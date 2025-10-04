@@ -8,6 +8,8 @@ environment:
 dependencies:
   cryptography: ^2.7.0
   convert: ^3.1.0
+  bip39_mnemonic: any
+  ed25519_hd_key: any
 dev_dependencies:
   test: ^1.25.0
   lints: ^5.0.0
