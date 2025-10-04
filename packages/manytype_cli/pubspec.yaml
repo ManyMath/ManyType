@@ -1,0 +1,16 @@
+name: manytype_cli
+description: CLI tool for Manytype round-trip proof
+version: 0.0.1-dev.1
+publish_to: none
+resolution: workspace
+environment:
+  sdk: ^3.5.3
+dependencies:
+  manytype_core:
+    path: ../manytype_core
+  manytype_protocol:
+    path: ../manytype_protocol
+  args: ^2.5.0
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^5.0.0

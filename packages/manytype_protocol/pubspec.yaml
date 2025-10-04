@@ -1,0 +1,13 @@
+name: manytype_protocol
+description: Generated protobuf types for Anytype wire protocol
+version: 0.0.1-dev.1
+publish_to: none
+resolution: workspace
+environment:
+  sdk: ^3.5.3
+dependencies:
+  protobuf: ^5.0.0
+  fixnum: ^1.1.0
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^5.0.0

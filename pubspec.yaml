@@ -1,0 +1,29 @@
+name: manytype_workspace
+publish_to: none
+environment:
+  sdk: ">=3.5.3 <4.0.0"
+workspace:
+  - packages/manytype_protocol
+  - packages/manytype_core
+  - packages/manytype_cli
+dev_dependencies:
+  melos: ^7.0.0
+melos:
+  name: manytype
+  packages:
+    - packages/**
+  sdkPath: auto
+  command:
+    bootstrap:
+      runPubGetInParallel: true
+  scripts:
+    test:
+      run: dart test
+      exec:
+        concurrency: 1
+      packageFilters:
+        dirExists: test
+    analyze:
+      run: dart analyze .
+      exec:
+        concurrency: 1
