@@ -1,0 +1,19 @@
+[package]
+name = "manytype_core"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+manytype_proto = { path = "../manytype_proto" }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+aes-gcm = "0.10"
+bip39 = "2"
+hmac = "0.12"
+sha2 = "0.10"
+rand = "0.9"
+hex = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

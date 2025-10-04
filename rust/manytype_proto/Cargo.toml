@@ -1,0 +1,10 @@
+[package]
+name = "manytype_proto"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+prost = { workspace = true }
+prost-types = { workspace = true }
+tonic = { workspace = true }
