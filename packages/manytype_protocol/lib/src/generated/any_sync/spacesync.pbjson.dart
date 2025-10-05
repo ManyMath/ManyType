@@ -712,3 +712,107 @@ const StorageHeader$json = {
 final $typed_data.Uint8List storageHeaderDescriptor = $convert.base64Decode(
     'Cg1TdG9yYWdlSGVhZGVyEhgKB3NwYWNlSWQYASABKAlSB3NwYWNlSWQSIAoLc3RvcmFnZU5hbW'
     'UYAiABKAlSC3N0b3JhZ2VOYW1l');
+
+const $core.Map<$core.String, $core.dynamic> SpaceSyncServiceBase$json = {
+  '1': 'SpaceSync',
+  '2': [
+    {
+      '1': 'HeadSync',
+      '2': '.spacesync.HeadSyncRequest',
+      '3': '.spacesync.HeadSyncResponse'
+    },
+    {
+      '1': 'StoreDiff',
+      '2': '.spacesync.StoreDiffRequest',
+      '3': '.spacesync.StoreDiffResponse'
+    },
+    {
+      '1': 'StoreElements',
+      '2': '.spacesync.StoreKeyValue',
+      '3': '.spacesync.StoreKeyValue',
+      '5': true,
+      '6': true
+    },
+    {
+      '1': 'SpacePush',
+      '2': '.spacesync.SpacePushRequest',
+      '3': '.spacesync.SpacePushResponse'
+    },
+    {
+      '1': 'SpacePull',
+      '2': '.spacesync.SpacePullRequest',
+      '3': '.spacesync.SpacePullResponse'
+    },
+    {
+      '1': 'ObjectSyncStream',
+      '2': '.spacesync.ObjectSyncMessage',
+      '3': '.spacesync.ObjectSyncMessage',
+      '5': true,
+      '6': true
+    },
+    {
+      '1': 'ObjectSync',
+      '2': '.spacesync.ObjectSyncMessage',
+      '3': '.spacesync.ObjectSyncMessage'
+    },
+    {
+      '1': 'ObjectSyncRequestStream',
+      '2': '.spacesync.ObjectSyncMessage',
+      '3': '.spacesync.ObjectSyncMessage',
+      '6': true
+    },
+    {
+      '1': 'AclAddRecord',
+      '2': '.spacesync.AclAddRecordRequest',
+      '3': '.spacesync.AclAddRecordResponse'
+    },
+    {
+      '1': 'AclGetRecords',
+      '2': '.spacesync.AclGetRecordsRequest',
+      '3': '.spacesync.AclGetRecordsResponse'
+    },
+  ],
+};
+
+@$core.Deprecated('Use spaceSyncServiceDescriptor instead')
+const $core.Map<$core.String, $core.Map<$core.String, $core.dynamic>>
+    SpaceSyncServiceBase$messageJson = {
+  '.spacesync.HeadSyncRequest': HeadSyncRequest$json,
+  '.spacesync.HeadSyncRange': HeadSyncRange$json,
+  '.spacesync.HeadSyncResponse': HeadSyncResponse$json,
+  '.spacesync.HeadSyncResult': HeadSyncResult$json,
+  '.spacesync.HeadSyncResultElement': HeadSyncResultElement$json,
+  '.spacesync.StoreDiffRequest': StoreDiffRequest$json,
+  '.spacesync.StoreDiffResponse': StoreDiffResponse$json,
+  '.spacesync.StoreKeyValue': StoreKeyValue$json,
+  '.spacesync.SpacePushRequest': SpacePushRequest$json,
+  '.spacesync.SpacePayload': SpacePayload$json,
+  '.spacesync.RawSpaceHeaderWithId': RawSpaceHeaderWithId$json,
+  '.spacesync.SpacePushResponse': SpacePushResponse$json,
+  '.spacesync.SpacePullRequest': SpacePullRequest$json,
+  '.spacesync.SpacePullResponse': SpacePullResponse$json,
+  '.spacesync.AclRecord': AclRecord$json,
+  '.spacesync.ObjectSyncMessage': ObjectSyncMessage$json,
+  '.spacesync.AclAddRecordRequest': AclAddRecordRequest$json,
+  '.spacesync.AclAddRecordResponse': AclAddRecordResponse$json,
+  '.spacesync.AclGetRecordsRequest': AclGetRecordsRequest$json,
+  '.spacesync.AclGetRecordsResponse': AclGetRecordsResponse$json,
+};
+
+/// Descriptor for `SpaceSync`. Decode as a `google.protobuf.ServiceDescriptorProto`.
+final $typed_data.Uint8List spaceSyncServiceDescriptor = $convert.base64Decode(
+    'CglTcGFjZVN5bmMSQwoISGVhZFN5bmMSGi5zcGFjZXN5bmMuSGVhZFN5bmNSZXF1ZXN0Ghsuc3'
+    'BhY2VzeW5jLkhlYWRTeW5jUmVzcG9uc2USRgoJU3RvcmVEaWZmEhsuc3BhY2VzeW5jLlN0b3Jl'
+    'RGlmZlJlcXVlc3QaHC5zcGFjZXN5bmMuU3RvcmVEaWZmUmVzcG9uc2USRwoNU3RvcmVFbGVtZW'
+    '50cxIYLnNwYWNlc3luYy5TdG9yZUtleVZhbHVlGhguc3BhY2VzeW5jLlN0b3JlS2V5VmFsdWUo'
+    'ATABEkYKCVNwYWNlUHVzaBIbLnNwYWNlc3luYy5TcGFjZVB1c2hSZXF1ZXN0Ghwuc3BhY2VzeW'
+    '5jLlNwYWNlUHVzaFJlc3BvbnNlEkYKCVNwYWNlUHVsbBIbLnNwYWNlc3luYy5TcGFjZVB1bGxS'
+    'ZXF1ZXN0Ghwuc3BhY2VzeW5jLlNwYWNlUHVsbFJlc3BvbnNlElIKEE9iamVjdFN5bmNTdHJlYW'
+    '0SHC5zcGFjZXN5bmMuT2JqZWN0U3luY01lc3NhZ2UaHC5zcGFjZXN5bmMuT2JqZWN0U3luY01l'
+    'c3NhZ2UoATABEkgKCk9iamVjdFN5bmMSHC5zcGFjZXN5bmMuT2JqZWN0U3luY01lc3NhZ2UaHC'
+    '5zcGFjZXN5bmMuT2JqZWN0U3luY01lc3NhZ2USVwoXT2JqZWN0U3luY1JlcXVlc3RTdHJlYW0S'
+    'HC5zcGFjZXN5bmMuT2JqZWN0U3luY01lc3NhZ2UaHC5zcGFjZXN5bmMuT2JqZWN0U3luY01lc3'
+    'NhZ2UwARJPCgxBY2xBZGRSZWNvcmQSHi5zcGFjZXN5bmMuQWNsQWRkUmVjb3JkUmVxdWVzdBof'
+    'LnNwYWNlc3luYy5BY2xBZGRSZWNvcmRSZXNwb25zZRJSCg1BY2xHZXRSZWNvcmRzEh8uc3BhY2'
+    'VzeW5jLkFjbEdldFJlY29yZHNSZXF1ZXN0GiAuc3BhY2VzeW5jLkFjbEdldFJlY29yZHNSZXNw'
+    'b25zZQ==');

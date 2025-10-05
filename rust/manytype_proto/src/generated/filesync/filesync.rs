@@ -234,5 +234,4 @@ impl AvailabilityStatus {
         }
     }
 }
-include!("filesync.tonic.rs");
 // @@protoc_insertion_point(module)

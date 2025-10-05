@@ -178,5 +178,4 @@ impl ErrCodes {
         }
     }
 }
-include!("consensusProto.tonic.rs");
 // @@protoc_insertion_point(module)

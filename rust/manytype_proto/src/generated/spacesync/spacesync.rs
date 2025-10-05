@@ -428,5 +428,4 @@ impl ObjectType {
         }
     }
 }
-include!("spacesync.tonic.rs");
 // @@protoc_insertion_point(module)

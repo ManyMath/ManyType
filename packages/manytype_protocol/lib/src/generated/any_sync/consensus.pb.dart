@@ -10,6 +10,7 @@
 // ignore_for_file: deprecated_member_use_from_same_package, library_prefixes
 // ignore_for_file: non_constant_identifier_names, prefer_relative_imports
 
+import 'dart:async' as $async;
 import 'dart:core' as $core;
 
 import 'package:fixnum/fixnum.dart' as $fixnum;
@@ -1143,6 +1144,33 @@ class LogFullSyncResponse extends $pb.GeneratedMessage {
 
   @$pb.TagNumber(2)
   $pb.PbList<RawRecordWithId> get records => $_getList(1);
+}
+
+class ConsensusApi {
+  final $pb.RpcClient _client;
+
+  ConsensusApi(this._client);
+
+  /// LogAdd adds new log to consensus
+  $async.Future<Ok> logAdd($pb.ClientContext? ctx, LogAddRequest request) =>
+      _client.invoke<Ok>(ctx, 'Consensus', 'LogAdd', request, Ok());
+
+  /// RecordAdd adds new record to log
+  $async.Future<RawRecordWithId> recordAdd(
+          $pb.ClientContext? ctx, RecordAddRequest request) =>
+      _client.invoke<RawRecordWithId>(
+          ctx, 'Consensus', 'RecordAdd', request, RawRecordWithId());
+
+  /// LogWatch fetches log and subscribes for a changes
+  $async.Future<LogWatchEvent> logWatch(
+          $pb.ClientContext? ctx, LogWatchRequest request) =>
+      _client.invoke<LogWatchEvent>(
+          ctx, 'Consensus', 'LogWatch', request, LogWatchEvent());
+
+  /// LogDelete deletes the log from the consensus
+  $async.Future<Ok> logDelete(
+          $pb.ClientContext? ctx, LogDeleteRequest request) =>
+      _client.invoke<Ok>(ctx, 'Consensus', 'LogDelete', request, Ok());
 }
 
 const $core.bool _omitFieldNames =

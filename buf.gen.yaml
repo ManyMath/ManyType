@@ -4,11 +4,7 @@ managed:
 plugins:
   - local: protoc-gen-dart
     out: packages/manytype_protocol/lib/src/generated
-    opt:
-      - "grpc"
   - local: protoc-gen-prost
-    out: rust/manytype_proto/src/generated
-  - local: protoc-gen-tonic
     out: rust/manytype_proto/src/generated
 inputs:
   - directory: proto

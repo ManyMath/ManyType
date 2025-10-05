@@ -951,3 +951,169 @@ const AclUploadInviteResponse$json = {
 /// Descriptor for `AclUploadInviteResponse`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List aclUploadInviteResponseDescriptor =
     $convert.base64Decode('ChdBY2xVcGxvYWRJbnZpdGVSZXNwb25zZQ==');
+
+const $core.Map<$core.String, $core.dynamic> CoordinatorServiceBase$json = {
+  '1': 'Coordinator',
+  '2': [
+    {
+      '1': 'SpaceSign',
+      '2': '.coordinator.SpaceSignRequest',
+      '3': '.coordinator.SpaceSignResponse'
+    },
+    {
+      '1': 'SpaceStatusCheck',
+      '2': '.coordinator.SpaceStatusCheckRequest',
+      '3': '.coordinator.SpaceStatusCheckResponse'
+    },
+    {
+      '1': 'SpaceStatusCheckMany',
+      '2': '.coordinator.SpaceStatusCheckManyRequest',
+      '3': '.coordinator.SpaceStatusCheckManyResponse'
+    },
+    {
+      '1': 'SpaceStatusChange',
+      '2': '.coordinator.SpaceStatusChangeRequest',
+      '3': '.coordinator.SpaceStatusChangeResponse'
+    },
+    {
+      '1': 'SpaceMakeShareable',
+      '2': '.coordinator.SpaceMakeShareableRequest',
+      '3': '.coordinator.SpaceMakeShareableResponse'
+    },
+    {
+      '1': 'SpaceMakeUnshareable',
+      '2': '.coordinator.SpaceMakeUnshareableRequest',
+      '3': '.coordinator.SpaceMakeUnshareableResponse'
+    },
+    {
+      '1': 'NetworkConfiguration',
+      '2': '.coordinator.NetworkConfigurationRequest',
+      '3': '.coordinator.NetworkConfigurationResponse'
+    },
+    {
+      '1': 'DeletionLog',
+      '2': '.coordinator.DeletionLogRequest',
+      '3': '.coordinator.DeletionLogResponse'
+    },
+    {
+      '1': 'SpaceDelete',
+      '2': '.coordinator.SpaceDeleteRequest',
+      '3': '.coordinator.SpaceDeleteResponse'
+    },
+    {
+      '1': 'AccountDelete',
+      '2': '.coordinator.AccountDeleteRequest',
+      '3': '.coordinator.AccountDeleteResponse'
+    },
+    {
+      '1': 'AccountRevertDeletion',
+      '2': '.coordinator.AccountRevertDeletionRequest',
+      '3': '.coordinator.AccountRevertDeletionResponse'
+    },
+    {
+      '1': 'AclAddRecord',
+      '2': '.coordinator.AclAddRecordRequest',
+      '3': '.coordinator.AclAddRecordResponse'
+    },
+    {
+      '1': 'AclGetRecords',
+      '2': '.coordinator.AclGetRecordsRequest',
+      '3': '.coordinator.AclGetRecordsResponse'
+    },
+    {
+      '1': 'AccountLimitsSet',
+      '2': '.coordinator.AccountLimitsSetRequest',
+      '3': '.coordinator.AccountLimitsSetResponse'
+    },
+    {
+      '1': 'AclEventLog',
+      '2': '.coordinator.AclEventLogRequest',
+      '3': '.coordinator.AclEventLogResponse'
+    },
+    {
+      '1': 'AclUploadInvite',
+      '2': '.coordinator.AclUploadInviteRequest',
+      '3': '.coordinator.AclUploadInviteResponse'
+    },
+  ],
+};
+
+@$core.Deprecated('Use coordinatorServiceDescriptor instead')
+const $core.Map<$core.String, $core.Map<$core.String, $core.dynamic>>
+    CoordinatorServiceBase$messageJson = {
+  '.coordinator.SpaceSignRequest': SpaceSignRequest$json,
+  '.coordinator.SpaceSignResponse': SpaceSignResponse$json,
+  '.coordinator.SpaceReceiptWithSignature': SpaceReceiptWithSignature$json,
+  '.coordinator.SpaceStatusCheckRequest': SpaceStatusCheckRequest$json,
+  '.coordinator.SpaceStatusCheckResponse': SpaceStatusCheckResponse$json,
+  '.coordinator.SpaceStatusPayload': SpaceStatusPayload$json,
+  '.coordinator.SpaceLimits': SpaceLimits$json,
+  '.coordinator.SpaceStatusCheckManyRequest': SpaceStatusCheckManyRequest$json,
+  '.coordinator.SpaceStatusCheckManyResponse':
+      SpaceStatusCheckManyResponse$json,
+  '.coordinator.AccountLimits': AccountLimits$json,
+  '.coordinator.SpaceStatusChangeRequest': SpaceStatusChangeRequest$json,
+  '.coordinator.SpaceStatusChangeResponse': SpaceStatusChangeResponse$json,
+  '.coordinator.SpaceMakeShareableRequest': SpaceMakeShareableRequest$json,
+  '.coordinator.SpaceMakeShareableResponse': SpaceMakeShareableResponse$json,
+  '.coordinator.SpaceMakeUnshareableRequest': SpaceMakeUnshareableRequest$json,
+  '.coordinator.SpaceMakeUnshareableResponse':
+      SpaceMakeUnshareableResponse$json,
+  '.coordinator.NetworkConfigurationRequest': NetworkConfigurationRequest$json,
+  '.coordinator.NetworkConfigurationResponse':
+      NetworkConfigurationResponse$json,
+  '.coordinator.Node': Node$json,
+  '.coordinator.DeletionLogRequest': DeletionLogRequest$json,
+  '.coordinator.DeletionLogResponse': DeletionLogResponse$json,
+  '.coordinator.DeletionLogRecord': DeletionLogRecord$json,
+  '.coordinator.SpaceDeleteRequest': SpaceDeleteRequest$json,
+  '.coordinator.SpaceDeleteResponse': SpaceDeleteResponse$json,
+  '.coordinator.AccountDeleteRequest': AccountDeleteRequest$json,
+  '.coordinator.AccountDeleteResponse': AccountDeleteResponse$json,
+  '.coordinator.AccountRevertDeletionRequest':
+      AccountRevertDeletionRequest$json,
+  '.coordinator.AccountRevertDeletionResponse':
+      AccountRevertDeletionResponse$json,
+  '.coordinator.AclAddRecordRequest': AclAddRecordRequest$json,
+  '.coordinator.AclAddRecordResponse': AclAddRecordResponse$json,
+  '.coordinator.AclGetRecordsRequest': AclGetRecordsRequest$json,
+  '.coordinator.AclGetRecordsResponse': AclGetRecordsResponse$json,
+  '.coordinator.AccountLimitsSetRequest': AccountLimitsSetRequest$json,
+  '.coordinator.AccountLimitsSetResponse': AccountLimitsSetResponse$json,
+  '.coordinator.AclEventLogRequest': AclEventLogRequest$json,
+  '.coordinator.AclEventLogResponse': AclEventLogResponse$json,
+  '.coordinator.AclEventLogRecord': AclEventLogRecord$json,
+  '.coordinator.AclUploadInviteRequest': AclUploadInviteRequest$json,
+  '.coordinator.AclUploadInviteResponse': AclUploadInviteResponse$json,
+};
+
+/// Descriptor for `Coordinator`. Decode as a `google.protobuf.ServiceDescriptorProto`.
+final $typed_data.Uint8List coordinatorServiceDescriptor = $convert.base64Decode(
+    'CgtDb29yZGluYXRvchJKCglTcGFjZVNpZ24SHS5jb29yZGluYXRvci5TcGFjZVNpZ25SZXF1ZX'
+    'N0Gh4uY29vcmRpbmF0b3IuU3BhY2VTaWduUmVzcG9uc2USXwoQU3BhY2VTdGF0dXNDaGVjaxIk'
+    'LmNvb3JkaW5hdG9yLlNwYWNlU3RhdHVzQ2hlY2tSZXF1ZXN0GiUuY29vcmRpbmF0b3IuU3BhY2'
+    'VTdGF0dXNDaGVja1Jlc3BvbnNlEmsKFFNwYWNlU3RhdHVzQ2hlY2tNYW55EiguY29vcmRpbmF0'
+    'b3IuU3BhY2VTdGF0dXNDaGVja01hbnlSZXF1ZXN0GikuY29vcmRpbmF0b3IuU3BhY2VTdGF0dX'
+    'NDaGVja01hbnlSZXNwb25zZRJiChFTcGFjZVN0YXR1c0NoYW5nZRIlLmNvb3JkaW5hdG9yLlNw'
+    'YWNlU3RhdHVzQ2hhbmdlUmVxdWVzdBomLmNvb3JkaW5hdG9yLlNwYWNlU3RhdHVzQ2hhbmdlUm'
+    'VzcG9uc2USZQoSU3BhY2VNYWtlU2hhcmVhYmxlEiYuY29vcmRpbmF0b3IuU3BhY2VNYWtlU2hh'
+    'cmVhYmxlUmVxdWVzdBonLmNvb3JkaW5hdG9yLlNwYWNlTWFrZVNoYXJlYWJsZVJlc3BvbnNlEm'
+    'sKFFNwYWNlTWFrZVVuc2hhcmVhYmxlEiguY29vcmRpbmF0b3IuU3BhY2VNYWtlVW5zaGFyZWFi'
+    'bGVSZXF1ZXN0GikuY29vcmRpbmF0b3IuU3BhY2VNYWtlVW5zaGFyZWFibGVSZXNwb25zZRJrCh'
+    'ROZXR3b3JrQ29uZmlndXJhdGlvbhIoLmNvb3JkaW5hdG9yLk5ldHdvcmtDb25maWd1cmF0aW9u'
+    'UmVxdWVzdBopLmNvb3JkaW5hdG9yLk5ldHdvcmtDb25maWd1cmF0aW9uUmVzcG9uc2USUAoLRG'
+    'VsZXRpb25Mb2cSHy5jb29yZGluYXRvci5EZWxldGlvbkxvZ1JlcXVlc3QaIC5jb29yZGluYXRv'
+    'ci5EZWxldGlvbkxvZ1Jlc3BvbnNlElAKC1NwYWNlRGVsZXRlEh8uY29vcmRpbmF0b3IuU3BhY2'
+    'VEZWxldGVSZXF1ZXN0GiAuY29vcmRpbmF0b3IuU3BhY2VEZWxldGVSZXNwb25zZRJWCg1BY2Nv'
+    'dW50RGVsZXRlEiEuY29vcmRpbmF0b3IuQWNjb3VudERlbGV0ZVJlcXVlc3QaIi5jb29yZGluYX'
+    'Rvci5BY2NvdW50RGVsZXRlUmVzcG9uc2USbgoVQWNjb3VudFJldmVydERlbGV0aW9uEikuY29v'
+    'cmRpbmF0b3IuQWNjb3VudFJldmVydERlbGV0aW9uUmVxdWVzdBoqLmNvb3JkaW5hdG9yLkFjY2'
+    '91bnRSZXZlcnREZWxldGlvblJlc3BvbnNlElMKDEFjbEFkZFJlY29yZBIgLmNvb3JkaW5hdG9y'
+    'LkFjbEFkZFJlY29yZFJlcXVlc3QaIS5jb29yZGluYXRvci5BY2xBZGRSZWNvcmRSZXNwb25zZR'
+    'JWCg1BY2xHZXRSZWNvcmRzEiEuY29vcmRpbmF0b3IuQWNsR2V0UmVjb3Jkc1JlcXVlc3QaIi5j'
+    'b29yZGluYXRvci5BY2xHZXRSZWNvcmRzUmVzcG9uc2USXwoQQWNjb3VudExpbWl0c1NldBIkLm'
+    'Nvb3JkaW5hdG9yLkFjY291bnRMaW1pdHNTZXRSZXF1ZXN0GiUuY29vcmRpbmF0b3IuQWNjb3Vu'
+    'dExpbWl0c1NldFJlc3BvbnNlElAKC0FjbEV2ZW50TG9nEh8uY29vcmRpbmF0b3IuQWNsRXZlbn'
+    'RMb2dSZXF1ZXN0GiAuY29vcmRpbmF0b3IuQWNsRXZlbnRMb2dSZXNwb25zZRJcCg9BY2xVcGxv'
+    'YWRJbnZpdGUSIy5jb29yZGluYXRvci5BY2xVcGxvYWRJbnZpdGVSZXF1ZXN0GiQuY29vcmRpbm'
+    'F0b3IuQWNsVXBsb2FkSW52aXRlUmVzcG9uc2U=');

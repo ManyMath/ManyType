@@ -10,6 +10,7 @@
 // ignore_for_file: deprecated_member_use_from_same_package, library_prefixes
 // ignore_for_file: non_constant_identifier_names, prefer_relative_imports
 
+import 'dart:async' as $async;
 import 'dart:core' as $core;
 
 import 'package:fixnum/fixnum.dart' as $fixnum;
@@ -2342,6 +2343,74 @@ class StorageHeader extends $pb.GeneratedMessage {
   $core.bool hasStorageName() => $_has(1);
   @$pb.TagNumber(2)
   void clearStorageName() => $_clearField(2);
+}
+
+class SpaceSyncApi {
+  final $pb.RpcClient _client;
+
+  SpaceSyncApi(this._client);
+
+  /// HeadSync compares all objects and their hashes in a space
+  $async.Future<HeadSyncResponse> headSync(
+          $pb.ClientContext? ctx, HeadSyncRequest request) =>
+      _client.invoke<HeadSyncResponse>(
+          ctx, 'SpaceSync', 'HeadSync', request, HeadSyncResponse());
+
+  /// StoreDiff compares all objects and their hashes in a space
+  $async.Future<StoreDiffResponse> storeDiff(
+          $pb.ClientContext? ctx, StoreDiffRequest request) =>
+      _client.invoke<StoreDiffResponse>(
+          ctx, 'SpaceSync', 'StoreDiff', request, StoreDiffResponse());
+
+  /// StoreElements exchanges elements between peers
+  $async.Future<StoreKeyValue> storeElements(
+          $pb.ClientContext? ctx, StoreKeyValue request) =>
+      _client.invoke<StoreKeyValue>(
+          ctx, 'SpaceSync', 'StoreElements', request, StoreKeyValue());
+
+  /// SpacePush sends new space to the node
+  $async.Future<SpacePushResponse> spacePush(
+          $pb.ClientContext? ctx, SpacePushRequest request) =>
+      _client.invoke<SpacePushResponse>(
+          ctx, 'SpaceSync', 'SpacePush', request, SpacePushResponse());
+
+  /// SpacePull gets space from the remote peer
+  $async.Future<SpacePullResponse> spacePull(
+          $pb.ClientContext? ctx, SpacePullRequest request) =>
+      _client.invoke<SpacePullResponse>(
+          ctx, 'SpaceSync', 'SpacePull', request, SpacePullResponse());
+
+  /// ObjectSyncStream opens object sync stream with node or client
+  $async.Future<ObjectSyncMessage> objectSyncStream(
+          $pb.ClientContext? ctx, ObjectSyncMessage request) =>
+      _client.invoke<ObjectSyncMessage>(
+          ctx, 'SpaceSync', 'ObjectSyncStream', request, ObjectSyncMessage());
+
+  /// ObjectSync sends object sync message and synchronously gets response message
+  $async.Future<ObjectSyncMessage> objectSync(
+          $pb.ClientContext? ctx, ObjectSyncMessage request) =>
+      _client.invoke<ObjectSyncMessage>(
+          ctx, 'SpaceSync', 'ObjectSync', request, ObjectSyncMessage());
+
+  /// ObjectSyncRequestStream opens sends a request and gets streamed response
+  $async.Future<ObjectSyncMessage> objectSyncRequestStream(
+          $pb.ClientContext? ctx, ObjectSyncMessage request) =>
+      _client.invoke<ObjectSyncMessage>(ctx, 'SpaceSync',
+          'ObjectSyncRequestStream', request, ObjectSyncMessage());
+
+  /// AclAddRecord adds a new record to acl log. Works only with any-sync-node
+  /// deprecated: use coordinator api
+  $async.Future<AclAddRecordResponse> aclAddRecord(
+          $pb.ClientContext? ctx, AclAddRecordRequest request) =>
+      _client.invoke<AclAddRecordResponse>(
+          ctx, 'SpaceSync', 'AclAddRecord', request, AclAddRecordResponse());
+
+  /// AclGetRecords gets acl records
+  /// deprecated: use coordinator api
+  $async.Future<AclGetRecordsResponse> aclGetRecords(
+          $pb.ClientContext? ctx, AclGetRecordsRequest request) =>
+      _client.invoke<AclGetRecordsResponse>(
+          ctx, 'SpaceSync', 'AclGetRecords', request, AclGetRecordsResponse());
 }
 
 const $core.bool _omitFieldNames =

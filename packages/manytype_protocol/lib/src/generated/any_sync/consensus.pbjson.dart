@@ -378,3 +378,54 @@ const LogFullSyncResponse$json = {
 final $typed_data.Uint8List logFullSyncResponseDescriptor = $convert.base64Decode(
     'ChNMb2dGdWxsU3luY1Jlc3BvbnNlEhIKBGhlYWQYASABKAlSBGhlYWQSOQoHcmVjb3JkcxgCIA'
     'MoCzIfLmNvbnNlbnN1c1Byb3RvLlJhd1JlY29yZFdpdGhJZFIHcmVjb3Jkcw==');
+
+const $core.Map<$core.String, $core.dynamic> ConsensusServiceBase$json = {
+  '1': 'Consensus',
+  '2': [
+    {
+      '1': 'LogAdd',
+      '2': '.consensusProto.LogAddRequest',
+      '3': '.consensusProto.Ok'
+    },
+    {
+      '1': 'RecordAdd',
+      '2': '.consensusProto.RecordAddRequest',
+      '3': '.consensusProto.RawRecordWithId'
+    },
+    {
+      '1': 'LogWatch',
+      '2': '.consensusProto.LogWatchRequest',
+      '3': '.consensusProto.LogWatchEvent',
+      '5': true,
+      '6': true
+    },
+    {
+      '1': 'LogDelete',
+      '2': '.consensusProto.LogDeleteRequest',
+      '3': '.consensusProto.Ok'
+    },
+  ],
+};
+
+@$core.Deprecated('Use consensusServiceDescriptor instead')
+const $core.Map<$core.String, $core.Map<$core.String, $core.dynamic>>
+    ConsensusServiceBase$messageJson = {
+  '.consensusProto.LogAddRequest': LogAddRequest$json,
+  '.consensusProto.RawRecordWithId': RawRecordWithId$json,
+  '.consensusProto.Ok': Ok$json,
+  '.consensusProto.RecordAddRequest': RecordAddRequest$json,
+  '.consensusProto.RawRecord': RawRecord$json,
+  '.consensusProto.LogWatchRequest': LogWatchRequest$json,
+  '.consensusProto.LogWatchEvent': LogWatchEvent$json,
+  '.consensusProto.Err': Err$json,
+  '.consensusProto.LogDeleteRequest': LogDeleteRequest$json,
+};
+
+/// Descriptor for `Consensus`. Decode as a `google.protobuf.ServiceDescriptorProto`.
+final $typed_data.Uint8List consensusServiceDescriptor = $convert.base64Decode(
+    'CglDb25zZW5zdXMSOwoGTG9nQWRkEh0uY29uc2Vuc3VzUHJvdG8uTG9nQWRkUmVxdWVzdBoSLm'
+    'NvbnNlbnN1c1Byb3RvLk9rEk4KCVJlY29yZEFkZBIgLmNvbnNlbnN1c1Byb3RvLlJlY29yZEFk'
+    'ZFJlcXVlc3QaHy5jb25zZW5zdXNQcm90by5SYXdSZWNvcmRXaXRoSWQSTgoITG9nV2F0Y2gSHy'
+    '5jb25zZW5zdXNQcm90by5Mb2dXYXRjaFJlcXVlc3QaHS5jb25zZW5zdXNQcm90by5Mb2dXYXRj'
+    'aEV2ZW50KAEwARJBCglMb2dEZWxldGUSIC5jb25zZW5zdXNQcm90by5Mb2dEZWxldGVSZXF1ZX'
+    'N0GhIuY29uc2Vuc3VzUHJvdG8uT2s=');

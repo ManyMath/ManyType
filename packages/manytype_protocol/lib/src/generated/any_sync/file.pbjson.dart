@@ -396,3 +396,112 @@ const SpaceLimitSetRequest$json = {
 final $typed_data.Uint8List spaceLimitSetRequestDescriptor = $convert.base64Decode(
     'ChRTcGFjZUxpbWl0U2V0UmVxdWVzdBIYCgdzcGFjZUlkGAEgASgJUgdzcGFjZUlkEhQKBWxpbW'
     'l0GAIgASgEUgVsaW1pdA==');
+
+const $core.Map<$core.String, $core.dynamic> FileServiceBase$json = {
+  '1': 'File',
+  '2': [
+    {
+      '1': 'BlockGet',
+      '2': '.filesync.BlockGetRequest',
+      '3': '.filesync.BlockGetResponse'
+    },
+    {'1': 'BlockPush', '2': '.filesync.BlockPushRequest', '3': '.filesync.Ok'},
+    {
+      '1': 'BlocksCheck',
+      '2': '.filesync.BlocksCheckRequest',
+      '3': '.filesync.BlocksCheckResponse'
+    },
+    {
+      '1': 'BlocksBind',
+      '2': '.filesync.BlocksBindRequest',
+      '3': '.filesync.Ok'
+    },
+    {
+      '1': 'FilesDelete',
+      '2': '.filesync.FilesDeleteRequest',
+      '3': '.filesync.FilesDeleteResponse'
+    },
+    {
+      '1': 'FilesInfo',
+      '2': '.filesync.FilesInfoRequest',
+      '3': '.filesync.FilesInfoResponse'
+    },
+    {
+      '1': 'FilesGet',
+      '2': '.filesync.FilesGetRequest',
+      '3': '.filesync.FilesGetResponse',
+      '6': true
+    },
+    {
+      '1': 'Check',
+      '2': '.filesync.CheckRequest',
+      '3': '.filesync.CheckResponse'
+    },
+    {
+      '1': 'SpaceInfo',
+      '2': '.filesync.SpaceInfoRequest',
+      '3': '.filesync.SpaceInfoResponse'
+    },
+    {
+      '1': 'AccountInfo',
+      '2': '.filesync.AccountInfoRequest',
+      '3': '.filesync.AccountInfoResponse'
+    },
+    {
+      '1': 'AccountLimitSet',
+      '2': '.filesync.AccountLimitSetRequest',
+      '3': '.filesync.Ok'
+    },
+    {
+      '1': 'SpaceLimitSet',
+      '2': '.filesync.SpaceLimitSetRequest',
+      '3': '.filesync.Ok'
+    },
+  ],
+};
+
+@$core.Deprecated('Use fileServiceDescriptor instead')
+const $core.Map<$core.String, $core.Map<$core.String, $core.dynamic>>
+    FileServiceBase$messageJson = {
+  '.filesync.BlockGetRequest': BlockGetRequest$json,
+  '.filesync.BlockGetResponse': BlockGetResponse$json,
+  '.filesync.BlockPushRequest': BlockPushRequest$json,
+  '.filesync.Ok': Ok$json,
+  '.filesync.BlocksCheckRequest': BlocksCheckRequest$json,
+  '.filesync.BlocksCheckResponse': BlocksCheckResponse$json,
+  '.filesync.BlockAvailability': BlockAvailability$json,
+  '.filesync.BlocksBindRequest': BlocksBindRequest$json,
+  '.filesync.FilesDeleteRequest': FilesDeleteRequest$json,
+  '.filesync.FilesDeleteResponse': FilesDeleteResponse$json,
+  '.filesync.FilesInfoRequest': FilesInfoRequest$json,
+  '.filesync.FilesInfoResponse': FilesInfoResponse$json,
+  '.filesync.FileInfo': FileInfo$json,
+  '.filesync.FilesGetRequest': FilesGetRequest$json,
+  '.filesync.FilesGetResponse': FilesGetResponse$json,
+  '.filesync.CheckRequest': CheckRequest$json,
+  '.filesync.CheckResponse': CheckResponse$json,
+  '.filesync.SpaceInfoRequest': SpaceInfoRequest$json,
+  '.filesync.SpaceInfoResponse': SpaceInfoResponse$json,
+  '.filesync.AccountInfoRequest': AccountInfoRequest$json,
+  '.filesync.AccountInfoResponse': AccountInfoResponse$json,
+  '.filesync.AccountLimitSetRequest': AccountLimitSetRequest$json,
+  '.filesync.SpaceLimitSetRequest': SpaceLimitSetRequest$json,
+};
+
+/// Descriptor for `File`. Decode as a `google.protobuf.ServiceDescriptorProto`.
+final $typed_data.Uint8List fileServiceDescriptor = $convert.base64Decode(
+    'CgRGaWxlEkEKCEJsb2NrR2V0EhkuZmlsZXN5bmMuQmxvY2tHZXRSZXF1ZXN0GhouZmlsZXN5bm'
+    'MuQmxvY2tHZXRSZXNwb25zZRI1CglCbG9ja1B1c2gSGi5maWxlc3luYy5CbG9ja1B1c2hSZXF1'
+    'ZXN0GgwuZmlsZXN5bmMuT2sSSgoLQmxvY2tzQ2hlY2sSHC5maWxlc3luYy5CbG9ja3NDaGVja1'
+    'JlcXVlc3QaHS5maWxlc3luYy5CbG9ja3NDaGVja1Jlc3BvbnNlEjcKCkJsb2Nrc0JpbmQSGy5m'
+    'aWxlc3luYy5CbG9ja3NCaW5kUmVxdWVzdBoMLmZpbGVzeW5jLk9rEkoKC0ZpbGVzRGVsZXRlEh'
+    'wuZmlsZXN5bmMuRmlsZXNEZWxldGVSZXF1ZXN0Gh0uZmlsZXN5bmMuRmlsZXNEZWxldGVSZXNw'
+    'b25zZRJECglGaWxlc0luZm8SGi5maWxlc3luYy5GaWxlc0luZm9SZXF1ZXN0GhsuZmlsZXN5bm'
+    'MuRmlsZXNJbmZvUmVzcG9uc2USQwoIRmlsZXNHZXQSGS5maWxlc3luYy5GaWxlc0dldFJlcXVl'
+    'c3QaGi5maWxlc3luYy5GaWxlc0dldFJlc3BvbnNlMAESOAoFQ2hlY2sSFi5maWxlc3luYy5DaG'
+    'Vja1JlcXVlc3QaFy5maWxlc3luYy5DaGVja1Jlc3BvbnNlEkQKCVNwYWNlSW5mbxIaLmZpbGVz'
+    'eW5jLlNwYWNlSW5mb1JlcXVlc3QaGy5maWxlc3luYy5TcGFjZUluZm9SZXNwb25zZRJKCgtBY2'
+    'NvdW50SW5mbxIcLmZpbGVzeW5jLkFjY291bnRJbmZvUmVxdWVzdBodLmZpbGVzeW5jLkFjY291'
+    'bnRJbmZvUmVzcG9uc2USQQoPQWNjb3VudExpbWl0U2V0EiAuZmlsZXN5bmMuQWNjb3VudExpbW'
+    'l0U2V0UmVxdWVzdBoMLmZpbGVzeW5jLk9rEj0KDVNwYWNlTGltaXRTZXQSHi5maWxlc3luYy5T'
+    'cGFjZUxpbWl0U2V0UmVxdWVzdBoMLmZpbGVzeW5jLk9r');

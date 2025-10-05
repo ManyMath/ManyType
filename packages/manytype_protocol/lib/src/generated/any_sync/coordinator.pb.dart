@@ -10,6 +10,7 @@
 // ignore_for_file: deprecated_member_use_from_same_package, library_prefixes
 // ignore_for_file: non_constant_identifier_names, prefer_relative_imports
 
+import 'dart:async' as $async;
 import 'dart:core' as $core;
 
 import 'package:fixnum/fixnum.dart' as $fixnum;
@@ -3093,6 +3094,108 @@ class AclUploadInviteResponse extends $pb.GeneratedMessage {
   static AclUploadInviteResponse getDefault() => _defaultInstance ??=
       $pb.GeneratedMessage.$_defaultFor<AclUploadInviteResponse>(create);
   static AclUploadInviteResponse? _defaultInstance;
+}
+
+class CoordinatorApi {
+  final $pb.RpcClient _client;
+
+  CoordinatorApi(this._client);
+
+  /// SpaceSign signs a space creation operation
+  $async.Future<SpaceSignResponse> spaceSign(
+          $pb.ClientContext? ctx, SpaceSignRequest request) =>
+      _client.invoke<SpaceSignResponse>(
+          ctx, 'Coordinator', 'SpaceSign', request, SpaceSignResponse());
+
+  /// SpaceStatusCheck checks the status of space and tells if it is deleted or not
+  $async.Future<SpaceStatusCheckResponse> spaceStatusCheck(
+          $pb.ClientContext? ctx, SpaceStatusCheckRequest request) =>
+      _client.invoke<SpaceStatusCheckResponse>(ctx, 'Coordinator',
+          'SpaceStatusCheck', request, SpaceStatusCheckResponse());
+
+  /// SpaceStatusCheckMany checks the statuses of spaces and tells if they are deleted or not
+  $async.Future<SpaceStatusCheckManyResponse> spaceStatusCheckMany(
+          $pb.ClientContext? ctx, SpaceStatusCheckManyRequest request) =>
+      _client.invoke<SpaceStatusCheckManyResponse>(ctx, 'Coordinator',
+          'SpaceStatusCheckMany', request, SpaceStatusCheckManyResponse());
+
+  /// SpaceStatusChange changes the status of space - Deprecated
+  $async.Future<SpaceStatusChangeResponse> spaceStatusChange(
+          $pb.ClientContext? ctx, SpaceStatusChangeRequest request) =>
+      _client.invoke<SpaceStatusChangeResponse>(ctx, 'Coordinator',
+          'SpaceStatusChange', request, SpaceStatusChangeResponse());
+
+  /// SpaceMakeShareable makes space shareable
+  $async.Future<SpaceMakeShareableResponse> spaceMakeShareable(
+          $pb.ClientContext? ctx, SpaceMakeShareableRequest request) =>
+      _client.invoke<SpaceMakeShareableResponse>(ctx, 'Coordinator',
+          'SpaceMakeShareable', request, SpaceMakeShareableResponse());
+
+  /// SpaceMakeUnshareable marks space unshareable
+  $async.Future<SpaceMakeUnshareableResponse> spaceMakeUnshareable(
+          $pb.ClientContext? ctx, SpaceMakeUnshareableRequest request) =>
+      _client.invoke<SpaceMakeUnshareableResponse>(ctx, 'Coordinator',
+          'SpaceMakeUnshareable', request, SpaceMakeUnshareableResponse());
+
+  /// NetworkConfiguration retrieves the latest network configuration
+  $async.Future<NetworkConfigurationResponse> networkConfiguration(
+          $pb.ClientContext? ctx, NetworkConfigurationRequest request) =>
+      _client.invoke<NetworkConfigurationResponse>(ctx, 'Coordinator',
+          'NetworkConfiguration', request, NetworkConfigurationResponse());
+
+  /// DeletionLog gets the latest deletion log records
+  $async.Future<DeletionLogResponse> deletionLog(
+          $pb.ClientContext? ctx, DeletionLogRequest request) =>
+      _client.invoke<DeletionLogResponse>(
+          ctx, 'Coordinator', 'DeletionLog', request, DeletionLogResponse());
+
+  /// SpaceDelete deletes a space
+  $async.Future<SpaceDeleteResponse> spaceDelete(
+          $pb.ClientContext? ctx, SpaceDeleteRequest request) =>
+      _client.invoke<SpaceDeleteResponse>(
+          ctx, 'Coordinator', 'SpaceDelete', request, SpaceDeleteResponse());
+
+  /// AccountDelete deletes an account
+  $async.Future<AccountDeleteResponse> accountDelete(
+          $pb.ClientContext? ctx, AccountDeleteRequest request) =>
+      _client.invoke<AccountDeleteResponse>(ctx, 'Coordinator', 'AccountDelete',
+          request, AccountDeleteResponse());
+
+  /// AccountRevertDeletion reverts an account deletion
+  $async.Future<AccountRevertDeletionResponse> accountRevertDeletion(
+          $pb.ClientContext? ctx, AccountRevertDeletionRequest request) =>
+      _client.invoke<AccountRevertDeletionResponse>(ctx, 'Coordinator',
+          'AccountRevertDeletion', request, AccountRevertDeletionResponse());
+
+  /// AclAddRecord adds a new record to acl log. Works only with any-sync-node
+  $async.Future<AclAddRecordResponse> aclAddRecord(
+          $pb.ClientContext? ctx, AclAddRecordRequest request) =>
+      _client.invoke<AclAddRecordResponse>(
+          ctx, 'Coordinator', 'AclAddRecord', request, AclAddRecordResponse());
+
+  /// AclGetRecords gets acl records
+  $async.Future<AclGetRecordsResponse> aclGetRecords(
+          $pb.ClientContext? ctx, AclGetRecordsRequest request) =>
+      _client.invoke<AclGetRecordsResponse>(ctx, 'Coordinator', 'AclGetRecords',
+          request, AclGetRecordsResponse());
+
+  /// AccountLimitsSet sets limits to the account. Can be used only by a network config member
+  $async.Future<AccountLimitsSetResponse> accountLimitsSet(
+          $pb.ClientContext? ctx, AccountLimitsSetRequest request) =>
+      _client.invoke<AccountLimitsSetResponse>(ctx, 'Coordinator',
+          'AccountLimitsSet', request, AccountLimitsSetResponse());
+
+  /// EventLog gets the latest event log records
+  $async.Future<AclEventLogResponse> aclEventLog(
+          $pb.ClientContext? ctx, AclEventLogRequest request) =>
+      _client.invoke<AclEventLogResponse>(
+          ctx, 'Coordinator', 'AclEventLog', request, AclEventLogResponse());
+
+  /// AclUploadInvite uploads invite binary data to the filenodes
+  $async.Future<AclUploadInviteResponse> aclUploadInvite(
+          $pb.ClientContext? ctx, AclUploadInviteRequest request) =>
+      _client.invoke<AclUploadInviteResponse>(ctx, 'Coordinator',
+          'AclUploadInvite', request, AclUploadInviteResponse());
 }
 
 const $core.bool _omitFieldNames =

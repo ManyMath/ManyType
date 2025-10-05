@@ -10,6 +10,7 @@
 // ignore_for_file: deprecated_member_use_from_same_package, library_prefixes
 // ignore_for_file: non_constant_identifier_names, prefer_relative_imports
 
+import 'dart:async' as $async;
 import 'dart:core' as $core;
 
 import 'package:fixnum/fixnum.dart' as $fixnum;
@@ -1498,6 +1499,80 @@ class SpaceLimitSetRequest extends $pb.GeneratedMessage {
   $core.bool hasLimit() => $_has(1);
   @$pb.TagNumber(2)
   void clearLimit() => $_clearField(2);
+}
+
+class FileApi {
+  final $pb.RpcClient _client;
+
+  FileApi(this._client);
+
+  /// BlockGet gets one block from a server
+  $async.Future<BlockGetResponse> blockGet(
+          $pb.ClientContext? ctx, BlockGetRequest request) =>
+      _client.invoke<BlockGetResponse>(
+          ctx, 'File', 'BlockGet', request, BlockGetResponse());
+
+  /// BlockPush pushes one block to a server
+  $async.Future<Ok> blockPush(
+          $pb.ClientContext? ctx, BlockPushRequest request) =>
+      _client.invoke<Ok>(ctx, 'File', 'BlockPush', request, Ok());
+
+  /// BlocksCheck checks is CIDs exists
+  $async.Future<BlocksCheckResponse> blocksCheck(
+          $pb.ClientContext? ctx, BlocksCheckRequest request) =>
+      _client.invoke<BlocksCheckResponse>(
+          ctx, 'File', 'BlocksCheck', request, BlocksCheckResponse());
+
+  /// BlocksBind binds CIDs to space
+  $async.Future<Ok> blocksBind(
+          $pb.ClientContext? ctx, BlocksBindRequest request) =>
+      _client.invoke<Ok>(ctx, 'File', 'BlocksBind', request, Ok());
+
+  /// FilesDelete deletes files by id
+  $async.Future<FilesDeleteResponse> filesDelete(
+          $pb.ClientContext? ctx, FilesDeleteRequest request) =>
+      _client.invoke<FilesDeleteResponse>(
+          ctx, 'File', 'FilesDelete', request, FilesDeleteResponse());
+
+  /// FilesInfo return info by given files id
+  $async.Future<FilesInfoResponse> filesInfo(
+          $pb.ClientContext? ctx, FilesInfoRequest request) =>
+      _client.invoke<FilesInfoResponse>(
+          ctx, 'File', 'FilesInfo', request, FilesInfoResponse());
+
+  /// FilesGet returns a stream that streams all file ids in the space
+  $async.Future<FilesGetResponse> filesGet(
+          $pb.ClientContext? ctx, FilesGetRequest request) =>
+      _client.invoke<FilesGetResponse>(
+          ctx, 'File', 'FilesGet', request, FilesGetResponse());
+
+  /// Check checks the connection and credentials
+  $async.Future<CheckResponse> check_(
+          $pb.ClientContext? ctx, CheckRequest request) =>
+      _client.invoke<CheckResponse>(
+          ctx, 'File', 'Check', request, CheckResponse());
+
+  /// SpaceInfo returns usage, limit, etc about space
+  $async.Future<SpaceInfoResponse> spaceInfo(
+          $pb.ClientContext? ctx, SpaceInfoRequest request) =>
+      _client.invoke<SpaceInfoResponse>(
+          ctx, 'File', 'SpaceInfo', request, SpaceInfoResponse());
+
+  /// AccountInfo returns usage, limit, etc by all spaces
+  $async.Future<AccountInfoResponse> accountInfo(
+          $pb.ClientContext? ctx, AccountInfoRequest request) =>
+      _client.invoke<AccountInfoResponse>(
+          ctx, 'File', 'AccountInfo', request, AccountInfoResponse());
+
+  /// AccountLimitSet sets the account file storage limit (available only for nodeconf members)
+  $async.Future<Ok> accountLimitSet(
+          $pb.ClientContext? ctx, AccountLimitSetRequest request) =>
+      _client.invoke<Ok>(ctx, 'File', 'AccountLimitSet', request, Ok());
+
+  /// SpaceLimitSet sets the space limit. Limit 0 means space will use account limits.
+  $async.Future<Ok> spaceLimitSet(
+          $pb.ClientContext? ctx, SpaceLimitSetRequest request) =>
+      _client.invoke<Ok>(ctx, 'File', 'SpaceLimitSet', request, Ok());
 }
 
 const $core.bool _omitFieldNames =

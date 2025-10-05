@@ -649,5 +649,4 @@ impl AclEventLogRecordType {
         }
     }
 }
-include!("coordinator.tonic.rs");
 // @@protoc_insertion_point(module)
