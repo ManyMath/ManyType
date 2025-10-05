@@ -1,0 +1,14 @@
+any-sync: v0.9.9
+anytype-heart: v0.48.5 (models.proto from main at cfb7ec9; compatible with v0.48.5)
+vendored: 2026-03-27
+
+Files vendored:
+  any_sync/spacesync.proto    - SpaceSync service (HeadSync, ObjectSyncStream)
+  any_sync/coordinator.proto  - Coordinator service (SpaceSign, NetworkConfiguration)
+  any_sync/consensus.proto    - Consensus service (LogAdd, RecordAdd)
+  any_sync/aclrecord.proto    - ACL record types (AclRoot, AclAccountInvite, etc.)
+  any_sync/treechange.proto   - Tree change types (RootChange, TreeChange)
+  any_sync/file.proto         - File sync service (FilePush, FileGet)
+  any_sync/handshake.proto    - Noise XX handshake messages
+  any_sync/crypto.proto       - Key type enums
+  any_block/models.proto      - Block model types (SmartBlockSnapshotBase, Block, Relation)

@@ -1,0 +1,264 @@
+syntax = "proto3";
+package spacesync;
+
+option go_package = "commonspace/spacesyncproto";
+
+enum ErrCodes {
+    Unexpected = 0;
+    SpaceMissing = 1;
+    SpaceExists = 2;
+    SpaceNotInCache = 3;
+    SpaceIsDeleted = 4;
+    PeerIsNotResponsible = 5;
+    ReceiptIsInvalid = 6;
+    InvalidPayload = 7;
+    DuplicateRequest = 8;
+    TooManyRequestsFromPeer = 9;
+    ErrorOffset = 100;
+}
+
+service SpaceSync {
+    // HeadSync compares all objects and their hashes in a space
+    rpc HeadSync(HeadSyncRequest) returns (HeadSyncResponse);
+    // StoreDiff compares all objects and their hashes in a space
+    rpc StoreDiff(StoreDiffRequest) returns (StoreDiffResponse);
+    // StoreElements exchanges elements between peers
+    rpc StoreElements(stream StoreKeyValue) returns (stream StoreKeyValue);
+    // SpacePush sends new space to the node
+    rpc SpacePush(SpacePushRequest) returns (SpacePushResponse);
+    // SpacePull gets space from the remote peer
+    rpc SpacePull(SpacePullRequest) returns (SpacePullResponse);
+    // ObjectSyncStream opens object sync stream with node or client
+    rpc ObjectSyncStream(stream ObjectSyncMessage) returns (stream ObjectSyncMessage);
+    // ObjectSync sends object sync message and synchronously gets response message
+    rpc ObjectSync(ObjectSyncMessage) returns (ObjectSyncMessage);
+    // ObjectSyncRequestStream opens sends a request and gets streamed response
+    rpc ObjectSyncRequestStream(ObjectSyncMessage) returns (stream ObjectSyncMessage);
+    // AclAddRecord adds a new record to acl log. Works only with any-sync-node
+    // deprecated: use coordinator api
+    rpc AclAddRecord(AclAddRecordRequest) returns (AclAddRecordResponse);
+    // AclGetRecords gets acl records
+    // deprecated: use coordinator api
+    rpc AclGetRecords(AclGetRecordsRequest) returns (AclGetRecordsResponse);
+}
+
+// HeadSyncRange presenting a request for one range
+message HeadSyncRange {
+    uint64 from = 1;
+    uint64 to = 2;
+    uint32 limit = 3;
+    bool elements = 4;
+}
+
+// HeadSyncResult presenting a response for one range
+message HeadSyncResult {
+    bytes hash = 1;
+    repeated HeadSyncResultElement elements = 2;
+    uint32 count = 3;
+}
+
+// HeadSyncResultElement presenting state of one object
+message HeadSyncResultElement {
+    string id = 1;
+    string head = 2;
+}
+
+// HeadSyncRequest is a request for HeadSync
+message HeadSyncRequest {
+    string spaceId = 1;
+    repeated HeadSyncRange ranges = 2;
+    DiffType diffType = 3;
+}
+
+// HeadSyncResponse is a response for HeadSync
+message HeadSyncResponse {
+    repeated HeadSyncResult results = 1;
+    DiffType diffType = 2;
+}
+
+// ObjectSyncMessage is a message sent on object sync
+message ObjectSyncMessage {
+    string spaceId = 1;
+    string requestId = 2;
+    string replyId = 3;
+    bytes payload = 4;
+    string objectId = 5;
+    ObjectType objectType = 6;
+}
+
+// SpacePushRequest is a request to add space on a node containing only one acl record
+message SpacePushRequest {
+    SpacePayload payload = 1;
+    bytes Credential = 2;
+}
+
+// SpacePushResponse is an empty response
+message SpacePushResponse {}
+
+// SpacePullRequest is a request to request a space on a node that doesn't have it
+message SpacePullRequest {
+    string id = 1;
+}
+
+// SpacePullResponse is a response with header and acl root
+message SpacePullResponse {
+    SpacePayload payload = 1;
+    repeated AclRecord aclRecords = 2;
+}
+
+message AclRecord {
+    bytes aclPayload = 1;
+    string id = 2;
+}
+
+// SpacePayload is a payload for pushing a space
+message SpacePayload {
+    RawSpaceHeaderWithId spaceHeader = 1;
+    bytes aclPayload = 2;
+    string aclPayloadId = 3;
+    bytes spaceSettingsPayload = 4;
+    string spaceSettingsPayloadId = 5;
+}
+
+// SpaceHeader is a header for a space
+message SpaceHeader {
+    bytes identity = 1;
+    int64 timestamp = 2;
+    string spaceType = 3;
+    uint64 replicationKey = 4;
+    bytes seed = 5;
+    bytes spaceHeaderPayload = 6;
+}
+
+// RawSpaceHeader is raw header for SpaceHeader
+message RawSpaceHeader {
+    bytes spaceHeader = 1;
+    bytes signature = 2;
+}
+
+// RawSpaceHeaderWithId is a marshalled RawSpaceHeader with its content id
+message RawSpaceHeaderWithId {
+    bytes rawHeader = 1;
+    string id = 2;
+}
+
+// SpaceSettingsContent is a payload for a space settings object
+message SpaceSettingsContent {
+    oneof value {
+        ObjectDelete objectDelete = 1;
+        SpaceDelete spaceDelete = 2;
+    }
+}
+
+// ObjectDelete is a message containing an object id which should be deleted
+message ObjectDelete {
+    string id = 1;
+}
+
+// StoreHeader is a header for a store
+message StoreHeader {
+    string spaceId = 1;
+    string storageName = 2;
+}
+
+// SpaceDelete is a message containing deleter peer id
+message SpaceDelete {
+    string deleterPeerId = 1;
+}
+
+// SpaceSettingsSnapshot contains all the deleted ids in a snapshot
+message SpaceSettingsSnapshot {
+    repeated string deletedIds = 1;
+    string deleterPeerId = 2;
+}
+
+// SettingsData contains ObjectTree change payload
+message SettingsData {
+    repeated SpaceSettingsContent content = 1;
+    SpaceSettingsSnapshot snapshot = 2;
+}
+
+// SpaceSubscription contains in ObjectSyncMessage.Payload and indicates that we need to subscribe or unsubscribe the current stream to this space
+enum SpaceSubscriptionAction {
+    Subscribe = 0;
+    Unsubscribe = 1;
+}
+
+message SpaceSubscription {
+    repeated string spaceIds = 1;
+    SpaceSubscriptionAction action = 2;
+}
+
+// AclAddRecordRequest contains marshaled consensusproto.RawRecord
+message AclAddRecordRequest {
+    string spaceId = 1;
+    bytes payload = 2;
+}
+
+// AclAddRecordResponse contains created record id and marshaled consensusproto.RawRecord
+message AclAddRecordResponse {
+    string recordId = 1;
+    bytes payload = 2;
+}
+
+// AclGetRecordsRequest can optionally contain the last known aclHead, the server will return only new records or an empty list if there are no new records.
+// If aclHead is not provided the whole list will be returned.
+message AclGetRecordsRequest {
+    string spaceId = 1;
+    string aclHead = 2;
+}
+
+// AclGetRecordsResponse contains list of marshaled consensusproto.RawRecordWithId
+message AclGetRecordsResponse {
+    repeated bytes records = 1;
+}
+
+message StoreDiffRequest {
+    string spaceId = 1;
+    repeated HeadSyncRange ranges = 2;
+}
+
+message StoreDiffResponse {
+    repeated HeadSyncResult results = 1;
+}
+
+message StoreKeyValue {
+    string keyPeerId = 1;
+    bytes value = 2;
+    bytes identitySignature = 3;
+    bytes peerSignature = 4;
+    string spaceId = 5;
+}
+
+message StoreKeyValues {
+    repeated StoreKeyValue keyValues = 1;
+}
+
+message StoreKeyInner {
+    bytes peer = 1;
+    bytes identity = 2;
+    bytes value = 3;
+    int64 timestampMicro = 4;
+    string aclHeadId = 5;
+    string key = 6;
+}
+
+message StorageHeader {
+    string spaceId = 1;
+    string storageName = 2;
+}
+
+// DiffType is a type of diff
+enum DiffType {
+    Initial = 0;
+    V1 = 1;
+    V2 = 2;
+    V3 = 3;
+}
+
+// ObjectType is a type of object
+enum ObjectType {
+    Tree = 0;
+    Acl = 1;
+    KeyValue = 2;
+}

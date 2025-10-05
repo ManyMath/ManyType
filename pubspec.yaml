@@ -27,3 +27,6 @@ melos:
       run: dart analyze .
       exec:
         concurrency: 1
+    codegen:
+      run: npx @bufbuild/buf generate
+      description: Generate Dart and Rust protobuf types from proto/
