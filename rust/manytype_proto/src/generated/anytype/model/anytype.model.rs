@@ -4677,4 +4677,372 @@ impl TemplateNamePrefillType {
         }
     }
 }
+/// the element of change tree used to store and internal apply smartBlock history
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Change {
+    /// set of actions to apply
+    #[prost(message, repeated, tag = "3")]
+    pub content: ::prost::alloc::vec::Vec<change::Content>,
+    /// snapshot - when not null, the Content will be ignored
+    #[prost(message, optional, tag = "4")]
+    pub snapshot: ::core::option::Option<change::Snapshot>,
+    /// file keys related to changes content
+    #[prost(message, repeated, tag = "6")]
+    pub file_keys: ::prost::alloc::vec::Vec<change::FileKeys>,
+    /// creation timestamp
+    #[prost(int64, tag = "7")]
+    pub timestamp: i64,
+    /// version of business logic
+    #[prost(uint32, tag = "8")]
+    pub version: u32,
+    /// business-level type of change applied to object
+    #[prost(uint32, tag = "9")]
+    pub change_type: u32,
+}
+/// Nested message and enum types in `Change`.
+pub mod change {
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Snapshot {
+        /// logId -> lastChangeId
+        #[prost(map = "string, string", tag = "1")]
+        pub log_heads: ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+        /// snapshot data
+        #[prost(message, optional, tag = "2")]
+        pub data: ::core::option::Option<super::SmartBlockSnapshotBase>,
+        /// all file keys related to doc
+        #[prost(message, repeated, tag = "3")]
+        pub file_keys: ::prost::alloc::vec::Vec<FileKeys>,
+    }
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct FileKeys {
+        #[prost(string, tag = "1")]
+        pub hash: ::prost::alloc::string::String,
+        #[prost(map = "string, string", tag = "2")]
+        pub keys: ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    }
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Content {
+        #[prost(oneof = "content::Value", tags = "1, 2, 3, 4, 5, 50, 51, 100, 101, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115")]
+        pub value: ::core::option::Option<content::Value>,
+    }
+    /// Nested message and enum types in `Content`.
+    pub mod content {
+        #[derive(Clone, PartialEq, ::prost::Oneof)]
+        pub enum Value {
+            #[prost(message, tag = "1")]
+            BlockCreate(super::BlockCreate),
+            #[prost(message, tag = "2")]
+            BlockUpdate(super::BlockUpdate),
+            #[prost(message, tag = "3")]
+            BlockRemove(super::BlockRemove),
+            #[prost(message, tag = "4")]
+            BlockMove(super::BlockMove),
+            #[prost(message, tag = "5")]
+            BlockDuplicate(super::BlockDuplicate),
+            #[prost(message, tag = "50")]
+            RelationAdd(super::RelationAdd),
+            #[prost(message, tag = "51")]
+            RelationRemove(super::RelationRemove),
+            #[prost(message, tag = "100")]
+            DetailsSet(super::DetailsSet),
+            #[prost(message, tag = "101")]
+            DetailsUnset(super::DetailsUnset),
+            #[prost(message, tag = "105")]
+            ObjectTypeAdd(super::ObjectTypeAdd),
+            #[prost(message, tag = "106")]
+            ObjectTypeRemove(super::ObjectTypeRemove),
+            #[prost(message, tag = "107")]
+            StoreKeySet(super::StoreKeySet),
+            #[prost(message, tag = "108")]
+            StoreKeyUnset(super::StoreKeyUnset),
+            #[prost(message, tag = "109")]
+            StoreSliceUpdate(super::StoreSliceUpdate),
+            #[prost(message, tag = "110")]
+            OriginalCreatedTimestampSet(super::OriginalCreatedTimestampSet),
+            #[prost(message, tag = "111")]
+            SetFileInfo(super::SetFileInfo),
+            #[prost(message, tag = "112")]
+            NotificationCreate(super::NotificationCreate),
+            #[prost(message, tag = "113")]
+            NotificationUpdate(super::NotificationUpdate),
+            #[prost(message, tag = "114")]
+            DeviceAdd(super::DeviceAdd),
+            #[prost(message, tag = "115")]
+            DeviceUpdate(super::DeviceUpdate),
+        }
+    }
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct BlockCreate {
+        #[prost(string, tag = "1")]
+        pub target_id: ::prost::alloc::string::String,
+        #[prost(enumeration = "super::block::Position", tag = "2")]
+        pub position: i32,
+        #[prost(message, repeated, tag = "3")]
+        pub blocks: ::prost::alloc::vec::Vec<super::Block>,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct BlockUpdate {
+        /// Original: repeated Event.Message events = 2;
+        /// Event.Message is from events.proto (1125 lines) -- not needed for v1.
+        /// Raw event bytes preserved for forward compatibility.
+        #[prost(bytes = "vec", repeated, tag = "2")]
+        pub events: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct BlockRemove {
+        #[prost(string, repeated, tag = "1")]
+        pub ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct BlockMove {
+        #[prost(string, tag = "1")]
+        pub target_id: ::prost::alloc::string::String,
+        #[prost(enumeration = "super::block::Position", tag = "2")]
+        pub position: i32,
+        #[prost(string, repeated, tag = "3")]
+        pub ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct BlockDuplicate {
+        #[prost(string, tag = "1")]
+        pub target_id: ::prost::alloc::string::String,
+        #[prost(enumeration = "super::block::Position", tag = "2")]
+        pub position: i32,
+        #[prost(string, repeated, tag = "3")]
+        pub ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    }
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct DetailsSet {
+        #[prost(string, tag = "1")]
+        pub key: ::prost::alloc::string::String,
+        #[prost(message, optional, tag = "2")]
+        pub value: ::core::option::Option<::prost_types::Value>,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct DetailsUnset {
+        #[prost(string, tag = "1")]
+        pub key: ::prost::alloc::string::String,
+    }
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct RelationAdd {
+        #[prost(message, repeated, tag = "1")]
+        pub relation_links: ::prost::alloc::vec::Vec<super::RelationLink>,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct RelationRemove {
+        #[prost(string, repeated, tag = "1")]
+        pub relation_key: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct ObjectTypeAdd {
+        #[prost(string, tag = "1")]
+        pub url: ::prost::alloc::string::String,
+        #[prost(string, tag = "2")]
+        pub key: ::prost::alloc::string::String,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct ObjectTypeRemove {
+        #[prost(string, tag = "1")]
+        pub url: ::prost::alloc::string::String,
+        #[prost(string, tag = "2")]
+        pub key: ::prost::alloc::string::String,
+    }
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct StoreKeySet {
+        #[prost(string, repeated, tag = "1")]
+        pub path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+        #[prost(message, optional, tag = "2")]
+        pub value: ::core::option::Option<::prost_types::Value>,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct StoreKeyUnset {
+        #[prost(string, repeated, tag = "1")]
+        pub path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct StoreSliceUpdate {
+        #[prost(string, tag = "1")]
+        pub key: ::prost::alloc::string::String,
+        #[prost(oneof = "store_slice_update::Operation", tags = "2, 3, 4")]
+        pub operation: ::core::option::Option<store_slice_update::Operation>,
+    }
+    /// Nested message and enum types in `StoreSliceUpdate`.
+    pub mod store_slice_update {
+        #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+        pub struct Add {
+            #[prost(string, tag = "1")]
+            pub after_id: ::prost::alloc::string::String,
+            #[prost(string, repeated, tag = "2")]
+            pub ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+        }
+        #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+        pub struct Remove {
+            #[prost(string, repeated, tag = "1")]
+            pub ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+        }
+        #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+        pub struct Move {
+            #[prost(string, tag = "1")]
+            pub after_id: ::prost::alloc::string::String,
+            #[prost(string, repeated, tag = "2")]
+            pub ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+        }
+        #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+        pub enum Operation {
+            #[prost(message, tag = "2")]
+            Add(Add),
+            #[prost(message, tag = "3")]
+            Remove(Remove),
+            #[prost(message, tag = "4")]
+            Move(Move),
+        }
+    }
+    #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct OriginalCreatedTimestampSet {
+        #[prost(int64, tag = "1")]
+        pub ts: i64,
+    }
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct SetFileInfo {
+        #[prost(message, optional, tag = "1")]
+        pub file_info: ::core::option::Option<super::FileInfo>,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct NotificationCreate {
+        #[prost(message, optional, tag = "1")]
+        pub notification: ::core::option::Option<super::Notification>,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct NotificationUpdate {
+        #[prost(string, tag = "1")]
+        pub id: ::prost::alloc::string::String,
+        #[prost(enumeration = "super::notification::Status", tag = "2")]
+        pub status: i32,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct DeviceAdd {
+        #[prost(message, optional, tag = "1")]
+        pub device: ::core::option::Option<super::DeviceInfo>,
+    }
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct DeviceUpdate {
+        #[prost(string, tag = "1")]
+        pub id: ::prost::alloc::string::String,
+        #[prost(string, tag = "2")]
+        pub name: ::prost::alloc::string::String,
+    }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ChangeNoSnapshot {
+    /// set of actions to apply
+    #[prost(message, repeated, tag = "3")]
+    pub content: ::prost::alloc::vec::Vec<change::Content>,
+    /// file keys related to changes content
+    #[prost(message, repeated, tag = "6")]
+    pub file_keys: ::prost::alloc::vec::Vec<change::FileKeys>,
+    /// creation timestamp
+    #[prost(int64, tag = "7")]
+    pub timestamp: i64,
+    /// version of business logic
+    #[prost(uint32, tag = "8")]
+    pub version: u32,
+    /// business-level type of change applied to object
+    #[prost(uint32, tag = "9")]
+    pub change_type: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StoreChange {
+    #[prost(message, repeated, tag = "1")]
+    pub change_set: ::prost::alloc::vec::Vec<StoreChangeContent>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StoreChangeContent {
+    #[prost(oneof = "store_change_content::Change", tags = "1, 2, 3")]
+    pub change: ::core::option::Option<store_change_content::Change>,
+}
+/// Nested message and enum types in `StoreChangeContent`.
+pub mod store_change_content {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Change {
+        #[prost(message, tag = "1")]
+        Create(super::DocumentCreate),
+        #[prost(message, tag = "2")]
+        Modify(super::DocumentModify),
+        #[prost(message, tag = "3")]
+        Delete(super::DocumentDelete),
+    }
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DocumentCreate {
+    #[prost(string, tag = "1")]
+    pub collection: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub document_id: ::prost::alloc::string::String,
+    /// json
+    #[prost(string, tag = "3")]
+    pub value: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DocumentModify {
+    #[prost(string, tag = "1")]
+    pub collection: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub document_id: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "4")]
+    pub keys: ::prost::alloc::vec::Vec<KeyModify>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct KeyModify {
+    /// key path; example: \[user, email\]
+    #[prost(string, repeated, tag = "1")]
+    pub key_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// modify op: set, unset, inc, etc.
+    #[prost(enumeration = "ModifyOp", tag = "3")]
+    pub modify_op: i32,
+    /// json value; example: '"new@email.com"'
+    #[prost(string, tag = "4")]
+    pub modify_value: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DocumentDelete {
+    #[prost(string, tag = "1")]
+    pub collection: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub document_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ModifyOp {
+    Set = 0,
+    Unset = 1,
+    Inc = 2,
+    AddToSet = 3,
+    Pull = 4,
+}
+impl ModifyOp {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Set => "Set",
+            Self::Unset => "Unset",
+            Self::Inc => "Inc",
+            Self::AddToSet => "AddToSet",
+            Self::Pull => "Pull",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "Set" => Some(Self::Set),
+            "Unset" => Some(Self::Unset),
+            "Inc" => Some(Self::Inc),
+            "AddToSet" => Some(Self::AddToSet),
+            "Pull" => Some(Self::Pull),
+            _ => None,
+        }
+    }
+}
 // @@protoc_insertion_point(module)

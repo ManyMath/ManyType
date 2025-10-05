@@ -12,3 +12,4 @@ Files vendored:
   any_sync/handshake.proto    - Noise XX handshake messages
   any_sync/crypto.proto       - Key type enums
   any_block/models.proto      - Block model types (SmartBlockSnapshotBase, Block, Relation)
+  any_block/changes.proto     - Change types (BlockCreate, BlockUpdate, BlockRemove, Snapshot)
