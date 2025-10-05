@@ -6,3 +6,6 @@
 //! - SLIP-0021 symmetric key derivation (space keys)
 //! - AES-256-GCM encryption/decryption
 //! - Ed25519 signing/verification
+
+pub mod bip39;
+pub mod slip0010;
