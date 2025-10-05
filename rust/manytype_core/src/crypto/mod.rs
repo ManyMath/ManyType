@@ -7,5 +7,8 @@
 //! - AES-256-GCM encryption/decryption
 //! - Ed25519 signing/verification
 
+pub mod aes_gcm;
 pub mod bip39;
+pub mod ed25519;
 pub mod slip0010;
+pub mod slip0021;
