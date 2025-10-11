@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 manytype_proto = { path = "../manytype_proto" }
+prost = { workspace = true }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 aes-gcm = "0.10"
 bip39 = "2"
