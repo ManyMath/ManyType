@@ -10,6 +10,7 @@ export 'src/crdt/block.dart';
 export 'src/crdt/cid.dart';
 export 'src/crdt/object_tree.dart';
 export 'src/crdt/tree_builder.dart';
+export 'src/crdt/snapshot.dart';
 export 'src/acl/acl_record.dart';
 export 'src/acl/acl_builder.dart';
 export 'src/acl/acl_state.dart';
