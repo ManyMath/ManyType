@@ -8,9 +8,9 @@ use anyhow::Result;
 /// In-memory for Phase 2 testing; Phase 3 swaps in redb persistence.
 pub trait TreeStorage: Send + Sync {
     fn add_raw_change(&mut self, id: String, raw: Vec<u8>) -> Result<()>;
-    fn get_raw_change(&self, id: &str) -> Result<Option<&[u8]>>;
+    fn get_raw_change(&self, id: &str) -> Result<Option<Vec<u8>>>;
     fn has_change(&self, id: &str) -> bool;
-    fn get_heads(&self) -> &[String];
+    fn get_heads(&self) -> Vec<String>;
     fn set_heads(&mut self, heads: Vec<String>);
 }
 
@@ -41,16 +41,16 @@ impl TreeStorage for InMemoryTreeStorage {
         Ok(())
     }
 
-    fn get_raw_change(&self, id: &str) -> Result<Option<&[u8]>> {
-        Ok(self.changes.get(id).map(|v| v.as_slice()))
+    fn get_raw_change(&self, id: &str) -> Result<Option<Vec<u8>>> {
+        Ok(self.changes.get(id).cloned())
     }
 
     fn has_change(&self, id: &str) -> bool {
         self.changes.contains_key(id)
     }
 
-    fn get_heads(&self) -> &[String] {
-        &self.heads
+    fn get_heads(&self) -> Vec<String> {
+        self.heads.clone()
     }
 
     fn set_heads(&mut self, heads: Vec<String>) {
@@ -68,7 +68,7 @@ mod tests {
         let data = vec![1, 2, 3, 4, 5];
         storage.add_raw_change("id1".to_string(), data.clone()).unwrap();
         let retrieved = storage.get_raw_change("id1").unwrap().unwrap();
-        assert_eq!(retrieved, &data[..]);
+        assert_eq!(retrieved.as_slice(), &data[..]);
     }
 
     #[test]
@@ -84,7 +84,7 @@ mod tests {
         let mut storage = InMemoryTreeStorage::new();
         assert!(storage.get_heads().is_empty());
         storage.set_heads(vec!["head1".to_string(), "head2".to_string()]);
-        assert_eq!(storage.get_heads(), &["head1".to_string(), "head2".to_string()]);
+        assert_eq!(storage.get_heads(), vec!["head1".to_string(), "head2".to_string()]);
     }
 
     #[test]
