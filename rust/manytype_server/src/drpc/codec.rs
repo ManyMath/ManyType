@@ -1,0 +1,313 @@
+//! DRPC wire protocol frame codec.
+//!
+//! Implements the Storj DRPC wire format:
+//! `[header: 1 byte] [stream_id: varint] [message_id: varint] [length: varint] [data: length bytes]`
+//!
+//! Header byte layout:
+//! - bit 7 (MSB): control flag
+//! - bits 6-1: kind (6 bits)
+//! - bit 0 (LSB): done flag
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use prost::encoding::{decode_varint, encode_varint};
+use tokio_util::codec::{Decoder, Encoder};
+
+/// Frame kind constants matching the DRPC wire protocol.
+pub const KIND_INVOKE: u8 = 1;
+pub const KIND_MESSAGE: u8 = 2;
+pub const KIND_ERROR: u8 = 3;
+pub const KIND_CANCEL: u8 = 4;
+pub const KIND_CLOSE: u8 = 5;
+pub const KIND_CLOSE_SEND: u8 = 6;
+pub const KIND_INVOKE_METADATA: u8 = 7;
+
+/// A single DRPC wire frame.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DrpcFrame {
+    pub kind: u8,
+    pub done: bool,
+    pub control: bool,
+    pub stream_id: u64,
+    pub message_id: u64,
+    pub data: Bytes,
+}
+
+/// Encode the header byte from kind, done, and control flags.
+///
+/// Layout: `[control (bit 7)] [kind (bits 6-1)] [done (bit 0)]`
+pub fn encode_header(kind: u8, done: bool, control: bool) -> u8 {
+    let mut h: u8 = 0;
+    if control {
+        h |= 0x80; // bit 7
+    }
+    h |= (kind & 0x3F) << 1; // bits 6-1
+    if done {
+        h |= 0x01; // bit 0
+    }
+    h
+}
+
+/// Decode the header byte into (control, kind, done).
+pub fn decode_header(h: u8) -> (bool, u8, bool) {
+    let control = (h & 0x80) != 0;
+    let kind = (h >> 1) & 0x3F;
+    let done = (h & 0x01) != 0;
+    (control, kind, done)
+}
+
+/// Tokio codec for DRPC frames.
+#[derive(Debug, Default)]
+pub struct DrpcCodec;
+
+impl DrpcCodec {
+    pub fn new() -> Self {
+        DrpcCodec
+    }
+}
+
+impl Encoder<DrpcFrame> for DrpcCodec {
+    type Error = std::io::Error;
+
+    fn encode(&mut self, frame: DrpcFrame, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        // Header byte
+        dst.put_u8(encode_header(frame.kind, frame.done, frame.control));
+
+        // Varints for stream_id, message_id, data length
+        encode_varint(frame.stream_id, dst);
+        encode_varint(frame.message_id, dst);
+        encode_varint(frame.data.len() as u64, dst);
+
+        // Data payload
+        dst.extend_from_slice(&frame.data);
+
+        Ok(())
+    }
+}
+
+impl Decoder for DrpcCodec {
+    type Item = DrpcFrame;
+    type Error = std::io::Error;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        if src.is_empty() {
+            return Ok(None);
+        }
+
+        // Try to decode the entire frame without consuming `src` yet.
+        // We work on a Cursor so we can rewind if data is incomplete.
+        let mut cursor = std::io::Cursor::new(&src[..]);
+
+        // Header byte
+        if cursor.remaining() < 1 {
+            return Ok(None);
+        }
+        let header = cursor.get_u8();
+        let (control, kind, done) = decode_header(header);
+
+        // Decode three varints: stream_id, message_id, length
+        let stream_id = match decode_varint(&mut cursor) {
+            Ok(v) => v,
+            Err(_) => {
+                // Incomplete varint -- need more data
+                src.reserve(1);
+                return Ok(None);
+            }
+        };
+
+        let message_id = match decode_varint(&mut cursor) {
+            Ok(v) => v,
+            Err(_) => {
+                src.reserve(1);
+                return Ok(None);
+            }
+        };
+
+        let data_len = match decode_varint(&mut cursor) {
+            Ok(v) => v as usize,
+            Err(_) => {
+                src.reserve(1);
+                return Ok(None);
+            }
+        };
+
+        // Check if we have enough data bytes
+        if cursor.remaining() < data_len {
+            // Reserve enough space for the remaining data
+            src.reserve(data_len - cursor.remaining());
+            return Ok(None);
+        }
+
+        // We have a complete frame. Record how many bytes we consumed.
+        let pos = cursor.position() as usize;
+        let total_frame_len = pos + data_len;
+
+        // Extract data
+        let data = Bytes::copy_from_slice(&src[pos..pos + data_len]);
+
+        // Advance src past the entire frame
+        src.advance(total_frame_len);
+
+        Ok(Some(DrpcFrame {
+            kind,
+            done,
+            control,
+            stream_id,
+            message_id,
+            data,
+        }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+    use tokio_util::codec::{Decoder, Encoder};
+
+    #[test]
+    fn test_encode_header_invoke() {
+        // KIND_INVOKE=1, done=false, control=false -> kind<<1 = 0x02
+        assert_eq!(encode_header(KIND_INVOKE, false, false), 0x02);
+    }
+
+    #[test]
+    fn test_encode_header_message_done() {
+        // KIND_MESSAGE=2, done=true, control=false -> (2<<1)|1 = 0x05
+        assert_eq!(encode_header(KIND_MESSAGE, true, false), 0x05);
+    }
+
+    #[test]
+    fn test_decode_header_roundtrip() {
+        for kind in 0..=0x3F {
+            for done in [false, true] {
+                for control in [false, true] {
+                    let h = encode_header(kind, done, control);
+                    let (c, k, d) = decode_header(h);
+                    assert_eq!((c, k, d), (control, kind, done), "header byte {h:#04x}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_invoke_frame() {
+        let mut codec = DrpcCodec::new();
+        let frame = DrpcFrame {
+            kind: KIND_INVOKE,
+            done: false,
+            control: false,
+            stream_id: 1,
+            message_id: 0,
+            data: Bytes::from_static(b"/pkg.Svc/Method"),
+        };
+
+        let mut buf = BytesMut::new();
+        codec.encode(frame.clone(), &mut buf).unwrap();
+
+        let decoded = codec.decode(&mut buf).unwrap().unwrap();
+        assert_eq!(decoded, frame);
+    }
+
+    #[test]
+    fn test_roundtrip_message_frame() {
+        let mut codec = DrpcCodec::new();
+        let frame = DrpcFrame {
+            kind: KIND_MESSAGE,
+            done: false,
+            control: false,
+            stream_id: 1,
+            message_id: 1,
+            data: Bytes::from_static(b"\x08\x01"),
+        };
+
+        let mut buf = BytesMut::new();
+        codec.encode(frame.clone(), &mut buf).unwrap();
+
+        let decoded = codec.decode(&mut buf).unwrap().unwrap();
+        assert_eq!(decoded, frame);
+    }
+
+    #[test]
+    fn test_roundtrip_close_send_done() {
+        let mut codec = DrpcCodec::new();
+        let frame = DrpcFrame {
+            kind: KIND_CLOSE_SEND,
+            done: true,
+            control: false,
+            stream_id: 1,
+            message_id: 0,
+            data: Bytes::new(),
+        };
+
+        let mut buf = BytesMut::new();
+        codec.encode(frame.clone(), &mut buf).unwrap();
+
+        let decoded = codec.decode(&mut buf).unwrap().unwrap();
+        assert_eq!(decoded, frame);
+    }
+
+    #[test]
+    fn test_partial_frame_returns_none() {
+        let mut codec = DrpcCodec::new();
+        let frame = DrpcFrame {
+            kind: KIND_INVOKE,
+            done: false,
+            control: false,
+            stream_id: 1,
+            message_id: 0,
+            data: Bytes::from_static(b"/pkg.Svc/Method"),
+        };
+
+        let mut buf = BytesMut::new();
+        codec.encode(frame, &mut buf).unwrap();
+
+        // Truncate to simulate partial data (just the header byte)
+        buf.truncate(1);
+
+        let result = codec.decode(&mut buf).unwrap();
+        assert!(result.is_none(), "partial frame should return Ok(None)");
+    }
+
+    #[test]
+    fn test_empty_buffer_returns_none() {
+        let mut codec = DrpcCodec::new();
+        let mut buf = BytesMut::new();
+
+        let result = codec.decode(&mut buf).unwrap();
+        assert!(result.is_none(), "empty buffer should return Ok(None)");
+    }
+
+    #[test]
+    fn test_multiple_frames_in_buffer() {
+        let mut codec = DrpcCodec::new();
+        let frame1 = DrpcFrame {
+            kind: KIND_INVOKE,
+            done: false,
+            control: false,
+            stream_id: 1,
+            message_id: 0,
+            data: Bytes::from_static(b"/method"),
+        };
+        let frame2 = DrpcFrame {
+            kind: KIND_MESSAGE,
+            done: true,
+            control: false,
+            stream_id: 1,
+            message_id: 1,
+            data: Bytes::from_static(b"\x08\x01"),
+        };
+
+        let mut buf = BytesMut::new();
+        codec.encode(frame1.clone(), &mut buf).unwrap();
+        codec.encode(frame2.clone(), &mut buf).unwrap();
+
+        let decoded1 = codec.decode(&mut buf).unwrap().unwrap();
+        assert_eq!(decoded1, frame1);
+
+        let decoded2 = codec.decode(&mut buf).unwrap().unwrap();
+        assert_eq!(decoded2, frame2);
+
+        // Buffer should be empty now
+        assert!(buf.is_empty());
+    }
+}
