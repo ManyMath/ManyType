@@ -1,0 +1,4 @@
+quic_listen = "127.0.0.1:33020"
+db_path = "/tmp/manytype_test.redb"
+identity_seed = "0101010101010101010101010101010101010101010101010101010101010101"
+network_id = "manytype-dev"
