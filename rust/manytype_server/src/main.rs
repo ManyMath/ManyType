@@ -7,6 +7,7 @@ mod handshake;
 mod consensus;
 mod file_node;
 mod storage;
+mod sync_node;
 mod transport;
 
 use std::sync::Arc;
