@@ -7,6 +7,7 @@ mod storage;
 mod transport;
 
 use anyhow::Result;
+use manytype_core::crypto::ed25519;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -21,6 +22,15 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|| "config.toml".to_string());
     let config = config::ServerConfig::load(&config_path)?;
 
+    // Derive signing key from identity seed
+    let seed_bytes = hex::decode(&config.identity_seed)?;
+    let seed: [u8; 32] = seed_bytes
+        .try_into()
+        .map_err(|v: Vec<u8>| anyhow::anyhow!("identity_seed must be 32 bytes, got {}", v.len()))?;
+    let signing_key = ed25519::signing_key_from_seed(&seed);
+    let verifying_key = ed25519::verifying_key(&signing_key);
+    let local_peer_id = verifying_key.to_bytes().to_vec();
+
     // Start QUIC listener
     let server_config = transport::quic::make_server_config()?;
     let endpoint = transport::quic::run_quic_listener(&config.quic_listen, server_config).await?;
@@ -28,8 +38,10 @@ async fn main() -> Result<()> {
 
     // Accept connections
     while let Some(incoming) = endpoint.accept().await {
+        let signing_key = signing_key.clone();
+        let local_peer_id = local_peer_id.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(incoming).await {
+            if let Err(e) = handle_connection(incoming, signing_key, local_peer_id).await {
                 tracing::error!("Connection error: {}", e);
             }
         });
@@ -40,23 +52,68 @@ async fn main() -> Result<()> {
 
 /// Handle an incoming QUIC connection.
 ///
-/// Placeholder: accepts connection and logs peer address.
-/// Full handshake + DRPC dispatch wiring added in Task 2.
-async fn handle_connection(incoming: quinn::Incoming) -> Result<()> {
+/// Accepts bidirectional streams, performs credential handshake on each,
+/// then transitions to DRPC dispatch loop.
+async fn handle_connection(
+    incoming: quinn::Incoming,
+    signing_key: ed25519_dalek::SigningKey,
+    local_peer_id: Vec<u8>,
+) -> Result<()> {
     let connection = incoming.await?;
     tracing::info!("New connection from {}", connection.remote_address());
 
-    // Accept bidirectional streams (placeholder -- handshake + DRPC in Task 2)
     loop {
-        match connection.accept_bi().await {
-            Ok((_send, _recv)) => {
-                tracing::info!("Accepted bidirectional stream from {}", connection.remote_address());
-            }
+        let (send, recv) = match connection.accept_bi().await {
+            Ok(streams) => streams,
             Err(quinn::ConnectionError::ApplicationClosed(_)) => {
                 tracing::info!("Connection closed by peer");
                 return Ok(());
             }
             Err(e) => return Err(e.into()),
+        };
+
+        let signing_key = signing_key.clone();
+        let local_peer_id = local_peer_id.clone();
+        tokio::spawn(async move {
+            if let Err(e) = handle_stream(send, recv, signing_key, local_peer_id).await {
+                tracing::error!("Stream error: {}", e);
+            }
+        });
+    }
+}
+
+/// Handle a single bidirectional QUIC stream.
+///
+/// Performs credential handshake, then enters DRPC dispatch loop.
+async fn handle_stream(
+    send: quinn::SendStream,
+    recv: quinn::RecvStream,
+    signing_key: ed25519_dalek::SigningKey,
+    local_peer_id: Vec<u8>,
+) -> Result<()> {
+    let mut stream = tokio::io::join(recv, send);
+
+    // Perform credential handshake
+    let remote_peer_id = handshake::perform_handshake(&mut stream, &signing_key, &local_peer_id).await?;
+    tracing::info!(
+        "Handshake complete with peer {}",
+        hex::encode(&remote_peer_id)
+    );
+
+    // Transition to DRPC dispatch
+    let mut drpc_stream = drpc::stream::DrpcStream::new(stream);
+    let state = drpc::router::ServerState {};
+
+    loop {
+        match drpc_stream.read_invoke().await {
+            Ok((_stream_id, method)) => {
+                if let Err(e) = drpc::router::dispatch(&method, &mut drpc_stream, &state).await {
+                    tracing::error!("RPC error on {}: {}", method, e);
+                }
+            }
+            Err(_) => break, // connection closed
         }
     }
+
+    Ok(())
 }
