@@ -1,32 +1,40 @@
 //! DRPC method router -- dispatches incoming RPC calls to handler functions.
 
 use anyhow::{Result, bail};
+use prost::Message;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::stream::DrpcStream;
+use crate::coordinator::{self, CoordinatorConfig};
 
 /// Shared server state passed to all RPC handlers.
 ///
-/// Placeholder struct -- will be populated with storage, config, etc.
-/// in later plans (03-02 through 03-05).
-pub struct ServerState {}
+/// Extended as new handler modules are wired in.
+pub struct ServerState {
+    pub coordinator_config: CoordinatorConfig,
+}
 
 /// Dispatch an RPC call to the appropriate handler based on method path.
 ///
 /// The caller should have already read the invoke frame to obtain the
 /// method path and stream_id. This function matches the method and
-/// invokes the corresponding handler stub.
+/// invokes the corresponding handler.
 pub async fn dispatch<T>(
     method: &str,
     stream: &mut DrpcStream<T>,
-    _state: &ServerState,
+    state: &ServerState,
 ) -> Result<()>
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
     match method {
         "/coordinator.Coordinator/NetworkConfiguration" => {
-            handle_network_configuration(stream).await
+            let request_bytes = stream.read_message().await?;
+            let response_bytes = coordinator::handle_network_configuration(
+                &request_bytes,
+                &state.coordinator_config,
+            )?;
+            stream.write_message(0, 0, &response_bytes).await
         }
         "/spacesync.SpaceSync/HeadSync" => {
             handle_head_sync(stream).await
@@ -56,12 +64,6 @@ where
 }
 
 // --- Handler stubs (implemented in later plans) ---
-
-async fn handle_network_configuration<T: AsyncRead + AsyncWrite + Unpin>(
-    _stream: &mut DrpcStream<T>,
-) -> Result<()> {
-    todo!("NetworkConfiguration handler -- implemented in plan 03-02")
-}
 
 async fn handle_head_sync<T: AsyncRead + AsyncWrite + Unpin>(
     _stream: &mut DrpcStream<T>,
@@ -105,7 +107,17 @@ mod tests {
     use bytes::Bytes;
     use tokio::io::duplex;
 
-    use crate::drpc::codec::{DrpcFrame, KIND_ERROR, KIND_INVOKE};
+    use crate::drpc::codec::{DrpcFrame, KIND_ERROR, KIND_INVOKE, KIND_MESSAGE};
+
+    fn test_state() -> ServerState {
+        ServerState {
+            coordinator_config: CoordinatorConfig {
+                network_id: "test-net".to_string(),
+                peer_id: "test-peer".to_string(),
+                addresses: vec!["127.0.0.1:4830".to_string()],
+            },
+        }
+    }
 
     #[tokio::test]
     async fn test_unknown_method_returns_error() {
@@ -113,7 +125,7 @@ mod tests {
         let mut server_stream = DrpcStream::new(server);
         let mut client_stream = DrpcStream::new(client);
 
-        let state = ServerState {};
+        let state = test_state();
 
         // Spawn dispatch for an unknown method
         let handle = tokio::spawn(async move {
@@ -139,23 +151,44 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_dispatch_known_method_hits_stub() {
-        let (client, server) = duplex(1024);
-        let mut server_stream = DrpcStream::new(server);
-        let state = ServerState {};
+    async fn test_dispatch_network_configuration() {
+        use manytype_proto::coordinator::{
+            NetworkConfigurationRequest, NetworkConfigurationResponse,
+        };
 
-        // Known method should hit todo!() -- we catch the panic
-        let result = tokio::spawn(async move {
+        let (client, server) = duplex(4096);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+
+        let state = test_state();
+
+        // Spawn dispatch handler
+        let handle = tokio::spawn(async move {
             dispatch(
                 "/coordinator.Coordinator/NetworkConfiguration",
                 &mut server_stream,
                 &state,
             )
             .await
-        })
-        .await;
+            .unwrap();
+        });
 
-        // The task should panic due to todo!()
-        assert!(result.is_err(), "known method stub should panic with todo!()");
+        // Client sends the request as a message frame
+        let request = NetworkConfigurationRequest::default();
+        let request_bytes = request.encode_to_vec();
+        client_stream.write_message(0, 0, &request_bytes).await.unwrap();
+
+        // Read the response message frame
+        let frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(frame.kind, KIND_MESSAGE);
+        assert!(frame.done);
+
+        let response =
+            NetworkConfigurationResponse::decode(frame.data.as_ref()).unwrap();
+        assert_eq!(response.network_id, "test-net");
+        assert!(!response.nodes.is_empty());
+        assert_eq!(response.nodes[0].peer_id, "test-peer");
+
+        handle.await.unwrap();
     }
 }

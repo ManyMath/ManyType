@@ -1,6 +1,7 @@
 //! Manytype server: all four any-sync node roles in a single binary.
 
 mod config;
+mod coordinator;
 mod drpc;
 mod handshake;
 mod storage;
