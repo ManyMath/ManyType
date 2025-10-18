@@ -37,6 +37,10 @@ async fn main() -> Result<()> {
     let verifying_key = ed25519::verifying_key(&signing_key);
     let local_peer_id = verifying_key.to_bytes().to_vec();
 
+    // Open persistent storage
+    let _db = storage::redb_storage::RedbTreeStorage::open(std::path::Path::new(&config.db_path))?;
+    tracing::info!("Opened redb database at {}", config.db_path);
+
     // Build shared server state
     let state = Arc::new(drpc::router::ServerState {
         coordinator_config: coordinator::CoordinatorConfig {
@@ -44,6 +48,7 @@ async fn main() -> Result<()> {
             peer_id: hex::encode(&local_peer_id),
             addresses: vec![config.quic_listen.clone()],
         },
+        sync_state: sync_node::new_shared_sync_state(),
     });
 
     // Start QUIC listener
