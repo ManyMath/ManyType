@@ -5,7 +5,9 @@ use prost::Message;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::stream::DrpcStream;
+use crate::consensus;
 use crate::coordinator::{self, CoordinatorConfig};
+use crate::file_node;
 
 /// Shared server state passed to all RPC handlers.
 ///
@@ -46,13 +48,19 @@ where
             handle_space_push(stream).await
         }
         "/consensusProto.Consensus/LogAdd" => {
-            handle_log_add(stream).await
+            let request_bytes = stream.read_message().await?;
+            let response_bytes = consensus::handle_log_add(&request_bytes)?;
+            stream.write_message(0, 0, &response_bytes).await
         }
         "/consensusProto.Consensus/RecordAdd" => {
-            handle_record_add(stream).await
+            let request_bytes = stream.read_message().await?;
+            let response_bytes = consensus::handle_record_add(&request_bytes)?;
+            stream.write_message(0, 0, &response_bytes).await
         }
         "/filesync.File/BlockPush" => {
-            handle_block_push(stream).await
+            let request_bytes = stream.read_message().await?;
+            let response_bytes = file_node::handle_block_push(&request_bytes)?;
+            stream.write_message(0, 0, &response_bytes).await
         }
         unknown => {
             stream
@@ -63,7 +71,7 @@ where
     }
 }
 
-// --- Handler stubs (implemented in later plans) ---
+// --- Handler stubs for spacesync (implemented in plan 03-03) ---
 
 async fn handle_head_sync<T: AsyncRead + AsyncWrite + Unpin>(
     _stream: &mut DrpcStream<T>,
@@ -81,24 +89,6 @@ async fn handle_space_push<T: AsyncRead + AsyncWrite + Unpin>(
     _stream: &mut DrpcStream<T>,
 ) -> Result<()> {
     todo!("SpacePush handler -- implemented in plan 03-03")
-}
-
-async fn handle_log_add<T: AsyncRead + AsyncWrite + Unpin>(
-    _stream: &mut DrpcStream<T>,
-) -> Result<()> {
-    todo!("LogAdd handler -- implemented in plan 03-04")
-}
-
-async fn handle_record_add<T: AsyncRead + AsyncWrite + Unpin>(
-    _stream: &mut DrpcStream<T>,
-) -> Result<()> {
-    todo!("RecordAdd handler -- implemented in plan 03-04")
-}
-
-async fn handle_block_push<T: AsyncRead + AsyncWrite + Unpin>(
-    _stream: &mut DrpcStream<T>,
-) -> Result<()> {
-    todo!("BlockPush handler -- implemented in plan 03-05")
 }
 
 #[cfg(test)]
@@ -188,6 +178,82 @@ mod tests {
         assert_eq!(response.network_id, "test-net");
         assert!(!response.nodes.is_empty());
         assert_eq!(response.nodes[0].peer_id, "test-peer");
+
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_dispatch_log_add() {
+        use manytype_proto::consensus::{LogAddRequest, Ok as ConsensusOk};
+
+        let (client, server) = duplex(4096);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+
+        let state = test_state();
+
+        let handle = tokio::spawn(async move {
+            dispatch(
+                "/consensusProto.Consensus/LogAdd",
+                &mut server_stream,
+                &state,
+            )
+            .await
+            .unwrap();
+        });
+
+        let request = LogAddRequest {
+            log_id: "test-log".to_string(),
+            ..Default::default()
+        };
+        client_stream
+            .write_message(0, 0, &request.encode_to_vec())
+            .await
+            .unwrap();
+
+        let frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(frame.kind, KIND_MESSAGE);
+        assert!(frame.done);
+        let _ok = ConsensusOk::decode(frame.data.as_ref()).unwrap();
+
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_dispatch_block_push() {
+        use manytype_proto::filesync::{BlockPushRequest, Ok as FilesyncOk};
+
+        let (client, server) = duplex(4096);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+
+        let state = test_state();
+
+        let handle = tokio::spawn(async move {
+            dispatch(
+                "/filesync.File/BlockPush",
+                &mut server_stream,
+                &state,
+            )
+            .await
+            .unwrap();
+        });
+
+        let request = BlockPushRequest {
+            space_id: "sp1".to_string(),
+            file_id: "f1".to_string(),
+            data: b"data".to_vec(),
+            ..Default::default()
+        };
+        client_stream
+            .write_message(0, 0, &request.encode_to_vec())
+            .await
+            .unwrap();
+
+        let frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(frame.kind, KIND_MESSAGE);
+        assert!(frame.done);
+        let _ok = FilesyncOk::decode(frame.data.as_ref()).unwrap();
 
         handle.await.unwrap();
     }

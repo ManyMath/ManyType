@@ -4,6 +4,8 @@ mod config;
 mod coordinator;
 mod drpc;
 mod handshake;
+mod consensus;
+mod file_node;
 mod storage;
 mod transport;
 
