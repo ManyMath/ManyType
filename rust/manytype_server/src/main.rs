@@ -9,6 +9,8 @@ mod file_node;
 mod storage;
 mod transport;
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use manytype_core::crypto::ed25519;
 
@@ -34,6 +36,15 @@ async fn main() -> Result<()> {
     let verifying_key = ed25519::verifying_key(&signing_key);
     let local_peer_id = verifying_key.to_bytes().to_vec();
 
+    // Build shared server state
+    let state = Arc::new(drpc::router::ServerState {
+        coordinator_config: coordinator::CoordinatorConfig {
+            network_id: config.network_id.clone(),
+            peer_id: hex::encode(&local_peer_id),
+            addresses: vec![config.quic_listen.clone()],
+        },
+    });
+
     // Start QUIC listener
     let server_config = transport::quic::make_server_config()?;
     let endpoint = transport::quic::run_quic_listener(&config.quic_listen, server_config).await?;
@@ -43,8 +54,9 @@ async fn main() -> Result<()> {
     while let Some(incoming) = endpoint.accept().await {
         let signing_key = signing_key.clone();
         let local_peer_id = local_peer_id.clone();
+        let state = Arc::clone(&state);
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(incoming, signing_key, local_peer_id).await {
+            if let Err(e) = handle_connection(incoming, signing_key, local_peer_id, state).await {
                 tracing::error!("Connection error: {}", e);
             }
         });
@@ -53,14 +65,11 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Handle an incoming QUIC connection.
-///
-/// Accepts bidirectional streams, performs credential handshake on each,
-/// then transitions to DRPC dispatch loop.
 async fn handle_connection(
     incoming: quinn::Incoming,
     signing_key: ed25519_dalek::SigningKey,
     local_peer_id: Vec<u8>,
+    state: Arc<drpc::router::ServerState>,
 ) -> Result<()> {
     let connection = incoming.await?;
     tracing::info!("New connection from {}", connection.remote_address());
@@ -77,22 +86,21 @@ async fn handle_connection(
 
         let signing_key = signing_key.clone();
         let local_peer_id = local_peer_id.clone();
+        let state = Arc::clone(&state);
         tokio::spawn(async move {
-            if let Err(e) = handle_stream(send, recv, signing_key, local_peer_id).await {
+            if let Err(e) = handle_stream(send, recv, signing_key, local_peer_id, state).await {
                 tracing::error!("Stream error: {}", e);
             }
         });
     }
 }
 
-/// Handle a single bidirectional QUIC stream.
-///
-/// Performs credential handshake, then enters DRPC dispatch loop.
 async fn handle_stream(
     send: quinn::SendStream,
     recv: quinn::RecvStream,
     signing_key: ed25519_dalek::SigningKey,
     local_peer_id: Vec<u8>,
+    state: Arc<drpc::router::ServerState>,
 ) -> Result<()> {
     let mut stream = tokio::io::join(recv, send);
 
@@ -105,7 +113,6 @@ async fn handle_stream(
 
     // Transition to DRPC dispatch
     let mut drpc_stream = drpc::stream::DrpcStream::new(stream);
-    let state = drpc::router::ServerState {};
 
     loop {
         match drpc_stream.read_invoke().await {
@@ -114,7 +121,7 @@ async fn handle_stream(
                     tracing::error!("RPC error on {}: {}", method, e);
                 }
             }
-            Err(_) => break, // connection closed
+            Err(_) => break,
         }
     }
 
