@@ -1,0 +1,26 @@
+[package]
+name = "manytype_quic_ffi"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+manytype_proto = { path = "../manytype_proto" }
+manytype_core = { path = "../manytype_core" }
+manytype_server = { path = "../manytype_server" }
+tokio = { workspace = true }
+quinn = { workspace = true }
+rustls = { workspace = true }
+prost = { workspace = true }
+bytes = { workspace = true }
+tokio-util = { workspace = true }
+futures = { workspace = true }
+anyhow = { workspace = true }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }

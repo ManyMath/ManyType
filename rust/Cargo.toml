@@ -4,6 +4,7 @@ members = [
     "manytype_proto",
     "manytype_core",
     "manytype_server",
+    "manytype_quic_ffi",
 ]
 
 [workspace.dependencies]
