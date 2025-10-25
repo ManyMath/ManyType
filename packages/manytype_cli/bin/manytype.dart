@@ -1,6 +1,7 @@
 import 'package:args/args.dart';
 
 import 'package:manytype_cli/src/commands/create.dart';
+import 'package:manytype_cli/src/commands/read.dart';
 import 'package:manytype_cli/src/commands/sync.dart';
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/store/database.dart';
@@ -52,7 +53,11 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'read':
-      print('read: not yet implemented (plan 05)');
+      final config = await CliConfig.load(serverOverride: serverOverride);
+      final db = ManytypeDatabase(CliConfig.dbPath);
+      final objId = command.rest.isNotEmpty ? command.rest.first : null;
+      await readCommand(db, config, objectId: objId);
+      await db.close();
       break;
   }
 }
