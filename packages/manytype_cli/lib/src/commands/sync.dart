@@ -133,12 +133,9 @@ Future<void> syncCommand(ManytypeDatabase db, CliConfig config) async {
 
 /// Encode changes as length-prefixed byte array for FFI boundary.
 ///
-/// Format: [u32 LE count][u32 LE len1][bytes1][u32 LE len2][bytes2]...
+/// Format: [u32 LE len1][bytes1][u32 LE len2][bytes2]...
 Uint8List _encodeChangesForFfi(List<Change> changes) {
   final buffer = BytesBuilder();
-  // Write count
-  final countBytes = ByteData(4)..setUint32(0, changes.length, Endian.little);
-  buffer.add(countBytes.buffer.asUint8List());
   for (final change in changes) {
     final raw = change.rawBytes;
     final lenBytes = ByteData(4)..setUint32(0, raw.length, Endian.little);

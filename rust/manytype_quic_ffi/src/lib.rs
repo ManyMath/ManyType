@@ -16,6 +16,8 @@ use std::sync::{LazyLock, Mutex};
 
 use client::ConnHandle;
 use manytype_core::crypto::ed25519;
+use manytype_proto::spacesync::ObjectSyncMessage;
+use prost::Message;
 use runtime::RUNTIME;
 
 /// Global handle storage: maps handle IDs to ConnHandles.
@@ -141,19 +143,28 @@ pub extern "C" fn ffi_invoke(
 #[unsafe(no_mangle)]
 pub extern "C" fn ffi_sync_object(
     handle_id: u64,
-    _space_id: *const c_char,
-    _object_id: *const c_char,
+    space_id: *const c_char,
+    object_id: *const c_char,
     changes_data: *const u8,
     changes_len: u32,
 ) -> *mut FfiResult {
-    // Parse length-prefixed changes
+    let space_id = unsafe { CStr::from_ptr(space_id) }
+        .to_str()
+        .unwrap_or("")
+        .to_string();
+    let object_id = unsafe { CStr::from_ptr(object_id) }
+        .to_str()
+        .unwrap_or("")
+        .to_string();
+
+    // Parse length-prefixed raw changes
     let changes_slice = if changes_len > 0 {
         unsafe { std::slice::from_raw_parts(changes_data, changes_len as usize) }
     } else {
         &[]
     };
 
-    let mut changes = Vec::new();
+    let mut raw_changes = Vec::new();
     let mut offset = 0usize;
     while offset + 4 <= changes_slice.len() {
         let len = u32::from_le_bytes(
@@ -163,9 +174,25 @@ pub extern "C" fn ffi_sync_object(
         if offset + len > changes_slice.len() {
             return FfiResult::error("changes_data truncated".to_string());
         }
-        changes.push(changes_slice[offset..offset + len].to_vec());
+        raw_changes.push(changes_slice[offset..offset + len].to_vec());
         offset += len;
     }
+
+    // Wrap each raw change in an ObjectSyncMessage protobuf
+    let changes: Vec<Vec<u8>> = raw_changes
+        .into_iter()
+        .enumerate()
+        .map(|(i, payload)| {
+            let msg = ObjectSyncMessage {
+                space_id: space_id.clone(),
+                object_id: object_id.clone(),
+                request_id: format!("req-{i}"),
+                payload,
+                ..Default::default()
+            };
+            msg.encode_to_vec()
+        })
+        .collect();
 
     let mut handles = HANDLES.lock().unwrap();
     let handle = match handles.get_mut(&handle_id) {
