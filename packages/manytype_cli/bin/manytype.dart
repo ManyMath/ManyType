@@ -1,14 +1,54 @@
 import 'package:args/args.dart';
 
-void main(List<String> arguments) {
+import 'package:manytype_cli/src/commands/create.dart';
+import 'package:manytype_cli/src/config.dart';
+import 'package:manytype_cli/src/store/database.dart';
+
+Future<void> main(List<String> arguments) async {
   final parser = ArgParser()
-    ..addCommand('create')
-    ..addCommand('sync')
-    ..addCommand('read');
+    ..addFlag('help', abbr: 'h', negatable: false)
+    ..addOption('server',
+        help: 'Server address (overrides config)', defaultsTo: null);
+
+  final createParser = ArgParser();
+  parser.addCommand('create', createParser);
+  parser.addCommand('sync');
+  parser.addCommand('read');
+  parser.addCommand('init');
 
   final results = parser.parse(arguments);
-  if (results.command == null) {
-    print('Usage: manytype <command>');
-    print('Commands: create, sync, read');
+
+  if (results['help'] == true || results.command == null) {
+    print('Usage: manytype <command> [options]');
+    print('Commands: init, create, sync, read');
+    print(parser.usage);
+    return;
+  }
+
+  final command = results.command!;
+  final serverOverride = results['server'] as String?;
+
+  switch (command.name) {
+    case 'init':
+      await CliConfig.initialize();
+      print('Initialized ~/.manytype/');
+      print('Mnemonic saved to ${CliConfig.configPath}');
+      break;
+
+    case 'create':
+      final config = await CliConfig.load(serverOverride: serverOverride);
+      final db = ManytypeDatabase(CliConfig.dbPath);
+      final text = command.rest.isNotEmpty ? command.rest.join(' ') : 'Untitled';
+      await createCommand(text, db, config);
+      await db.close();
+      break;
+
+    case 'sync':
+      print('sync: not yet implemented (plan 04)');
+      break;
+
+    case 'read':
+      print('read: not yet implemented (plan 05)');
+      break;
   }
 }
