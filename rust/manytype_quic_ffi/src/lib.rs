@@ -68,8 +68,13 @@ impl FfiResult {
 /// `identity_seed`: 32-byte Ed25519 seed
 ///
 /// Returns FfiResult with handle ID (u64 LE) on success.
+///
+/// # Safety
+///
+/// - `addr` must be a valid, NUL-terminated C string.
+/// - `identity_seed` must point to at least `seed_len` readable bytes.
 #[unsafe(no_mangle)]
-pub extern "C" fn ffi_connect(
+pub unsafe extern "C" fn ffi_connect(
     addr: *const c_char,
     identity_seed: *const u8,
     seed_len: u32,
@@ -104,8 +109,13 @@ pub extern "C" fn ffi_connect(
 /// `payload`: request protobuf bytes
 ///
 /// Returns FfiResult with response protobuf bytes on success.
+///
+/// # Safety
+///
+/// - `method` must be a valid, NUL-terminated C string.
+/// - `payload` must point to at least `payload_len` readable bytes (or be null when `payload_len` is 0).
 #[unsafe(no_mangle)]
-pub extern "C" fn ffi_invoke(
+pub unsafe extern "C" fn ffi_invoke(
     handle_id: u64,
     method: *const c_char,
     payload: *const u8,
@@ -140,8 +150,13 @@ pub extern "C" fn ffi_invoke(
 ///   Format: [u32 LE length][bytes] repeated for each change.
 ///
 /// Returns FfiResult with responses in the same length-prefixed format.
+///
+/// # Safety
+///
+/// - `space_id` and `object_id` must be valid, NUL-terminated C strings.
+/// - `changes_data` must point to at least `changes_len` readable bytes (or be null when `changes_len` is 0).
 #[unsafe(no_mangle)]
-pub extern "C" fn ffi_sync_object(
+pub unsafe extern "C" fn ffi_sync_object(
     handle_id: u64,
     space_id: *const c_char,
     object_id: *const c_char,

@@ -1,7 +1,6 @@
 //! DRPC method router -- dispatches incoming RPC calls to handler functions.
 
 use anyhow::{Result, bail};
-use prost::Message;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::codec::KIND_CLOSE_SEND;
@@ -137,6 +136,7 @@ where
 mod tests {
     use super::*;
     use bytes::Bytes;
+    use prost::Message;
     use tokio::io::duplex;
 
     use crate::drpc::codec::{DrpcFrame, KIND_ERROR, KIND_INVOKE, KIND_MESSAGE};

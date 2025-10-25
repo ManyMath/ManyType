@@ -13,6 +13,7 @@ use prost::Message;
 use manytype_proto::spacesync::*;
 
 /// Per-space state: tracks objects and their head lists.
+#[derive(Default)]
 pub struct SpaceState {
     /// Map of object_id -> head CIDs for that object
     pub object_heads: HashMap<String, Vec<String>>,
@@ -20,16 +21,6 @@ pub struct SpaceState {
     pub space_header: Option<Vec<u8>>,
     /// ACL root payload bytes
     pub acl_root: Option<Vec<u8>>,
-}
-
-impl SpaceState {
-    pub fn new() -> Self {
-        Self {
-            object_heads: HashMap::new(),
-            space_header: None,
-            acl_root: None,
-        }
-    }
 }
 
 /// Shared sync state across connections.
@@ -97,7 +88,7 @@ pub fn handle_head_sync(request_bytes: &[u8], sync_state: &SharedSyncState) -> R
 
     let response = HeadSyncResponse {
         results,
-        ..Default::default()
+        diff_type: 0,
     };
     Ok(response.encode_to_vec())
 }
@@ -118,7 +109,7 @@ pub fn handle_space_push(request_bytes: &[u8], sync_state: &SharedSyncState) -> 
     let space_id = space_header_with_id.id.clone();
 
     let mut state = sync_state.write().unwrap();
-    let space = state.entry(space_id.clone()).or_insert_with(SpaceState::new);
+    let space = state.entry(space_id.clone()).or_default();
     space.space_header = Some(space_header_with_id.raw_header);
 
     // Store ACL root payload if present
@@ -147,13 +138,13 @@ pub fn handle_object_sync_message(
     let mut state = sync_state.write().unwrap();
     let space = state
         .entry(space_id.clone())
-        .or_insert_with(SpaceState::new);
+        .or_default();
 
     // Track that we received data for this object
     space
         .object_heads
         .entry(object_id.clone())
-        .or_insert_with(Vec::new);
+        .or_default();
 
     tracing::info!(
         "sync: received ObjectSyncMessage for {}/{}",

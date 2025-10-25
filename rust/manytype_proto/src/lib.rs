@@ -48,6 +48,7 @@ pub mod crypto {
 }
 
 /// Block model types - SmartBlockSnapshotBase, Block, Relation.
+#[allow(clippy::empty_docs, clippy::doc_lazy_continuation)]
 pub mod models {
     include!("generated/anytype/model/anytype.model.rs");
 }
