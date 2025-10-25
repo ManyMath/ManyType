@@ -1,6 +1,7 @@
 import 'package:args/args.dart';
 
 import 'package:manytype_cli/src/commands/create.dart';
+import 'package:manytype_cli/src/commands/sync.dart';
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/store/database.dart';
 
@@ -44,7 +45,10 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'sync':
-      print('sync: not yet implemented (plan 04)');
+      final config = await CliConfig.load(serverOverride: serverOverride);
+      final db = ManytypeDatabase(CliConfig.dbPath);
+      await syncCommand(db, config);
+      await db.close();
       break;
 
     case 'read':
