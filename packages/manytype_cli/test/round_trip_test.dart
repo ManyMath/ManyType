@@ -75,6 +75,8 @@ void main() {
         reason: 'read failed: ${readLocalResult.stderr}');
 
     // Step 4: Sync to server (requires server running)
+    // This exercises: object push via HeadSync + ObjectSyncStream,
+    // AND store-sync via StoreDiff + StoreElements (ffi_sync_store).
     final syncResult = await Process.run(
       'dart',
       ['run', 'packages/manytype_cli/bin/manytype.dart', 'sync'],
@@ -83,7 +85,11 @@ void main() {
     );
     expect(syncResult.exitCode, equals(0),
         reason: 'sync failed: ${syncResult.stderr}');
-    expect(syncResult.stdout.toString(), contains('Sync complete'));
+    final syncOutput = syncResult.stdout.toString();
+    expect(syncOutput, contains('Sync complete'));
+    // Verify store-sync was exercised (output includes store value counts)
+    expect(syncOutput, contains('store values'),
+        reason: 'sync output should report store values: $syncOutput');
 
     // Step 5: Read after sync (text should still be present)
     final readAfterResult = await Process.run(
@@ -96,5 +102,20 @@ void main() {
         reason: 'read after sync failed: ${readAfterResult.stderr}');
     expect(readAfterResult.stdout.toString(),
         contains('Hello round-trip world'));
-  }, timeout: Timeout(Duration(minutes: 2)));
+
+    // Step 6: Re-sync to verify store-sync round-trip (server should have
+    // our store values from step 4; a second sync pulls them back).
+    final resyncResult = await Process.run(
+      'dart',
+      ['run', 'packages/manytype_cli/bin/manytype.dart', 'sync'],
+      environment: env,
+      workingDirectory: repoRoot,
+    );
+    expect(resyncResult.exitCode, equals(0),
+        reason: 're-sync failed: ${resyncResult.stderr}');
+    final resyncOutput = resyncResult.stdout.toString();
+    expect(resyncOutput, contains('Sync complete'));
+    expect(resyncOutput, contains('store values'),
+        reason: 're-sync should report store values: $resyncOutput');
+  }, timeout: Timeout(Duration(minutes: 3)));
 }
