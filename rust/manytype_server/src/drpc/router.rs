@@ -139,7 +139,7 @@ mod tests {
     use prost::Message;
     use tokio::io::duplex;
 
-    use crate::drpc::codec::{DrpcFrame, KIND_ERROR, KIND_INVOKE, KIND_MESSAGE};
+    use crate::drpc::codec::{DrpcFrame, KIND_ERROR, KIND_MESSAGE};
 
     fn test_state() -> ServerState {
         ServerState {
