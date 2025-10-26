@@ -28,12 +28,13 @@ Future<void> createCommand(
 
   String aclHeadId;
   if (existingObjects.isEmpty) {
-    // First object in space: build ACL root.
-    // Per Phase 2 decision: identity key == master key for single-user.
+    // First object in space: build ACL root with distinct account/master
+    // and identity keys.
     final aclRoot = await buildAclRoot(
       spaceId: spaceId,
-      masterKeySeed: identity.seed,
-      readKey: identity.seed, // For v1: read key = identity seed
+      masterKeySeed: identity.accountSeed,
+      identityPrivateKey: identity.seed,
+      readKey: identity.seed,
     );
 
     // Store ACL root as a special object in the space

@@ -37,9 +37,8 @@ async fn main() -> Result<()> {
     let verifying_key = ed25519::verifying_key(&signing_key);
     let local_peer_id = verifying_key.to_bytes().to_vec();
 
-    // Open persistent storage
-    let _db = storage::redb_storage::RedbTreeStorage::open(std::path::Path::new(&config.db_path))?;
-    tracing::info!("Opened redb database at {}", config.db_path);
+    let sync_state = sync_node::SharedSyncState::open(&config.db_path)?;
+    tracing::info!("Opened sync state at {}", config.db_path);
 
     // Build shared server state
     let state = Arc::new(drpc::router::ServerState {
@@ -48,7 +47,8 @@ async fn main() -> Result<()> {
             peer_id: hex::encode(&local_peer_id),
             addresses: vec![config.quic_listen.clone()],
         },
-        sync_state: sync_node::new_shared_sync_state(),
+        sync_state,
+        local_signing_key: signing_key.clone(),
     });
 
     // Start QUIC listener
@@ -120,9 +120,17 @@ async fn handle_stream(
     // Transition to DRPC dispatch
     let mut drpc_stream = drpc::stream::DrpcStream::new(stream);
 
-    while let Ok((_stream_id, method)) = drpc_stream.read_invoke().await {
-        if let Err(e) = drpc::router::dispatch(&method, &mut drpc_stream, &state).await {
-            tracing::error!("RPC error on {}: {}", method, e);
+    loop {
+        match drpc_stream.read_invoke().await {
+            Ok((_stream_id, method)) => {
+                if let Err(e) =
+                    drpc::router::dispatch(&method, &mut drpc_stream, &state, &remote_peer_id)
+                        .await
+                {
+                    tracing::error!("RPC error on {}: {}", method, e);
+                }
+            }
+            Err(_) => break,
         }
     }
 

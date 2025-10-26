@@ -1,10 +1,13 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:fixnum/fixnum.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart';
+import 'package:manytype_protocol/events.dart';
 import 'package:manytype_protocol/models.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
+import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart';
 import 'package:test/test.dart';
 
 /// Helper: generate a deterministic 32-byte seed for testing.
@@ -124,6 +127,65 @@ void main() {
       expect(state['block-1']!.text.text, equals('Updated'));
     });
 
+    test('replays block update events from Anytype event payloads', () async {
+      final block1 = createTextBlock('block-1', 'Original');
+      final root = await buildRootChange(
+        spaceId: 'space-1',
+        aclHeadId: aclHeadId,
+        identityPrivateKey: identitySeed,
+      );
+      final tree = ObjectTree.fromRoot(root);
+
+      final createData = marshalChangeContent([
+        Change_Content(
+          blockCreate: Change_BlockCreate(
+            targetId: 'sb-root',
+            blocks: [block1],
+          ),
+        ),
+      ]);
+      final createChange = await buildTreeChange(
+        currentHeads: tree.heads,
+        aclHeadId: aclHeadId,
+        snapshotBaseId: root.id,
+        changesData: createData,
+        identityPrivateKey: identitySeed,
+      );
+      await tree.addChange(createChange);
+
+      final updateEvent = Event_Message(
+        blockSetText: Event_Block_Set_Text(
+          id: 'block-1',
+          text: Event_Block_Set_Text_TextValue(value: 'Updated from event'),
+          style: Event_Block_Set_Text_Style(
+            value: Block_Content_Text_Style.Header2,
+          ),
+        ),
+      );
+      final updateData = marshalChangeContent([
+        Change_Content(
+          blockUpdate: Change_BlockUpdate(
+            events: [updateEvent.writeToBuffer()],
+          ),
+        ),
+      ]);
+      final updateChange = await buildTreeChange(
+        currentHeads: tree.heads,
+        aclHeadId: aclHeadId,
+        snapshotBaseId: root.id,
+        changesData: updateData,
+        identityPrivateKey: identitySeed,
+      );
+      await tree.addChange(updateChange);
+
+      final state = collectBlockState(tree);
+      expect(state['block-1']!.text.text, equals('Updated from event'));
+      expect(
+        state['block-1']!.text.style,
+        equals(Block_Content_Text_Style.Header2),
+      );
+    });
+
     test('from tree with BlockCreate + BlockRemove returns empty blocks list',
         () async {
       final block1 = createTextBlock('block-1', 'Temporary');
@@ -199,6 +261,130 @@ void main() {
       // Content blocks
       expect(snapshot.blocks.any((b) => b.id == 'block-1'), isTrue);
       expect(snapshot.blocks.any((b) => b.id == 'block-2'), isTrue);
+    });
+
+    test('replays metadata, relations, store values, and file info', () async {
+      final block1 = createTextBlock('block-1', 'Hello');
+
+      final (tree, _, _) = await _buildTreeWithBlocks(
+        identitySeed,
+        aclHeadId,
+        [
+          Change_Content(
+            blockCreate: Change_BlockCreate(
+              targetId: 'sb-root',
+              blocks: [block1],
+            ),
+          ),
+          Change_Content(
+            detailsSet: Change_DetailsSet(
+              key: 'title',
+              value: Value(stringValue: 'Manytype'),
+            ),
+          ),
+          Change_Content(
+            detailsSet: Change_DetailsSet(
+              key: 'obsolete',
+              value: Value(stringValue: 'remove-me'),
+            ),
+          ),
+          Change_Content(
+            detailsUnset: Change_DetailsUnset(key: 'obsolete'),
+          ),
+          Change_Content(
+            relationAdd: Change_RelationAdd(
+              relationLinks: [
+                RelationLink(key: 'rel-keep', format: RelationFormat.shorttext),
+                RelationLink(key: 'rel-drop', format: RelationFormat.number),
+              ],
+            ),
+          ),
+          Change_Content(
+            relationRemove: Change_RelationRemove(
+              relationKey: ['rel-drop'],
+            ),
+          ),
+          Change_Content(
+            objectTypeAdd: Change_ObjectTypeAdd(key: 'ot-drop'),
+          ),
+          Change_Content(
+            objectTypeAdd: Change_ObjectTypeAdd(key: 'ot-keep'),
+          ),
+          Change_Content(
+            objectTypeRemove: Change_ObjectTypeRemove(key: 'ot-drop'),
+          ),
+          Change_Content(
+            storeKeySet: Change_StoreKeySet(
+              path: ['views'],
+              value: Value(
+                listValue: ListValue(
+                  values: [Value(stringValue: 'view-1')],
+                ),
+              ),
+            ),
+          ),
+          Change_Content(
+            storeSliceUpdate: Change_StoreSliceUpdate(
+              key: 'views',
+              add: Change_StoreSliceUpdate_Add(
+                afterId: 'view-1',
+                ids: ['view-2'],
+              ),
+            ),
+          ),
+          Change_Content(
+            storeSliceUpdate: Change_StoreSliceUpdate(
+              key: 'views',
+              move: Change_StoreSliceUpdate_Move(
+                afterId: 'view-2',
+                ids: ['view-1'],
+              ),
+            ),
+          ),
+          Change_Content(
+            storeSliceUpdate: Change_StoreSliceUpdate(
+              key: 'views',
+              remove: Change_StoreSliceUpdate_Remove(ids: ['view-2']),
+            ),
+          ),
+          Change_Content(
+            storeKeySet: Change_StoreKeySet(
+              path: ['legacy'],
+              value: Value(stringValue: 'stale'),
+            ),
+          ),
+          Change_Content(
+            storeKeyUnset: Change_StoreKeyUnset(path: ['legacy']),
+          ),
+          Change_Content(
+            originalCreatedTimestampSet: Change_OriginalCreatedTimestampSet(
+              ts: Int64(123456789),
+            ),
+          ),
+          Change_Content(
+            setFileInfo: Change_SetFileInfo(
+              fileInfo: FileInfo(fileId: 'file-1'),
+            ),
+          ),
+        ],
+      );
+
+      final snapshot = createSnapshot(tree, 'sb-root');
+
+      expect(snapshot.details.fields['title']?.stringValue, equals('Manytype'));
+      expect(snapshot.details.fields.containsKey('obsolete'), isFalse);
+      expect(snapshot.relationLinks.map((link) => link.key), ['rel-keep']);
+      expect(snapshot.objectTypes, ['ot-keep']);
+
+      final views = snapshot.collections.fields['views']!.listValue.values
+          .map((value) => value.stringValue)
+          .toList();
+      expect(views, ['view-1']);
+      expect(snapshot.collections.fields.containsKey('legacy'), isFalse);
+      expect(snapshot.removedCollectionKeys, contains('legacy'));
+
+      expect(snapshot.originalCreatedTimestamp, Int64(123456789));
+      expect(snapshot.fileInfo.fileId, equals('file-1'));
     });
   });
 

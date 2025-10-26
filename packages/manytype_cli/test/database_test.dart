@@ -90,5 +90,42 @@ void main() {
       expect(all.length, 1);
       expect(all.first.spaceId, 'space-b');
     });
+
+    test('upserts and retrieves store entries by space', () async {
+      await db.upsertStoreEntry(
+        keyPeerId: 'peer-b',
+        spaceId: 'space-a',
+        valueBytes: [2],
+        identitySignatureBytes: [20],
+        peerSignatureBytes: [21],
+      );
+      await db.upsertStoreEntry(
+        keyPeerId: 'peer-a',
+        spaceId: 'space-a',
+        valueBytes: [1],
+        identitySignatureBytes: [10],
+        peerSignatureBytes: [11],
+      );
+      await db.upsertStoreEntry(
+        keyPeerId: 'peer-a',
+        spaceId: 'space-a',
+        valueBytes: [3],
+        identitySignatureBytes: [30],
+        peerSignatureBytes: [31],
+      );
+      await db.upsertStoreEntry(
+        keyPeerId: 'peer-c',
+        spaceId: 'space-b',
+        valueBytes: [4],
+        identitySignatureBytes: [40],
+        peerSignatureBytes: [41],
+      );
+
+      final entries = await db.getStoreEntriesBySpace('space-a');
+      expect(entries.map((entry) => entry.keyPeerId).toList(), ['peer-a', 'peer-b']);
+      expect(entries.first.value, [3]);
+      expect(entries.first.identitySignature, [30]);
+      expect(entries.first.peerSignature, [31]);
+    });
   });
 }

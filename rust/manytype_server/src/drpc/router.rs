@@ -16,6 +16,7 @@ use crate::sync_node::{self, SharedSyncState};
 pub struct ServerState {
     pub coordinator_config: CoordinatorConfig,
     pub sync_state: SharedSyncState,
+    pub local_signing_key: ed25519_dalek::SigningKey,
 }
 
 /// Dispatch an RPC call to the appropriate handler based on method path.
@@ -27,6 +28,7 @@ pub async fn dispatch<T>(
     method: &str,
     stream: &mut DrpcStream<T>,
     state: &ServerState,
+    remote_peer_id: &[u8],
 ) -> Result<()>
 where
     T: AsyncRead + AsyncWrite + Unpin,
@@ -40,11 +42,90 @@ where
             )?;
             stream.write_message(0, 0, &response_bytes).await
         }
+        "/coordinator.Coordinator/SpaceSign" => {
+            let request_bytes = stream.read_message().await?;
+            let response_bytes = coordinator::handle_space_sign(
+                &request_bytes,
+                &state.coordinator_config,
+                &state.local_signing_key,
+                remote_peer_id,
+            )?;
+            stream.write_message(0, 0, &response_bytes).await
+        }
+        "/coordinator.Coordinator/SpaceStatusCheck" => {
+            let request_bytes = stream.read_message().await?;
+            let response_bytes =
+                coordinator::handle_space_status_check(&request_bytes, &state.sync_state)?;
+            stream.write_message(0, 0, &response_bytes).await
+        }
         "/spacesync.SpaceSync/HeadSync" => {
             let request_bytes = stream.read_message().await?;
             let response_bytes =
                 sync_node::handle_head_sync(&request_bytes, &state.sync_state)?;
             stream.write_message(0, 0, &response_bytes).await
+        }
+        "/spacesync.SpaceSync/StoreDiff" => {
+            let request_bytes = stream.read_message().await?;
+            let response_bytes =
+                sync_node::handle_store_diff(&request_bytes, &state.sync_state)?;
+            stream.write_message(0, 0, &response_bytes).await
+        }
+        "/spacesync.SpaceSync/StoreElements" => {
+            let mut messages = Vec::new();
+
+            loop {
+                let frame = match stream.read_frame().await? {
+                    Some(f) => f,
+                    None => break,
+                };
+
+                if frame.kind == KIND_CLOSE_SEND {
+                    break;
+                }
+
+                let msg_bytes = if frame.done {
+                    frame.data.to_vec()
+                } else {
+                    let mut buf = frame.data.to_vec();
+                    loop {
+                        let next = stream
+                            .read_frame()
+                            .await?
+                            .ok_or_else(|| anyhow::anyhow!("connection closed mid-message"))?;
+                        buf.extend_from_slice(&next.data);
+                        if next.done {
+                            break;
+                        }
+                    }
+                    buf
+                };
+
+                messages.push(msg_bytes);
+            }
+
+            for response_bytes in
+                sync_node::handle_store_elements_messages(&messages, &state.sync_state)?
+            {
+                stream
+                    .write_frame(super::codec::DrpcFrame {
+                        kind: super::codec::KIND_MESSAGE,
+                        done: false,
+                        control: false,
+                        stream_id: 0,
+                        message_id: 0,
+                        data: bytes::Bytes::from(response_bytes),
+                    })
+                    .await?;
+            }
+
+            stream.write_frame(super::codec::DrpcFrame {
+                kind: KIND_CLOSE_SEND,
+                done: true,
+                control: false,
+                stream_id: 0,
+                message_id: 0,
+                data: bytes::Bytes::new(),
+            }).await
         }
         "/spacesync.SpaceSync/ObjectSyncStream" => {
             // Bidirectional stream: read messages in a loop until the
@@ -104,8 +185,13 @@ where
         }
         "/spacesync.SpaceSync/SpacePush" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes =
-                sync_node::handle_space_push(&request_bytes, &state.sync_state)?;
+            let response_bytes = sync_node::handle_space_push(
+                &request_bytes,
+                &state.sync_state,
+                &state.coordinator_config,
+                &state.local_signing_key,
+                remote_peer_id,
+            )?;
             stream.write_message(0, 0, &response_bytes).await
         }
         "/consensusProto.Consensus/LogAdd" => {
@@ -115,7 +201,8 @@ where
         }
         "/consensusProto.Consensus/RecordAdd" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes = consensus::handle_record_add(&request_bytes)?;
+            let response_bytes =
+                consensus::handle_record_add(&request_bytes, &state.local_signing_key)?;
             stream.write_message(0, 0, &response_bytes).await
         }
         "/filesync.File/BlockPush" => {
@@ -140,6 +227,9 @@ mod tests {
     use tokio::io::duplex;
 
     use crate::drpc::codec::{DrpcFrame, KIND_ERROR, KIND_MESSAGE};
+    use manytype_core::crypto::ed25519;
+    use manytype_core::crdt::cid::compute_cid;
+    use manytype_proto::spacesync::{StoreKeyInner, StoreKeyValue};
 
     fn test_state() -> ServerState {
         ServerState {
@@ -149,6 +239,25 @@ mod tests {
                 addresses: vec!["127.0.0.1:4830".to_string()],
             },
             sync_state: sync_node::new_shared_sync_state(),
+            local_signing_key: ed25519::signing_key_from_seed(&[1u8; 32]),
+        }
+    }
+
+    fn make_store_entry(space_id: &str, key_peer_id: &str, timestamp_micro: i64) -> StoreKeyValue {
+        StoreKeyValue {
+            key_peer_id: key_peer_id.to_string(),
+            value: StoreKeyInner {
+                peer: vec![1; 32],
+                identity: vec![2; 32],
+                value: vec![3; 32],
+                timestamp_micro,
+                acl_head_id: "acl-head".to_string(),
+                key: key_peer_id.to_string(),
+            }
+            .encode_to_vec(),
+            identity_signature: vec![4; 64],
+            peer_signature: vec![5; 64],
+            space_id: space_id.to_string(),
         }
     }
 
@@ -162,7 +271,9 @@ mod tests {
 
         // Spawn dispatch for an unknown method
         let handle = tokio::spawn(async move {
-            let result = dispatch("/unknown.Service/Method", &mut server_stream, &state).await;
+            let result =
+                dispatch("/unknown.Service/Method", &mut server_stream, &state, b"peer")
+                    .await;
             assert!(result.is_err());
             let err_msg = result.unwrap_err().to_string();
             assert!(
@@ -201,6 +312,7 @@ mod tests {
                 "/coordinator.Coordinator/NetworkConfiguration",
                 &mut server_stream,
                 &state,
+                b"peer",
             )
             .await
             .unwrap();
@@ -240,6 +352,7 @@ mod tests {
                 "/spacesync.SpaceSync/HeadSync",
                 &mut server_stream,
                 &state,
+                b"peer",
             )
             .await
             .unwrap();
@@ -267,7 +380,8 @@ mod tests {
     #[tokio::test]
     async fn test_dispatch_space_push() {
         use manytype_proto::spacesync::{
-            RawSpaceHeaderWithId, SpacePayload, SpacePushRequest, SpacePushResponse,
+            RawSpaceHeader, RawSpaceHeaderWithId, SpaceHeader, SpacePayload, SpacePushRequest,
+            SpacePushResponse,
         };
 
         let (client, server) = duplex(4096);
@@ -275,25 +389,44 @@ mod tests {
         let mut client_stream = DrpcStream::new(client);
 
         let state = test_state();
+        let raw_header = RawSpaceHeader {
+            space_header: SpaceHeader {
+                identity: vec![2; 32],
+                ..Default::default()
+            }
+            .encode_to_vec(),
+            signature: vec![1; 64],
+        }
+        .encode_to_vec();
+        let credential = coordinator::build_signed_space_receipt(
+            "sp-1",
+            &hex::encode(b"peer"),
+            &vec![2; 32],
+            &state.coordinator_config,
+            &state.local_signing_key,
+        )
+        .unwrap()
+        .encode_to_vec();
 
         let handle = tokio::spawn(async move {
             dispatch(
                 "/spacesync.SpaceSync/SpacePush",
                 &mut server_stream,
                 &state,
+                b"peer",
             )
             .await
             .unwrap();
         });
-
         let request = SpacePushRequest {
             payload: Some(SpacePayload {
                 space_header: Some(RawSpaceHeaderWithId {
-                    raw_header: b"header".to_vec(),
+                    raw_header,
                     id: "sp-1".to_string(),
                 }),
                 ..Default::default()
             }),
+            credential,
             ..Default::default()
         };
         client_stream
@@ -324,6 +457,7 @@ mod tests {
                 "/spacesync.SpaceSync/ObjectSyncStream",
                 &mut server_stream,
                 &state,
+                b"peer",
             )
             .await
             .unwrap();
@@ -371,6 +505,116 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_dispatch_store_diff() {
+        use manytype_proto::spacesync::{StoreDiffRequest, StoreDiffResponse};
+
+        let (client, server) = duplex(4096);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+
+        let state = test_state();
+        state
+            .sync_state
+            .upsert_store_entry(make_store_entry("sp-1", "settings-peer-1", 10))
+            .unwrap();
+
+        let handle = tokio::spawn(async move {
+            dispatch(
+                "/spacesync.SpaceSync/StoreDiff",
+                &mut server_stream,
+                &state,
+                b"peer",
+            )
+            .await
+            .unwrap();
+        });
+
+        let request = StoreDiffRequest {
+            space_id: "sp-1".to_string(),
+            ..Default::default()
+        };
+        client_stream
+            .write_message(0, 0, &request.encode_to_vec())
+            .await
+            .unwrap();
+
+        let frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(frame.kind, KIND_MESSAGE);
+        let response = StoreDiffResponse::decode(frame.data.as_ref()).unwrap();
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.results[0].elements[0].id, "settings-peer-1");
+
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_dispatch_store_elements() {
+        let (client, server) = duplex(4096);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+
+        let state = test_state();
+        state
+            .sync_state
+            .upsert_store_entry(make_store_entry("sp-1", "settings-peer-1", 10))
+            .unwrap();
+
+        let handle = tokio::spawn(async move {
+            dispatch(
+                "/spacesync.SpaceSync/StoreElements",
+                &mut server_stream,
+                &state,
+                b"peer",
+            )
+            .await
+            .unwrap();
+        });
+
+        for message in [
+            StoreKeyValue {
+                space_id: "sp-1".to_string(),
+                ..Default::default()
+            },
+            StoreKeyValue {
+                key_peer_id: "settings-peer-1".to_string(),
+                ..Default::default()
+            },
+            StoreKeyValue::default(),
+        ] {
+            client_stream
+                .write_message(0, 0, &message.encode_to_vec())
+                .await
+                .unwrap();
+        }
+        client_stream
+            .write_frame(DrpcFrame {
+                kind: KIND_CLOSE_SEND,
+                done: true,
+                control: false,
+                stream_id: 0,
+                message_id: 0,
+                data: Bytes::new(),
+            })
+            .await
+            .unwrap();
+
+        let frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(frame.kind, KIND_MESSAGE);
+        let response = StoreKeyValue::decode(frame.data.as_ref()).unwrap();
+        assert_eq!(response.key_peer_id, "settings-peer-1");
+
+        let terminator = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(terminator.kind, KIND_MESSAGE);
+        let terminator_msg = StoreKeyValue::decode(terminator.data.as_ref()).unwrap();
+        assert!(terminator_msg.key_peer_id.is_empty());
+
+        let close_frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn test_dispatch_log_add() {
         use manytype_proto::consensus::{LogAddRequest, Ok as ConsensusOk};
 
@@ -385,13 +629,18 @@ mod tests {
                 "/consensusProto.Consensus/LogAdd",
                 &mut server_stream,
                 &state,
+                b"peer",
             )
             .await
             .unwrap();
         });
 
         let request = LogAddRequest {
-            log_id: "test-log".to_string(),
+            log_id: "router-test-log-add".to_string(),
+            record: Some(manytype_proto::consensus::RawRecordWithId {
+                payload: b"root".to_vec(),
+                id: compute_cid(b"root"),
+            }),
             ..Default::default()
         };
         client_stream
@@ -422,6 +671,7 @@ mod tests {
                 "/filesync.File/BlockPush",
                 &mut server_stream,
                 &state,
+                b"peer",
             )
             .await
             .unwrap();
@@ -449,7 +699,7 @@ mod tests {
     #[tokio::test]
     async fn test_integration_space_push_then_head_sync() {
         use manytype_proto::spacesync::{
-            HeadSyncRequest, HeadSyncResponse, RawSpaceHeaderWithId,
+            HeadSyncRequest, HeadSyncResponse, RawSpaceHeader, RawSpaceHeaderWithId, SpaceHeader,
             SpacePayload, SpacePushRequest, SpacePushResponse,
         };
 
@@ -468,22 +718,51 @@ mod tests {
                     addresses: vec![],
                 },
                 sync_state: sync_state.clone(),
+                local_signing_key: ed25519::signing_key_from_seed(&[1u8; 32]),
             };
 
             let handle = tokio::spawn(async move {
-                dispatch("/spacesync.SpaceSync/SpacePush", &mut server_stream, &state)
-                    .await
-                    .unwrap();
+                dispatch(
+                    "/spacesync.SpaceSync/SpacePush",
+                    &mut server_stream,
+                    &state,
+                    b"peer",
+                )
+                .await
+                .unwrap();
             });
 
+            let raw_header = RawSpaceHeader {
+                space_header: SpaceHeader {
+                    identity: vec![2; 32],
+                    ..Default::default()
+                }
+                .encode_to_vec(),
+                signature: vec![1; 64],
+            }
+            .encode_to_vec();
+            let credential = coordinator::build_signed_space_receipt(
+                "integration-space",
+                &hex::encode(b"peer"),
+                &vec![2; 32],
+                &CoordinatorConfig {
+                    network_id: "test".to_string(),
+                    peer_id: "p".to_string(),
+                    addresses: vec![],
+                },
+                &ed25519::signing_key_from_seed(&[1u8; 32]),
+            )
+            .unwrap()
+            .encode_to_vec();
             let request = SpacePushRequest {
                 payload: Some(SpacePayload {
                     space_header: Some(RawSpaceHeaderWithId {
-                        raw_header: b"hdr".to_vec(),
+                        raw_header,
                         id: "integration-space".to_string(),
                     }),
                     ..Default::default()
                 }),
+                credential,
                 ..Default::default()
             };
             client_stream
@@ -508,12 +787,18 @@ mod tests {
                     addresses: vec![],
                 },
                 sync_state: sync_state.clone(),
+                local_signing_key: ed25519::signing_key_from_seed(&[1u8; 32]),
             };
 
             let handle = tokio::spawn(async move {
-                dispatch("/spacesync.SpaceSync/HeadSync", &mut server_stream, &state)
-                    .await
-                    .unwrap();
+                dispatch(
+                    "/spacesync.SpaceSync/HeadSync",
+                    &mut server_stream,
+                    &state,
+                    b"peer",
+                )
+                .await
+                .unwrap();
             });
 
             let request = HeadSyncRequest {

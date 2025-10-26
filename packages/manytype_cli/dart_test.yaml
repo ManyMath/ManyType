@@ -1,0 +1,3 @@
+tags:
+  round_trip:
+    # Integration test requiring running server + FFI library

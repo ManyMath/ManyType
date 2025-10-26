@@ -11,9 +11,9 @@ import 'acl_record.dart';
 
 /// Build a signed AclRoot record with real Ed25519 signing and AES-GCM encryption.
 ///
-/// This creates the first record in an ACL chain. The [masterKeySeed] is used
-/// both as the identity key and master key (single-user simplification).
-/// The [readKey] is encrypted with AES-GCM using the masterKeySeed as the
+/// This creates the first record in an ACL chain. The [masterKeySeed] signs
+/// the identity public key, while [identityPrivateKey] signs the ACL record.
+/// The [readKey] is encrypted with AES-GCM using the master key seed as the
 /// symmetric key.
 ///
 /// Returns a [RawRecordWithId] where:
@@ -22,22 +22,24 @@ import 'acl_record.dart';
 Future<RawRecordWithId> buildAclRoot({
   required String spaceId,
   required Uint8List masterKeySeed,
+  required Uint8List identityPrivateKey,
   required Uint8List readKey,
 }) async {
-  // 1. Derive Ed25519 keypair from masterKeySeed (used as both master and identity for single-user)
+  // 1. Derive keypairs for the account/master key and the identity key.
   final masterKeyPair = await ed25519KeyPairFromSeed(masterKeySeed);
+  final identityKeyPair = await ed25519KeyPairFromSeed(identityPrivateKey);
 
   // 2. Encrypt readKey with AES-GCM using masterKeySeed as symmetric key (per D-12: real encryption)
   final encryptedReadKey = await aesGcmEncrypt(masterKeySeed, readKey);
 
   // 3. Sign the identity public key with the master key to produce identitySignature
   final identitySignature =
-      await ed25519Sign(masterKeySeed, masterKeyPair.publicKey);
+      await ed25519Sign(masterKeySeed, identityKeyPair.publicKey);
 
   // 4. Create AclRoot proto
   final now = DateTime.now().millisecondsSinceEpoch;
   final aclRoot = AclRoot(
-    identity: masterKeyPair.publicKey,
+    identity: identityKeyPair.publicKey,
     masterKey: masterKeyPair.publicKey,
     spaceId: spaceId,
     encryptedReadKey: encryptedReadKey,
@@ -51,7 +53,7 @@ Future<RawRecordWithId> buildAclRoot({
   // 6. Create Record proto (prevId empty for root)
   final record = Record(
     prevId: '',
-    identity: masterKeyPair.publicKey,
+    identity: identityKeyPair.publicKey,
     data: aclRootBytes,
     timestamp: Int64(now),
   );
@@ -59,8 +61,8 @@ Future<RawRecordWithId> buildAclRoot({
   // 7. Marshal Record to get payload bytes
   final recordBytes = record.writeToBuffer();
 
-  // 8. Sign the Record payload with identity key (per D-12: real Ed25519 signing)
-  final signature = await ed25519Sign(masterKeySeed, recordBytes);
+  // 8. Sign the Record payload with the identity key.
+  final signature = await ed25519Sign(identityPrivateKey, recordBytes);
 
   // 9. Create RawRecord with payload and signature
   final rawRecord = RawRecord(

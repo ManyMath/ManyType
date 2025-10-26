@@ -9,6 +9,7 @@ import 'package:test/test.dart';
 void main() {
   // Deterministic seeds for testing
   final masterKeySeed = Uint8List.fromList(List.generate(32, (i) => i + 1));
+  final identitySeed = Uint8List.fromList(List.generate(32, (i) => i + 50));
   final readKey = Uint8List.fromList(List.generate(32, (i) => i + 100));
   const spaceId = 'test-space-id';
 
@@ -18,6 +19,7 @@ void main() {
       final result = await buildAclRoot(
         spaceId: spaceId,
         masterKeySeed: masterKeySeed,
+        identityPrivateKey: identitySeed,
         readKey: readKey,
       );
 
@@ -29,6 +31,7 @@ void main() {
       final result = await buildAclRoot(
         spaceId: spaceId,
         masterKeySeed: masterKeySeed,
+        identityPrivateKey: identitySeed,
         readKey: readKey,
       );
 
@@ -48,6 +51,7 @@ void main() {
       final result = await buildAclRoot(
         spaceId: spaceId,
         masterKeySeed: masterKeySeed,
+        identityPrivateKey: identitySeed,
         readKey: readKey,
       );
 
@@ -70,6 +74,7 @@ void main() {
       final result = await buildAclRoot(
         spaceId: spaceId,
         masterKeySeed: masterKeySeed,
+        identityPrivateKey: identitySeed,
         readKey: readKey,
       );
 
@@ -84,10 +89,9 @@ void main() {
 
       // Identity should match what we started with
       final masterKeyPair = await ed25519KeyPairFromSeed(masterKeySeed);
-      // In our builder, identity == master key (single-user simplification)
+      final identityKeyPair = await ed25519KeyPairFromSeed(identitySeed);
       expect(aclRoot.masterKey, equals(masterKeyPair.publicKey));
-      // Identity should be a valid 32-byte Ed25519 public key
-      expect(aclRoot.identity.length, equals(32));
+      expect(aclRoot.identity, equals(identityKeyPair.publicKey));
     });
 
     test(
@@ -96,6 +100,7 @@ void main() {
       final root = await buildAclRoot(
         spaceId: spaceId,
         masterKeySeed: masterKeySeed,
+        identityPrivateKey: identitySeed,
         readKey: readKey,
       );
 
@@ -116,7 +121,7 @@ void main() {
       final record = await buildAclRecord(
         prevId: root.id,
         aclData: aclData,
-        identityPrivateKey: masterKeySeed,
+        identityPrivateKey: identitySeed,
       );
 
       // Decode and check prevId
@@ -131,6 +136,7 @@ void main() {
       final result = await buildAclRoot(
         spaceId: spaceId,
         masterKeySeed: masterKeySeed,
+        identityPrivateKey: identitySeed,
         readKey: readKey,
       );
 
@@ -146,6 +152,7 @@ void main() {
       final root = await buildAclRoot(
         spaceId: spaceId,
         masterKeySeed: masterKeySeed,
+        identityPrivateKey: identitySeed,
         readKey: readKey,
       );
 
@@ -162,6 +169,7 @@ void main() {
       final root = await buildAclRoot(
         spaceId: spaceId,
         masterKeySeed: masterKeySeed,
+        identityPrivateKey: identitySeed,
         readKey: readKey,
       );
 
@@ -186,7 +194,7 @@ void main() {
       final inviteRecord = await buildAclRecord(
         prevId: root.id,
         aclData: inviteData,
-        identityPrivateKey: masterKeySeed,
+        identityPrivateKey: identitySeed,
       );
 
       final verifiedInvite = await verifyAndDecodeAclRecord(inviteRecord);
@@ -209,7 +217,7 @@ void main() {
       final joinRecord = await buildAclRecord(
         prevId: inviteRecord.id,
         aclData: joinData,
-        identityPrivateKey: masterKeySeed,
+        identityPrivateKey: identitySeed,
       );
 
       final verifiedJoin = await verifyAndDecodeAclRecord(joinRecord);
@@ -223,6 +231,7 @@ void main() {
       final root = await buildAclRoot(
         spaceId: spaceId,
         masterKeySeed: masterKeySeed,
+        identityPrivateKey: identitySeed,
         readKey: readKey,
       );
 
@@ -243,7 +252,7 @@ void main() {
       final badRecord = await buildAclRecord(
         prevId: 'bafywrongprevid',
         aclData: aclData,
-        identityPrivateKey: masterKeySeed,
+        identityPrivateKey: identitySeed,
       );
 
       final verifiedBad = await verifyAndDecodeAclRecord(badRecord);

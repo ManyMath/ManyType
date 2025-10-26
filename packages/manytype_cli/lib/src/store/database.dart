@@ -25,14 +25,26 @@ class Changes extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [Objects, Changes])
+@DataClassName('StoredStoreEntry')
+class StoreEntries extends Table {
+  TextColumn get keyPeerId => text()();
+  TextColumn get spaceId => text()();
+  BlobColumn get value => blob()();
+  BlobColumn get identitySignature => blob()();
+  BlobColumn get peerSignature => blob()();
+
+  @override
+  Set<Column> get primaryKey => {keyPeerId};
+}
+
+@DriftDatabase(tables: [Objects, Changes, StoreEntries])
 class ManytypeDatabase extends _$ManytypeDatabase {
   ManytypeDatabase(String dbPath) : super(_openConnection(dbPath));
 
   ManytypeDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   /// Insert a new object. Returns the created object.
   Future<void> insertObject(String id, String spaceId) async {
@@ -89,6 +101,31 @@ class ManytypeDatabase extends _$ManytypeDatabase {
     }
     return result;
   }
+
+  Future<void> upsertStoreEntry({
+    required String keyPeerId,
+    required String spaceId,
+    required List<int> valueBytes,
+    required List<int> identitySignatureBytes,
+    required List<int> peerSignatureBytes,
+  }) async {
+    await into(storeEntries).insert(
+      StoreEntriesCompanion.insert(
+        keyPeerId: keyPeerId,
+        spaceId: spaceId,
+        value: Uint8List.fromList(valueBytes),
+        identitySignature: Uint8List.fromList(identitySignatureBytes),
+        peerSignature: Uint8List.fromList(peerSignatureBytes),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<List<StoredStoreEntry>> getStoreEntriesBySpace(String spaceId) =>
+      (select(storeEntries)
+            ..where((entry) => entry.spaceId.equals(spaceId))
+            ..orderBy([(entry) => OrderingTerm.asc(entry.keyPeerId)]))
+          .get();
 }
 
 LazyDatabase _openConnection(String dbPath) {

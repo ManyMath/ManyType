@@ -6,6 +6,7 @@
 //   2. FFI library built: cargo build -p manytype_quic_ffi --release
 //   3. LD_LIBRARY_PATH includes rust/target/release/
 
+@Tags(['round_trip'])
 import 'dart:io';
 import 'package:test/test.dart';
 

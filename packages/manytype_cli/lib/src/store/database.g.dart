@@ -505,16 +505,346 @@ class ChangesCompanion extends UpdateCompanion<Change> {
   }
 }
 
+class $StoreEntriesTable extends StoreEntries
+    with TableInfo<$StoreEntriesTable, StoredStoreEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoreEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyPeerIdMeta =
+      const VerificationMeta('keyPeerId');
+  @override
+  late final GeneratedColumn<String> keyPeerId = GeneratedColumn<String>(
+      'key_peer_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _spaceIdMeta =
+      const VerificationMeta('spaceId');
+  @override
+  late final GeneratedColumn<String> spaceId = GeneratedColumn<String>(
+      'space_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<Uint8List> value = GeneratedColumn<Uint8List>(
+      'value', aliasedName, false,
+      type: DriftSqlType.blob, requiredDuringInsert: true);
+  static const VerificationMeta _identitySignatureMeta =
+      const VerificationMeta('identitySignature');
+  @override
+  late final GeneratedColumn<Uint8List> identitySignature =
+      GeneratedColumn<Uint8List>('identity_signature', aliasedName, false,
+          type: DriftSqlType.blob, requiredDuringInsert: true);
+  static const VerificationMeta _peerSignatureMeta =
+      const VerificationMeta('peerSignature');
+  @override
+  late final GeneratedColumn<Uint8List> peerSignature =
+      GeneratedColumn<Uint8List>('peer_signature', aliasedName, false,
+          type: DriftSqlType.blob, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [keyPeerId, spaceId, value, identitySignature, peerSignature];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'store_entries';
+  @override
+  VerificationContext validateIntegrity(Insertable<StoredStoreEntry> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('key_peer_id')) {
+      context.handle(
+          _keyPeerIdMeta,
+          keyPeerId.isAcceptableOrUnknown(
+              data['key_peer_id']!, _keyPeerIdMeta));
+    } else if (isInserting) {
+      context.missing(_keyPeerIdMeta);
+    }
+    if (data.containsKey('space_id')) {
+      context.handle(_spaceIdMeta,
+          spaceId.isAcceptableOrUnknown(data['space_id']!, _spaceIdMeta));
+    } else if (isInserting) {
+      context.missing(_spaceIdMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+          _valueMeta, value.isAcceptableOrUnknown(data['value']!, _valueMeta));
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    if (data.containsKey('identity_signature')) {
+      context.handle(
+          _identitySignatureMeta,
+          identitySignature.isAcceptableOrUnknown(
+              data['identity_signature']!, _identitySignatureMeta));
+    } else if (isInserting) {
+      context.missing(_identitySignatureMeta);
+    }
+    if (data.containsKey('peer_signature')) {
+      context.handle(
+          _peerSignatureMeta,
+          peerSignature.isAcceptableOrUnknown(
+              data['peer_signature']!, _peerSignatureMeta));
+    } else if (isInserting) {
+      context.missing(_peerSignatureMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {keyPeerId};
+  @override
+  StoredStoreEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredStoreEntry(
+      keyPeerId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}key_peer_id'])!,
+      spaceId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}space_id'])!,
+      value: attachedDatabase.typeMapping
+          .read(DriftSqlType.blob, data['${effectivePrefix}value'])!,
+      identitySignature: attachedDatabase.typeMapping.read(
+          DriftSqlType.blob, data['${effectivePrefix}identity_signature'])!,
+      peerSignature: attachedDatabase.typeMapping
+          .read(DriftSqlType.blob, data['${effectivePrefix}peer_signature'])!,
+    );
+  }
+
+  @override
+  $StoreEntriesTable createAlias(String alias) {
+    return $StoreEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredStoreEntry extends DataClass
+    implements Insertable<StoredStoreEntry> {
+  final String keyPeerId;
+  final String spaceId;
+  final Uint8List value;
+  final Uint8List identitySignature;
+  final Uint8List peerSignature;
+  const StoredStoreEntry(
+      {required this.keyPeerId,
+      required this.spaceId,
+      required this.value,
+      required this.identitySignature,
+      required this.peerSignature});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key_peer_id'] = Variable<String>(keyPeerId);
+    map['space_id'] = Variable<String>(spaceId);
+    map['value'] = Variable<Uint8List>(value);
+    map['identity_signature'] = Variable<Uint8List>(identitySignature);
+    map['peer_signature'] = Variable<Uint8List>(peerSignature);
+    return map;
+  }
+
+  StoreEntriesCompanion toCompanion(bool nullToAbsent) {
+    return StoreEntriesCompanion(
+      keyPeerId: Value(keyPeerId),
+      spaceId: Value(spaceId),
+      value: Value(value),
+      identitySignature: Value(identitySignature),
+      peerSignature: Value(peerSignature),
+    );
+  }
+
+  factory StoredStoreEntry.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredStoreEntry(
+      keyPeerId: serializer.fromJson<String>(json['keyPeerId']),
+      spaceId: serializer.fromJson<String>(json['spaceId']),
+      value: serializer.fromJson<Uint8List>(json['value']),
+      identitySignature:
+          serializer.fromJson<Uint8List>(json['identitySignature']),
+      peerSignature: serializer.fromJson<Uint8List>(json['peerSignature']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'keyPeerId': serializer.toJson<String>(keyPeerId),
+      'spaceId': serializer.toJson<String>(spaceId),
+      'value': serializer.toJson<Uint8List>(value),
+      'identitySignature': serializer.toJson<Uint8List>(identitySignature),
+      'peerSignature': serializer.toJson<Uint8List>(peerSignature),
+    };
+  }
+
+  StoredStoreEntry copyWith(
+          {String? keyPeerId,
+          String? spaceId,
+          Uint8List? value,
+          Uint8List? identitySignature,
+          Uint8List? peerSignature}) =>
+      StoredStoreEntry(
+        keyPeerId: keyPeerId ?? this.keyPeerId,
+        spaceId: spaceId ?? this.spaceId,
+        value: value ?? this.value,
+        identitySignature: identitySignature ?? this.identitySignature,
+        peerSignature: peerSignature ?? this.peerSignature,
+      );
+  StoredStoreEntry copyWithCompanion(StoreEntriesCompanion data) {
+    return StoredStoreEntry(
+      keyPeerId: data.keyPeerId.present ? data.keyPeerId.value : this.keyPeerId,
+      spaceId: data.spaceId.present ? data.spaceId.value : this.spaceId,
+      value: data.value.present ? data.value.value : this.value,
+      identitySignature: data.identitySignature.present
+          ? data.identitySignature.value
+          : this.identitySignature,
+      peerSignature: data.peerSignature.present
+          ? data.peerSignature.value
+          : this.peerSignature,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredStoreEntry(')
+          ..write('keyPeerId: $keyPeerId, ')
+          ..write('spaceId: $spaceId, ')
+          ..write('value: $value, ')
+          ..write('identitySignature: $identitySignature, ')
+          ..write('peerSignature: $peerSignature')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      keyPeerId,
+      spaceId,
+      $driftBlobEquality.hash(value),
+      $driftBlobEquality.hash(identitySignature),
+      $driftBlobEquality.hash(peerSignature));
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredStoreEntry &&
+          other.keyPeerId == this.keyPeerId &&
+          other.spaceId == this.spaceId &&
+          $driftBlobEquality.equals(other.value, this.value) &&
+          $driftBlobEquality.equals(
+              other.identitySignature, this.identitySignature) &&
+          $driftBlobEquality.equals(other.peerSignature, this.peerSignature));
+}
+
+class StoreEntriesCompanion extends UpdateCompanion<StoredStoreEntry> {
+  final Value<String> keyPeerId;
+  final Value<String> spaceId;
+  final Value<Uint8List> value;
+  final Value<Uint8List> identitySignature;
+  final Value<Uint8List> peerSignature;
+  final Value<int> rowid;
+  const StoreEntriesCompanion({
+    this.keyPeerId = const Value.absent(),
+    this.spaceId = const Value.absent(),
+    this.value = const Value.absent(),
+    this.identitySignature = const Value.absent(),
+    this.peerSignature = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoreEntriesCompanion.insert({
+    required String keyPeerId,
+    required String spaceId,
+    required Uint8List value,
+    required Uint8List identitySignature,
+    required Uint8List peerSignature,
+    this.rowid = const Value.absent(),
+  })  : keyPeerId = Value(keyPeerId),
+        spaceId = Value(spaceId),
+        value = Value(value),
+        identitySignature = Value(identitySignature),
+        peerSignature = Value(peerSignature);
+  static Insertable<StoredStoreEntry> custom({
+    Expression<String>? keyPeerId,
+    Expression<String>? spaceId,
+    Expression<Uint8List>? value,
+    Expression<Uint8List>? identitySignature,
+    Expression<Uint8List>? peerSignature,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (keyPeerId != null) 'key_peer_id': keyPeerId,
+      if (spaceId != null) 'space_id': spaceId,
+      if (value != null) 'value': value,
+      if (identitySignature != null) 'identity_signature': identitySignature,
+      if (peerSignature != null) 'peer_signature': peerSignature,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoreEntriesCompanion copyWith(
+      {Value<String>? keyPeerId,
+      Value<String>? spaceId,
+      Value<Uint8List>? value,
+      Value<Uint8List>? identitySignature,
+      Value<Uint8List>? peerSignature,
+      Value<int>? rowid}) {
+    return StoreEntriesCompanion(
+      keyPeerId: keyPeerId ?? this.keyPeerId,
+      spaceId: spaceId ?? this.spaceId,
+      value: value ?? this.value,
+      identitySignature: identitySignature ?? this.identitySignature,
+      peerSignature: peerSignature ?? this.peerSignature,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (keyPeerId.present) {
+      map['key_peer_id'] = Variable<String>(keyPeerId.value);
+    }
+    if (spaceId.present) {
+      map['space_id'] = Variable<String>(spaceId.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<Uint8List>(value.value);
+    }
+    if (identitySignature.present) {
+      map['identity_signature'] = Variable<Uint8List>(identitySignature.value);
+    }
+    if (peerSignature.present) {
+      map['peer_signature'] = Variable<Uint8List>(peerSignature.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoreEntriesCompanion(')
+          ..write('keyPeerId: $keyPeerId, ')
+          ..write('spaceId: $spaceId, ')
+          ..write('value: $value, ')
+          ..write('identitySignature: $identitySignature, ')
+          ..write('peerSignature: $peerSignature, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ManytypeDatabase extends GeneratedDatabase {
   _$ManytypeDatabase(QueryExecutor e) : super(e);
   $ManytypeDatabaseManager get managers => $ManytypeDatabaseManager(this);
   late final $ObjectsTable objects = $ObjectsTable(this);
   late final $ChangesTable changes = $ChangesTable(this);
+  late final $StoreEntriesTable storeEntries = $StoreEntriesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [objects, changes];
+  List<DatabaseSchemaEntity> get allSchemaEntities =>
+      [objects, changes, storeEntries];
 }
 
 typedef $$ObjectsTableCreateCompanionBuilder = ObjectsCompanion Function({
@@ -808,6 +1138,183 @@ typedef $$ChangesTableProcessedTableManager = ProcessedTableManager<
     (Change, BaseReferences<_$ManytypeDatabase, $ChangesTable, Change>),
     Change,
     PrefetchHooks Function()>;
+typedef $$StoreEntriesTableCreateCompanionBuilder = StoreEntriesCompanion
+    Function({
+  required String keyPeerId,
+  required String spaceId,
+  required Uint8List value,
+  required Uint8List identitySignature,
+  required Uint8List peerSignature,
+  Value<int> rowid,
+});
+typedef $$StoreEntriesTableUpdateCompanionBuilder = StoreEntriesCompanion
+    Function({
+  Value<String> keyPeerId,
+  Value<String> spaceId,
+  Value<Uint8List> value,
+  Value<Uint8List> identitySignature,
+  Value<Uint8List> peerSignature,
+  Value<int> rowid,
+});
+
+class $$StoreEntriesTableFilterComposer
+    extends Composer<_$ManytypeDatabase, $StoreEntriesTable> {
+  $$StoreEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get keyPeerId => $composableBuilder(
+      column: $table.keyPeerId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get spaceId => $composableBuilder(
+      column: $table.spaceId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<Uint8List> get value => $composableBuilder(
+      column: $table.value, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<Uint8List> get identitySignature => $composableBuilder(
+      column: $table.identitySignature,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<Uint8List> get peerSignature => $composableBuilder(
+      column: $table.peerSignature, builder: (column) => ColumnFilters(column));
+}
+
+class $$StoreEntriesTableOrderingComposer
+    extends Composer<_$ManytypeDatabase, $StoreEntriesTable> {
+  $$StoreEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get keyPeerId => $composableBuilder(
+      column: $table.keyPeerId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get spaceId => $composableBuilder(
+      column: $table.spaceId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<Uint8List> get value => $composableBuilder(
+      column: $table.value, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<Uint8List> get identitySignature => $composableBuilder(
+      column: $table.identitySignature,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<Uint8List> get peerSignature => $composableBuilder(
+      column: $table.peerSignature,
+      builder: (column) => ColumnOrderings(column));
+}
+
+class $$StoreEntriesTableAnnotationComposer
+    extends Composer<_$ManytypeDatabase, $StoreEntriesTable> {
+  $$StoreEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get keyPeerId =>
+      $composableBuilder(column: $table.keyPeerId, builder: (column) => column);
+
+  GeneratedColumn<String> get spaceId =>
+      $composableBuilder(column: $table.spaceId, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get identitySignature => $composableBuilder(
+      column: $table.identitySignature, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get peerSignature => $composableBuilder(
+      column: $table.peerSignature, builder: (column) => column);
+}
+
+class $$StoreEntriesTableTableManager extends RootTableManager<
+    _$ManytypeDatabase,
+    $StoreEntriesTable,
+    StoredStoreEntry,
+    $$StoreEntriesTableFilterComposer,
+    $$StoreEntriesTableOrderingComposer,
+    $$StoreEntriesTableAnnotationComposer,
+    $$StoreEntriesTableCreateCompanionBuilder,
+    $$StoreEntriesTableUpdateCompanionBuilder,
+    (
+      StoredStoreEntry,
+      BaseReferences<_$ManytypeDatabase, $StoreEntriesTable, StoredStoreEntry>
+    ),
+    StoredStoreEntry,
+    PrefetchHooks Function()> {
+  $$StoreEntriesTableTableManager(
+      _$ManytypeDatabase db, $StoreEntriesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StoreEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$StoreEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$StoreEntriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> keyPeerId = const Value.absent(),
+            Value<String> spaceId = const Value.absent(),
+            Value<Uint8List> value = const Value.absent(),
+            Value<Uint8List> identitySignature = const Value.absent(),
+            Value<Uint8List> peerSignature = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              StoreEntriesCompanion(
+            keyPeerId: keyPeerId,
+            spaceId: spaceId,
+            value: value,
+            identitySignature: identitySignature,
+            peerSignature: peerSignature,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String keyPeerId,
+            required String spaceId,
+            required Uint8List value,
+            required Uint8List identitySignature,
+            required Uint8List peerSignature,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              StoreEntriesCompanion.insert(
+            keyPeerId: keyPeerId,
+            spaceId: spaceId,
+            value: value,
+            identitySignature: identitySignature,
+            peerSignature: peerSignature,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$StoreEntriesTableProcessedTableManager = ProcessedTableManager<
+    _$ManytypeDatabase,
+    $StoreEntriesTable,
+    StoredStoreEntry,
+    $$StoreEntriesTableFilterComposer,
+    $$StoreEntriesTableOrderingComposer,
+    $$StoreEntriesTableAnnotationComposer,
+    $$StoreEntriesTableCreateCompanionBuilder,
+    $$StoreEntriesTableUpdateCompanionBuilder,
+    (
+      StoredStoreEntry,
+      BaseReferences<_$ManytypeDatabase, $StoreEntriesTable, StoredStoreEntry>
+    ),
+    StoredStoreEntry,
+    PrefetchHooks Function()>;
 
 class $ManytypeDatabaseManager {
   final _$ManytypeDatabase _db;
@@ -816,4 +1323,6 @@ class $ManytypeDatabaseManager {
       $$ObjectsTableTableManager(_db, _db.objects);
   $$ChangesTableTableManager get changes =>
       $$ChangesTableTableManager(_db, _db.changes);
+  $$StoreEntriesTableTableManager get storeEntries =>
+      $$StoreEntriesTableTableManager(_db, _db.storeEntries);
 }

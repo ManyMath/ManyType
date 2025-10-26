@@ -1,8 +1,9 @@
 //! Rust FFI crate wrapping QUIC client, credential handshake, and DRPC framing.
 //!
-//! Provides C FFI exports for Dart to call: connect, invoke, sync_object, free.
+//! Provides C FFI exports for Dart to call: connect, invoke, sync_object,
+//! sync_store, free.
 //! All network protocol complexity stays in Rust; Dart gets simple
-//! connect/invoke/sync_object calls through the C ABI.
+//! connect/invoke/sync_object/sync_store calls through the C ABI.
 
 pub mod client;
 pub mod drpc;
@@ -149,7 +150,8 @@ pub unsafe extern "C" fn ffi_invoke(
 /// `changes_data`: length-prefixed array of changes.
 ///   Format: [u32 LE length][bytes] repeated for each change.
 ///
-/// Returns FfiResult with responses in the same length-prefixed format.
+/// When `changes_data` is empty, this sends a pull request for the object and
+/// returns raw change payloads in the same length-prefixed format.
 ///
 /// # Safety
 ///
@@ -193,21 +195,32 @@ pub unsafe extern "C" fn ffi_sync_object(
         offset += len;
     }
 
-    // Wrap each raw change in an ObjectSyncMessage protobuf
-    let changes: Vec<Vec<u8>> = raw_changes
-        .into_iter()
-        .enumerate()
-        .map(|(i, payload)| {
-            let msg = ObjectSyncMessage {
-                space_id: space_id.clone(),
-                object_id: object_id.clone(),
-                request_id: format!("req-{i}"),
-                payload,
-                ..Default::default()
-            };
-            msg.encode_to_vec()
-        })
-        .collect();
+    let pull_request = raw_changes.is_empty();
+    let messages: Vec<Vec<u8>> = if pull_request {
+        vec![ObjectSyncMessage {
+            space_id: space_id.clone(),
+            object_id: object_id.clone(),
+            request_id: "pull-0".to_string(),
+            payload: Vec::new(),
+            ..Default::default()
+        }
+        .encode_to_vec()]
+    } else {
+        raw_changes
+            .into_iter()
+            .enumerate()
+            .map(|(i, payload)| {
+                let msg = ObjectSyncMessage {
+                    space_id: space_id.clone(),
+                    object_id: object_id.clone(),
+                    request_id: format!("req-{i}"),
+                    payload,
+                    ..Default::default()
+                };
+                msg.encode_to_vec()
+            })
+            .collect()
+    };
 
     let mut handles = HANDLES.lock().unwrap();
     let handle = match handles.get_mut(&handle_id) {
@@ -215,17 +228,84 @@ pub unsafe extern "C" fn ffi_sync_object(
         None => return FfiResult::error(format!("unknown handle ID: {handle_id}")),
     };
 
-    match RUNTIME.block_on(drpc::sync_object(&mut handle.drpc_stream, &changes)) {
+    match RUNTIME.block_on(drpc::sync_object(&mut handle.drpc_stream, &messages)) {
         Ok(responses) => {
-            // Serialize responses as length-prefixed
             let mut out = Vec::new();
-            for resp in &responses {
-                out.extend_from_slice(&(resp.len() as u32).to_le_bytes());
-                out.extend_from_slice(resp);
+            for resp in responses {
+                let msg = match ObjectSyncMessage::decode(resp.as_slice()) {
+                    Ok(msg) => msg,
+                    Err(e) => {
+                        return FfiResult::error(format!(
+                            "sync_object returned invalid ObjectSyncMessage: {e}"
+                        ));
+                    }
+                };
+                if msg.payload.is_empty() {
+                    continue;
+                }
+                if pull_request {
+                    out.extend_from_slice(&msg.payload);
+                } else {
+                    out.extend_from_slice(&(msg.payload.len() as u32).to_le_bytes());
+                    out.extend_from_slice(&msg.payload);
+                }
             }
             FfiResult::success(out)
         }
         Err(e) => FfiResult::error(format!("sync_object failed: {e:#}")),
+    }
+}
+
+/// Exchange StoreKeyValue messages over StoreElements.
+///
+/// `messages_data` is a length-prefixed array of serialized StoreKeyValue
+/// protobuf messages. Responses are returned in the same format.
+#[unsafe(no_mangle)]
+pub extern "C" fn ffi_sync_store(
+    handle_id: u64,
+    messages_data: *const u8,
+    messages_len: u32,
+) -> *mut FfiResult {
+    let messages_slice = if messages_len > 0 {
+        unsafe { std::slice::from_raw_parts(messages_data, messages_len as usize) }
+    } else {
+        &[]
+    };
+
+    let mut messages = Vec::new();
+    let mut offset = 0usize;
+    while offset + 4 <= messages_slice.len() {
+        let len = u32::from_le_bytes(
+            messages_slice[offset..offset + 4].try_into().unwrap(),
+        ) as usize;
+        offset += 4;
+        if offset + len > messages_slice.len() {
+            return FfiResult::error("messages_data truncated".to_string());
+        }
+        messages.push(messages_slice[offset..offset + len].to_vec());
+        offset += len;
+    }
+
+    let mut handles = HANDLES.lock().unwrap();
+    let handle = match handles.get_mut(&handle_id) {
+        Some(h) => h,
+        None => return FfiResult::error(format!("unknown handle ID: {handle_id}")),
+    };
+
+    match RUNTIME.block_on(drpc::exchange_stream(
+        &mut handle.drpc_stream,
+        "/spacesync.SpaceSync/StoreElements",
+        &messages,
+    )) {
+        Ok(responses) => {
+            let mut out = Vec::new();
+            for resp in responses {
+                out.extend_from_slice(&(resp.len() as u32).to_le_bytes());
+                out.extend_from_slice(&resp);
+            }
+            FfiResult::success(out)
+        }
+        Err(e) => FfiResult::error(format!("sync_store failed: {e:#}")),
     }
 }
 

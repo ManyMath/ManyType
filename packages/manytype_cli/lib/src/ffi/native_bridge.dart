@@ -69,13 +69,26 @@ typedef FfiFreeResultDart = void Function(Pointer<FfiResult> result);
 /// - [connect] -> ffi_connect
 /// - [invoke] -> ffi_invoke
 /// - [syncObject] -> ffi_sync_object
+/// - [syncStore] -> ffi_sync_store
 /// - [freeHandle] -> ffi_free_handle
 /// - (internal) ffi_free_result
+typedef FfiSyncStoreNative = Pointer<FfiResult> Function(
+  Uint64 handleId,
+  Pointer<Uint8> messagesData,
+  Uint32 messagesLen,
+);
+typedef FfiSyncStoreDart = Pointer<FfiResult> Function(
+  int handleId,
+  Pointer<Uint8> messagesData,
+  int messagesLen,
+);
+
 class NativeBridge {
   late final DynamicLibrary _lib;
   late final FfiConnectDart _connect;
   late final FfiInvokeDart _invoke;
   late final FfiSyncObjectDart _syncObject;
+  late final FfiSyncStoreDart _syncStore;
   late final FfiFreeHandleDart _freeHandle;
   late final FfiFreeResultDart _freeResult;
 
@@ -88,6 +101,9 @@ class NativeBridge {
     _syncObject = _lib
         .lookupFunction<FfiSyncObjectNative, FfiSyncObjectDart>(
             'ffi_sync_object');
+    _syncStore = _lib
+        .lookupFunction<FfiSyncStoreNative, FfiSyncStoreDart>(
+            'ffi_sync_store');
     _freeHandle = _lib
         .lookupFunction<FfiFreeHandleNative, FfiFreeHandleDart>(
             'ffi_free_handle');
@@ -167,6 +183,19 @@ class NativeBridge {
     calloc.free(objPtr);
     calloc.free(dataPtr);
 
+    return _processDataResult(result);
+  }
+
+  /// Exchange serialized StoreKeyValue messages via StoreElements.
+  ///
+  /// [messagesData] is a length-prefixed sequence of protobuf messages.
+  Uint8List syncStore(int handleId, Uint8List messagesData) {
+    final dataPtr = calloc<Uint8>(messagesData.length);
+    dataPtr.asTypedList(messagesData.length).setAll(0, messagesData);
+
+    final result = _syncStore(handleId, dataPtr, messagesData.length);
+
+    calloc.free(dataPtr);
     return _processDataResult(result);
   }
 

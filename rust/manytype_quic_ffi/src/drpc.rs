@@ -128,6 +128,72 @@ where
     Ok(responses)
 }
 
+/// Exchange protobuf messages over an arbitrary bidirectional DRPC stream.
+///
+/// Sends all request messages, closes the client send side, then collects all
+/// server MESSAGE frames until the server closes the stream.
+pub async fn exchange_stream<T>(
+    drpc_stream: &mut DrpcStream<T>,
+    method: &str,
+    messages: &[Vec<u8>],
+) -> Result<Vec<Vec<u8>>>
+where
+    T: AsyncRead + AsyncWrite + Unpin,
+{
+    drpc_stream
+        .write_frame(DrpcFrame {
+            kind: KIND_INVOKE,
+            done: false,
+            control: false,
+            stream_id: 0,
+            message_id: 0,
+            data: Bytes::copy_from_slice(method.as_bytes()),
+        })
+        .await
+        .context("failed to write invoke frame for bidirectional stream")?;
+
+    for (index, message) in messages.iter().enumerate() {
+        drpc_stream
+            .write_message(0, index as u64, message)
+            .await
+            .context("failed to write stream message")?;
+    }
+
+    drpc_stream
+        .write_frame(DrpcFrame {
+            kind: KIND_CLOSE_SEND,
+            done: true,
+            control: false,
+            stream_id: 0,
+            message_id: 0,
+            data: Bytes::new(),
+        })
+        .await
+        .context("failed to write close-send")?;
+
+    let mut responses = Vec::new();
+    loop {
+        let frame = drpc_stream
+            .read_frame()
+            .await
+            .context("failed to read stream frame")?
+            .context("connection closed before server close-send")?;
+
+        if frame.kind == KIND_CLOSE_SEND {
+            break;
+        }
+
+        anyhow::ensure!(
+            frame.kind == KIND_MESSAGE,
+            "expected MESSAGE or CLOSE_SEND from server, got kind={}",
+            frame.kind
+        );
+        responses.push(frame.data.to_vec());
+    }
+
+    Ok(responses)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
