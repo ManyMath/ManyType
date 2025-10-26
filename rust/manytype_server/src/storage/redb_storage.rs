@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! RedbTreeStorage: persistent TreeStorage backed by redb.
 //!
 //! Uses two tables:

@@ -17,9 +17,9 @@ use manytype_proto::treechange::{RawTreeChange, TreeChange};
 
 use crate::coordinator::{self, CoordinatorConfig};
 
-pub use crate::storage::sync_state::{
-    SharedSyncState, SpaceState, new_shared_sync_state, new_shared_sync_state_at,
-};
+pub use crate::storage::sync_state::{SharedSyncState, SpaceState};
+#[cfg(test)]
+pub use crate::storage::sync_state::{new_shared_sync_state, new_shared_sync_state_at};
 
 const LDIFF_DIVIDE_FACTOR: usize = 32;
 const LDIFF_COMPARE_THRESHOLD: usize = 256;
@@ -82,8 +82,7 @@ pub fn handle_head_sync(request_bytes: &[u8], sync_state: &SharedSyncState) -> R
                 vec![]
             }
         }
-    } else {
-        if !request.ranges.is_empty() && matches!(request.diff_type(), DiffType::V2 | DiffType::V3) {
+    } else if !request.ranges.is_empty() && matches!(request.diff_type(), DiffType::V2 | DiffType::V3) {
             let diff = Diff::new_with_type(
                 LDIFF_DIVIDE_FACTOR,
                 LDIFF_COMPARE_THRESHOLD,
@@ -108,9 +107,8 @@ pub fn handle_head_sync(request_bytes: &[u8], sync_state: &SharedSyncState) -> R
                 count: result.count as u32,
             })
             .collect()
-        } else {
-            vec![]
-        }
+    } else {
+        vec![]
     };
 
     let response = HeadSyncResponse {
@@ -120,7 +118,6 @@ pub fn handle_head_sync(request_bytes: &[u8], sync_state: &SharedSyncState) -> R
         } else {
             DiffType::Initial as i32
         },
-        ..Default::default()
     };
     Ok(response.encode_to_vec())
 }

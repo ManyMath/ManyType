@@ -260,8 +260,12 @@ pub unsafe extern "C" fn ffi_sync_object(
 ///
 /// `messages_data` is a length-prefixed array of serialized StoreKeyValue
 /// protobuf messages. Responses are returned in the same format.
+///
+/// # Safety
+///
+/// - `messages_data` must point to at least `messages_len` readable bytes (or be null when `messages_len` is 0).
 #[unsafe(no_mangle)]
-pub extern "C" fn ffi_sync_store(
+pub unsafe extern "C" fn ffi_sync_store(
     handle_id: u64,
     messages_data: *const u8,
     messages_len: u32,

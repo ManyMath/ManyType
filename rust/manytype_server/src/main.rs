@@ -120,17 +120,11 @@ async fn handle_stream(
     // Transition to DRPC dispatch
     let mut drpc_stream = drpc::stream::DrpcStream::new(stream);
 
-    loop {
-        match drpc_stream.read_invoke().await {
-            Ok((_stream_id, method)) => {
-                if let Err(e) =
-                    drpc::router::dispatch(&method, &mut drpc_stream, &state, &remote_peer_id)
-                        .await
-                {
-                    tracing::error!("RPC error on {}: {}", method, e);
-                }
-            }
-            Err(_) => break,
+    while let Ok((_stream_id, method)) = drpc_stream.read_invoke().await {
+        if let Err(e) =
+            drpc::router::dispatch(&method, &mut drpc_stream, &state, &remote_peer_id).await
+        {
+            tracing::error!("RPC error on {}: {}", method, e);
         }
     }
 

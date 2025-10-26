@@ -1,0 +1,154 @@
+syntax = "proto3";
+package anytype;
+option go_package = "pb";
+
+import "any_block/models.proto";
+import "google/protobuf/struct.proto";
+
+message Event {
+  message Message {
+    string spaceId = 132;
+
+    oneof value {
+      Block.Set.Fields blockSetFields = 6;
+      Block.Set.ChildrenIds blockSetChildrenIds = 7;
+      Block.Set.BackgroundColor blockSetBackgroundColor = 9;
+      Block.Set.Text blockSetText = 10;
+      Block.Set.Align blockSetAlign = 15;
+      Block.Set.Div blockSetDiv = 17;
+      Block.Set.Relation blockSetRelation = 21;
+      Block.Set.Latex blockSetLatex = 25;
+      Block.Set.VerticalAlign blockSetVerticalAlign = 36;
+      Block.Set.TableRow blockSetTableRow = 37;
+      Block.Set.Widget blockSetWidget = 40;
+    }
+  }
+
+  message Block {
+    message Set {
+      message Relation {
+        string id = 1;
+        Key key = 2;
+
+        message Key {
+          string value = 1;
+        }
+      }
+
+      message Fields {
+        string id = 1;
+        google.protobuf.Struct fields = 2;
+      }
+
+      message ChildrenIds {
+        string id = 1;
+        repeated string childrenIds = 2;
+      }
+
+      message BackgroundColor {
+        string id = 1;
+        string backgroundColor = 2;
+      }
+
+      message Align {
+        string id = 1;
+        anytype.model.Block.Align align = 2;
+      }
+
+      message VerticalAlign {
+        string id = 1;
+        anytype.model.Block.VerticalAlign verticalAlign = 2;
+      }
+
+      message Text {
+        string id = 1;
+        TextValue text = 2;
+        Style style = 3;
+        Marks marks = 4;
+        Checked checked = 5;
+        Color color = 6;
+        IconEmoji iconEmoji = 7;
+        IconImage iconImage = 8;
+
+        message TextValue {
+          string value = 1;
+        }
+
+        message Style {
+          anytype.model.Block.Content.Text.Style value = 1;
+        }
+
+        message Marks {
+          anytype.model.Block.Content.Text.Marks value = 1;
+        }
+
+        message Checked {
+          bool value = 1;
+        }
+
+        message Color {
+          string value = 1;
+        }
+
+        message IconEmoji {
+          string value = 1;
+        }
+
+        message IconImage {
+          string value = 1;
+        }
+      }
+
+      message Latex {
+        string id = 1;
+        TextValue text = 2;
+        Processor processor = 3;
+
+        message TextValue {
+          string value = 1;
+        }
+
+        message Processor {
+          anytype.model.Block.Content.Latex.Processor value = 1;
+        }
+      }
+
+      message Div {
+        string id = 1;
+        Style style = 2;
+
+        message Style {
+          anytype.model.Block.Content.Div.Style value = 1;
+        }
+      }
+
+      message TableRow {
+        string id = 1;
+        IsHeader isHeader = 2;
+
+        message IsHeader {
+          bool value = 1;
+        }
+      }
+
+      message Widget {
+        string id = 1;
+        Layout layout = 2;
+        Limit limit = 3;
+        ViewId viewId = 4;
+
+        message Layout {
+          anytype.model.Block.Content.Widget.Layout value = 1;
+        }
+
+        message Limit {
+          int32 value = 1;
+        }
+
+        message ViewId {
+          string value = 1;
+        }
+      }
+    }
+  }
+}
