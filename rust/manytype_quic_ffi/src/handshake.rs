@@ -1,14 +1,15 @@
-//! Client-side 4-step credential handshake.
+//! Client-side 5-step credential handshake.
 //!
 //! Mirrors the server handshake but the client writes first:
 //! 1. Client -> Server: Credentials
 //! 2. Server -> Client: Credentials
 //! 3. Client -> Server: Ack
 //! 4. Server -> Client: Ack
+//! 5. Client <-> Server: Proto (encoding negotiation; client sends first)
 
 use anyhow::{Result, ensure};
 use manytype_core::crypto::ed25519;
-use manytype_proto::handshake::{Ack, Credentials, PayloadSignedPeerIds};
+use manytype_proto::handshake::{Ack, Credentials, Encoding, PayloadSignedPeerIds, Proto, ProtoType};
 use manytype_server::handshake::{build_credentials, read_handshake_msg, write_handshake_msg};
 use prost::Message;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -42,6 +43,23 @@ pub async fn client_handshake(
     ensure!(msg_type == 2, "expected Ack (type 2), got type {}", msg_type);
     let ack = Ack::decode(payload.as_slice())?;
     ensure!(ack.error == 0, "server sent error in ack: {}", ack.error);
+
+    // 5. Send our Proto message (send first to avoid deadlock — both sides write before read)
+    let proto_msg = Proto {
+        proto: ProtoType::Drpc as i32,
+        encodings: vec![Encoding::None as i32],
+    };
+    write_handshake_msg(stream, 3, &proto_msg.encode_to_vec()).await?;
+
+    // 5. Read remote Proto
+    let (msg_type, payload) = read_handshake_msg(stream).await?;
+    ensure!(msg_type == 3, "expected Proto (type 3), got type {}", msg_type);
+    let remote_proto = Proto::decode(payload.as_slice())?;
+    ensure!(
+        remote_proto.proto == ProtoType::Drpc as i32,
+        "incompatible proto type: {}",
+        remote_proto.proto
+    );
 
     Ok(server_peer_id)
 }
