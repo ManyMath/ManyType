@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+FROM ghcr.io/anyproto/any-sync-tools
+
+ARG TARGETARCH
+
+RUN set -eux; \
+    if [ -z "${TARGETARCH:-}" ]; then \
+        case "$(uname -m)" in \
+            x86_64) TARGETARCH=amd64 ;; \
+            aarch64|arm64) TARGETARCH=arm64 ;; \
+            *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
+        esac; \
+    fi; \
+    apt update; \
+    apt install -y --no-install-recommends \
+        bash \
+        curl \
+        ca-certificates \
+        perl \
+        python3 \
+        python3-yaml \
+        python-is-python3; \
+    curl -L "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${TARGETARCH}" \
+        -o /usr/local/bin/yq; \
+    chmod +x /usr/local/bin/yq; \
+    rm -rf /var/lib/apt/lists/*
+WORKDIR /code
+ENTRYPOINT ["bash", "/code/docker-generateconfig/init.sh"]

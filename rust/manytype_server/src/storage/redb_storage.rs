@@ -75,9 +75,7 @@ impl TreeStorage for RedbTreeStorage {
             return Vec::new();
         };
         match table.get("heads") {
-            Ok(Some(value)) => {
-                serde_json::from_slice(value.value()).unwrap_or_default()
-            }
+            Ok(Some(value)) => serde_json::from_slice(value.value()).unwrap_or_default(),
             _ => Vec::new(),
         }
     }
@@ -113,7 +111,9 @@ mod tests {
     fn add_and_get_raw_change_round_trips() {
         let (mut storage, _tmp) = temp_storage();
         let data = vec![1, 2, 3];
-        storage.add_raw_change("cid1".to_string(), data.clone()).unwrap();
+        storage
+            .add_raw_change("cid1".to_string(), data.clone())
+            .unwrap();
         let retrieved = storage.get_raw_change("cid1").unwrap().unwrap();
         assert_eq!(retrieved, data);
     }
@@ -122,7 +122,9 @@ mod tests {
     fn has_change_returns_false_before_add_true_after() {
         let (mut storage, _tmp) = temp_storage();
         assert!(!storage.has_change("cid1"));
-        storage.add_raw_change("cid1".to_string(), vec![42]).unwrap();
+        storage
+            .add_raw_change("cid1".to_string(), vec![42])
+            .unwrap();
         assert!(storage.has_change("cid1"));
     }
 
@@ -131,7 +133,10 @@ mod tests {
         let (mut storage, _tmp) = temp_storage();
         assert!(storage.get_heads().is_empty());
         storage.set_heads(vec!["h1".to_string(), "h2".to_string()]);
-        assert_eq!(storage.get_heads(), vec!["h1".to_string(), "h2".to_string()]);
+        assert_eq!(
+            storage.get_heads(),
+            vec!["h1".to_string(), "h2".to_string()]
+        );
     }
 
     #[test]
@@ -142,7 +147,9 @@ mod tests {
         // Write data
         {
             let mut storage = RedbTreeStorage::open(&path).unwrap();
-            storage.add_raw_change("cid1".to_string(), vec![10, 20, 30]).unwrap();
+            storage
+                .add_raw_change("cid1".to_string(), vec![10, 20, 30])
+                .unwrap();
             storage.set_heads(vec!["h1".to_string()]);
         }
 
@@ -166,7 +173,9 @@ mod tests {
         use manytype_core::crdt::cid::compute_cid;
         use manytype_core::crdt::object_tree::ObjectTree;
         use manytype_core::crypto::ed25519;
-        use manytype_proto::treechange::{RawTreeChange, RawTreeChangeWithId, RootChange, TreeChange};
+        use manytype_proto::treechange::{
+            RawTreeChange, RawTreeChangeWithId, RootChange, TreeChange,
+        };
         use prost::Message;
 
         let (storage, _tmp) = temp_storage();

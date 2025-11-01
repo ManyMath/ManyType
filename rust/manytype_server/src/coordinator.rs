@@ -84,6 +84,7 @@ pub fn handle_space_sign(
     let response = SpaceSignResponse {
         receipt: Some(receipt),
     };
+    tracing::info!("coordinator: signed space {}", request.space_id);
     Ok(response.encode_to_vec())
 }
 
@@ -146,8 +147,14 @@ pub fn validate_space_receipt(
     verifying_key: &ed25519_dalek::VerifyingKey,
 ) -> Result<()> {
     let receipt = SpaceReceipt::decode(signed_receipt.space_receipt_payload.as_slice())?;
-    anyhow::ensure!(receipt.space_id == expected_space_id, "receipt space id is incorrect");
-    anyhow::ensure!(receipt.peer_id == expected_peer_id, "receipt peer id is incorrect");
+    anyhow::ensure!(
+        receipt.space_id == expected_space_id,
+        "receipt space id is incorrect"
+    );
+    anyhow::ensure!(
+        receipt.peer_id == expected_peer_id,
+        "receipt peer id is incorrect"
+    );
     anyhow::ensure!(
         receipt.account_identity == expected_account_identity,
         "receipt account identity is incorrect"
@@ -192,6 +199,12 @@ mod tests {
         ed25519::signing_key_from_seed(&[7u8; 32])
     }
 
+    fn test_server_libp2p_peer_id() -> String {
+        let signing_key = test_signing_key();
+        let verifying_key = ed25519::verifying_key(&signing_key);
+        ed25519::ed25519_pubkey_to_libp2p_peer_id(&verifying_key.to_bytes())
+    }
+
     fn test_space_header(account_identity: &[u8]) -> Vec<u8> {
         let header = SpaceHeader {
             identity: account_identity.to_vec(),
@@ -209,7 +222,7 @@ mod tests {
     fn test_network_configuration_returns_valid_response() {
         let config = CoordinatorConfig {
             network_id: "manytype-test-net".to_string(),
-            peer_id: "12D3KooWTestPeer".to_string(),
+            peer_id: test_server_libp2p_peer_id(),
             addresses: vec!["127.0.0.1:4830".to_string()],
         };
 
@@ -217,33 +230,36 @@ mod tests {
         let request = NetworkConfigurationRequest::default();
         let request_bytes = request.encode_to_vec();
 
-        let response_bytes =
-            handle_network_configuration(&request_bytes, &config).unwrap();
-        let response =
-            NetworkConfigurationResponse::decode(response_bytes.as_slice()).unwrap();
+        let response_bytes = handle_network_configuration(&request_bytes, &config).unwrap();
+        let response = NetworkConfigurationResponse::decode(response_bytes.as_slice()).unwrap();
 
         assert_eq!(response.network_id, "manytype-test-net");
         assert_eq!(response.configuration_id, "manytype-v1");
         assert!(!response.nodes.is_empty(), "should have at least one node");
-        assert!(response.creation_time_unix > 0, "creation time should be set");
+        assert!(
+            response.creation_time_unix > 0,
+            "creation time should be set"
+        );
     }
 
     #[test]
     fn test_node_has_peer_id_address_and_all_roles() {
         let config = CoordinatorConfig {
             network_id: "test-net".to_string(),
-            peer_id: "12D3KooWTestPeer".to_string(),
+            peer_id: test_server_libp2p_peer_id(),
             addresses: vec!["127.0.0.1:4830".to_string(), "192.168.1.1:4830".to_string()],
         };
 
         let request_bytes = NetworkConfigurationRequest::default().encode_to_vec();
-        let response_bytes =
-            handle_network_configuration(&request_bytes, &config).unwrap();
-        let response =
-            NetworkConfigurationResponse::decode(response_bytes.as_slice()).unwrap();
+        let response_bytes = handle_network_configuration(&request_bytes, &config).unwrap();
+        let response = NetworkConfigurationResponse::decode(response_bytes.as_slice()).unwrap();
 
         let node = &response.nodes[0];
-        assert_eq!(node.peer_id, "12D3KooWTestPeer");
+        assert!(
+            node.peer_id.starts_with("12D3KooW"),
+            "peer_id was: {}",
+            node.peer_id
+        );
         assert_eq!(node.addresses.len(), 2);
         assert_eq!(node.addresses[0], "127.0.0.1:4830");
 
@@ -263,6 +279,25 @@ mod tests {
         assert!(
             node.types.contains(&(NodeType::ConsensusApi as i32)),
             "should have ConsensusApi"
+        );
+    }
+
+    #[test]
+    fn test_network_configuration_peer_id_is_libp2p_encoded() {
+        let config = CoordinatorConfig {
+            network_id: "test-net".to_string(),
+            peer_id: test_server_libp2p_peer_id(),
+            addresses: vec!["127.0.0.1:4830".to_string()],
+        };
+
+        let request_bytes = NetworkConfigurationRequest::default().encode_to_vec();
+        let response_bytes = handle_network_configuration(&request_bytes, &config).unwrap();
+        let response = NetworkConfigurationResponse::decode(response_bytes.as_slice()).unwrap();
+
+        assert!(
+            response.nodes[0].peer_id.starts_with("12D3KooW"),
+            "peer_id should be libp2p-encoded, got: {}",
+            response.nodes[0].peer_id
         );
     }
 

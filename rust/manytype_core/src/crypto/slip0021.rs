@@ -13,21 +13,18 @@ type HmacSha512 = Hmac<Sha512>;
 /// Matches Anytype's Go implementation in derived.go / go-slip21.
 pub fn slip21_derive(seed: &[u8], path: &str) -> [u8; 32] {
     // Master node: HMAC-SHA512(key="Symmetric key seed", data=seed)
-    let mut mac = HmacSha512::new_from_slice(b"Symmetric key seed")
-        .expect("HMAC accepts any key length");
+    let mut mac =
+        HmacSha512::new_from_slice(b"Symmetric key seed").expect("HMAC accepts any key length");
     mac.update(seed);
     let mut node = mac.finalize().into_bytes();
 
     // Split path after "m/" into labels
-    let path_after_m = path
-        .strip_prefix("m/")
-        .expect("path must start with m/");
+    let path_after_m = path.strip_prefix("m/").expect("path must start with m/");
     let segments: Vec<&str> = path_after_m.split('/').collect();
 
     // Derive each segment: HMAC-SHA512(key=node[0..32], data=0x00 || label)
     for segment in segments {
-        let mut mac = HmacSha512::new_from_slice(&node[..32])
-            .expect("HMAC accepts any key length");
+        let mut mac = HmacSha512::new_from_slice(&node[..32]).expect("HMAC accepts any key length");
         mac.update(&[0x00]);
         mac.update(segment.as_bytes());
         node = mac.finalize().into_bytes();
@@ -58,8 +55,8 @@ mod tests {
         let seed = hex::decode("000102030405060708090a0b0c0d0e0f").unwrap();
 
         // Verify master node
-        let mut mac = HmacSha512::new_from_slice(b"Symmetric key seed")
-            .expect("HMAC accepts any key length");
+        let mut mac =
+            HmacSha512::new_from_slice(b"Symmetric key seed").expect("HMAC accepts any key length");
         mac.update(&seed);
         let master = mac.finalize().into_bytes();
 

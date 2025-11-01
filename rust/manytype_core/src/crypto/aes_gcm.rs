@@ -93,10 +93,7 @@ mod tests {
         // Different random nonces should produce different ciphertext
         assert_ne!(enc1, enc2);
         // But both should decrypt to the same plaintext
-        assert_eq!(
-            decrypt(&key, &enc1).unwrap(),
-            decrypt(&key, &enc2).unwrap()
-        );
+        assert_eq!(decrypt(&key, &enc1).unwrap(), decrypt(&key, &enc2).unwrap());
     }
 
     #[test]

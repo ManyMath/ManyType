@@ -5,21 +5,38 @@
 //! 2. Server -> Client: Credentials
 //! 3. Client -> Server: Ack (error=Null)
 //! 4. Server -> Client: Ack (error=Null)
-//! 5. Server <-> Client: Proto (encoding negotiation)
 //!
 //! Header format: [type: u8][length: u32 LE]
 //! Type 1 = Credentials, Type 2 = Ack, Type 3 = Proto
 
 use anyhow::Result;
+use libp2p_identity::Keypair;
 use manytype_core::crypto::ed25519;
-use manytype_proto::handshake::{Ack, Credentials, CredentialsType, Encoding, PayloadSignedPeerIds, Proto, ProtoType};
-use prost::Message;
+use manytype_proto::handshake::{
+    Ack, Credentials, CredentialsType, Encoding, PayloadSignedPeerIds, Proto, ProtoType,
+};
+use prost::{Enumeration, Message};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const MSG_TYPE_CREDENTIALS: u8 = 1;
 const MSG_TYPE_ACK: u8 = 2;
 const MSG_TYPE_PROTO: u8 = 3;
 const MAX_HANDSHAKE_MSG_SIZE: u32 = 204800; // 200 KB
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Enumeration)]
+enum AnysyncKeyType {
+    Ed25519Public = 0,
+    Ed25519Private = 1,
+    Aes = 2,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct AnysyncKey {
+    #[prost(enumeration = "AnysyncKeyType", tag = "1")]
+    r#type: i32,
+    #[prost(bytes = "vec", tag = "2")]
+    data: Vec<u8>,
+}
 
 /// Write a handshake message with 5-byte header framing.
 pub async fn write_handshake_msg(
@@ -53,19 +70,15 @@ pub async fn read_handshake_msg(
 
 /// Build a Credentials protobuf message with SignedPeerIds.
 pub fn build_credentials(
-    signing_key: &ed25519_dalek::SigningKey,
-    local_peer_id: &[u8],
-    remote_peer_id: &[u8],
+    identity_keypair: &Keypair,
+    local_peer_id: &str,
+    remote_peer_id: &str,
 ) -> Vec<u8> {
-    let verifying_key = ed25519::verifying_key(signing_key);
-    let mut sign_payload = Vec::new();
-    sign_payload.extend_from_slice(local_peer_id);
-    sign_payload.extend_from_slice(remote_peer_id);
-    let signature = ed25519::sign(signing_key, &sign_payload);
-
     let signed_peer_ids = PayloadSignedPeerIds {
-        identity: verifying_key.to_bytes().to_vec(),
-        sign: signature.to_bytes().to_vec(),
+        identity: encode_anysync_public_key(identity_keypair),
+        sign: identity_keypair
+            .sign(format!("{local_peer_id}{remote_peer_id}").as_bytes())
+            .expect("ed25519 identity key should sign"),
     };
 
     let credentials = Credentials {
@@ -82,8 +95,9 @@ pub fn build_credentials(
 /// Returns the remote peer's identity bytes on success.
 pub async fn perform_handshake(
     stream: &mut (impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin),
-    signing_key: &ed25519_dalek::SigningKey,
-    local_peer_id: &[u8],
+    identity_keypair: &Keypair,
+    local_peer_id: &str,
+    remote_peer_id: &str,
 ) -> Result<Vec<u8>> {
     // 1. Read client Credentials
     let (msg_type, payload) = read_handshake_msg(stream).await?;
@@ -108,11 +122,17 @@ pub async fn perform_handshake(
         );
     }
 
-    let client_signed = PayloadSignedPeerIds::decode(client_creds.payload.as_slice())?;
-    let remote_peer_id = client_signed.identity.clone();
+    let remote_identity = match CredentialsType::try_from(client_creds.r#type) {
+        Ok(CredentialsType::SignedPeerIds) => {
+            let client_signed = PayloadSignedPeerIds::decode(client_creds.payload.as_slice())?;
+            verify_signed_peer_ids(&client_signed, remote_peer_id, local_peer_id)?
+        }
+        Ok(CredentialsType::SkipVerify) => Vec::new(),
+        _ => anyhow::bail!("unsupported credential type {}", client_creds.r#type),
+    };
 
     // 2. Send our Credentials
-    let our_creds = build_credentials(signing_key, local_peer_id, &remote_peer_id);
+    let our_creds = build_credentials(identity_keypair, local_peer_id, remote_peer_id);
     write_handshake_msg(stream, MSG_TYPE_CREDENTIALS, &our_creds).await?;
 
     // 3. Read client Ack
@@ -129,14 +149,15 @@ pub async fn perform_handshake(
     let our_ack = Ack { error: 0 };
     write_handshake_msg(stream, MSG_TYPE_ACK, &our_ack.encode_to_vec()).await?;
 
-    // 5. Send our Proto message (send first to avoid deadlock)
-    let proto_msg = Proto {
-        proto: ProtoType::Drpc as i32,
-        encodings: vec![Encoding::None as i32],
-    };
-    write_handshake_msg(stream, MSG_TYPE_PROTO, &proto_msg.encode_to_vec()).await?;
+    Ok(remote_identity)
+}
 
-    // 5. Read remote Proto
+/// Perform the per-stream Proto handshake after a connection-level credential handshake.
+pub async fn perform_proto_handshake(
+    stream: &mut (impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin),
+    expected_proto: ProtoType,
+    supported_encodings: &[Encoding],
+) -> Result<Vec<i32>> {
     let (msg_type, payload) = read_handshake_msg(stream).await?;
     anyhow::ensure!(
         msg_type == MSG_TYPE_PROTO,
@@ -144,20 +165,110 @@ pub async fn perform_handshake(
         msg_type
     );
     let remote_proto = Proto::decode(payload.as_slice())?;
-    anyhow::ensure!(
-        remote_proto.proto == ProtoType::Drpc as i32,
-        "incompatible proto type: {}",
-        remote_proto.proto
-    );
+    if remote_proto.proto != expected_proto as i32 {
+        let ack = Ack {
+            error: manytype_proto::handshake::Error::IncompatibleProto as i32,
+        };
+        write_handshake_msg(stream, MSG_TYPE_ACK, &ack.encode_to_vec()).await?;
+        anyhow::bail!("incompatible proto type: {}", remote_proto.proto);
+    }
 
-    Ok(remote_peer_id)
+    if remote_proto.encodings.is_empty() {
+        let ack = Ack { error: 0 };
+        write_handshake_msg(stream, MSG_TYPE_ACK, &ack.encode_to_vec()).await?;
+        return Ok(vec![Encoding::None as i32]);
+    }
+
+    let chosen = remote_proto
+        .encodings
+        .iter()
+        .copied()
+        .find(|encoding| {
+            supported_encodings
+                .iter()
+                .any(|supported| *encoding == *supported as i32)
+        })
+        .map(|encoding| vec![encoding])
+        .unwrap_or_else(|| vec![Encoding::None as i32]);
+
+    let response = Proto {
+        proto: expected_proto as i32,
+        encodings: chosen.clone(),
+    };
+    write_handshake_msg(stream, MSG_TYPE_PROTO, &response.encode_to_vec()).await?;
+
+    Ok(chosen)
+}
+
+fn verify_signed_peer_ids(
+    signed_peer_ids: &PayloadSignedPeerIds,
+    remote_peer_id: &str,
+    local_peer_id: &str,
+) -> Result<Vec<u8>> {
+    let public_key = decode_anysync_public_key(&signed_peer_ids.identity)?;
+    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&public_key)
+        .map_err(|e| anyhow::anyhow!("invalid ed25519 public key: {e}"))?;
+    let signature = ed25519_dalek::Signature::from_bytes(
+        &signed_peer_ids
+            .sign
+            .as_slice()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("invalid ed25519 signature length"))?,
+    );
+    anyhow::ensure!(
+        ed25519::verify(
+            &verifying_key,
+            format!("{remote_peer_id}{local_peer_id}").as_bytes(),
+            &signature,
+        ),
+        "credential signature verification failed"
+    );
+    Ok(public_key.to_vec())
+}
+
+fn encode_anysync_public_key(identity_keypair: &Keypair) -> Vec<u8> {
+    let public_key = identity_keypair
+        .public()
+        .try_into_ed25519()
+        .expect("identity key should be ed25519")
+        .to_bytes()
+        .to_vec();
+    AnysyncKey {
+        r#type: AnysyncKeyType::Ed25519Public as i32,
+        data: public_key,
+    }
+    .encode_to_vec()
+}
+
+fn decode_anysync_public_key(bytes: &[u8]) -> Result<[u8; 32]> {
+    let key = AnysyncKey::decode(bytes)?;
+    anyhow::ensure!(
+        key.r#type == AnysyncKeyType::Ed25519Public as i32,
+        "credential identity must be an Ed25519 public key"
+    );
+    key.data
+        .as_slice()
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("credential identity must be 32 bytes"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use manytype_core::crypto::ed25519;
     use tokio::io::duplex;
+
+    fn identity_from_seed(seed: [u8; 32]) -> (Keypair, String, Vec<u8>) {
+        let mut libp2p_seed = seed;
+        let identity = Keypair::ed25519_from_bytes(libp2p_seed.as_mut_slice()).unwrap();
+        let peer_id = identity.public().to_peer_id().to_string();
+        let raw_public = identity
+            .public()
+            .try_into_ed25519()
+            .unwrap()
+            .to_bytes()
+            .to_vec();
+        (identity, peer_id, raw_public)
+    }
 
     #[tokio::test]
     async fn test_write_read_handshake_msg_round_trip() {
@@ -220,11 +331,12 @@ mod tests {
     #[tokio::test]
     async fn test_build_credentials_contains_signed_peer_ids() {
         let seed = [1u8; 32];
-        let signing_key = ed25519::signing_key_from_seed(&seed);
-        let local_peer_id = b"local-peer";
-        let remote_peer_id = b"remote-peer";
+        let mut libp2p_seed = seed;
+        let identity_keypair = Keypair::ed25519_from_bytes(libp2p_seed.as_mut_slice()).unwrap();
+        let local_peer_id = "local-peer";
+        let remote_peer_id = "remote-peer";
 
-        let creds_bytes = build_credentials(&signing_key, local_peer_id, remote_peer_id);
+        let creds_bytes = build_credentials(&identity_keypair, local_peer_id, remote_peer_id);
 
         // Decode and verify
         let creds = Credentials::decode(creds_bytes.as_slice()).unwrap();
@@ -234,52 +346,60 @@ mod tests {
 
         // Verify payload contains identity and valid signature
         let signed = PayloadSignedPeerIds::decode(creds.payload.as_slice()).unwrap();
-        let vk = ed25519::verifying_key(&signing_key);
-        assert_eq!(signed.identity, vk.to_bytes().to_vec());
-        assert_eq!(signed.sign.len(), 64); // Ed25519 signature is 64 bytes
-
-        // Verify the signature is valid
-        let mut sign_payload = Vec::new();
-        sign_payload.extend_from_slice(local_peer_id);
-        sign_payload.extend_from_slice(remote_peer_id);
-        let sig = ed25519_dalek::Signature::from_bytes(
-            &signed.sign.try_into().expect("64 bytes"),
+        assert_eq!(
+            signed.identity,
+            encode_anysync_public_key(&identity_keypair)
         );
-        assert!(ed25519::verify(&vk, &sign_payload, &sig));
+        assert_eq!(signed.sign.len(), 64);
+        let decoded_key = decode_anysync_public_key(&signed.identity).unwrap();
+        let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&decoded_key).unwrap();
+        let signature =
+            ed25519_dalek::Signature::from_bytes(&signed.sign.as_slice().try_into().unwrap());
+        assert!(ed25519::verify(
+            &verifying_key,
+            format!("{local_peer_id}{remote_peer_id}").as_bytes(),
+            &signature
+        ));
     }
 
     #[tokio::test]
     async fn test_full_handshake_round_trip() {
         let (client_io, server_io) = duplex(8192);
 
-        let server_seed = [1u8; 32];
-        let server_signing_key = ed25519::signing_key_from_seed(&server_seed);
-        let server_vk = ed25519::verifying_key(&server_signing_key);
-        let server_peer_id = server_vk.to_bytes().to_vec();
-
-        let client_seed = [2u8; 32];
-        let client_signing_key = ed25519::signing_key_from_seed(&client_seed);
-        let client_vk = ed25519::verifying_key(&client_signing_key);
-        let client_peer_id = client_vk.to_bytes().to_vec();
-
-        let server_peer_id_clone = server_peer_id.clone();
-        let client_peer_id_clone = client_peer_id.clone();
+        let (server_identity, server_peer_id, _) = identity_from_seed([1u8; 32]);
+        let (client_identity, client_peer_id, client_raw_identity) = identity_from_seed([2u8; 32]);
+        let server_peer_id_for_server = server_peer_id.clone();
+        let client_peer_id_for_server = client_peer_id.clone();
+        let server_peer_id_for_client = server_peer_id.clone();
+        let client_peer_id_for_client = client_peer_id.clone();
 
         // Server side
         let server_handle = tokio::spawn(async move {
             let (recv, send) = tokio::io::split(server_io);
             let mut stream = tokio::io::join(recv, send);
-            perform_handshake(&mut stream, &server_signing_key, &server_peer_id_clone).await
+            perform_handshake(
+                &mut stream,
+                &server_identity,
+                &server_peer_id_for_server,
+                &client_peer_id_for_server,
+            )
+            .await
         });
 
-        // Client side (simulates the 4-step handshake)
+        // Client side (simulates the 4-step credential handshake)
         let client_handle = tokio::spawn(async move {
             let (recv, send) = tokio::io::split(client_io);
             let mut stream = tokio::io::join(recv, send);
 
             // 1. Client sends Credentials
-            let creds = build_credentials(&client_signing_key, &client_peer_id_clone, &server_peer_id);
-            write_handshake_msg(&mut stream, MSG_TYPE_CREDENTIALS, &creds).await.unwrap();
+            let creds = build_credentials(
+                &client_identity,
+                &client_peer_id_for_client,
+                &server_peer_id_for_client,
+            );
+            write_handshake_msg(&mut stream, MSG_TYPE_CREDENTIALS, &creds)
+                .await
+                .unwrap();
 
             // 2. Client reads server Credentials
             let (msg_type, _payload) = read_handshake_msg(&mut stream).await.unwrap();
@@ -287,73 +407,60 @@ mod tests {
 
             // 3. Client sends Ack (success)
             let ack = Ack { error: 0 };
-            write_handshake_msg(&mut stream, MSG_TYPE_ACK, &ack.encode_to_vec()).await.unwrap();
+            write_handshake_msg(&mut stream, MSG_TYPE_ACK, &ack.encode_to_vec())
+                .await
+                .unwrap();
 
             // 4. Client reads server Ack
             let (msg_type, payload) = read_handshake_msg(&mut stream).await.unwrap();
             assert_eq!(msg_type, MSG_TYPE_ACK);
             let ack = Ack::decode(payload.as_slice()).unwrap();
             assert_eq!(ack.error, 0);
-
-            // 5. Client sends Proto (send first to avoid deadlock)
-            let proto_msg = Proto {
-                proto: ProtoType::Drpc as i32,
-                encodings: vec![Encoding::None as i32],
-            };
-            write_handshake_msg(&mut stream, MSG_TYPE_PROTO, &proto_msg.encode_to_vec()).await.unwrap();
-
-            // 5. Client reads server Proto
-            let (msg_type, payload) = read_handshake_msg(&mut stream).await.unwrap();
-            assert_eq!(msg_type, MSG_TYPE_PROTO);
-            let server_proto = Proto::decode(payload.as_slice()).unwrap();
-            assert_eq!(server_proto.proto, ProtoType::Drpc as i32);
         });
 
         let remote_id = server_handle.await.unwrap().unwrap();
-        assert_eq!(remote_id, client_peer_id);
+        assert_eq!(remote_id, client_raw_identity);
         client_handle.await.unwrap();
     }
 
     #[tokio::test]
     async fn test_version_validation_boundary() {
-        let server_seed = [1u8; 32];
-        let server_signing_key = ed25519::signing_key_from_seed(&server_seed);
-        let server_vk = ed25519::verifying_key(&server_signing_key);
-        let server_peer_id = server_vk.to_bytes().to_vec();
-
-        let client_seed = [2u8; 32];
-        let client_signing_key = ed25519::signing_key_from_seed(&client_seed);
+        let (server_identity, server_peer_id, _) = identity_from_seed([1u8; 32]);
+        let (client_identity, client_peer_id, _) = identity_from_seed([2u8; 32]);
 
         // versions to test: (version, should_accept)
-        for (version, should_accept) in [(7u32, false), (8u32, true), (9u32, true), (12u32, true), (13u32, false)] {
+        for (version, should_accept) in [
+            (7u32, false),
+            (8u32, true),
+            (9u32, true),
+            (12u32, true),
+            (13u32, false),
+        ] {
             let (client_io, server_io) = duplex(8192);
 
-            let sk = server_signing_key.clone();
-            let pid = server_peer_id.clone();
+            let identity = server_identity.clone();
+            let local_peer_id = server_peer_id.clone();
+            let remote_peer_id = client_peer_id.clone();
 
             let server_handle = tokio::spawn(async move {
                 let (recv, send) = tokio::io::split(server_io);
                 let mut stream = tokio::io::join(recv, send);
-                perform_handshake(&mut stream, &sk, &pid).await
+                perform_handshake(&mut stream, &identity, &local_peer_id, &remote_peer_id).await
             });
 
-            let csk = client_signing_key.clone();
+            let client_identity = client_identity.clone();
+            let client_peer_id = client_peer_id.clone();
+            let server_peer_id = server_peer_id.clone();
             let client_handle = tokio::spawn(async move {
-                let client_vk = ed25519::verifying_key(&csk);
-                let client_peer_id = client_vk.to_bytes().to_vec();
-
                 let (recv, send) = tokio::io::split(client_io);
                 let mut stream = tokio::io::join(recv, send);
 
                 // Build credentials with the test version
-                let verifying_key = ed25519::verifying_key(&csk);
-                let mut sign_payload = Vec::new();
-                sign_payload.extend_from_slice(&client_peer_id);
-                // empty remote_peer_id (don't know server yet)
-                let signature = ed25519::sign(&csk, &sign_payload);
                 let signed_peer_ids = manytype_proto::handshake::PayloadSignedPeerIds {
-                    identity: verifying_key.to_bytes().to_vec(),
-                    sign: signature.to_bytes().to_vec(),
+                    identity: encode_anysync_public_key(&client_identity),
+                    sign: client_identity
+                        .sign(format!("{client_peer_id}{server_peer_id}").as_bytes())
+                        .unwrap(),
                 };
                 let creds = Credentials {
                     r#type: CredentialsType::SignedPeerIds as i32,
@@ -414,47 +521,35 @@ mod tests {
     async fn test_proto_step_negotiation() {
         let (client_io, server_io) = duplex(8192);
 
-        let server_seed = [1u8; 32];
-        let server_signing_key = ed25519::signing_key_from_seed(&server_seed);
-        let server_vk = ed25519::verifying_key(&server_signing_key);
-        let server_peer_id = server_vk.to_bytes().to_vec();
-
-        let client_seed = [2u8; 32];
-        let client_signing_key = ed25519::signing_key_from_seed(&client_seed);
-        let client_vk = ed25519::verifying_key(&client_signing_key);
-        let client_peer_id = client_vk.to_bytes().to_vec();
-
-        let server_peer_id_clone = server_peer_id.clone();
-        let client_peer_id_clone = client_peer_id.clone();
-
         let server_handle = tokio::spawn(async move {
             let (recv, send) = tokio::io::split(server_io);
             let mut stream = tokio::io::join(recv, send);
-            perform_handshake(&mut stream, &server_signing_key, &server_peer_id_clone).await
+            perform_proto_handshake(&mut stream, ProtoType::Drpc, &[Encoding::None]).await
         });
 
         let client_handle = tokio::spawn(async move {
             let (recv, send) = tokio::io::split(client_io);
             let mut stream = tokio::io::join(recv, send);
 
-            // Steps 1-4: full credential exchange
-            let creds = build_credentials(&client_signing_key, &client_peer_id_clone, &server_peer_id);
-            write_handshake_msg(&mut stream, MSG_TYPE_CREDENTIALS, &creds).await.unwrap();
-            let (_, _) = read_handshake_msg(&mut stream).await.unwrap(); // server Credentials
-            let ack = Ack { error: 0 };
-            write_handshake_msg(&mut stream, MSG_TYPE_ACK, &ack.encode_to_vec()).await.unwrap();
-            let (_, _) = read_handshake_msg(&mut stream).await.unwrap(); // server Ack
-
-            // Step 5: Proto exchange — client sends first, then reads
+            // Proto exchange: client sends first, then reads
             let proto_msg = Proto {
                 proto: ProtoType::Drpc as i32,
                 encodings: vec![Encoding::None as i32],
             };
-            write_handshake_msg(&mut stream, MSG_TYPE_PROTO, &proto_msg.encode_to_vec()).await.unwrap();
+            write_handshake_msg(&mut stream, MSG_TYPE_PROTO, &proto_msg.encode_to_vec())
+                .await
+                .unwrap();
             let (msg_type, payload) = read_handshake_msg(&mut stream).await.unwrap();
-            assert_eq!(msg_type, MSG_TYPE_PROTO, "server should send Proto (type 3)");
+            assert_eq!(
+                msg_type, MSG_TYPE_PROTO,
+                "server should send Proto (type 3)"
+            );
             let server_proto = Proto::decode(payload.as_slice()).unwrap();
-            assert_eq!(server_proto.proto, ProtoType::Drpc as i32, "server Proto should be DRPC");
+            assert_eq!(
+                server_proto.proto,
+                ProtoType::Drpc as i32,
+                "server Proto should be DRPC"
+            );
             assert_eq!(
                 server_proto.encodings,
                 vec![Encoding::None as i32],
@@ -462,8 +557,41 @@ mod tests {
             );
         });
 
-        let remote_id = server_handle.await.unwrap().unwrap();
-        assert_eq!(remote_id, client_peer_id);
+        let encodings = server_handle.await.unwrap().unwrap();
+        assert_eq!(encodings, vec![Encoding::None as i32]);
+        client_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_proto_step_negotiates_down_from_snappy() {
+        let (client_io, server_io) = duplex(8192);
+
+        let server_handle = tokio::spawn(async move {
+            let (recv, send) = tokio::io::split(server_io);
+            let mut stream = tokio::io::join(recv, send);
+            perform_proto_handshake(&mut stream, ProtoType::Drpc, &[Encoding::None]).await
+        });
+
+        let client_handle = tokio::spawn(async move {
+            let (recv, send) = tokio::io::split(client_io);
+            let mut stream = tokio::io::join(recv, send);
+
+            let proto_msg = Proto {
+                proto: ProtoType::Drpc as i32,
+                encodings: vec![Encoding::Snappy as i32],
+            };
+            write_handshake_msg(&mut stream, MSG_TYPE_PROTO, &proto_msg.encode_to_vec())
+                .await
+                .unwrap();
+            let (msg_type, payload) = read_handshake_msg(&mut stream).await.unwrap();
+            assert_eq!(msg_type, MSG_TYPE_PROTO);
+            let server_proto = Proto::decode(payload.as_slice()).unwrap();
+            assert_eq!(server_proto.proto, ProtoType::Drpc as i32);
+            assert_eq!(server_proto.encodings, vec![Encoding::None as i32]);
+        });
+
+        let encodings = server_handle.await.unwrap().unwrap();
+        assert_eq!(encodings, vec![Encoding::None as i32]);
         client_handle.await.unwrap();
     }
 }

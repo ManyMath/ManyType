@@ -25,6 +25,7 @@ pub struct ServerState {
 /// method path and stream_id. This function matches the method and
 /// invokes the corresponding handler.
 pub async fn dispatch<T>(
+    stream_id: u64,
     method: &str,
     stream: &mut DrpcStream<T>,
     state: &ServerState,
@@ -33,6 +34,139 @@ pub async fn dispatch<T>(
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
+    let mut next_message_id = 1u64;
+
+    fn is_benign_disconnect(error: &anyhow::Error) -> bool {
+        use std::io::ErrorKind;
+
+        error.chain().any(|cause| {
+            if let Some(io_error) = cause.downcast_ref::<std::io::Error>() {
+                return matches!(
+                    io_error.kind(),
+                    ErrorKind::BrokenPipe
+                        | ErrorKind::ConnectionAborted
+                        | ErrorKind::ConnectionReset
+                        | ErrorKind::UnexpectedEof
+                        | ErrorKind::NotConnected
+                );
+            }
+
+            if let Some(write_error) = cause.downcast_ref::<quinn::WriteError>() {
+                return matches!(
+                    write_error,
+                    quinn::WriteError::ConnectionLost(_)
+                        | quinn::WriteError::ClosedStream
+                        | quinn::WriteError::Stopped(_)
+                        | quinn::WriteError::ZeroRttRejected
+                );
+            }
+
+            if let Some(connection_error) = cause.downcast_ref::<quinn::ConnectionError>() {
+                return matches!(
+                    connection_error,
+                    quinn::ConnectionError::ApplicationClosed(_)
+                        | quinn::ConnectionError::ConnectionClosed(_)
+                        | quinn::ConnectionError::LocallyClosed
+                        | quinn::ConnectionError::TimedOut
+                        | quinn::ConnectionError::Reset
+                );
+            }
+
+            false
+        })
+    }
+
+    async fn write_response<T>(
+        stream: &mut DrpcStream<T>,
+        stream_id: u64,
+        next_message_id: &mut u64,
+        data: &[u8],
+    ) -> Result<()>
+    where
+        T: AsyncRead + AsyncWrite + Unpin,
+    {
+        let message_id = *next_message_id;
+        *next_message_id += 1;
+        if let Err(error) = stream.write_message(stream_id, message_id, data).await {
+            if is_benign_disconnect(&error) {
+                return Ok(());
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    async fn write_close_send<T>(
+        stream: &mut DrpcStream<T>,
+        stream_id: u64,
+        next_message_id: &mut u64,
+    ) -> Result<()>
+    where
+        T: AsyncRead + AsyncWrite + Unpin,
+    {
+        if let Err(error) = write_frame(
+            stream,
+            stream_id,
+            next_message_id,
+            KIND_CLOSE_SEND,
+            true,
+            bytes::Bytes::new(),
+        )
+        .await
+        {
+            if is_benign_disconnect(&error) {
+                return Ok(());
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    async fn write_unary_response<T>(
+        stream: &mut DrpcStream<T>,
+        stream_id: u64,
+        next_message_id: &mut u64,
+        data: &[u8],
+    ) -> Result<()>
+    where
+        T: AsyncRead + AsyncWrite + Unpin,
+    {
+        write_response(stream, stream_id, next_message_id, data).await?;
+        write_close_send(stream, stream_id, next_message_id).await
+    }
+
+    async fn write_frame<T>(
+        stream: &mut DrpcStream<T>,
+        stream_id: u64,
+        next_message_id: &mut u64,
+        kind: u8,
+        done: bool,
+        data: bytes::Bytes,
+    ) -> Result<()>
+    where
+        T: AsyncRead + AsyncWrite + Unpin,
+    {
+        let message_id = *next_message_id;
+        *next_message_id += 1;
+        if let Err(error) = stream
+            .write_frame(super::codec::DrpcFrame {
+                kind,
+                done,
+                control: false,
+                stream_id,
+                message_id,
+                data,
+            })
+            .await
+        {
+            if is_benign_disconnect(&error) {
+                return Ok(());
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
     match method {
         "/coordinator.Coordinator/NetworkConfiguration" => {
             let request_bytes = stream.read_message().await?;
@@ -40,7 +174,7 @@ where
                 &request_bytes,
                 &state.coordinator_config,
             )?;
-            stream.write_message(0, 0, &response_bytes).await
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/coordinator.Coordinator/SpaceSign" => {
             let request_bytes = stream.read_message().await?;
@@ -50,33 +184,33 @@ where
                 &state.local_signing_key,
                 remote_peer_id,
             )?;
-            stream.write_message(0, 0, &response_bytes).await
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/coordinator.Coordinator/SpaceStatusCheck" => {
             let request_bytes = stream.read_message().await?;
             let response_bytes =
                 coordinator::handle_space_status_check(&request_bytes, &state.sync_state)?;
-            stream.write_message(0, 0, &response_bytes).await
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/spacesync.SpaceSync/HeadSync" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes =
-                sync_node::handle_head_sync(&request_bytes, &state.sync_state)?;
-            stream.write_message(0, 0, &response_bytes).await
+            let response_bytes = sync_node::handle_head_sync(&request_bytes, &state.sync_state)?;
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/spacesync.SpaceSync/StoreDiff" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes =
-                sync_node::handle_store_diff(&request_bytes, &state.sync_state)?;
-            stream.write_message(0, 0, &response_bytes).await
+            let response_bytes = sync_node::handle_store_diff(&request_bytes, &state.sync_state)?;
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/spacesync.SpaceSync/StoreElements" => {
             let mut messages = Vec::new();
 
             loop {
-                let frame = match stream.read_frame().await? {
-                    Some(f) => f,
-                    None => break,
+                let frame = match stream.read_frame().await {
+                    Ok(Some(frame)) => frame,
+                    Ok(None) => break,
+                    Err(error) if is_benign_disconnect(&error) => break,
+                    Err(error) => return Err(error),
                 };
 
                 if frame.kind == KIND_CLOSE_SEND {
@@ -106,35 +240,29 @@ where
             for response_bytes in
                 sync_node::handle_store_elements_messages(&messages, &state.sync_state)?
             {
-                stream
-                    .write_frame(super::codec::DrpcFrame {
-                        kind: super::codec::KIND_MESSAGE,
-                        done: false,
-                        control: false,
-                        stream_id: 0,
-                        message_id: 0,
-                        data: bytes::Bytes::from(response_bytes),
-                    })
-                    .await?;
+                write_frame(
+                    stream,
+                    stream_id,
+                    &mut next_message_id,
+                    super::codec::KIND_MESSAGE,
+                    false,
+                    bytes::Bytes::from(response_bytes),
+                )
+                .await?;
             }
 
-            stream.write_frame(super::codec::DrpcFrame {
-                kind: KIND_CLOSE_SEND,
-                done: true,
-                control: false,
-                stream_id: 0,
-                message_id: 0,
-                data: bytes::Bytes::new(),
-            }).await
+            write_close_send(stream, stream_id, &mut next_message_id).await
         }
         "/spacesync.SpaceSync/ObjectSyncStream" => {
             // Bidirectional stream: read messages in a loop until the
             // client signals close. For each message, process it and
             // send back a confirmation.
             loop {
-                let frame = match stream.read_frame().await? {
-                    Some(f) => f,
-                    None => break, // connection closed
+                let frame = match stream.read_frame().await {
+                    Ok(Some(frame)) => frame,
+                    Ok(None) => break,
+                    Err(error) if is_benign_disconnect(&error) => break,
+                    Err(error) => return Err(error),
                 };
 
                 if frame.kind == KIND_CLOSE_SEND {
@@ -163,25 +291,25 @@ where
                 let response_bytes =
                     sync_node::handle_object_sync_message(&msg_bytes, &state.sync_state)?;
                 // Write response as non-final message (stream continues)
-                stream.write_frame(super::codec::DrpcFrame {
-                    kind: super::codec::KIND_MESSAGE,
-                    done: false,
-                    control: false,
-                    stream_id: 0,
-                    message_id: 0,
-                    data: bytes::Bytes::from(response_bytes),
-                }).await?;
+                write_frame(
+                    stream,
+                    stream_id,
+                    &mut next_message_id,
+                    super::codec::KIND_MESSAGE,
+                    false,
+                    bytes::Bytes::from(response_bytes),
+                )
+                .await?;
             }
 
             // Send close-send to signal we're done
-            stream.write_frame(super::codec::DrpcFrame {
-                kind: KIND_CLOSE_SEND,
-                done: true,
-                control: false,
-                stream_id: 0,
-                message_id: 0,
-                data: bytes::Bytes::new(),
-            }).await
+            write_close_send(stream, stream_id, &mut next_message_id).await
+        }
+        "/spacesync.SpaceSync/ObjectSyncRequestStream" => {
+            let request_bytes = stream.read_message().await?;
+            let response_bytes =
+                sync_node::handle_object_sync_message(&request_bytes, &state.sync_state)?;
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/spacesync.SpaceSync/SpacePush" => {
             let request_bytes = stream.read_message().await?;
@@ -192,27 +320,58 @@ where
                 &state.local_signing_key,
                 remote_peer_id,
             )?;
-            stream.write_message(0, 0, &response_bytes).await
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/consensusProto.Consensus/LogAdd" => {
             let request_bytes = stream.read_message().await?;
             let response_bytes = consensus::handle_log_add(&request_bytes)?;
-            stream.write_message(0, 0, &response_bytes).await
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/consensusProto.Consensus/RecordAdd" => {
             let request_bytes = stream.read_message().await?;
             let response_bytes =
                 consensus::handle_record_add(&request_bytes, &state.local_signing_key)?;
-            stream.write_message(0, 0, &response_bytes).await
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/filesync.File/BlockPush" => {
             let request_bytes = stream.read_message().await?;
             let response_bytes = file_node::handle_block_push(&request_bytes)?;
-            stream.write_message(0, 0, &response_bytes).await
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+        }
+        "/filesync.File/Check" => {
+            let request_bytes = stream.read_message().await?;
+            let response_bytes = file_node::handle_check(&request_bytes, &state.sync_state)?;
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+        }
+        "/filesync.File/SpaceInfo" => {
+            let request_bytes = stream.read_message().await?;
+            let response_bytes = file_node::handle_space_info(&request_bytes)?;
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+        }
+        "/filesync.File/AccountInfo" => {
+            let request_bytes = stream.read_message().await?;
+            let response_bytes = file_node::handle_account_info(&request_bytes)?;
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+        }
+        "/coordinator.Coordinator/NotifySubscribe" => {
+            let _request_bytes = stream.read_message().await?;
+            loop {
+                let Some(frame) = stream.read_frame().await? else {
+                    break;
+                };
+                if matches!(frame.kind, super::codec::KIND_CLOSE | super::codec::KIND_CANCEL) {
+                    break;
+                }
+            }
+            Ok(())
         }
         unknown => {
             stream
-                .write_error(0, &format!("unknown method: {unknown}"))
+                .write_error(
+                    stream_id,
+                    next_message_id,
+                    &format!("unknown method: {unknown}"),
+                )
                 .await?;
             bail!("unknown method: {unknown}");
         }
@@ -227,8 +386,8 @@ mod tests {
     use tokio::io::duplex;
 
     use crate::drpc::codec::{DrpcFrame, KIND_ERROR, KIND_MESSAGE};
-    use manytype_core::crypto::ed25519;
     use manytype_core::crdt::cid::compute_cid;
+    use manytype_core::crypto::ed25519;
     use manytype_proto::spacesync::{StoreKeyInner, StoreKeyValue};
 
     fn test_state() -> ServerState {
@@ -271,9 +430,14 @@ mod tests {
 
         // Spawn dispatch for an unknown method
         let handle = tokio::spawn(async move {
-            let result =
-                dispatch("/unknown.Service/Method", &mut server_stream, &state, b"peer")
-                    .await;
+            let result = dispatch(
+                1,
+                "/unknown.Service/Method",
+                &mut server_stream,
+                &state,
+                b"peer",
+            )
+            .await;
             assert!(result.is_err());
             let err_msg = result.unwrap_err().to_string();
             assert!(
@@ -295,6 +459,108 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_filesync_check_returns_response() {
+        use manytype_proto::filesync::{CheckRequest, CheckResponse};
+
+        let (client, server) = duplex(1024);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+        let state = test_state();
+
+        let handle = tokio::spawn(async move {
+            dispatch(1, "/filesync.File/Check", &mut server_stream, &state, b"peer")
+                .await
+                .unwrap();
+        });
+
+        client_stream
+            .write_message(1, 1, &CheckRequest {}.encode_to_vec())
+            .await
+            .unwrap();
+        let frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(frame.kind, KIND_MESSAGE);
+        let response = CheckResponse::decode(frame.data.as_ref()).unwrap();
+        assert!(response.allow_write);
+
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_filesync_space_info_returns_response() {
+        use manytype_proto::filesync::{SpaceInfoRequest, SpaceInfoResponse};
+
+        let (client, server) = duplex(1024);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+        let state = test_state();
+
+        let handle = tokio::spawn(async move {
+            dispatch(1, "/filesync.File/SpaceInfo", &mut server_stream, &state, b"peer")
+                .await
+                .unwrap();
+        });
+
+        client_stream
+            .write_message(
+                1,
+                1,
+                &SpaceInfoRequest {
+                    space_id: "space-1".to_string(),
+                }
+                .encode_to_vec(),
+            )
+            .await
+            .unwrap();
+        let frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(frame.kind, KIND_MESSAGE);
+        let response = SpaceInfoResponse::decode(frame.data.as_ref()).unwrap();
+        assert_eq!(response.space_id, "space-1");
+
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_object_sync_request_stream_returns_message() {
+        use manytype_proto::spacesync::ObjectSyncMessage;
+
+        let (client, server) = duplex(4096);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+        let state = test_state();
+
+        let handle = tokio::spawn(async move {
+            dispatch(
+                1,
+                "/spacesync.SpaceSync/ObjectSyncRequestStream",
+                &mut server_stream,
+                &state,
+                b"peer",
+            )
+            .await
+            .unwrap();
+        });
+
+        let request = ObjectSyncMessage {
+            space_id: "space-1".to_string(),
+            object_id: "obj-1".to_string(),
+            request_id: "req-1".to_string(),
+            payload: vec![1, 2, 3],
+            ..Default::default()
+        };
+        client_stream
+            .write_message(1, 1, &request.encode_to_vec())
+            .await
+            .unwrap();
+
+        let frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(frame.kind, KIND_MESSAGE);
+        let response = ObjectSyncMessage::decode(frame.data.as_ref()).unwrap();
+        assert_eq!(response.reply_id, "req-1");
+
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn test_dispatch_network_configuration() {
         use manytype_proto::coordinator::{
             NetworkConfigurationRequest, NetworkConfigurationResponse,
@@ -309,6 +575,7 @@ mod tests {
         // Spawn dispatch handler
         let handle = tokio::spawn(async move {
             dispatch(
+                1,
                 "/coordinator.Coordinator/NetworkConfiguration",
                 &mut server_stream,
                 &state,
@@ -321,18 +588,27 @@ mod tests {
         // Client sends the request as a message frame
         let request = NetworkConfigurationRequest::default();
         let request_bytes = request.encode_to_vec();
-        client_stream.write_message(0, 0, &request_bytes).await.unwrap();
+        client_stream
+            .write_message(0, 0, &request_bytes)
+            .await
+            .unwrap();
 
         // Read the response message frame
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_MESSAGE);
         assert!(frame.done);
+        assert_eq!(frame.stream_id, 1);
+        assert_eq!(frame.message_id, 1);
 
-        let response =
-            NetworkConfigurationResponse::decode(frame.data.as_ref()).unwrap();
+        let response = NetworkConfigurationResponse::decode(frame.data.as_ref()).unwrap();
         assert_eq!(response.network_id, "test-net");
         assert!(!response.nodes.is_empty());
         assert_eq!(response.nodes[0].peer_id, "test-peer");
+
+        let close_frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+        assert_eq!(close_frame.stream_id, 1);
+        assert_eq!(close_frame.message_id, 2);
 
         handle.await.unwrap();
     }
@@ -349,6 +625,7 @@ mod tests {
 
         let handle = tokio::spawn(async move {
             dispatch(
+                1,
                 "/spacesync.SpaceSync/HeadSync",
                 &mut server_stream,
                 &state,
@@ -370,9 +647,16 @@ mod tests {
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_MESSAGE);
         assert!(frame.done);
+        assert_eq!(frame.stream_id, 1);
+        assert_eq!(frame.message_id, 1);
         let response = HeadSyncResponse::decode(frame.data.as_ref()).unwrap();
         // Unknown space should return empty results
         assert!(response.results.is_empty());
+
+        let close_frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+        assert_eq!(close_frame.stream_id, 1);
+        assert_eq!(close_frame.message_id, 2);
 
         handle.await.unwrap();
     }
@@ -410,6 +694,7 @@ mod tests {
 
         let handle = tokio::spawn(async move {
             dispatch(
+                1,
                 "/spacesync.SpaceSync/SpacePush",
                 &mut server_stream,
                 &state,
@@ -437,7 +722,14 @@ mod tests {
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_MESSAGE);
         assert!(frame.done);
+        assert_eq!(frame.stream_id, 1);
+        assert_eq!(frame.message_id, 1);
         let _response = SpacePushResponse::decode(frame.data.as_ref()).unwrap();
+
+        let close_frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+        assert_eq!(close_frame.stream_id, 1);
+        assert_eq!(close_frame.message_id, 2);
 
         handle.await.unwrap();
     }
@@ -454,6 +746,7 @@ mod tests {
 
         let handle = tokio::spawn(async move {
             dispatch(
+                1,
                 "/spacesync.SpaceSync/ObjectSyncStream",
                 &mut server_stream,
                 &state,
@@ -479,6 +772,8 @@ mod tests {
         // Read the confirmation response (non-final -- stream continues)
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_MESSAGE);
+        assert_eq!(frame.stream_id, 1);
+        assert_eq!(frame.message_id, 1);
         let response = ObjectSyncMessage::decode(frame.data.as_ref()).unwrap();
         assert_eq!(response.space_id, "sp-1");
         assert_eq!(response.object_id, "obj-1");
@@ -500,6 +795,8 @@ mod tests {
         // Read server's close-send response
         let close_frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+        assert_eq!(close_frame.stream_id, 1);
+        assert_eq!(close_frame.message_id, 2);
 
         handle.await.unwrap();
     }
@@ -520,6 +817,7 @@ mod tests {
 
         let handle = tokio::spawn(async move {
             dispatch(
+                1,
                 "/spacesync.SpaceSync/StoreDiff",
                 &mut server_stream,
                 &state,
@@ -540,9 +838,16 @@ mod tests {
 
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_MESSAGE);
+        assert_eq!(frame.stream_id, 1);
+        assert_eq!(frame.message_id, 1);
         let response = StoreDiffResponse::decode(frame.data.as_ref()).unwrap();
         assert_eq!(response.results.len(), 1);
         assert_eq!(response.results[0].elements[0].id, "settings-peer-1");
+
+        let close_frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+        assert_eq!(close_frame.stream_id, 1);
+        assert_eq!(close_frame.message_id, 2);
 
         handle.await.unwrap();
     }
@@ -561,6 +866,7 @@ mod tests {
 
         let handle = tokio::spawn(async move {
             dispatch(
+                1,
                 "/spacesync.SpaceSync/StoreElements",
                 &mut server_stream,
                 &state,
@@ -600,16 +906,22 @@ mod tests {
 
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_MESSAGE);
+        assert_eq!(frame.stream_id, 1);
+        assert_eq!(frame.message_id, 1);
         let response = StoreKeyValue::decode(frame.data.as_ref()).unwrap();
         assert_eq!(response.key_peer_id, "settings-peer-1");
 
         let terminator = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(terminator.kind, KIND_MESSAGE);
+        assert_eq!(terminator.stream_id, 1);
+        assert_eq!(terminator.message_id, 2);
         let terminator_msg = StoreKeyValue::decode(terminator.data.as_ref()).unwrap();
         assert!(terminator_msg.key_peer_id.is_empty());
 
         let close_frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+        assert_eq!(close_frame.stream_id, 1);
+        assert_eq!(close_frame.message_id, 3);
 
         handle.await.unwrap();
     }
@@ -626,6 +938,7 @@ mod tests {
 
         let handle = tokio::spawn(async move {
             dispatch(
+                1,
                 "/consensusProto.Consensus/LogAdd",
                 &mut server_stream,
                 &state,
@@ -651,7 +964,14 @@ mod tests {
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_MESSAGE);
         assert!(frame.done);
+        assert_eq!(frame.stream_id, 1);
+        assert_eq!(frame.message_id, 1);
         let _ok = ConsensusOk::decode(frame.data.as_ref()).unwrap();
+
+        let close_frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+        assert_eq!(close_frame.stream_id, 1);
+        assert_eq!(close_frame.message_id, 2);
 
         handle.await.unwrap();
     }
@@ -668,6 +988,7 @@ mod tests {
 
         let handle = tokio::spawn(async move {
             dispatch(
+                1,
                 "/filesync.File/BlockPush",
                 &mut server_stream,
                 &state,
@@ -691,7 +1012,14 @@ mod tests {
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_MESSAGE);
         assert!(frame.done);
+        assert_eq!(frame.stream_id, 1);
+        assert_eq!(frame.message_id, 1);
         let _ok = FilesyncOk::decode(frame.data.as_ref()).unwrap();
+
+        let close_frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+        assert_eq!(close_frame.stream_id, 1);
+        assert_eq!(close_frame.message_id, 2);
 
         handle.await.unwrap();
     }
@@ -723,6 +1051,7 @@ mod tests {
 
             let handle = tokio::spawn(async move {
                 dispatch(
+                    1,
                     "/spacesync.SpaceSync/SpacePush",
                     &mut server_stream,
                     &state,
@@ -792,6 +1121,7 @@ mod tests {
 
             let handle = tokio::spawn(async move {
                 dispatch(
+                    1,
                     "/spacesync.SpaceSync/HeadSync",
                     &mut server_stream,
                     &state,

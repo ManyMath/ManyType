@@ -30,8 +30,7 @@ mod tests {
     /// Shared cross-language test vector.
     /// Input: b"hello anytype"
     /// Expected: computed via CIDv1 + dag-cbor + SHA-256 + base32lower
-    const EXPECTED_CID: &str =
-        "bafyreie7ijnjsupdthz7mvg2y76gd6coqvyic5k36tli2p2bnn6mq24ohi";
+    const EXPECTED_CID: &str = "bafyreie7ijnjsupdthz7mvg2y76gd6coqvyic5k36tli2p2bnn6mq24ohi";
 
     #[test]
     fn cross_language_test_vector() {

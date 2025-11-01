@@ -1,5 +1,15 @@
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 
+const LIBP2P_ED25519_PEER_ID_PREFIX: [u8; 6] = [0x00, 0x24, 0x08, 0x01, 0x12, 0x20];
+
+/// Encode an Ed25519 public key as a libp2p peer ID string.
+pub fn ed25519_pubkey_to_libp2p_peer_id(pubkey: &[u8; 32]) -> String {
+    let mut payload = Vec::with_capacity(38);
+    payload.extend_from_slice(&LIBP2P_ED25519_PEER_ID_PREFIX);
+    payload.extend_from_slice(pubkey);
+    bs58::encode(payload).into_string()
+}
+
 /// Create an Ed25519 signing key from a 32-byte seed.
 pub fn signing_key_from_seed(seed: &[u8; 32]) -> SigningKey {
     SigningKey::from_bytes(seed)
@@ -89,5 +99,25 @@ mod tests {
         let message = b"anytype test message";
         let sig = sign(&sk, message);
         assert!(verify(&vk, message, &sig));
+    }
+
+    #[test]
+    fn test_libp2p_peer_id_starts_with_12d3koow() {
+        let seed = [1u8; 32];
+        let sk = signing_key_from_seed(&seed);
+        let vk = verifying_key(&sk);
+        let peer_id = ed25519_pubkey_to_libp2p_peer_id(&vk.to_bytes());
+        assert!(peer_id.starts_with("12D3KooW"), "got: {}", peer_id);
+    }
+
+    #[test]
+    fn test_libp2p_peer_id_is_deterministic() {
+        let seed = [1u8; 32];
+        let sk = signing_key_from_seed(&seed);
+        let vk = verifying_key(&sk);
+        let pubkey = vk.to_bytes();
+        let id1 = ed25519_pubkey_to_libp2p_peer_id(&pubkey);
+        let id2 = ed25519_pubkey_to_libp2p_peer_id(&pubkey);
+        assert_eq!(id1, id2);
     }
 }

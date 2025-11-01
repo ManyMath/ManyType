@@ -11,8 +11,8 @@ use prost::Message;
 use manytype_core::crdt::cid::compute_cid;
 use manytype_core::ldiff::{Diff, Element, Hasher, Range};
 use manytype_proto::coordinator::SpaceReceiptWithSignature;
-use manytype_proto::spacesync::{RawSpaceHeader, SpaceHeader};
 use manytype_proto::spacesync::*;
+use manytype_proto::spacesync::{RawSpaceHeader, SpaceHeader};
 use manytype_proto::treechange::{RawTreeChange, TreeChange};
 
 use crate::coordinator::{self, CoordinatorConfig};
@@ -35,7 +35,8 @@ pub fn handle_head_sync(request_bytes: &[u8], sync_state: &SharedSyncState) -> R
 
     let state = sync_state.read().unwrap();
     let results = if let Some(space) = state.get(space_id) {
-        if !request.ranges.is_empty() && matches!(request.diff_type(), DiffType::V2 | DiffType::V3) {
+        if !request.ranges.is_empty() && matches!(request.diff_type(), DiffType::V2 | DiffType::V3)
+        {
             let diff = build_head_diff(space, request.diff_type());
             diff.ranges(
                 &request
@@ -82,31 +83,33 @@ pub fn handle_head_sync(request_bytes: &[u8], sync_state: &SharedSyncState) -> R
                 vec![]
             }
         }
-    } else if !request.ranges.is_empty() && matches!(request.diff_type(), DiffType::V2 | DiffType::V3) {
-            let diff = Diff::new_with_type(
-                LDIFF_DIVIDE_FACTOR,
-                LDIFF_COMPARE_THRESHOLD,
-                request.diff_type(),
-            );
-            diff.ranges(
-                &request
-                    .ranges
-                    .iter()
-                    .map(|range| Range {
-                        from: range.from,
-                        to: range.to,
-                        elements: range.elements,
-                        limit: range.limit as usize,
-                    })
-                    .collect::<Vec<_>>(),
-            )
-            .into_iter()
-            .map(|result| HeadSyncResult {
-                hash: result.hash,
-                elements: Vec::new(),
-                count: result.count as u32,
-            })
-            .collect()
+    } else if !request.ranges.is_empty()
+        && matches!(request.diff_type(), DiffType::V2 | DiffType::V3)
+    {
+        let diff = Diff::new_with_type(
+            LDIFF_DIVIDE_FACTOR,
+            LDIFF_COMPARE_THRESHOLD,
+            request.diff_type(),
+        );
+        diff.ranges(
+            &request
+                .ranges
+                .iter()
+                .map(|range| Range {
+                    from: range.from,
+                    to: range.to,
+                    elements: range.elements,
+                    limit: range.limit as usize,
+                })
+                .collect::<Vec<_>>(),
+        )
+        .into_iter()
+        .map(|result| HeadSyncResult {
+            hash: result.hash,
+            elements: Vec::new(),
+            count: result.count as u32,
+        })
+        .collect()
     } else {
         vec![]
     };
@@ -119,6 +122,11 @@ pub fn handle_head_sync(request_bytes: &[u8], sync_state: &SharedSyncState) -> R
             DiffType::Initial as i32
         },
     };
+    tracing::info!(
+        "sync: headsync for {} returned {} ranges",
+        space_id,
+        response.results.len()
+    );
     Ok(response.encode_to_vec())
 }
 
@@ -362,7 +370,11 @@ fn collect_object_elements(space: &SpaceState) -> Vec<HeadSyncResultElement> {
 
     let mut elements = Vec::new();
     for object_id in object_ids {
-        let mut heads = space.object_heads.get(&object_id).cloned().unwrap_or_default();
+        let mut heads = space
+            .object_heads
+            .get(&object_id)
+            .cloned()
+            .unwrap_or_default();
         heads.sort();
         if heads.is_empty() {
             elements.push(HeadSyncResultElement {
@@ -578,8 +590,7 @@ mod tests {
             space_id: "space-2".to_string(),
             ..Default::default()
         };
-        let response_bytes =
-            handle_head_sync(&hs_request.encode_to_vec(), &sync_state).unwrap();
+        let response_bytes = handle_head_sync(&hs_request.encode_to_vec(), &sync_state).unwrap();
         let response = HeadSyncResponse::decode(response_bytes.as_slice()).unwrap();
         assert!(
             !response.results.is_empty(),
@@ -599,14 +610,16 @@ mod tests {
             payload: raw_change,
             ..Default::default()
         };
-        let response_bytes =
-            handle_object_sync_message(&msg.encode_to_vec(), &sync_state).unwrap();
+        let response_bytes = handle_object_sync_message(&msg.encode_to_vec(), &sync_state).unwrap();
         let response = ObjectSyncMessage::decode(response_bytes.as_slice()).unwrap();
 
         assert_eq!(response.space_id, "space-1");
         assert_eq!(response.object_id, "obj-1");
         assert_eq!(response.reply_id, "req-42");
-        assert!(response.payload.is_empty(), "confirmation has empty payload");
+        assert!(
+            response.payload.is_empty(),
+            "confirmation has empty payload"
+        );
 
         let state = sync_state.read().unwrap();
         let space = state.get("space-1").expect("space should exist");
@@ -658,16 +671,15 @@ mod tests {
         assert_eq!(response.reply_id, "pull-1");
 
         let payload = response.payload;
-        let first_len =
-            u32::from_le_bytes(payload[0..4].try_into().unwrap()) as usize;
+        let first_len = u32::from_le_bytes(payload[0..4].try_into().unwrap()) as usize;
         let first = payload[4..4 + first_len].to_vec();
         let second_offset = 4 + first_len;
         let second_len = u32::from_le_bytes(
-            payload[second_offset..second_offset + 4].try_into().unwrap(),
+            payload[second_offset..second_offset + 4]
+                .try_into()
+                .unwrap(),
         ) as usize;
-        let second = payload
-            [second_offset + 4..second_offset + 4 + second_len]
-            .to_vec();
+        let second = payload[second_offset + 4..second_offset + 4 + second_len].to_vec();
 
         assert_eq!(first, first_change);
         assert_eq!(second, second_change);
@@ -835,7 +847,9 @@ mod tests {
         assert_eq!(fetched.key_peer_id, existing.key_peer_id);
         assert!(terminator.key_peer_id.is_empty());
 
-        let stored_new = sync_state.get_store_entry("space-1", "settings-peer-2").unwrap();
+        let stored_new = sync_state
+            .get_store_entry("space-1", "settings-peer-2")
+            .unwrap();
         assert_eq!(stored_new.key_peer_id, new_entry.key_peer_id);
         assert_eq!(stored_new.value, new_entry.value);
     }

@@ -5,7 +5,7 @@
 //! 2. Ed25519 signature is valid
 //! 3. Decodes inner Record and AclRoot/AclData
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use ed25519_dalek::{Signature, VerifyingKey};
 use prost::Message;
 
@@ -63,25 +63,20 @@ pub fn verify_acl_record(raw_with_id: &RawRecordWithId) -> Result<VerifiedAclRec
     let record = Record::decode(raw_record.payload.as_slice())?;
 
     // 4. Verify Ed25519 signature
-    let identity_bytes: [u8; 32] = record
-        .identity
-        .as_slice()
-        .try_into()
-        .map_err(|_| anyhow::anyhow!("Identity must be 32 bytes, got {}", record.identity.len()))?;
+    let identity_bytes: [u8; 32] =
+        record.identity.as_slice().try_into().map_err(|_| {
+            anyhow::anyhow!("Identity must be 32 bytes, got {}", record.identity.len())
+        })?;
 
     let verifying_key = VerifyingKey::from_bytes(&identity_bytes)
         .map_err(|e| anyhow::anyhow!("Invalid Ed25519 public key: {}", e))?;
 
-    let sig_bytes: [u8; 64] = raw_record
-        .signature
-        .as_slice()
-        .try_into()
-        .map_err(|_| {
-            anyhow::anyhow!(
-                "Signature must be 64 bytes, got {}",
-                raw_record.signature.len()
-            )
-        })?;
+    let sig_bytes: [u8; 64] = raw_record.signature.as_slice().try_into().map_err(|_| {
+        anyhow::anyhow!(
+            "Signature must be 64 bytes, got {}",
+            raw_record.signature.len()
+        )
+    })?;
 
     let signature = Signature::from_bytes(&sig_bytes);
 
@@ -231,15 +226,13 @@ mod tests {
 
         let acl_data = AclData {
             acl_content: vec![AclContentValue {
-                value: Some(
-                    manytype_proto::aclrecord::acl_content_value::Value::Invite(
-                        AclAccountInvite {
-                            invite_key: vec![42u8; 32],
-                            permissions: AclUserPermissions::Writer as i32,
-                            ..Default::default()
-                        },
-                    ),
-                ),
+                value: Some(manytype_proto::aclrecord::acl_content_value::Value::Invite(
+                    AclAccountInvite {
+                        invite_key: vec![42u8; 32],
+                        permissions: AclUserPermissions::Writer as i32,
+                        ..Default::default()
+                    },
+                )),
             }],
         };
 

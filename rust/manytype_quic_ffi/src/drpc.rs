@@ -6,8 +6,18 @@ use anyhow::{Context, Result};
 use bytes::Bytes;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use manytype_server::drpc::codec::{DrpcFrame, KIND_CLOSE_SEND, KIND_INVOKE, KIND_MESSAGE};
+use manytype_server::drpc::codec::{
+    DrpcFrame, KIND_CLOSE, KIND_CLOSE_SEND, KIND_ERROR, KIND_INVOKE, KIND_MESSAGE,
+};
 use manytype_server::drpc::stream::DrpcStream;
+
+const STREAM_ID: u64 = 1;
+
+fn trace(message: impl FnOnce() -> String) {
+    if std::env::var_os("MANYTYPE_QUIC_TRACE").is_some() {
+        eprintln!("[manytype_quic_ffi::drpc] {}", message());
+    }
+}
 
 /// Invoke a unary RPC: send INVOKE+MESSAGE, read response MESSAGE.
 pub async fn invoke<T>(
@@ -18,30 +28,77 @@ pub async fn invoke<T>(
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
+    trace(|| {
+        format!(
+            "invoke start method={method} request_len={}",
+            request_bytes.len()
+        )
+    });
+
     // Write INVOKE frame with method path
     drpc_stream
         .write_frame(DrpcFrame {
             kind: KIND_INVOKE,
-            done: false,
+            done: true,
             control: false,
-            stream_id: 0,
-            message_id: 0,
+            stream_id: STREAM_ID,
+            message_id: 1,
             data: Bytes::copy_from_slice(method.as_bytes()),
         })
         .await
         .context("failed to write invoke frame")?;
+    trace(|| format!("invoke wrote KIND_INVOKE method={method}"));
 
     // Write MESSAGE frame with request payload
     drpc_stream
-        .write_message(0, 0, request_bytes)
+        .write_message(STREAM_ID, 2, request_bytes)
         .await
         .context("failed to write request message")?;
+    trace(|| format!("invoke wrote KIND_MESSAGE method={method}"));
 
-    // Read response message
+    drpc_stream
+        .write_frame(DrpcFrame {
+            kind: KIND_CLOSE_SEND,
+            done: true,
+            control: false,
+            stream_id: STREAM_ID,
+            message_id: 3,
+            data: Bytes::new(),
+        })
+        .await
+        .context("failed to write request close-send")?;
+    trace(|| format!("invoke wrote KIND_CLOSE_SEND method={method}"));
+
+    // Official dRPC unary semantics are: request message -> CloseSend -> response
+    // message -> client closes the stream. Do not block waiting for a server
+    // CloseSend here; the official coordinator returns the message body and expects
+    // the client to close the stream afterward.
     let response = drpc_stream
         .read_message()
         .await
         .context("failed to read response message")?;
+    trace(|| {
+        format!(
+            "invoke read response method={method} response_len={}",
+            response.len()
+        )
+    });
+
+    if let Err(err) = drpc_stream
+        .write_frame(DrpcFrame {
+            kind: KIND_CLOSE,
+            done: true,
+            control: false,
+            stream_id: STREAM_ID,
+            message_id: 4,
+            data: Bytes::new(),
+        })
+        .await
+    {
+        trace(|| format!("invoke close ignored method={method} error={err:#}"));
+    } else {
+        trace(|| format!("invoke wrote KIND_CLOSE method={method}"));
+    }
 
     Ok(response)
 }
@@ -64,10 +121,10 @@ where
     drpc_stream
         .write_frame(DrpcFrame {
             kind: KIND_INVOKE,
-            done: false,
+            done: true,
             control: false,
-            stream_id: 0,
-            message_id: 0,
+            stream_id: STREAM_ID,
+            message_id: 1,
             data: Bytes::from_static(b"/spacesync.SpaceSync/ObjectSyncStream"),
         })
         .await
@@ -78,7 +135,7 @@ where
     for (i, change) in changes.iter().enumerate() {
         // Write each change as a MESSAGE frame (done=true, self-contained)
         drpc_stream
-            .write_message(0, i as u64, change)
+            .write_message(STREAM_ID, (i as u64) + 2, change)
             .await
             .context("failed to write change message")?;
 
@@ -92,10 +149,7 @@ where
         if frame.kind == KIND_MESSAGE {
             responses.push(frame.data.to_vec());
         } else {
-            anyhow::bail!(
-                "expected MESSAGE confirmation, got kind={}",
-                frame.kind
-            );
+            anyhow::bail!("expected MESSAGE confirmation, got kind={}", frame.kind);
         }
     }
 
@@ -105,8 +159,8 @@ where
             kind: KIND_CLOSE_SEND,
             done: true,
             control: false,
-            stream_id: 0,
-            message_id: 0,
+            stream_id: STREAM_ID,
+            message_id: (changes.len() as u64) + 2,
             data: Bytes::new(),
         })
         .await
@@ -140,23 +194,37 @@ pub async fn exchange_stream<T>(
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
+    trace(|| {
+        format!(
+            "exchange_stream start method={method} message_count={}",
+            messages.len()
+        )
+    });
     drpc_stream
         .write_frame(DrpcFrame {
             kind: KIND_INVOKE,
-            done: false,
+            done: true,
             control: false,
-            stream_id: 0,
-            message_id: 0,
+            stream_id: STREAM_ID,
+            message_id: 1,
             data: Bytes::copy_from_slice(method.as_bytes()),
         })
         .await
         .context("failed to write invoke frame for bidirectional stream")?;
+    trace(|| format!("exchange_stream wrote KIND_INVOKE method={method}"));
 
     for (index, message) in messages.iter().enumerate() {
         drpc_stream
-            .write_message(0, index as u64, message)
+            .write_message(STREAM_ID, (index as u64) + 2, message)
             .await
             .context("failed to write stream message")?;
+        trace(|| {
+            format!(
+                "exchange_stream wrote KIND_MESSAGE method={method} message_index={} message_len={}",
+                index,
+                message.len()
+            )
+        });
     }
 
     drpc_stream
@@ -164,12 +232,13 @@ where
             kind: KIND_CLOSE_SEND,
             done: true,
             control: false,
-            stream_id: 0,
-            message_id: 0,
+            stream_id: STREAM_ID,
+            message_id: (messages.len() as u64) + 2,
             data: Bytes::new(),
         })
         .await
         .context("failed to write close-send")?;
+    trace(|| format!("exchange_stream wrote KIND_CLOSE_SEND method={method}"));
 
     let mut responses = Vec::new();
     loop {
@@ -178,9 +247,24 @@ where
             .await
             .context("failed to read stream frame")?
             .context("connection closed before server close-send")?;
+        trace(|| {
+            format!(
+                "exchange_stream read frame method={method} kind={} done={} message_len={}",
+                frame.kind,
+                frame.done,
+                frame.data.len()
+            )
+        });
 
         if frame.kind == KIND_CLOSE_SEND {
             break;
+        }
+
+        if frame.kind == KIND_ERROR {
+            anyhow::bail!(
+                "remote stream error: {}",
+                String::from_utf8_lossy(frame.data.as_ref())
+            );
         }
 
         anyhow::ensure!(
@@ -221,7 +305,18 @@ mod tests {
 
             // Write response
             server_stream
-                .write_message(0, 0, b"test-response")
+                .write_message(1, 1, b"test-response")
+                .await
+                .unwrap();
+            server_stream
+                .write_frame(DrpcFrame {
+                    kind: KIND_CLOSE_SEND,
+                    done: true,
+                    control: false,
+                    stream_id: 1,
+                    message_id: 2,
+                    data: Bytes::new(),
+                })
                 .await
                 .unwrap();
         });

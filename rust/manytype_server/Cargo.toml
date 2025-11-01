@@ -25,6 +25,8 @@ serde = { workspace = true }
 rand = { workspace = true }
 hex = { workspace = true }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
+libp2p-identity = { workspace = true, features = ["ed25519", "peerid", "rsa"] }
+libp2p-tls = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

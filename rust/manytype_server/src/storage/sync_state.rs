@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, LockResult, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
+use manytype_proto::spacesync::StoreKeyValue;
 use prost::Message;
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
-use manytype_proto::spacesync::StoreKeyValue;
 
 const GLOBAL_SPACES_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("spaces");
 const SPACE_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("meta");
@@ -39,6 +39,7 @@ pub struct SharedSyncState {
 struct SyncStateStorage {
     global_db: Database,
     root_dir: PathBuf,
+    persist_lock: Mutex<()>,
 }
 
 #[derive(Clone, Debug)]
@@ -77,6 +78,7 @@ impl SyncStateStorage {
         Ok(Self {
             global_db,
             root_dir: paths.root_dir,
+            persist_lock: Mutex::new(()),
         })
     }
 
@@ -96,7 +98,7 @@ impl SyncStateStorage {
         Ok(spaces)
     }
 
-    fn ensure_space_registered(&self, space_id: &str) -> Result<()> {
+    fn ensure_space_registered_locked(&self, space_id: &str) -> Result<()> {
         let write_txn = self.global_db.begin_write()?;
         {
             let mut table = write_txn.open_table(GLOBAL_SPACES_TABLE)?;
@@ -166,7 +168,8 @@ impl SyncStateStorage {
         space_header: Option<&[u8]>,
         acl_root: Option<&[u8]>,
     ) -> Result<()> {
-        self.ensure_space_registered(space_id)?;
+        let _guard = self.persist_lock.lock().unwrap();
+        self.ensure_space_registered_locked(space_id)?;
         let space_db = Database::create(self.paths().space_db_path(space_id))?;
         let write_txn = space_db.begin_write()?;
         {
@@ -191,7 +194,8 @@ impl SyncStateStorage {
         raw_change_id: Option<&str>,
         raw_change: Option<&[u8]>,
     ) -> Result<()> {
-        self.ensure_space_registered(space_id)?;
+        let _guard = self.persist_lock.lock().unwrap();
+        self.ensure_space_registered_locked(space_id)?;
         let space_db = Database::create(self.paths().space_db_path(space_id))?;
         let write_txn = space_db.begin_write()?;
         {
@@ -199,10 +203,8 @@ impl SyncStateStorage {
             heads_table.insert(object_id, serde_json::to_vec(object_heads)?.as_slice())?;
 
             let mut object_changes_table = write_txn.open_table(SPACE_OBJECT_CHANGES_TABLE)?;
-            object_changes_table.insert(
-                object_id,
-                serde_json::to_vec(object_changes)?.as_slice(),
-            )?;
+            object_changes_table
+                .insert(object_id, serde_json::to_vec(object_changes)?.as_slice())?;
 
             if let (Some(raw_change_id), Some(raw_change)) = (raw_change_id, raw_change) {
                 let mut changes_table = write_txn.open_table(SPACE_CHANGES_TABLE)?;
@@ -219,7 +221,8 @@ impl SyncStateStorage {
         key_peer_id: &str,
         value: &[u8],
     ) -> Result<()> {
-        self.ensure_space_registered(space_id)?;
+        let _guard = self.persist_lock.lock().unwrap();
+        self.ensure_space_registered_locked(space_id)?;
         let space_db = Database::create(self.paths().space_db_path(space_id))?;
         let write_txn = space_db.begin_write()?;
         {
@@ -282,10 +285,15 @@ impl SharedSyncState {
             let mut state = self.inner.write().unwrap();
             let space = state.entry(space_id.to_string()).or_default();
             if !space.raw_changes.contains_key(change_id) {
-                space.raw_changes.insert(change_id.to_string(), raw_change.clone());
+                space
+                    .raw_changes
+                    .insert(change_id.to_string(), raw_change.clone());
             }
 
-            let object_changes = space.object_changes.entry(object_id.to_string()).or_default();
+            let object_changes = space
+                .object_changes
+                .entry(object_id.to_string())
+                .or_default();
             if !object_changes.iter().any(|existing| existing == change_id) {
                 object_changes.push(change_id.to_string());
             }
@@ -335,11 +343,7 @@ impl SharedSyncState {
             .persist_store_key_value(&entry.space_id, &entry.key_peer_id, &encoded)
     }
 
-    pub fn get_store_entry(
-        &self,
-        space_id: &str,
-        key_peer_id: &str,
-    ) -> Option<StoreKeyValue> {
+    pub fn get_store_entry(&self, space_id: &str, key_peer_id: &str) -> Option<StoreKeyValue> {
         let state = self.inner.read().unwrap();
         let space = state.get(space_id)?;
         let encoded = space.store_key_values.get(key_peer_id)?;
@@ -362,10 +366,7 @@ pub fn new_shared_sync_state_at(path: impl AsRef<Path>) -> Result<SharedSyncStat
     SharedSyncState::open(path)
 }
 
-fn ensure_table(
-    db: &Database,
-    definition: TableDefinition<&str, &[u8]>,
-) -> Result<()> {
+fn ensure_table(db: &Database, definition: TableDefinition<&str, &[u8]>) -> Result<()> {
     let write_txn = db.begin_write()?;
     {
         let _table = write_txn.open_table(definition)?;
@@ -421,9 +422,7 @@ mod tests {
                     &[],
                 )
                 .unwrap();
-            state
-                .upsert_store_entry(store_entry.clone())
-                .unwrap();
+            state.upsert_store_entry(store_entry.clone()).unwrap();
         }
 
         let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();

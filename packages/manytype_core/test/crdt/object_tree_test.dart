@@ -20,8 +20,7 @@ void main() {
   });
 
   group('buildRootChange', () {
-    test('produces RawTreeChangeWithId with id starting with "bafy"',
-        () async {
+    test('produces RawTreeChangeWithId with id starting with "bafy"', () async {
       final root = await buildRootChange(
         spaceId: 'space-1',
         aclHeadId: 'acl-1',
@@ -51,8 +50,9 @@ void main() {
       final rawTreeChange = RawTreeChange.fromBuffer(root.rawChange);
       // Decode RootChange to get identity
       final rootChange = RootChange.fromBuffer(rawTreeChange.payload);
+      final identityKey = Key.fromBuffer(rootChange.identity);
       final valid = await ed25519Verify(
-        Uint8List.fromList(rootChange.identity),
+        Uint8List.fromList(identityKey.data),
         Uint8List.fromList(rawTreeChange.payload),
         Uint8List.fromList(rawTreeChange.signature),
       );
@@ -186,8 +186,9 @@ void main() {
       // Verify signature
       final rawTreeChange = RawTreeChange.fromBuffer(change.rawChange);
       final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+      final identityKey = Key.fromBuffer(treeChange.identity);
       final valid = await ed25519Verify(
-        Uint8List.fromList(treeChange.identity),
+        Uint8List.fromList(identityKey.data),
         Uint8List.fromList(rawTreeChange.payload),
         Uint8List.fromList(rawTreeChange.signature),
       );

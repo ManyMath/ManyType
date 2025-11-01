@@ -10,7 +10,8 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 
 use super::codec::{
-    DrpcCodec, DrpcFrame, KIND_ERROR, KIND_INVOKE, KIND_MESSAGE,
+    DrpcCodec, DrpcFrame, KIND_CANCEL, KIND_CLOSE, KIND_CLOSE_SEND, KIND_ERROR, KIND_INVOKE,
+    KIND_INVOKE_METADATA, KIND_MESSAGE,
 };
 
 /// A bidirectional DRPC stream over an async transport.
@@ -48,16 +49,40 @@ where
 
     /// Read KIND_INVOKE frame, returning (stream_id, method_path).
     pub async fn read_invoke(&mut self) -> Result<(u64, String)> {
-        let frame = self
-            .read_frame()
-            .await?
-            .context("connection closed before invoke")?;
+        let mut stream_id = None;
+
+        let frame = loop {
+            let frame = self
+                .read_frame()
+                .await?
+                .context("connection closed before invoke")?;
+
+            match frame.kind {
+                KIND_INVOKE_METADATA => {
+                    if let Some(expected_stream_id) = stream_id {
+                        if frame.stream_id != expected_stream_id {
+                            bail!(
+                                "invoke metadata stream_id changed from {} to {}",
+                                expected_stream_id,
+                                frame.stream_id
+                            );
+                        }
+                    } else {
+                        stream_id = Some(frame.stream_id);
+                    }
+                    continue;
+                }
+                KIND_CLOSE | KIND_CLOSE_SEND | KIND_CANCEL => {
+                    continue;
+                }
+                _ => {}
+            }
+
+            break frame;
+        };
 
         if frame.kind != KIND_INVOKE {
-            bail!(
-                "expected KIND_INVOKE frame, got kind={}",
-                frame.kind
-            );
+            bail!("expected KIND_INVOKE frame, got kind={}", frame.kind);
         }
 
         let method = String::from_utf8(frame.data.to_vec())
@@ -116,6 +141,7 @@ where
     pub async fn write_error(
         &mut self,
         stream_id: u64,
+        message_id: u64,
         message: &str,
     ) -> Result<()> {
         self.write_frame(DrpcFrame {
@@ -123,7 +149,7 @@ where
             done: true,
             control: false,
             stream_id,
-            message_id: 0,
+            message_id,
             data: Bytes::copy_from_slice(message.as_bytes()),
         })
         .await

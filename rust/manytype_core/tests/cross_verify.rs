@@ -11,8 +11,7 @@ use manytype_core::crypto::{bip39, ed25519, slip0010, slip0021};
 const TEST_MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
-const TEST_SEED_HEX: &str =
-    "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4";
+const TEST_SEED_HEX: &str = "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4";
 
 const TEST_IDENTITY_PRIVATE_KEY_HEX: &str =
     "9fb70eabab6626779573378193b8a200cf6167c7a050e02535747379a647ee72";
@@ -23,8 +22,7 @@ const TEST_IDENTITY_PUBLIC_KEY_HEX: &str =
 const TEST_ACCOUNT_PRIVATE_KEY_HEX: &str =
     "dc9eccf762dfda3c45af595519af889d3ef3a04dd2384e8cc77eae5e778fddeb";
 
-const TEST_SPACE_KEY_HEX: &str =
-    "cb5118d8e9f9b5019ba41f9f90306281378577c83596014cbc5ecbb1c84ae741";
+const TEST_SPACE_KEY_HEX: &str = "cb5118d8e9f9b5019ba41f9f90306281378577c83596014cbc5ecbb1c84ae741";
 
 // SLIP-0021 spec vectors (seed = 000102030405060708090a0b0c0d0e0f)
 const TEST_SLIP21_MASTER_ENC_KEY_HEX: &str =

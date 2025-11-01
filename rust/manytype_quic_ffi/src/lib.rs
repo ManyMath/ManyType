@@ -28,6 +28,12 @@ static HANDLES: LazyLock<Mutex<HashMap<u64, ConnHandle>>> =
 /// Monotonic counter for handle IDs.
 static NEXT_HANDLE_ID: AtomicU64 = AtomicU64::new(1);
 
+fn trace(message: impl FnOnce() -> String) {
+    if std::env::var_os("MANYTYPE_QUIC_TRACE").is_some() {
+        eprintln!("[manytype_quic_ffi::ffi] {}", message());
+    }
+}
+
 /// FFI result returned to Dart/C callers.
 ///
 /// On success: `data` is non-null with `data_len` bytes, `error` is null.
@@ -54,7 +60,9 @@ impl FfiResult {
     }
 
     fn error(msg: String) -> *mut FfiResult {
-        let c_str = CString::new(msg).unwrap_or_else(|_| CString::new("unknown error").unwrap());
+        let sanitized = msg.replace('\0', "\\0");
+        let c_str =
+            CString::new(sanitized).unwrap_or_else(|_| CString::new("unknown error").unwrap());
         Box::into_raw(Box::new(FfiResult {
             data: std::ptr::null_mut(),
             data_len: 0,
@@ -66,40 +74,61 @@ impl FfiResult {
 /// Connect to a QUIC server and perform credential handshake.
 ///
 /// `addr`: C string, e.g. "127.0.0.1:4830"
-/// `identity_seed`: 32-byte Ed25519 seed
+/// `peer_seed`: 32-byte Ed25519 peer seed used for libp2p TLS/peer ID
+/// `account_seed`: 32-byte Ed25519 account seed used for Any-sync credentials
 ///
 /// Returns FfiResult with handle ID (u64 LE) on success.
 ///
 /// # Safety
 ///
 /// - `addr` must be a valid, NUL-terminated C string.
-/// - `identity_seed` must point to at least `seed_len` readable bytes.
+/// - `peer_seed` and `account_seed` must point to at least 32 readable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ffi_connect(
     addr: *const c_char,
-    identity_seed: *const u8,
-    seed_len: u32,
+    peer_seed: *const u8,
+    peer_seed_len: u32,
+    account_seed: *const u8,
+    account_seed_len: u32,
 ) -> *mut FfiResult {
     let addr_str = match unsafe { CStr::from_ptr(addr) }.to_str() {
         Ok(s) => s.to_string(),
         Err(e) => return FfiResult::error(format!("invalid addr string: {e}")),
     };
 
-    if seed_len != 32 {
-        return FfiResult::error(format!("identity_seed must be 32 bytes, got {seed_len}"));
+    if peer_seed_len != 32 {
+        return FfiResult::error(format!("peer_seed must be 32 bytes, got {peer_seed_len}"));
     }
-    let seed_slice = unsafe { std::slice::from_raw_parts(identity_seed, 32) };
-    let mut seed = [0u8; 32];
-    seed.copy_from_slice(seed_slice);
-    let signing_key = ed25519::signing_key_from_seed(&seed);
+    if account_seed_len != 32 {
+        return FfiResult::error(format!(
+            "account_seed must be 32 bytes, got {account_seed_len}"
+        ));
+    }
+    let peer_seed_slice = unsafe { std::slice::from_raw_parts(peer_seed, 32) };
+    let account_seed_slice = unsafe { std::slice::from_raw_parts(account_seed, 32) };
+    let mut peer_seed = [0u8; 32];
+    peer_seed.copy_from_slice(peer_seed_slice);
+    let mut account_seed = [0u8; 32];
+    account_seed.copy_from_slice(account_seed_slice);
+    let peer_signing_key = ed25519::signing_key_from_seed(&peer_seed);
+    let account_signing_key = ed25519::signing_key_from_seed(&account_seed);
+    trace(|| format!("ffi_connect start addr={addr_str}"));
 
-    match RUNTIME.block_on(client::connect(&addr_str, &signing_key)) {
+    match RUNTIME.block_on(client::connect(
+        &addr_str,
+        &peer_signing_key,
+        &account_signing_key,
+    )) {
         Ok(handle) => {
             let id = NEXT_HANDLE_ID.fetch_add(1, Ordering::Relaxed);
             HANDLES.lock().unwrap().insert(id, handle);
+            trace(|| format!("ffi_connect success addr={addr_str} handle_id={id}"));
             FfiResult::success(id.to_le_bytes().to_vec())
         }
-        Err(e) => FfiResult::error(format!("connect failed: {e:#}")),
+        Err(e) => {
+            trace(|| format!("ffi_connect error addr={addr_str} error={e:#}"));
+            FfiResult::error(format!("connect failed: {e:#}"))
+        }
     }
 }
 
@@ -133,15 +162,38 @@ pub unsafe extern "C" fn ffi_invoke(
         &[]
     };
 
-    let mut handles = HANDLES.lock().unwrap();
-    let handle = match handles.get_mut(&handle_id) {
-        Some(h) => h,
-        None => return FfiResult::error(format!("unknown handle ID: {handle_id}")),
+    let connection = {
+        let handles = HANDLES.lock().unwrap();
+        match handles.get(&handle_id) {
+            Some(h) => h.connection.clone(),
+            None => return FfiResult::error(format!("unknown handle ID: {handle_id}")),
+        }
     };
+    trace(|| {
+        format!(
+            "ffi_invoke start handle_id={handle_id} method={method_str} payload_len={payload_len}"
+        )
+    });
 
-    match RUNTIME.block_on(drpc::invoke(&mut handle.drpc_stream, method_str, payload_slice)) {
-        Ok(response) => FfiResult::success(response),
-        Err(e) => FfiResult::error(format!("invoke failed: {e:#}")),
+    match RUNTIME.block_on(async {
+        let mut drpc_stream = client::open_drpc_stream(&connection).await?;
+        drpc::invoke(&mut drpc_stream, method_str, payload_slice).await
+    }) {
+        Ok(response) => {
+            trace(|| {
+                format!(
+                    "ffi_invoke success handle_id={handle_id} method={method_str} response_len={}",
+                    response.len()
+                )
+            });
+            FfiResult::success(response)
+        }
+        Err(e) => {
+            trace(|| {
+                format!("ffi_invoke error handle_id={handle_id} method={method_str} error={e:#}")
+            });
+            FfiResult::error(format!("invoke failed: {e:#}"))
+        }
     }
 }
 
@@ -184,9 +236,8 @@ pub unsafe extern "C" fn ffi_sync_object(
     let mut raw_changes = Vec::new();
     let mut offset = 0usize;
     while offset + 4 <= changes_slice.len() {
-        let len = u32::from_le_bytes(
-            changes_slice[offset..offset + 4].try_into().unwrap(),
-        ) as usize;
+        let len =
+            u32::from_le_bytes(changes_slice[offset..offset + 4].try_into().unwrap()) as usize;
         offset += 4;
         if offset + len > changes_slice.len() {
             return FfiResult::error("changes_data truncated".to_string());
@@ -197,14 +248,16 @@ pub unsafe extern "C" fn ffi_sync_object(
 
     let pull_request = raw_changes.is_empty();
     let messages: Vec<Vec<u8>> = if pull_request {
-        vec![ObjectSyncMessage {
-            space_id: space_id.clone(),
-            object_id: object_id.clone(),
-            request_id: "pull-0".to_string(),
-            payload: Vec::new(),
-            ..Default::default()
-        }
-        .encode_to_vec()]
+        vec![
+            ObjectSyncMessage {
+                space_id: space_id.clone(),
+                object_id: object_id.clone(),
+                request_id: "pull-0".to_string(),
+                payload: Vec::new(),
+                ..Default::default()
+            }
+            .encode_to_vec(),
+        ]
     } else {
         raw_changes
             .into_iter()
@@ -222,13 +275,18 @@ pub unsafe extern "C" fn ffi_sync_object(
             .collect()
     };
 
-    let mut handles = HANDLES.lock().unwrap();
-    let handle = match handles.get_mut(&handle_id) {
-        Some(h) => h,
-        None => return FfiResult::error(format!("unknown handle ID: {handle_id}")),
+    let connection = {
+        let handles = HANDLES.lock().unwrap();
+        match handles.get(&handle_id) {
+            Some(h) => h.connection.clone(),
+            None => return FfiResult::error(format!("unknown handle ID: {handle_id}")),
+        }
     };
 
-    match RUNTIME.block_on(drpc::sync_object(&mut handle.drpc_stream, &messages)) {
+    match RUNTIME.block_on(async {
+        let mut drpc_stream = client::open_drpc_stream(&connection).await?;
+        drpc::sync_object(&mut drpc_stream, &messages).await
+    }) {
         Ok(responses) => {
             let mut out = Vec::new();
             for resp in responses {
@@ -270,6 +328,7 @@ pub unsafe extern "C" fn ffi_sync_store(
     messages_data: *const u8,
     messages_len: u32,
 ) -> *mut FfiResult {
+    trace(|| format!("ffi_sync_store start handle_id={handle_id} messages_len={messages_len}"));
     let messages_slice = if messages_len > 0 {
         unsafe { std::slice::from_raw_parts(messages_data, messages_len as usize) }
     } else {
@@ -279,9 +338,8 @@ pub unsafe extern "C" fn ffi_sync_store(
     let mut messages = Vec::new();
     let mut offset = 0usize;
     while offset + 4 <= messages_slice.len() {
-        let len = u32::from_le_bytes(
-            messages_slice[offset..offset + 4].try_into().unwrap(),
-        ) as usize;
+        let len =
+            u32::from_le_bytes(messages_slice[offset..offset + 4].try_into().unwrap()) as usize;
         offset += 4;
         if offset + len > messages_slice.len() {
             return FfiResult::error("messages_data truncated".to_string());
@@ -290,18 +348,30 @@ pub unsafe extern "C" fn ffi_sync_store(
         offset += len;
     }
 
-    let mut handles = HANDLES.lock().unwrap();
-    let handle = match handles.get_mut(&handle_id) {
-        Some(h) => h,
-        None => return FfiResult::error(format!("unknown handle ID: {handle_id}")),
+    let connection = {
+        let handles = HANDLES.lock().unwrap();
+        match handles.get(&handle_id) {
+            Some(h) => h.connection.clone(),
+            None => return FfiResult::error(format!("unknown handle ID: {handle_id}")),
+        }
     };
 
-    match RUNTIME.block_on(drpc::exchange_stream(
-        &mut handle.drpc_stream,
-        "/spacesync.SpaceSync/StoreElements",
-        &messages,
-    )) {
+    match RUNTIME.block_on(async {
+        let mut drpc_stream = client::open_drpc_stream(&connection).await?;
+        drpc::exchange_stream(
+            &mut drpc_stream,
+            "/spacesync.SpaceSync/StoreElements",
+            &messages,
+        )
+        .await
+    }) {
         Ok(responses) => {
+            trace(|| {
+                format!(
+                    "ffi_sync_store success handle_id={handle_id} response_count={}",
+                    responses.len()
+                )
+            });
             let mut out = Vec::new();
             for resp in responses {
                 out.extend_from_slice(&(resp.len() as u32).to_le_bytes());
@@ -309,7 +379,10 @@ pub unsafe extern "C" fn ffi_sync_store(
             }
             FfiResult::success(out)
         }
-        Err(e) => FfiResult::error(format!("sync_store failed: {e:#}")),
+        Err(e) => {
+            trace(|| format!("ffi_sync_store error handle_id={handle_id} error={e:#}"));
+            FfiResult::error(format!("sync_store failed: {e:#}"))
+        }
     }
 }
 
@@ -331,9 +404,8 @@ pub unsafe extern "C" fn ffi_free_result(result: *mut FfiResult) {
     }
     let res = unsafe { Box::from_raw(result) };
     if !res.data.is_null() {
-        let _ = unsafe {
-            Vec::from_raw_parts(res.data, res.data_len as usize, res.data_len as usize)
-        };
+        let _ =
+            unsafe { Vec::from_raw_parts(res.data, res.data_len as usize, res.data_len as usize) };
     }
     if !res.error.is_null() {
         let _ = unsafe { CString::from_raw(res.error) };

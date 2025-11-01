@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use ed25519_dalek::Verifier;
 use prost::Message;
 
@@ -284,10 +284,11 @@ mod tests {
         };
         let err = verify_root_change(&raw_with_id);
         assert!(err.is_err());
-        assert!(err
-            .unwrap_err()
-            .to_string()
-            .contains("signature verification failed"));
+        assert!(
+            err.unwrap_err()
+                .to_string()
+                .contains("signature verification failed")
+        );
     }
 
     #[test]
@@ -341,8 +342,7 @@ mod tests {
         tree.add_change(&c1).unwrap();
         tree.add_change(&c2).unwrap();
 
-        let merge =
-            make_tree_change(&sk, vec![c1.id.clone(), c2.id.clone()], &root.id, b"merge");
+        let merge = make_tree_change(&sk, vec![c1.id.clone(), c2.id.clone()], &root.id, b"merge");
         tree.add_change(&merge).unwrap();
 
         assert_eq!(tree.heads(), vec![merge.id]);
@@ -370,8 +370,7 @@ mod tests {
         assert_eq!(after_c2_heads.len(), 2);
 
         // Merge: change referencing both forks
-        let merge =
-            make_tree_change(&sk, vec![c1.id.clone(), c2.id.clone()], &root.id, b"merge");
+        let merge = make_tree_change(&sk, vec![c1.id.clone(), c2.id.clone()], &root.id, b"merge");
         tree.add_change(&merge).unwrap();
         let final_heads = tree.heads();
         assert_eq!(final_heads, vec![merge.id.clone()]);
@@ -414,7 +413,11 @@ mod tests {
         let fixture_dir = workspace_root.join("test_vectors");
         std::fs::create_dir_all(&fixture_dir).unwrap();
         let fixture_path = fixture_dir.join("object_tree_fixture.json");
-        std::fs::write(&fixture_path, serde_json::to_string_pretty(&fixture).unwrap()).unwrap();
+        std::fs::write(
+            &fixture_path,
+            serde_json::to_string_pretty(&fixture).unwrap(),
+        )
+        .unwrap();
 
         // Now re-read fixture and replay to verify cross-language compatibility
         let fixture_str = std::fs::read_to_string(&fixture_path).unwrap();

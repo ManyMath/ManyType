@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_cli/src/identity.dart';
+import 'package:manytype_protocol/manytype_protocol.dart' show Key, KeyType;
 import 'package:manytype_protocol/spacesync.dart';
 import 'package:test/test.dart';
 
@@ -9,6 +10,8 @@ void main() {
   // Known BIP-39 test vector mnemonic
   const testMnemonic =
       'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+  const highBitReplicationMnemonic =
+      'guilt universe cup credit night tissue pencil window brother ecology marriage over';
 
   group('Identity', () {
     test('derives 32-byte account and identity seeds from mnemonic', () async {
@@ -46,6 +49,12 @@ void main() {
       expect(identity.spaceHeader.rawHeader, isNotEmpty);
     });
 
+    test('spaceId uses unsigned base36 replication keys', () async {
+      final identity = await Identity.fromMnemonic(highBitReplicationMnemonic);
+      expect(identity.spaceId, matches(RegExp(r'^bafy[a-z2-7]+\.[0-9a-z]+$')));
+      expect(identity.spaceId, isNot(contains('.-')));
+    });
+
     test('keyPair has matching private and public keys', () async {
       final identity = await Identity.fromMnemonic(testMnemonic);
       expect(identity.keyPair.privateKey.length, 32);
@@ -56,10 +65,15 @@ void main() {
 
     test('space header is signed by the account key', () async {
       final identity = await Identity.fromMnemonic(testMnemonic);
-      final rawHeader = RawSpaceHeader.fromBuffer(identity.spaceHeader.rawHeader);
+      final rawHeader =
+          RawSpaceHeader.fromBuffer(identity.spaceHeader.rawHeader);
       final header = SpaceHeader.fromBuffer(rawHeader.spaceHeader);
 
-      expect(header.identity, identity.accountKeyPair.publicKey);
+      final expectedIdentityKey = Key(
+        type: KeyType.Ed25519Public,
+        data: identity.accountKeyPair.publicKey,
+      );
+      expect(header.identity, expectedIdentityKey.writeToBuffer());
       final valid = await ed25519Verify(
         identity.accountKeyPair.publicKey,
         Uint8List.fromList(rawHeader.spaceHeader),

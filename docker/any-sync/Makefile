@@ -1,0 +1,58 @@
+.DEFAULT_GOAL := start
+
+DOCKER_BUILD := docker build
+
+# Check if the 's' flag (silent/quiet mode) is present in MAKEFLAGS
+ifeq ($(findstring s,$(MAKEFLAGS)),s)
+	QUIET_MODE := true
+	DOCKER_COMPOSE := docker compose --progress=quiet
+else
+	QUIET_MODE := false
+	DOCKER_COMPOSE := docker compose
+endif
+
+# targets
+generate_env:
+ifeq ($(QUIET_MODE),true)
+	$(DOCKER_BUILD) --quiet --tag generateconfig-env --file Dockerfile-generateconfig-env . >/dev/null
+else
+	$(DOCKER_BUILD) --tag generateconfig-env --file Dockerfile-generateconfig-env .
+endif
+	docker run --rm \
+		--volume ${CURDIR}/:/code/:Z \
+		generateconfig-env
+
+start: generate_env
+	$(DOCKER_COMPOSE) up --detach --remove-orphans --quiet-pull
+ifeq ($(QUIET_MODE),false)
+	@echo "Done! Upload your self-hosted network configuration file ${CURDIR}/etc/client.yml into the client app"
+	@echo "See: https://doc.anytype.io/anytype-docs/data-and-security/self-hosting#switching-between-networks"
+endif
+
+stop:
+	$(DOCKER_COMPOSE) stop
+
+clean:
+	docker system prune --all --volumes
+
+pull:
+	$(DOCKER_COMPOSE) pull
+
+down:
+	$(DOCKER_COMPOSE) down --remove-orphans
+logs:
+	$(DOCKER_COMPOSE) logs --follow
+
+# build with "plain" log for debug
+build:
+	$(DOCKER_COMPOSE) build --no-cache --progress plain
+
+restart: down start
+update: pull down start
+upgrade: down clean start
+
+STORAGE_DIR := $(shell grep -m1 '^STORAGE_DIR=' .env 2>/dev/null | cut -d= -f2- | tr -d '"')
+STORAGE_DIR := $(if $(STORAGE_DIR),$(STORAGE_DIR),./storage)
+
+cleanEtcStorage:
+	rm -rf etc/ $(STORAGE_DIR)

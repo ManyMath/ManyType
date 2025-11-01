@@ -36,7 +36,7 @@ Future<RawTreeChangeWithId> buildRootChange({
     changeType: changeType,
     timestamp: Int64(DateTime.now().millisecondsSinceEpoch ~/ 1000),
     seed: seed,
-    identity: keyPair.publicKey,
+    identity: _marshalEd25519PublicKey(keyPair.publicKey),
   );
 
   // Marshal to bytes (this is the payload)
@@ -84,7 +84,7 @@ Future<RawTreeChangeWithId> buildTreeChange({
     changesData: changesData,
     readKeyId: readKeyId,
     timestamp: Int64(DateTime.now().millisecondsSinceEpoch ~/ 1000),
-    identity: keyPair.publicKey,
+    identity: _marshalEd25519PublicKey(keyPair.publicKey),
     isSnapshot: isSnapshot,
   );
   treeChange.treeHeadIds.addAll(currentHeads);
@@ -109,3 +109,10 @@ Future<RawTreeChangeWithId> buildTreeChange({
 
   return RawTreeChangeWithId(rawChange: rawBytes, id: cid);
 }
+
+Uint8List _marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
+      Key(
+        type: KeyType.Ed25519Public,
+        data: publicKey,
+      ).writeToBuffer(),
+    );

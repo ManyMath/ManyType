@@ -5,11 +5,9 @@
 
 use std::collections::HashMap;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
-use manytype_proto::aclrecord::{
-    acl_content_value::Value, AclContentValue, AclUserPermissions,
-};
+use manytype_proto::aclrecord::{AclContentValue, AclUserPermissions, acl_content_value::Value};
 
 use super::acl_record::VerifiedAclRecord;
 
@@ -189,8 +187,8 @@ mod tests {
     use crate::crdt::cid::compute_cid;
     use crate::crypto::ed25519::{sign, signing_key_from_seed, verifying_key};
     use manytype_proto::aclrecord::{
-        acl_content_value::Value, AclAccountInvite, AclAccountInviteJoin, AclContentValue, AclData,
-        AclUserPermissions,
+        AclAccountInvite, AclAccountInviteJoin, AclContentValue, AclData, AclUserPermissions,
+        acl_content_value::Value,
     };
     use manytype_proto::consensus::{RawRecord, RawRecordWithId, Record};
     use prost::Message;

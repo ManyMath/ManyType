@@ -134,7 +134,10 @@ impl Diff {
     }
 
     pub fn elements(&self) -> Vec<Element> {
-        self.sorted.iter().map(|item| item.element.clone()).collect()
+        self.sorted
+            .iter()
+            .map(|item| item.element.clone())
+            .collect()
     }
 
     pub fn ids(&self) -> Vec<String> {
@@ -196,10 +199,7 @@ impl Diff {
         Ok((ctx.new_ids, ctx.changed_ids, ctx.removed_ids))
     }
 
-    pub fn compare_diff<R: Remote>(
-        &self,
-        remote: &R,
-    ) -> Result<DiffResult> {
+    pub fn compare_diff<R: Remote>(&self, remote: &R) -> Result<DiffResult> {
         let mut ctx = DiffContext::default();
         ctx.to_send.push(Range {
             from: 0,
@@ -257,8 +257,12 @@ impl Diff {
                 self.get_range(expanded).elements
             };
             match mode {
-                CompareMode::Equal => compare_elements_equal(ctx, &my_elements, &other_result.elements),
-                CompareMode::Greater => compare_elements_greater(ctx, &my_elements, &other_result.elements),
+                CompareMode::Equal => {
+                    compare_elements_equal(ctx, &my_elements, &other_result.elements)
+                }
+                CompareMode::Greater => {
+                    compare_elements_greater(ctx, &my_elements, &other_result.elements)
+                }
             }
             return;
         }
@@ -340,10 +344,13 @@ impl Diff {
         });
 
         self.ranges.clear();
-        let root = self.build_range(RangeTuple {
-            from: 0,
-            to: u64::MAX,
-        }, true);
+        let root = self.build_range(
+            RangeTuple {
+                from: 0,
+                to: u64::MAX,
+            },
+            true,
+        );
         self.root_hash = root.hash;
     }
 
@@ -363,10 +370,7 @@ impl Diff {
             }
         } else {
             let hash = hash_elements(&elements);
-            RangeNode {
-                hash,
-                count,
-            }
+            RangeNode { hash, count }
         };
 
         self.ranges.insert(tuple, node.clone());
@@ -404,7 +408,9 @@ fn compare_elements_equal(ctx: &mut DiffContext, mine: &[Element], other: &[Elem
     for element in mine {
         match other_map.get(element.id.as_str()) {
             None => ctx.removed_ids.push(element.id.clone()),
-            Some(other_head) if *other_head != element.head => ctx.changed_ids.push(element.id.clone()),
+            Some(other_head) if *other_head != element.head => {
+                ctx.changed_ids.push(element.id.clone())
+            }
             Some(_) => {}
         }
     }
@@ -436,7 +442,10 @@ fn compare_elements_greater(ctx: &mut DiffContext, mine: &[Element], other: &[El
         }
     }
 
-    let my_ids: HashMap<&str, ()> = mine.iter().map(|element| (element.id.as_str(), ())).collect();
+    let my_ids: HashMap<&str, ()> = mine
+        .iter()
+        .map(|element| (element.id.as_str(), ()))
+        .collect();
     for element in other {
         if !my_ids.contains_key(element.id.as_str()) {
             ctx.new_ids.push(element.id.clone());
@@ -574,7 +583,11 @@ mod tests {
         let mut mine = Diff::new(16, 16);
         let mut other = Diff::new(16, 16);
         mine.set([element("same", "b"), element("ours-newer", "z")]);
-        other.set([element("same", "b"), element("ours-newer", "a"), element("theirs", "z")]);
+        other.set([
+            element("same", "b"),
+            element("ours-newer", "a"),
+            element("theirs", "z"),
+        ]);
 
         let (new_ids, changed_ids, their_changed_ids, removed_ids) =
             mine.compare_diff(&other).unwrap();

@@ -20,13 +20,17 @@ final class FfiResult extends Struct {
 // Native (C ABI) function signatures.
 typedef FfiConnectNative = Pointer<FfiResult> Function(
   Pointer<Utf8> addr,
-  Pointer<Uint8> identitySeed,
-  Uint32 seedLen,
+  Pointer<Uint8> peerSeed,
+  Uint32 peerSeedLen,
+  Pointer<Uint8> accountSeed,
+  Uint32 accountSeedLen,
 );
 typedef FfiConnectDart = Pointer<FfiResult> Function(
   Pointer<Utf8> addr,
-  Pointer<Uint8> identitySeed,
-  int seedLen,
+  Pointer<Uint8> peerSeed,
+  int peerSeedLen,
+  Pointer<Uint8> accountSeed,
+  int accountSeedLen,
 );
 
 typedef FfiInvokeNative = Pointer<FfiResult> Function(
@@ -96,20 +100,15 @@ class NativeBridge {
     _lib = _loadLibrary();
     _connect =
         _lib.lookupFunction<FfiConnectNative, FfiConnectDart>('ffi_connect');
-    _invoke =
-        _lib.lookupFunction<FfiInvokeNative, FfiInvokeDart>('ffi_invoke');
-    _syncObject = _lib
-        .lookupFunction<FfiSyncObjectNative, FfiSyncObjectDart>(
-            'ffi_sync_object');
+    _invoke = _lib.lookupFunction<FfiInvokeNative, FfiInvokeDart>('ffi_invoke');
+    _syncObject = _lib.lookupFunction<FfiSyncObjectNative, FfiSyncObjectDart>(
+        'ffi_sync_object');
     _syncStore = _lib
-        .lookupFunction<FfiSyncStoreNative, FfiSyncStoreDart>(
-            'ffi_sync_store');
-    _freeHandle = _lib
-        .lookupFunction<FfiFreeHandleNative, FfiFreeHandleDart>(
-            'ffi_free_handle');
-    _freeResult = _lib
-        .lookupFunction<FfiFreeResultNative, FfiFreeResultDart>(
-            'ffi_free_result');
+        .lookupFunction<FfiSyncStoreNative, FfiSyncStoreDart>('ffi_sync_store');
+    _freeHandle = _lib.lookupFunction<FfiFreeHandleNative, FfiFreeHandleDart>(
+        'ffi_free_handle');
+    _freeResult = _lib.lookupFunction<FfiFreeResultNative, FfiFreeResultDart>(
+        'ffi_free_result');
   }
 
   /// Load the platform-specific shared library.
@@ -118,24 +117,33 @@ class NativeBridge {
     if (Platform.isMacOS) {
       return DynamicLibrary.open('libmanytype_quic_ffi.dylib');
     }
-    throw UnsupportedError(
-        'Unsupported platform: ${Platform.operatingSystem}');
+    throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
   }
 
   /// Connect to a QUIC server and perform credential handshake.
   ///
   /// [addr] is the server address (e.g. "127.0.0.1:4830").
-  /// [identitySeed] is the 32-byte Ed25519 seed.
+  /// [peerSeed] is the 32-byte Ed25519 peer seed for libp2p TLS.
+  /// [accountSeed] is the 32-byte Ed25519 account seed for credentials.
   /// Returns a handle ID for subsequent calls.
-  int connect(String addr, Uint8List identitySeed) {
+  int connect(String addr, Uint8List peerSeed, Uint8List accountSeed) {
     final addrPtr = addr.toNativeUtf8();
-    final seedPtr = calloc<Uint8>(identitySeed.length);
-    seedPtr.asTypedList(identitySeed.length).setAll(0, identitySeed);
+    final peerSeedPtr = calloc<Uint8>(peerSeed.length);
+    peerSeedPtr.asTypedList(peerSeed.length).setAll(0, peerSeed);
+    final accountSeedPtr = calloc<Uint8>(accountSeed.length);
+    accountSeedPtr.asTypedList(accountSeed.length).setAll(0, accountSeed);
 
-    final result = _connect(addrPtr, seedPtr, identitySeed.length);
+    final result = _connect(
+      addrPtr,
+      peerSeedPtr,
+      peerSeed.length,
+      accountSeedPtr,
+      accountSeed.length,
+    );
 
     calloc.free(addrPtr);
-    calloc.free(seedPtr);
+    calloc.free(peerSeedPtr);
+    calloc.free(accountSeedPtr);
 
     return _processHandleResult(result);
   }

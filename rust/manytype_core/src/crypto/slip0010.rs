@@ -14,8 +14,7 @@ pub struct DerivedKey {
 /// Derive the master node from a BIP-39 seed using SLIP-0010.
 /// Returns (key, chain_code) from HMAC-SHA512(key="ed25519 seed", data=seed).
 fn master_node(seed: &[u8]) -> ([u8; 32], [u8; 32]) {
-    let mut mac =
-        HmacSha512::new_from_slice(b"ed25519 seed").expect("HMAC accepts any key length");
+    let mut mac = HmacSha512::new_from_slice(b"ed25519 seed").expect("HMAC accepts any key length");
     mac.update(seed);
     let result = mac.finalize().into_bytes();
     let mut key = [0u8; 32];
@@ -33,8 +32,8 @@ fn derive_hardened_child(
     index: u32,
 ) -> ([u8; 32], [u8; 32]) {
     let child_index = index | 0x80000000; // Set hardened bit
-    let mut mac = HmacSha512::new_from_slice(parent_chain_code)
-        .expect("HMAC accepts any key length");
+    let mut mac =
+        HmacSha512::new_from_slice(parent_chain_code).expect("HMAC accepts any key length");
     mac.update(&[0x00]);
     mac.update(parent_key);
     mac.update(&child_index.to_be_bytes());

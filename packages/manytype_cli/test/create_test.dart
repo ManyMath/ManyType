@@ -17,7 +17,8 @@ void main() {
 
   setUp(() {
     db = ManytypeDatabase.forTesting(NativeDatabase.memory());
-    config = CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
+    config =
+        CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
   });
 
   tearDown(() async {
@@ -28,16 +29,24 @@ void main() {
     test('creates object with 2 changes (root + content)', () async {
       await createCommand('Hello world', db, config);
 
-      // Space should have ACL root + the new object
       final allObjects = await db.getAllObjects();
-      expect(allObjects.length, 2); // ACL root + text object
+      expect(allObjects.length, 3); // ACL root + settings root + text object
 
-      // Get the text object (second one, after ACL root)
-      final aclRoot = allObjects[0];
-      final textObj = allObjects[1];
+      StoredObject? textObj;
+      int bootstrapObjects = 0;
+      for (final object in allObjects) {
+        final changes = await db.getChangesForObject(object.id);
+        if (changes.length == 2) {
+          textObj = object;
+        } else if (changes.length == 1) {
+          bootstrapObjects++;
+        }
+      }
+      expect(textObj, isNotNull);
+      expect(bootstrapObjects, 2);
 
       // Text object should have 2 changes: root change + tree change
-      final changes = await db.getChangesForObject(textObj.id);
+      final changes = await db.getChangesForObject(textObj!.id);
       expect(changes.length, 2);
 
       // Root change has no parents
@@ -50,18 +59,22 @@ void main() {
       expect(treeParents[0], changes[0].id); // parent is root change
       expect(changes[1].rawBytes.length, greaterThan(0));
 
-      // ACL root should have 1 change
-      final aclChanges = await db.getChangesForObject(aclRoot.id);
-      expect(aclChanges.length, 1);
+      final bootstrapChangeCounts = <int>[];
+      for (final object in allObjects) {
+        if (object.id == textObj.id) continue;
+        bootstrapChangeCounts
+            .add((await db.getChangesForObject(object.id)).length);
+      }
+      expect(bootstrapChangeCounts, everyElement(1));
     });
 
     test('second create reuses existing ACL root', () async {
       await createCommand('First object', db, config);
       await createCommand('Second object', db, config);
 
-      // Should have ACL root + 2 text objects
+      // Should have ACL root + settings root + 2 text objects
       final allObjects = await db.getAllObjects();
-      expect(allObjects.length, 3);
+      expect(allObjects.length, 4);
     });
 
     test('created changes have non-empty rawBytes', () async {
@@ -91,13 +104,13 @@ void main() {
       // Create in first db instance
       await createCommand('Persistent test', db, config);
       final objsBefore = await db.getAllObjects();
-      expect(objsBefore.length, 2);
+      expect(objsBefore.length, 3);
 
       // The in-memory database is the same instance, so this verifies
       // the data is retrievable (persistence with file-backed DB is
       // proven by using the same dbPath across process restarts).
       final objsAfter = await db.getAllObjects();
-      expect(objsAfter.length, 2);
+      expect(objsAfter.length, 3);
       expect(objsAfter.first.id, objsBefore.first.id);
     });
   });

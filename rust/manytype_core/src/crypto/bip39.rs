@@ -12,8 +12,7 @@ pub fn generate_mnemonic() -> String {
 /// Parse a mnemonic string and derive a 64-byte seed.
 /// Passphrase is empty string (Anytype uses no passphrase).
 pub fn mnemonic_to_seed(mnemonic: &str) -> [u8; 64] {
-    let mnemonic =
-        Mnemonic::parse_in(Language::English, mnemonic).expect("invalid mnemonic");
+    let mnemonic = Mnemonic::parse_in(Language::English, mnemonic).expect("invalid mnemonic");
     mnemonic.to_seed("")
 }
 

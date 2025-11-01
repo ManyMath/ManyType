@@ -1,8 +1,12 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart';
+import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/models.dart';
+import 'package:manytype_protocol/manytype_protocol.dart'
+    show AclRoot, Key, KeyType;
 
 import '../config.dart';
 import '../identity.dart';
@@ -28,36 +32,42 @@ Future<void> createCommand(
 
   String aclHeadId;
   if (existingObjects.isEmpty) {
-    // First object in space: build ACL root with distinct account/master
-    // and identity keys.
-    final aclRoot = await buildAclRoot(
+    final aclRoot = await _buildDerivedAclRoot(
       spaceId: spaceId,
-      masterKeySeed: identity.accountSeed,
-      identityPrivateKey: identity.seed,
-      readKey: identity.seed,
+      accountSeed: identity.accountSeed,
+    );
+    final settingsRoot = await buildRootChange(
+      spaceId: spaceId,
+      aclHeadId: aclRoot.id,
+      identityPrivateKey: identity.accountSeed,
+      changeType: 'any-sync.space',
     );
 
-    // Store ACL root as a special object in the space
     await db.insertObject(aclRoot.id, spaceId);
     await db.insertChange(
       aclRoot.id,
       aclRoot.id,
-      aclRoot.payload, // raw bytes of the ACL record
-      jsonEncode([]), // ACL root has no parents
+      aclRoot.payload,
+      jsonEncode([]),
+    );
+    await db.insertObject(settingsRoot.id, spaceId);
+    await db.insertChange(
+      settingsRoot.id,
+      settingsRoot.id,
+      settingsRoot.rawChange,
+      jsonEncode([]),
     );
     aclHeadId = aclRoot.id;
     print('Initialized space: $spaceId');
   } else {
-    // Get existing ACL head (first object is always ACL root).
-    // This is a simplification for v1.
-    aclHeadId = existingObjects.first.id;
+    aclHeadId = await _findAclRootId(db, existingObjects, spaceId);
   }
 
   // Build root change for new object tree
   final rootChange = await buildRootChange(
     spaceId: spaceId,
     aclHeadId: aclHeadId,
-    identityPrivateKey: identity.seed,
+    identityPrivateKey: identity.accountSeed,
   );
 
   final objectId = rootChange.id;
@@ -79,7 +89,7 @@ Future<void> createCommand(
     aclHeadId: aclHeadId,
     snapshotBaseId: rootChange.id,
     changesData: changeData,
-    identityPrivateKey: identity.seed,
+    identityPrivateKey: identity.accountSeed,
   );
 
   // Persist to local store
@@ -101,3 +111,59 @@ Future<void> createCommand(
   print('Text: $text');
   print('Changes: 2 (root + content)');
 }
+
+Future<RawRecordWithId> _buildDerivedAclRoot({
+  required String spaceId,
+  required Uint8List accountSeed,
+}) async {
+  final accountKeyPair = await ed25519KeyPairFromSeed(accountSeed);
+  final identity = _marshalEd25519PublicKey(accountKeyPair.publicKey);
+  final identitySignature =
+      await ed25519Sign(accountSeed, accountKeyPair.publicKey);
+  final aclRoot = AclRoot(
+    identity: identity,
+    masterKey: identity,
+    spaceId: spaceId,
+    identitySignature: identitySignature,
+  );
+  final aclRootBytes = Uint8List.fromList(aclRoot.writeToBuffer());
+  final signature = await ed25519Sign(accountSeed, aclRootBytes);
+  final rawRecord = RawRecord(
+    payload: aclRootBytes,
+    signature: signature,
+  );
+  final rawRecordBytes = Uint8List.fromList(rawRecord.writeToBuffer());
+  final cid = await computeCid(rawRecordBytes);
+  return RawRecordWithId(
+    payload: rawRecordBytes,
+    id: cid,
+  );
+}
+
+Future<String> _findAclRootId(
+  ManytypeDatabase db,
+  List<StoredObject> objects,
+  String spaceId,
+) async {
+  for (final object in objects) {
+    final changes = await db.getChangesForObject(object.id);
+    if (changes.isEmpty) continue;
+    try {
+      final rawRecord = RawRecord.fromBuffer(changes.first.rawBytes);
+      final aclRoot = AclRoot.fromBuffer(rawRecord.payload);
+      if (aclRoot.spaceId == spaceId) {
+        return object.id;
+      }
+    } catch (_) {
+      continue;
+    }
+  }
+  throw StateError('Space bootstrap is missing an ACL root');
+}
+
+Uint8List _marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
+      Key(
+        type: KeyType.Ed25519Public,
+        data: publicKey,
+      ).writeToBuffer(),
+    );

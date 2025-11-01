@@ -42,10 +42,7 @@ pub fn handle_log_add(request_bytes: &[u8]) -> Result<Vec<u8>> {
         !logs.contains_key(&request.log_id),
         "consensus log already exists"
     );
-    logs.insert(
-        request.log_id,
-        vec![StoredRecord { id: record.id }],
-    );
+    logs.insert(request.log_id, vec![StoredRecord { id: record.id }]);
 
     Ok(ConsensusOk {}.encode_to_vec())
 }
@@ -139,7 +136,10 @@ mod tests {
             }),
         };
         let err = handle_log_add(&request.encode_to_vec()).unwrap_err();
-        assert!(err.to_string().contains("invalid initial record payload cid"));
+        assert!(
+            err.to_string()
+                .contains("invalid initial record payload cid")
+        );
     }
 
     #[test]
@@ -172,8 +172,7 @@ mod tests {
             record: Some(raw_record),
         };
 
-        let response_bytes =
-            handle_record_add(&request.encode_to_vec(), &signing_key).unwrap();
+        let response_bytes = handle_record_add(&request.encode_to_vec(), &signing_key).unwrap();
         let response = RawRecordWithId::decode(response_bytes.as_slice()).unwrap();
         let signed = RawRecord::decode(response.payload.as_slice()).unwrap();
 
@@ -213,8 +212,9 @@ mod tests {
             }),
         };
         let err = handle_record_add(&request.encode_to_vec(), &signing_key).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("record prevId does not match the current head"));
+        assert!(
+            err.to_string()
+                .contains("record prevId does not match the current head")
+        );
     }
 }

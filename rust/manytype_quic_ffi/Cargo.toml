@@ -21,6 +21,8 @@ futures = { workspace = true }
 anyhow = { workspace = true }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 tracing = { workspace = true }
+libp2p-identity = { workspace = true, features = ["ed25519", "peerid", "rsa"] }
+libp2p-tls = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

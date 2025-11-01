@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:fixnum/fixnum.dart';
 import 'package:manytype_core/manytype_core.dart';
+import 'package:manytype_protocol/manytype_protocol.dart' show Key, KeyType;
 import 'package:manytype_protocol/spacesync.dart';
 
 /// User identity derived from BIP-39 mnemonic via SLIP-0010.
@@ -67,9 +68,11 @@ class Identity {
 }
 
 const _regularSpaceType = 'anytype.space';
-const _fnv64OffsetBasis = 0xcbf29ce484222325;
-const _fnv64Prime = 0x100000001b3;
-const _u64Mask = 0xffffffffffffffff;
+final _fnv64OffsetBasis = BigInt.parse('cbf29ce484222325', radix: 16);
+final _fnv64Prime = BigInt.parse('100000001b3', radix: 16);
+final _u64Mask = (BigInt.one << 64) - BigInt.one;
+final _u64SignBit = BigInt.one << 63;
+final _u64Modulus = BigInt.one << 64;
 
 Future<RawSpaceHeaderWithId> _buildDerivedSpaceHeader({
   required Uint8List accountSeed,
@@ -77,9 +80,9 @@ Future<RawSpaceHeaderWithId> _buildDerivedSpaceHeader({
 }) async {
   final replicationKey = _fnv64(accountPublicKey);
   final header = SpaceHeader(
-    identity: accountPublicKey,
+    identity: _marshalEd25519PublicKey(accountPublicKey),
     spaceType: _regularSpaceType,
-    replicationKey: Int64(replicationKey),
+    replicationKey: _toProtoUint64(replicationKey),
   );
   final headerBytes = Uint8List.fromList(header.writeToBuffer());
   final signature = await ed25519Sign(accountSeed, headerBytes);
@@ -91,16 +94,33 @@ Future<RawSpaceHeaderWithId> _buildDerivedSpaceHeader({
   final headerId = await computeCid(rawHeaderBytes);
 
   return RawSpaceHeaderWithId(
-    id: '$headerId.${replicationKey.toRadixString(36)}',
+    id: '$headerId.${_formatUint64Radix36(replicationKey)}',
     rawHeader: rawHeaderBytes,
   );
 }
 
-int _fnv64(List<int> bytes) {
+Uint8List _marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
+      Key(
+        type: KeyType.Ed25519Public,
+        data: publicKey,
+      ).writeToBuffer(),
+    );
+
+BigInt _fnv64(List<int> bytes) {
   var hash = _fnv64OffsetBasis;
   for (final byte in bytes) {
     hash = (hash * _fnv64Prime) & _u64Mask;
-    hash ^= byte;
+    hash ^= BigInt.from(byte);
   }
   return hash;
 }
+
+Int64 _toProtoUint64(BigInt value) {
+  final normalized = value & _u64Mask;
+  final signed =
+      normalized >= _u64SignBit ? normalized - _u64Modulus : normalized;
+  return Int64.parseInt(signed.toString());
+}
+
+String _formatUint64Radix36(BigInt value) =>
+    (value & _u64Mask).toRadixString(36);

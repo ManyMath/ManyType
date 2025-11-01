@@ -57,7 +57,7 @@ class ObjectTree {
 
     // 4. Verify Ed25519 signature
     final valid = await ed25519Verify(
-      Uint8List.fromList(treeChange.identity),
+      _decodeIdentityPublicKey(treeChange.identity),
       Uint8List.fromList(rawTreeChange.payload),
       Uint8List.fromList(rawTreeChange.signature),
     );
@@ -131,4 +131,16 @@ class ObjectTree {
 
     return tree;
   }
+}
+
+Uint8List _decodeIdentityPublicKey(List<int> identityBytes) {
+  try {
+    final key = Key.fromBuffer(identityBytes);
+    if (key.type == KeyType.Ed25519Public && key.data.length == 32) {
+      return Uint8List.fromList(key.data);
+    }
+  } catch (_) {
+    // Fall back to legacy raw 32-byte identities.
+  }
+  return Uint8List.fromList(identityBytes);
 }
