@@ -93,6 +93,7 @@ async fn main() -> Result<()> {
     }
 
     let sync_state = sync_node::SharedSyncState::open(&config.db_path)?;
+    let file_node = file_node::FileNodeState::open(&config.db_path)?;
     tracing::info!("Opened sync state at {}", config.db_path);
     tracing::info!("Server peer ID: {}", local_peer_id_libp2p);
 
@@ -104,6 +105,7 @@ async fn main() -> Result<()> {
             addresses: vec![config.quic_listen.clone()],
         },
         sync_state,
+        file_node,
         local_signing_key: signing_key.clone(),
     });
 
@@ -193,6 +195,7 @@ async fn handle_stream(
     state: Arc<drpc::router::ServerState>,
 ) -> Result<()> {
     let mut stream = tokio::io::join(recv, send);
+    let trace_file_rpcs = std::env::var_os("MANYTYPE_TRACE_FILE_RPCS").is_some();
 
     handshake::perform_proto_handshake(&mut stream, ProtoType::Drpc, &[Encoding::None]).await?;
     tracing::info!("Proto handshake complete with peer {}", remote_tls_peer_id);
@@ -206,6 +209,14 @@ async fn handle_stream(
             Err(error) if is_benign_connection_error(&error) => return Ok(()),
             Err(error) => return Err(error),
         };
+        if trace_file_rpcs && method.starts_with("/filesync.File/") {
+            tracing::info!(
+                "File RPC invoke: method={} peer={} stream_id={}",
+                method,
+                remote_tls_peer_id,
+                stream_id
+            );
+        }
         if let Err(e) = drpc::router::dispatch(
             stream_id,
             &method,

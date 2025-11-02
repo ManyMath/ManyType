@@ -16,6 +16,7 @@ use crate::sync_node::{self, SharedSyncState};
 pub struct ServerState {
     pub coordinator_config: CoordinatorConfig,
     pub sync_state: SharedSyncState,
+    pub file_node: file_node::FileNodeState,
     pub local_signing_key: ed25519_dalek::SigningKey,
 }
 
@@ -133,6 +134,26 @@ where
     {
         write_response(stream, stream_id, next_message_id, data).await?;
         write_close_send(stream, stream_id, next_message_id).await
+    }
+
+    async fn write_error_response<T>(
+        stream: &mut DrpcStream<T>,
+        stream_id: u64,
+        next_message_id: &mut u64,
+        message: &str,
+    ) -> Result<()>
+    where
+        T: AsyncRead + AsyncWrite + Unpin,
+    {
+        let message_id = *next_message_id;
+        *next_message_id += 1;
+        if let Err(error) = stream.write_error(stream_id, message_id, message).await {
+            if is_benign_disconnect(&error) {
+                return Ok(());
+            }
+            return Err(error);
+        }
+        Ok(())
     }
 
     async fn write_frame<T>(
@@ -359,25 +380,216 @@ where
                 consensus::handle_record_add(&request_bytes, &state.local_signing_key)?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
+        "/filesync.File/BlocksCheck" => {
+            let request_bytes = stream.read_message().await?;
+            match file_node::handle_blocks_check(
+                &request_bytes,
+                &state.file_node,
+                &state.sync_state,
+                remote_peer_id,
+            ) {
+                Ok(response_bytes) => {
+                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
+                        .await
+                }
+                Err(error) => {
+                    write_error_response(
+                        stream,
+                        stream_id,
+                        &mut next_message_id,
+                        &error.to_string(),
+                    )
+                    .await?;
+                    bail!("{error}");
+                }
+            }
+        }
+        "/filesync.File/BlockGet" => {
+            let request_bytes = stream.read_message().await?;
+            match file_node::handle_block_get(
+                &request_bytes,
+                &state.file_node,
+                &state.sync_state,
+                remote_peer_id,
+            ) {
+                Ok(response_bytes) => {
+                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
+                        .await
+                }
+                Err(error) => {
+                    write_error_response(
+                        stream,
+                        stream_id,
+                        &mut next_message_id,
+                        &error.to_string(),
+                    )
+                    .await?;
+                    bail!("{error}");
+                }
+            }
+        }
         "/filesync.File/BlockPush" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes = file_node::handle_block_push(&request_bytes)?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            match file_node::handle_block_push(
+                &request_bytes,
+                &state.file_node,
+                &state.sync_state,
+                remote_peer_id,
+            ) {
+                Ok(response_bytes) => {
+                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
+                        .await
+                }
+                Err(error) => {
+                    write_error_response(
+                        stream,
+                        stream_id,
+                        &mut next_message_id,
+                        &error.to_string(),
+                    )
+                    .await?;
+                    bail!("{error}");
+                }
+            }
+        }
+        "/filesync.File/BlockPushMany" => {
+            let request_bytes = stream.read_message().await?;
+            match file_node::handle_block_push_many(
+                &request_bytes,
+                &state.file_node,
+                &state.sync_state,
+                remote_peer_id,
+            ) {
+                Ok(response_bytes) => {
+                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
+                        .await
+                }
+                Err(error) => {
+                    write_error_response(
+                        stream,
+                        stream_id,
+                        &mut next_message_id,
+                        &error.to_string(),
+                    )
+                    .await?;
+                    bail!("{error}");
+                }
+            }
+        }
+        "/filesync.File/BlocksBind" => {
+            let request_bytes = stream.read_message().await?;
+            match file_node::handle_blocks_bind(
+                &request_bytes,
+                &state.file_node,
+                &state.sync_state,
+                remote_peer_id,
+            ) {
+                Ok(response_bytes) => {
+                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
+                        .await
+                }
+                Err(error) => {
+                    write_error_response(
+                        stream,
+                        stream_id,
+                        &mut next_message_id,
+                        &error.to_string(),
+                    )
+                    .await?;
+                    bail!("{error}");
+                }
+            }
         }
         "/filesync.File/Check" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes = file_node::handle_check(&request_bytes, &state.sync_state)?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            match file_node::handle_check(&request_bytes, &state.sync_state, remote_peer_id) {
+                Ok(response_bytes) => {
+                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
+                        .await
+                }
+                Err(error) => {
+                    write_error_response(
+                        stream,
+                        stream_id,
+                        &mut next_message_id,
+                        &error.to_string(),
+                    )
+                    .await?;
+                    bail!("{error}");
+                }
+            }
+        }
+        "/filesync.File/FilesDelete" => {
+            let request_bytes = stream.read_message().await?;
+            match file_node::handle_files_delete(
+                &request_bytes,
+                &state.file_node,
+                &state.sync_state,
+                remote_peer_id,
+            ) {
+                Ok(response_bytes) => {
+                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
+                        .await
+                }
+                Err(error) => {
+                    write_error_response(
+                        stream,
+                        stream_id,
+                        &mut next_message_id,
+                        &error.to_string(),
+                    )
+                    .await?;
+                    bail!("{error}");
+                }
+            }
         }
         "/filesync.File/SpaceInfo" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes = file_node::handle_space_info(&request_bytes)?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            match file_node::handle_space_info(
+                &request_bytes,
+                &state.file_node,
+                &state.sync_state,
+                remote_peer_id,
+            ) {
+                Ok(response_bytes) => {
+                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
+                        .await
+                }
+                Err(error) => {
+                    write_error_response(
+                        stream,
+                        stream_id,
+                        &mut next_message_id,
+                        &error.to_string(),
+                    )
+                    .await?;
+                    bail!("{error}");
+                }
+            }
         }
         "/filesync.File/AccountInfo" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes = file_node::handle_account_info(&request_bytes)?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            match file_node::handle_account_info(
+                &request_bytes,
+                &state.file_node,
+                &state.sync_state,
+                remote_peer_id,
+            ) {
+                Ok(response_bytes) => {
+                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
+                        .await
+                }
+                Err(error) => {
+                    write_error_response(
+                        stream,
+                        stream_id,
+                        &mut next_message_id,
+                        &error.to_string(),
+                    )
+                    .await?;
+                    bail!("{error}");
+                }
+            }
         }
         "/coordinator.Coordinator/NotifySubscribe" => {
             let _request_bytes = stream.read_message().await?;
@@ -412,6 +624,7 @@ mod tests {
     use super::*;
     use bytes::Bytes;
     use prost::Message;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use tokio::io::duplex;
 
     use crate::drpc::codec::{DrpcFrame, KIND_ERROR, KIND_MESSAGE};
@@ -420,13 +633,34 @@ mod tests {
     use manytype_proto::spacesync::{StoreKeyInner, StoreKeyValue};
 
     fn test_state() -> ServerState {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let sync_state = sync_node::new_shared_sync_state();
+        sync_state
+            .upsert_space_metadata(
+                "space-1",
+                Some(vec![1]),
+                None,
+                None,
+                None,
+                None,
+                Some(false),
+                Some(hex::encode(b"peer")),
+            )
+            .unwrap();
         ServerState {
             coordinator_config: CoordinatorConfig {
                 network_id: "test-net".to_string(),
                 peer_id: "test-peer".to_string(),
                 addresses: vec!["127.0.0.1:4830".to_string()],
             },
-            sync_state: sync_node::new_shared_sync_state(),
+            sync_state,
+            file_node: file_node::FileNodeState::open(
+                std::env::temp_dir().join(format!("manytype-file-node-router-{nonce}.redb")),
+            )
+            .unwrap(),
             local_signing_key: ed25519::signing_key_from_seed(&[1u8; 32]),
         }
     }
@@ -1019,6 +1253,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_dispatch_block_push() {
+        use manytype_core::crdt::cid::cid_string_to_bytes;
         use manytype_proto::filesync::{BlockPushRequest, Ok as FilesyncOk};
 
         let (client, server) = duplex(4096);
@@ -1026,6 +1261,19 @@ mod tests {
         let mut client_stream = DrpcStream::new(client);
 
         let state = test_state();
+        state
+            .sync_state
+            .upsert_space_metadata(
+                "sp1",
+                Some(vec![1]),
+                None,
+                None,
+                None,
+                None,
+                Some(false),
+                None,
+            )
+            .unwrap();
 
         let handle = tokio::spawn(async move {
             dispatch(
@@ -1039,11 +1287,12 @@ mod tests {
             .unwrap();
         });
 
+        let payload = b"data".to_vec();
         let request = BlockPushRequest {
             space_id: "sp1".to_string(),
             file_id: "f1".to_string(),
-            data: b"data".to_vec(),
-            ..Default::default()
+            cid: cid_string_to_bytes(&compute_cid(&payload)).unwrap(),
+            data: payload,
         };
         client_stream
             .write_message(0, 0, &request.encode_to_vec())
@@ -1061,6 +1310,48 @@ mod tests {
         assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
         assert_eq!(close_frame.stream_id, 1);
         assert_eq!(close_frame.message_id, 2);
+
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_dispatch_block_get_missing_returns_error_frame() {
+        use manytype_core::crdt::cid::cid_string_to_bytes;
+        use manytype_proto::filesync::BlockGetRequest;
+
+        let (client, server) = duplex(4096);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+
+        let state = test_state();
+
+        let handle = tokio::spawn(async move {
+            let result = dispatch(
+                1,
+                "/filesync.File/BlockGet",
+                &mut server_stream,
+                &state,
+                b"peer",
+            )
+            .await;
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("CIDNotFound"));
+        });
+
+        let request = BlockGetRequest {
+            space_id: "space-1".to_string(),
+            cid: cid_string_to_bytes(&compute_cid(b"missing")).unwrap(),
+            wait: false,
+        };
+        client_stream
+            .write_message(0, 0, &request.encode_to_vec())
+            .await
+            .unwrap();
+
+        let frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(frame.kind, KIND_ERROR);
+        let error_text = String::from_utf8(frame.data.to_vec()).unwrap();
+        assert!(error_text.contains("CIDNotFound"));
 
         handle.await.unwrap();
     }
@@ -1087,6 +1378,14 @@ mod tests {
                     addresses: vec![],
                 },
                 sync_state: sync_state.clone(),
+                file_node: file_node::FileNodeState::open(std::env::temp_dir().join(format!(
+                    "manytype-file-node-int-{}-1.redb",
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_nanos()
+                )))
+                .unwrap(),
                 local_signing_key: ed25519::signing_key_from_seed(&[1u8; 32]),
             };
 
@@ -1157,6 +1456,14 @@ mod tests {
                     addresses: vec![],
                 },
                 sync_state: sync_state.clone(),
+                file_node: file_node::FileNodeState::open(std::env::temp_dir().join(format!(
+                    "manytype-file-node-int-{}-2.redb",
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_nanos()
+                )))
+                .unwrap(),
                 local_signing_key: ed25519::signing_key_from_seed(&[1u8; 32]),
             };
 

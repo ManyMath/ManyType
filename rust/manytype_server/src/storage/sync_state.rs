@@ -25,6 +25,7 @@ const META_ACL_ROOT_ID: &str = "acl_root_id";
 const META_SETTINGS_PAYLOAD: &str = "settings_payload";
 const META_SETTINGS_PAYLOAD_ID: &str = "settings_payload_id";
 const META_IS_SHARED: &str = "is_shared";
+const META_OWNER_PEER_ID: &str = "owner_peer_id";
 
 #[derive(Clone, Debug, Default)]
 pub struct SpaceState {
@@ -39,6 +40,7 @@ pub struct SpaceState {
     pub settings_payload: Option<Vec<u8>>,
     pub settings_payload_id: String,
     pub is_shared: bool,
+    pub owner_peer_id: String,
     pub store_key_values: HashMap<String, Vec<u8>>,
 }
 
@@ -155,6 +157,10 @@ impl SyncStateStorage {
             .get(META_IS_SHARED)?
             .map(|value| value.value() == b"1")
             .unwrap_or(false);
+        let owner_peer_id = meta_table
+            .get(META_OWNER_PEER_ID)?
+            .map(|value| String::from_utf8_lossy(value.value()).into_owned())
+            .unwrap_or_default();
 
         let mut object_heads = HashMap::new();
         for entry in heads_table.iter()?.flatten() {
@@ -201,6 +207,7 @@ impl SyncStateStorage {
             settings_payload,
             settings_payload_id,
             is_shared,
+            owner_peer_id,
             store_key_values,
         })
     }
@@ -214,6 +221,7 @@ impl SyncStateStorage {
         settings_payload: Option<&[u8]>,
         settings_payload_id: Option<&str>,
         is_shared: Option<bool>,
+        owner_peer_id: Option<&str>,
     ) -> Result<()> {
         let _guard = self.persist_lock.lock().unwrap();
         self.ensure_space_registered_locked(space_id)?;
@@ -241,6 +249,9 @@ impl SyncStateStorage {
                     META_IS_SHARED,
                     if is_shared { &b"1"[..] } else { &b"0"[..] },
                 )?;
+            }
+            if let Some(owner_peer_id) = owner_peer_id {
+                table.insert(META_OWNER_PEER_ID, owner_peer_id.as_bytes())?;
             }
         }
         write_txn.commit()?;
@@ -342,6 +353,7 @@ impl SharedSyncState {
         settings_payload: Option<Vec<u8>>,
         settings_payload_id: Option<String>,
         is_shared: Option<bool>,
+        owner_peer_id: Option<String>,
     ) -> Result<()> {
         {
             let mut state = self.inner.write().unwrap();
@@ -364,6 +376,9 @@ impl SharedSyncState {
             if let Some(is_shared) = is_shared {
                 space.is_shared = is_shared;
             }
+            if let Some(owner_peer_id) = owner_peer_id.clone() {
+                space.owner_peer_id = owner_peer_id;
+            }
         }
 
         self.storage.persist_space_metadata(
@@ -374,11 +389,19 @@ impl SharedSyncState {
             settings_payload.as_deref(),
             settings_payload_id.as_deref(),
             is_shared,
+            owner_peer_id.as_deref(),
         )
     }
 
     pub fn mark_space_shared(&self, space_id: &str) -> Result<()> {
-        let (space_header, acl_root, acl_root_id, settings_payload, settings_payload_id) = {
+        let (
+            space_header,
+            acl_root,
+            acl_root_id,
+            settings_payload,
+            settings_payload_id,
+            owner_peer_id,
+        ) = {
             let mut state = self.inner.write().unwrap();
             let Some(space) = state.get_mut(space_id) else {
                 anyhow::bail!("space not found: {space_id}");
@@ -390,6 +413,7 @@ impl SharedSyncState {
                 (!space.acl_root_id.is_empty()).then(|| space.acl_root_id.clone()),
                 space.settings_payload.clone(),
                 (!space.settings_payload_id.is_empty()).then(|| space.settings_payload_id.clone()),
+                (!space.owner_peer_id.is_empty()).then(|| space.owner_peer_id.clone()),
             )
         };
 
@@ -401,7 +425,29 @@ impl SharedSyncState {
             settings_payload.as_deref(),
             settings_payload_id.as_deref(),
             Some(true),
+            owner_peer_id.as_deref(),
         )
+    }
+
+    pub fn peer_owns_space(&self, space_id: &str, peer_id_hex: &str) -> bool {
+        let state = self.inner.read().unwrap();
+        let Some(space) = state.get(space_id) else {
+            return false;
+        };
+        space.owner_peer_id.is_empty() || space.owner_peer_id == peer_id_hex
+    }
+
+    pub fn owned_space_ids(&self, peer_id_hex: &str) -> Vec<String> {
+        let state = self.inner.read().unwrap();
+        let mut owned: Vec<_> = state
+            .iter()
+            .filter(|(_, space)| {
+                space.owner_peer_id.is_empty() || space.owner_peer_id == peer_id_hex
+            })
+            .map(|(space_id, _)| space_id.clone())
+            .collect();
+        owned.sort();
+        owned
     }
 
     pub fn append_acl_record(
@@ -591,6 +637,7 @@ mod tests {
                     Some(b"settings".to_vec()),
                     Some("settings-id".to_string()),
                     Some(false),
+                    Some("peer-1".to_string()),
                 )
                 .unwrap();
             state
@@ -763,6 +810,7 @@ mod tests {
                     None,
                     None,
                     Some(false),
+                    Some("peer-1".to_string()),
                 )
                 .unwrap();
             state.mark_space_shared("space-1").unwrap();

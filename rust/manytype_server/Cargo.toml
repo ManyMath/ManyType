@@ -27,6 +27,9 @@ hex = { workspace = true }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 libp2p-identity = { workspace = true, features = ["ed25519", "peerid", "rsa"] }
 libp2p-tls = { workspace = true }
+cid = "0.11"
+multihash-codetable = { version = "0.1", features = ["sha2"] }
+multibase = "0.9"
 
 [dev-dependencies]
 tempfile = "3"

@@ -453,6 +453,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
+                None,
             )
             .unwrap();
 
@@ -484,6 +485,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
+                None,
             )
             .unwrap();
 
@@ -526,6 +528,7 @@ mod tests {
                     None,
                     None,
                     Some(false),
+                    None,
                 )
                 .unwrap();
 
@@ -570,6 +573,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
+                None,
             )
             .unwrap();
 
@@ -604,6 +608,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
+                None,
             )
             .unwrap();
 
@@ -682,6 +687,7 @@ mod tests {
                     None,
                     None,
                     Some(false),
+                    None,
                 )
                 .unwrap();
 

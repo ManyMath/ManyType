@@ -260,6 +260,7 @@ pub fn handle_space_push(
         settings_payload,
         settings_payload_id,
         Some(false),
+        Some(hex::encode(remote_peer_id)),
     )?;
 
     tracing::info!("sync: stored space {}", space_id);
