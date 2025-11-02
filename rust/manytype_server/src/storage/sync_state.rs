@@ -5,6 +5,7 @@ use std::sync::{Arc, LockResult, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuar
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
+use manytype_proto::consensus::RawRecordWithId;
 use manytype_proto::spacesync::StoreKeyValue;
 use prost::Message;
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
@@ -16,9 +17,14 @@ const SPACE_OBJECT_CHANGES_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("object_changes");
 const SPACE_CHANGES_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("changes");
 const SPACE_STORE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("store");
+const SPACE_ACL_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("acl");
 
 const META_SPACE_HEADER: &str = "space_header";
 const META_ACL_ROOT: &str = "acl_root";
+const META_ACL_ROOT_ID: &str = "acl_root_id";
+const META_SETTINGS_PAYLOAD: &str = "settings_payload";
+const META_SETTINGS_PAYLOAD_ID: &str = "settings_payload_id";
+const META_IS_SHARED: &str = "is_shared";
 
 #[derive(Clone, Debug, Default)]
 pub struct SpaceState {
@@ -27,6 +33,12 @@ pub struct SpaceState {
     pub raw_changes: HashMap<String, Vec<u8>>,
     pub space_header: Option<Vec<u8>>,
     pub acl_root: Option<Vec<u8>>,
+    pub acl_root_id: String,
+    pub acl_records: Vec<Vec<u8>>,
+    pub acl_head: String,
+    pub settings_payload: Option<Vec<u8>>,
+    pub settings_payload_id: String,
+    pub is_shared: bool,
     pub store_key_values: HashMap<String, Vec<u8>>,
 }
 
@@ -120,6 +132,7 @@ impl SyncStateStorage {
         let object_changes_table = read_txn.open_table(SPACE_OBJECT_CHANGES_TABLE)?;
         let changes_table = read_txn.open_table(SPACE_CHANGES_TABLE)?;
         let store_table = read_txn.open_table(SPACE_STORE_TABLE)?;
+        let acl_table = read_txn.open_table(SPACE_ACL_TABLE)?;
 
         let space_header = meta_table
             .get(META_SPACE_HEADER)?
@@ -127,6 +140,21 @@ impl SyncStateStorage {
         let acl_root = meta_table
             .get(META_ACL_ROOT)?
             .map(|value| value.value().to_vec());
+        let acl_root_id = meta_table
+            .get(META_ACL_ROOT_ID)?
+            .map(|value| String::from_utf8_lossy(value.value()).into_owned())
+            .unwrap_or_default();
+        let settings_payload = meta_table
+            .get(META_SETTINGS_PAYLOAD)?
+            .map(|value| value.value().to_vec());
+        let settings_payload_id = meta_table
+            .get(META_SETTINGS_PAYLOAD_ID)?
+            .map(|value| String::from_utf8_lossy(value.value()).into_owned())
+            .unwrap_or_default();
+        let is_shared = meta_table
+            .get(META_IS_SHARED)?
+            .map(|value| value.value() == b"1")
+            .unwrap_or(false);
 
         let mut object_heads = HashMap::new();
         for entry in heads_table.iter()?.flatten() {
@@ -152,12 +180,27 @@ impl SyncStateStorage {
             store_key_values.insert(entry.0.value().to_string(), entry.1.value().to_vec());
         }
 
+        let mut acl_records = Vec::new();
+        for entry in acl_table.iter()?.flatten() {
+            acl_records.push(entry.1.value().to_vec());
+        }
+        let acl_head = acl_records
+            .last()
+            .and_then(|encoded| decode_acl_record_id(encoded))
+            .unwrap_or_default();
+
         Ok(SpaceState {
             object_heads,
             object_changes,
             raw_changes,
             space_header,
             acl_root,
+            acl_root_id,
+            acl_records,
+            acl_head,
+            settings_payload,
+            settings_payload_id,
+            is_shared,
             store_key_values,
         })
     }
@@ -167,6 +210,10 @@ impl SyncStateStorage {
         space_id: &str,
         space_header: Option<&[u8]>,
         acl_root: Option<&[u8]>,
+        acl_root_id: Option<&str>,
+        settings_payload: Option<&[u8]>,
+        settings_payload_id: Option<&str>,
+        is_shared: Option<bool>,
     ) -> Result<()> {
         let _guard = self.persist_lock.lock().unwrap();
         self.ensure_space_registered_locked(space_id)?;
@@ -180,6 +227,40 @@ impl SyncStateStorage {
             if let Some(acl_root) = acl_root {
                 table.insert(META_ACL_ROOT, acl_root)?;
             }
+            if let Some(acl_root_id) = acl_root_id {
+                table.insert(META_ACL_ROOT_ID, acl_root_id.as_bytes())?;
+            }
+            if let Some(settings_payload) = settings_payload {
+                table.insert(META_SETTINGS_PAYLOAD, settings_payload)?;
+            }
+            if let Some(settings_payload_id) = settings_payload_id {
+                table.insert(META_SETTINGS_PAYLOAD_ID, settings_payload_id.as_bytes())?;
+            }
+            if let Some(is_shared) = is_shared {
+                table.insert(
+                    META_IS_SHARED,
+                    if is_shared { &b"1"[..] } else { &b"0"[..] },
+                )?;
+            }
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    fn persist_acl_record(
+        &self,
+        space_id: &str,
+        index: usize,
+        raw_record_with_id: &[u8],
+    ) -> Result<()> {
+        let _guard = self.persist_lock.lock().unwrap();
+        self.ensure_space_registered_locked(space_id)?;
+        let space_db = Database::create(self.paths().space_db_path(space_id))?;
+        let write_txn = space_db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(SPACE_ACL_TABLE)?;
+            let key = format!("{index:018}");
+            table.insert(key.as_str(), raw_record_with_id)?;
         }
         write_txn.commit()?;
         Ok(())
@@ -257,6 +338,10 @@ impl SharedSyncState {
         space_id: &str,
         space_header: Option<Vec<u8>>,
         acl_root: Option<Vec<u8>>,
+        acl_root_id: Option<String>,
+        settings_payload: Option<Vec<u8>>,
+        settings_payload_id: Option<String>,
+        is_shared: Option<bool>,
     ) -> Result<()> {
         {
             let mut state = self.inner.write().unwrap();
@@ -267,10 +352,94 @@ impl SharedSyncState {
             if let Some(acl_root) = acl_root.clone() {
                 space.acl_root = Some(acl_root);
             }
+            if let Some(acl_root_id) = acl_root_id.clone() {
+                space.acl_root_id = acl_root_id;
+            }
+            if let Some(settings_payload) = settings_payload.clone() {
+                space.settings_payload = Some(settings_payload);
+            }
+            if let Some(settings_payload_id) = settings_payload_id.clone() {
+                space.settings_payload_id = settings_payload_id;
+            }
+            if let Some(is_shared) = is_shared {
+                space.is_shared = is_shared;
+            }
         }
 
+        self.storage.persist_space_metadata(
+            space_id,
+            space_header.as_deref(),
+            acl_root.as_deref(),
+            acl_root_id.as_deref(),
+            settings_payload.as_deref(),
+            settings_payload_id.as_deref(),
+            is_shared,
+        )
+    }
+
+    pub fn mark_space_shared(&self, space_id: &str) -> Result<()> {
+        let (space_header, acl_root, acl_root_id, settings_payload, settings_payload_id) = {
+            let mut state = self.inner.write().unwrap();
+            let Some(space) = state.get_mut(space_id) else {
+                anyhow::bail!("space not found: {space_id}");
+            };
+            space.is_shared = true;
+            (
+                space.space_header.clone(),
+                space.acl_root.clone(),
+                (!space.acl_root_id.is_empty()).then(|| space.acl_root_id.clone()),
+                space.settings_payload.clone(),
+                (!space.settings_payload_id.is_empty()).then(|| space.settings_payload_id.clone()),
+            )
+        };
+
+        self.storage.persist_space_metadata(
+            space_id,
+            space_header.as_deref(),
+            acl_root.as_deref(),
+            acl_root_id.as_deref(),
+            settings_payload.as_deref(),
+            settings_payload_id.as_deref(),
+            Some(true),
+        )
+    }
+
+    pub fn append_acl_record(
+        &self,
+        space_id: &str,
+        raw_record_with_id: Vec<u8>,
+        record_id: &str,
+    ) -> Result<()> {
+        let index = {
+            let mut state = self.inner.write().unwrap();
+            let space = state.entry(space_id.to_string()).or_default();
+            space.acl_records.push(raw_record_with_id.clone());
+            space.acl_head = record_id.to_string();
+            space.acl_records.len() - 1
+        };
+
         self.storage
-            .persist_space_metadata(space_id, space_header.as_deref(), acl_root.as_deref())
+            .persist_acl_record(space_id, index, &raw_record_with_id)
+    }
+
+    pub fn list_acl_records(&self, space_id: &str, acl_head: &str) -> Vec<Vec<u8>> {
+        let state = self.inner.read().unwrap();
+        let Some(space) = state.get(space_id) else {
+            return Vec::new();
+        };
+        if acl_head.is_empty() {
+            return space.acl_records.clone();
+        }
+
+        let Some(cursor_idx) = space
+            .acl_records
+            .iter()
+            .position(|raw| decode_acl_record_id(raw).as_deref() == Some(acl_head))
+        else {
+            return Vec::new();
+        };
+
+        space.acl_records[cursor_idx + 1..].to_vec()
     }
 
     pub fn record_object_change(
@@ -383,9 +552,16 @@ fn ensure_space_tables(db: &Database) -> Result<()> {
         let _object_changes = write_txn.open_table(SPACE_OBJECT_CHANGES_TABLE)?;
         let _changes = write_txn.open_table(SPACE_CHANGES_TABLE)?;
         let _store = write_txn.open_table(SPACE_STORE_TABLE)?;
+        let _acl = write_txn.open_table(SPACE_ACL_TABLE)?;
     }
     write_txn.commit()?;
     Ok(())
+}
+
+fn decode_acl_record_id(raw_record_with_id: &[u8]) -> Option<String> {
+    RawRecordWithId::decode(raw_record_with_id)
+        .ok()
+        .map(|record| record.id)
 }
 
 #[cfg(test)]
@@ -411,6 +587,10 @@ mod tests {
                     "space-1",
                     Some(b"header".to_vec()),
                     Some(b"acl-root".to_vec()),
+                    Some("acl-root-id".to_string()),
+                    Some(b"settings".to_vec()),
+                    Some("settings-id".to_string()),
+                    Some(false),
                 )
                 .unwrap();
             state
@@ -430,6 +610,13 @@ mod tests {
         let space = snapshot.get("space-1").unwrap();
         assert_eq!(space.space_header.as_deref(), Some(b"header".as_ref()));
         assert_eq!(space.acl_root.as_deref(), Some(b"acl-root".as_ref()));
+        assert_eq!(space.acl_root_id, "acl-root-id");
+        assert_eq!(
+            space.settings_payload.as_deref(),
+            Some(b"settings".as_ref())
+        );
+        assert_eq!(space.settings_payload_id, "settings-id");
+        assert!(!space.is_shared);
         assert_eq!(
             space.object_heads.get("object-1"),
             Some(&vec!["change-1".to_string()])
@@ -465,5 +652,123 @@ mod tests {
         let snapshot = state.read().unwrap();
         let heads = &snapshot.get("space-1").unwrap().object_heads["object-1"];
         assert_eq!(heads, &vec!["child".to_string()]);
+    }
+
+    #[test]
+    fn acl_records_persist_across_reopen() {
+        let temp_dir = TempDir::new().unwrap();
+        {
+            let state = new_shared_sync_state_at(temp_dir.path()).unwrap();
+            state
+                .append_acl_record(
+                    "space-1",
+                    RawRecordWithId {
+                        payload: b"record-1".to_vec(),
+                        id: "cid-1".to_string(),
+                    }
+                    .encode_to_vec(),
+                    "cid-1",
+                )
+                .unwrap();
+            state
+                .append_acl_record(
+                    "space-1",
+                    RawRecordWithId {
+                        payload: b"record-2".to_vec(),
+                        id: "cid-2".to_string(),
+                    }
+                    .encode_to_vec(),
+                    "cid-2",
+                )
+                .unwrap();
+        }
+
+        let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        let records = reopened.list_acl_records("space-1", "");
+        assert_eq!(records.len(), 2);
+        assert_eq!(
+            RawRecordWithId::decode(records[0].as_slice()).unwrap().id,
+            "cid-1"
+        );
+        assert_eq!(
+            RawRecordWithId::decode(records[1].as_slice()).unwrap().id,
+            "cid-2"
+        );
+        assert_eq!(reopened.read().unwrap()["space-1"].acl_head, "cid-2");
+    }
+
+    #[test]
+    fn list_acl_records_cursor_excludes_head_record() {
+        let state = new_shared_sync_state();
+        state
+            .append_acl_record(
+                "space-1",
+                RawRecordWithId {
+                    payload: b"record-1".to_vec(),
+                    id: "cid-1".to_string(),
+                }
+                .encode_to_vec(),
+                "cid-1",
+            )
+            .unwrap();
+        state
+            .append_acl_record(
+                "space-1",
+                RawRecordWithId {
+                    payload: b"record-2".to_vec(),
+                    id: "cid-2".to_string(),
+                }
+                .encode_to_vec(),
+                "cid-2",
+            )
+            .unwrap();
+
+        let records = state.list_acl_records("space-1", "cid-1");
+        assert_eq!(records.len(), 1);
+        assert_eq!(
+            RawRecordWithId::decode(records[0].as_slice()).unwrap().id,
+            "cid-2"
+        );
+    }
+
+    #[test]
+    fn list_acl_records_unknown_head_returns_empty() {
+        let state = new_shared_sync_state();
+        state
+            .append_acl_record(
+                "space-1",
+                RawRecordWithId {
+                    payload: b"record-1".to_vec(),
+                    id: "cid-1".to_string(),
+                }
+                .encode_to_vec(),
+                "cid-1",
+            )
+            .unwrap();
+
+        assert!(state.list_acl_records("space-1", "missing").is_empty());
+    }
+
+    #[test]
+    fn mark_space_shared_persists_across_reopen() {
+        let temp_dir = TempDir::new().unwrap();
+        {
+            let state = new_shared_sync_state_at(temp_dir.path()).unwrap();
+            state
+                .upsert_space_metadata(
+                    "space-1",
+                    Some(b"header".to_vec()),
+                    Some(b"acl-root".to_vec()),
+                    Some("acl-root-id".to_string()),
+                    None,
+                    None,
+                    Some(false),
+                )
+                .unwrap();
+            state.mark_space_shared("space-1").unwrap();
+        }
+
+        let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        assert!(reopened.read().unwrap()["space-1"].is_shared);
     }
 }

@@ -25,13 +25,9 @@ printf 'Running oracle capture against docker oracle...\n'
 
 timeout 120s bash -lc '
   set -euo pipefail
-  export HOME="$TMPDIR"
-  export MANYTYPE_SYNC_CAPTURE_PATH="$ORACLE_ARTIFACT_PATH"
+  export ORACLE_ARTIFACT_PATH="$ORACLE_ARTIFACT_PATH"
   cd "$ROOT_DIR"
-  dart run packages/manytype_cli/bin/manytype.dart init
-  dart run packages/manytype_cli/bin/manytype.dart create "oracle-capture-probe"
-  dart run packages/manytype_cli/bin/manytype.dart \
-    --network-config docker/any-sync/etc/client.yml sync
+  dart test packages/manytype_cli/test/oracle_sync_preflight_test.dart
 '
 
 if [[ ! -f "$ORACLE_ARTIFACT_PATH" ]]; then
@@ -48,6 +44,7 @@ events = data.get("events", [])
 methods = {e.get("method", "") for e in events if e.get("type") == "unary_rpc"}
 required = {
     "/coordinator.Coordinator/NetworkConfiguration",
+    "/coordinator.Coordinator/SpaceStatusCheck",
     "/coordinator.Coordinator/SpaceSign",
     "/spacesync.SpaceSync/SpacePush",
     "/spacesync.SpaceSync/HeadSync",
@@ -57,7 +54,31 @@ missing = required - methods
 if missing:
     print("FAIL: artifact missing required RPC methods:", missing, file=sys.stderr)
     sys.exit(1)
-print(f"OK: artifact contains {len(events)} events, all required RPC methods present")
+
+ordered = [e.get("method", "") for e in events if e.get("type") == "unary_rpc"]
+def idx(method):
+    try:
+        return ordered.index(method)
+    except ValueError:
+        return -1
+
+network_index = idx("/coordinator.Coordinator/NetworkConfiguration")
+status_index = idx("/coordinator.Coordinator/SpaceStatusCheck")
+sign_index = idx("/coordinator.Coordinator/SpaceSign")
+push_index = idx("/spacesync.SpaceSync/SpacePush")
+
+if not (network_index >= 0 and status_index > network_index and sign_index > status_index and push_index > sign_index):
+    print(
+        "FAIL: RPC ordering is invalid; expected "
+        "NetworkConfiguration -> SpaceStatusCheck -> SpaceSign -> SpacePush",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+print(
+    f"OK: artifact contains {len(events)} events, all required RPC methods present, "
+    "and preflight ordering is correct"
+)
 PYEOF
 
 printf 'Oracle capture artifact written to: %s\n' "$ORACLE_ARTIFACT_PATH"

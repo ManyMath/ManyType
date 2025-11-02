@@ -10,6 +10,7 @@ use prost::Message;
 
 use manytype_core::crdt::cid::compute_cid;
 use manytype_core::ldiff::{Diff, Element, Hasher, Range};
+use manytype_proto::consensus::RawRecordWithId;
 use manytype_proto::coordinator::SpaceReceiptWithSignature;
 use manytype_proto::spacesync::*;
 use manytype_proto::spacesync::{RawSpaceHeader, SpaceHeader};
@@ -244,15 +245,76 @@ pub fn handle_space_push(
         &signing_key.verifying_key(),
     )?;
 
+    let acl_payload = (!payload.acl_payload.is_empty()).then_some(payload.acl_payload);
+    let acl_payload_id = (!payload.acl_payload_id.is_empty()).then_some(payload.acl_payload_id);
+    let settings_payload =
+        (!payload.space_settings_payload.is_empty()).then_some(payload.space_settings_payload);
+    let settings_payload_id = (!payload.space_settings_payload_id.is_empty())
+        .then_some(payload.space_settings_payload_id);
+
     sync_state.upsert_space_metadata(
         &space_id,
         Some(space_header_with_id.raw_header),
-        (!payload.acl_payload.is_empty()).then_some(payload.acl_payload),
+        acl_payload,
+        acl_payload_id,
+        settings_payload,
+        settings_payload_id,
+        Some(false),
     )?;
 
     tracing::info!("sync: stored space {}", space_id);
     let response = SpacePushResponse {};
     Ok(response.encode_to_vec())
+}
+
+/// Handle /spacesync.SpaceSync/SpacePull
+pub fn handle_space_pull(request_bytes: &[u8], sync_state: &SharedSyncState) -> Result<Vec<u8>> {
+    let request = SpacePullRequest::decode(request_bytes)?;
+    let state = sync_state.read().unwrap();
+    let space = state
+        .get(&request.id)
+        .ok_or_else(|| anyhow::anyhow!("space not found: {}", request.id))?;
+
+    let acl_records = space
+        .acl_records
+        .iter()
+        .map(|encoded| {
+            let record = RawRecordWithId::decode(encoded.as_slice())
+                .map_err(|error| anyhow::anyhow!("failed to decode ACL record: {error}"))?;
+            Ok(AclRecord {
+                acl_payload: encoded.clone(),
+                id: record.id,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let payload = SpacePayload {
+        space_header: space
+            .space_header
+            .as_ref()
+            .map(|raw_header| RawSpaceHeaderWithId {
+                raw_header: raw_header.clone(),
+                id: request.id.clone(),
+            }),
+        acl_payload: space.acl_root.clone().unwrap_or_default(),
+        acl_payload_id: if !space.acl_root_id.is_empty() {
+            space.acl_root_id.clone()
+        } else {
+            space
+                .acl_root
+                .as_deref()
+                .map(compute_cid)
+                .unwrap_or_default()
+        },
+        space_settings_payload: space.settings_payload.clone().unwrap_or_default(),
+        space_settings_payload_id: space.settings_payload_id.clone(),
+    };
+
+    Ok(SpacePullResponse {
+        payload: Some(payload),
+        acl_records,
+    }
+    .encode_to_vec())
 }
 
 /// Handle a single ObjectSyncMessage from the bidirectional stream.
@@ -471,6 +533,7 @@ mod tests {
 
     use super::*;
     use manytype_core::crypto::ed25519;
+    use manytype_proto::coordinator::{AclAddRecordRequest, AclAddRecordResponse};
     use manytype_proto::treechange::{RawTreeChange, TreeChange};
 
     fn test_signing_key() -> ed25519_dalek::SigningKey {
@@ -542,6 +605,8 @@ mod tests {
                 space_header: Some(space_header),
                 acl_payload: b"acl-root-bytes".to_vec(),
                 acl_payload_id: "acl-1".to_string(),
+                space_settings_payload: b"settings".to_vec(),
+                space_settings_payload_id: "settings-1".to_string(),
                 ..Default::default()
             }),
             credential,
@@ -561,6 +626,12 @@ mod tests {
         let space = state.get("space-1").expect("space should exist");
         assert!(space.space_header.is_some());
         assert_eq!(space.acl_root.as_deref(), Some(b"acl-root-bytes".as_ref()));
+        assert_eq!(space.acl_root_id, "acl-1");
+        assert_eq!(
+            space.settings_payload.as_deref(),
+            Some(b"settings".as_ref())
+        );
+        assert_eq!(space.settings_payload_id, "settings-1");
     }
 
     #[test]
@@ -596,6 +667,177 @@ mod tests {
             !response.results.is_empty(),
             "HeadSync should return non-empty results for pushed space"
         );
+    }
+
+    #[test]
+    fn space_pull_returns_acl_root_and_empty_records() {
+        let sync_state = new_shared_sync_state();
+        let account_identity = vec![4; 32];
+        let (space_header, credential) =
+            make_space_header_with_receipt("space-1", &account_identity, b"peer-1");
+        handle_space_push(
+            &SpacePushRequest {
+                payload: Some(SpacePayload {
+                    space_header: Some(space_header),
+                    acl_payload: b"acl-root-test".to_vec(),
+                    acl_payload_id: "acl-root-id".to_string(),
+                    space_settings_payload: b"settings".to_vec(),
+                    space_settings_payload_id: "settings-id".to_string(),
+                    ..Default::default()
+                }),
+                credential,
+                ..Default::default()
+            }
+            .encode_to_vec(),
+            &sync_state,
+            &test_coordinator_config(),
+            &test_signing_key(),
+            b"peer-1",
+        )
+        .unwrap();
+
+        let response = SpacePullResponse::decode(
+            handle_space_pull(
+                &SpacePullRequest {
+                    id: "space-1".to_string(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        let payload = response.payload.unwrap();
+        assert_eq!(payload.acl_payload, b"acl-root-test".to_vec());
+        assert_eq!(payload.acl_payload_id, "acl-root-id");
+        assert_eq!(payload.space_settings_payload, b"settings".to_vec());
+        assert_eq!(payload.space_settings_payload_id, "settings-id");
+        assert!(response.acl_records.is_empty());
+    }
+
+    #[test]
+    fn space_pull_returns_acl_records_after_acl_add() {
+        let _guard = crate::consensus::TEST_MUTEX.lock().unwrap();
+        let sync_state = new_shared_sync_state();
+        let account_identity = vec![4; 32];
+        let (space_header, credential) =
+            make_space_header_with_receipt("space-1", &account_identity, b"peer-1");
+        handle_space_push(
+            &SpacePushRequest {
+                payload: Some(SpacePayload {
+                    space_header: Some(space_header),
+                    acl_payload: b"acl-root-test".to_vec(),
+                    acl_payload_id: "acl-root-id".to_string(),
+                    ..Default::default()
+                }),
+                credential,
+                ..Default::default()
+            }
+            .encode_to_vec(),
+            &sync_state,
+            &test_coordinator_config(),
+            &test_signing_key(),
+            b"peer-1",
+        )
+        .unwrap();
+
+        let add_response = AclAddRecordResponse::decode(
+            coordinator::handle_acl_add_record(
+                &AclAddRecordRequest {
+                    space_id: "space-1".to_string(),
+                    payload: manytype_proto::consensus::RawRecord {
+                        payload: manytype_proto::consensus::Record {
+                            prev_id: "acl-root-id".to_string(),
+                            identity: vec![7; 32],
+                            data: b"acl".to_vec(),
+                            timestamp: 1,
+                        }
+                        .encode_to_vec(),
+                        signature: b"sig".to_vec(),
+                        ..Default::default()
+                    }
+                    .encode_to_vec(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+                &test_signing_key(),
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+
+        let response = SpacePullResponse::decode(
+            handle_space_pull(
+                &SpacePullRequest {
+                    id: "space-1".to_string(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+
+        assert_eq!(response.acl_records.len(), 1);
+        assert_eq!(response.acl_records[0].id, add_response.record_id);
+    }
+
+    #[test]
+    fn space_pull_unknown_space_returns_error() {
+        let sync_state = new_shared_sync_state();
+        let result = handle_space_pull(
+            &SpacePullRequest {
+                id: "missing".to_string(),
+            }
+            .encode_to_vec(),
+            &sync_state,
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("space not found"));
+    }
+
+    #[test]
+    fn space_pull_includes_space_header() {
+        let sync_state = new_shared_sync_state();
+        let account_identity = vec![4; 32];
+        let (space_header, credential) =
+            make_space_header_with_receipt("space-2", &account_identity, b"peer-2");
+        let expected_header = space_header.raw_header.clone();
+        handle_space_push(
+            &SpacePushRequest {
+                payload: Some(SpacePayload {
+                    space_header: Some(space_header),
+                    ..Default::default()
+                }),
+                credential,
+                ..Default::default()
+            }
+            .encode_to_vec(),
+            &sync_state,
+            &test_coordinator_config(),
+            &test_signing_key(),
+            b"peer-2",
+        )
+        .unwrap();
+
+        let response = SpacePullResponse::decode(
+            handle_space_pull(
+                &SpacePullRequest {
+                    id: "space-2".to_string(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        let header = response.payload.unwrap().space_header.unwrap();
+        assert_eq!(header.raw_header, expected_header);
+        assert_eq!(header.id, "space-2");
     }
 
     #[test]

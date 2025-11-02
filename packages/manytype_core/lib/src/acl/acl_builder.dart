@@ -103,7 +103,7 @@ Future<RawRecordWithId> buildAclRecord({
   final now = DateTime.now().millisecondsSinceEpoch;
   final record = Record(
     prevId: prevId,
-    identity: keyPair.publicKey,
+    identity: _marshalEd25519PublicKey(keyPair.publicKey),
     data: aclDataBytes,
     timestamp: Int64(now),
   );
@@ -143,8 +143,7 @@ Future<RawRecordWithId> buildAclRecord({
 Future<VerifiedAclRecord> verifyAndDecodeAclRecord(
     RawRecordWithId rawWithId) async {
   // 1. Verify CID
-  final computedCid =
-      await computeCid(Uint8List.fromList(rawWithId.payload));
+  final computedCid = await computeCid(Uint8List.fromList(rawWithId.payload));
   if (computedCid != rawWithId.id) {
     throw StateError(
         'CID mismatch: computed=$computedCid, expected=${rawWithId.id}');
@@ -158,7 +157,7 @@ Future<VerifiedAclRecord> verifyAndDecodeAclRecord(
 
   // 4. Verify Ed25519 signature
   final valid = await ed25519Verify(
-    Uint8List.fromList(record.identity),
+    _decodeIdentityPublicKey(record.identity),
     Uint8List.fromList(rawRecord.payload),
     Uint8List.fromList(rawRecord.signature),
   );
@@ -180,9 +179,27 @@ Future<VerifiedAclRecord> verifyAndDecodeAclRecord(
   return VerifiedAclRecord(
     id: rawWithId.id,
     prevId: record.prevId,
-    identity: Uint8List.fromList(record.identity),
+    identity: _decodeIdentityPublicKey(record.identity),
     aclRoot: aclRoot,
     aclData: aclData,
     timestamp: record.timestamp.toInt(),
   );
+}
+
+Uint8List _marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
+      Key(
+        type: KeyType.Ed25519Public,
+        data: publicKey,
+      ).writeToBuffer(),
+    );
+
+Uint8List _decodeIdentityPublicKey(List<int> identityBytes) {
+  if (identityBytes.length == 32) {
+    return Uint8List.fromList(identityBytes);
+  }
+  final key = Key.fromBuffer(identityBytes);
+  if (key.type == KeyType.Ed25519Public && key.data.length == 32) {
+    return Uint8List.fromList(key.data);
+  }
+  throw StateError('Unsupported identity key payload');
 }

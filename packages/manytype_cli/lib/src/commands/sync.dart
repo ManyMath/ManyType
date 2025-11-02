@@ -14,6 +14,32 @@ import '../identity.dart';
 import '../network_config.dart';
 import '../store/database.dart';
 import '../ffi/native_bridge.dart';
+import '../head_sync_client.dart';
+
+typedef SyncUnaryInvoker = Uint8List Function(
+  int handleId,
+  String method,
+  Uint8List payload,
+);
+
+typedef SyncUnaryRecorder = void Function({
+  required String role,
+  required String method,
+  required Uint8List requestBytes,
+  required Uint8List responseBytes,
+});
+
+class SyncDiscoveryResult {
+  const SyncDiscoveryResult({
+    required this.networkConfig,
+    required this.syncAddress,
+    required this.spaceStatus,
+  });
+
+  final NetworkConfigurationResponse networkConfig;
+  final String syncAddress;
+  final SpaceStatusPayload spaceStatus;
+}
 
 /// Sync local objects with the remote Rust server.
 ///
@@ -56,32 +82,30 @@ Future<void> syncCommand(
   capture.recordConnection(role: 'coordinator', address: coordinatorAddress);
 
   try {
-    // Step 2: NetworkConfiguration RPC (per D-12 - must be first)
-    final netConfigRequest = NetworkConfigurationRequest();
-    final netConfigRequestBytes =
-        Uint8List.fromList(netConfigRequest.writeToBuffer());
-    final netConfigResponse = bridge.invoke(
-      coordinatorHandleId,
-      '/coordinator.Coordinator/NetworkConfiguration',
-      netConfigRequestBytes,
+    // Step 2: NetworkConfiguration + SpaceStatusCheck preflight
+    final discovery = discoverSyncTargetsForSync(
+      invoke: bridge.invoke,
+      coordinatorHandleId: coordinatorHandleId,
+      spaceId: spaceId,
+      officialInteropMode: officialInteropMode,
+      localServerAddress: config.serverAddress,
+      recordUnaryRpc: ({
+        required role,
+        required method,
+        required requestBytes,
+        required responseBytes,
+      }) {
+        capture.recordUnaryRpc(
+          role: role,
+          method: method,
+          requestBytes: requestBytes,
+          responseBytes: responseBytes,
+        );
+      },
     );
-    capture.recordUnaryRpc(
-      role: 'coordinator',
-      method: '/coordinator.Coordinator/NetworkConfiguration',
-      requestBytes: netConfigRequestBytes,
-      responseBytes: netConfigResponse,
-    );
-    final netConfig =
-        NetworkConfigurationResponse.fromBuffer(netConfigResponse);
+    final netConfig = discovery.networkConfig;
     print('Network: ${netConfig.networkId}, nodes: ${netConfig.nodes.length}');
-
-    syncAddress = networkConfigPath == null
-        ? config.serverAddress
-        : chooseTreeAddressFromResponse(netConfig.nodes);
-    if (syncAddress == null) {
-      throw StateError(
-          'Coordinator response did not include a tree node address');
-    }
+    syncAddress = discovery.syncAddress;
 
     // Step 3: SpaceSign (obtain receipt for SpacePush)
     final spaceSignResponseBytes = bridge.invoke(
@@ -147,34 +171,20 @@ Future<void> syncCommand(
       print('Pushed space header');
     }
 
-    // Step 5: HeadSync to get server heads (per D-13 - diff-based)
-    final headSyncRequest = HeadSyncRequest(
-      spaceId: spaceId,
-      diffType: DiffType.V3,
-      ranges: [_fullHeadSyncRange(elements: true)],
+    // Step 5: HeadSync to get server heads (Phase 16 iterative V2/V3 narrowing)
+    final headSyncClient = HeadSyncClient(
+      invoker: (handleId, method, payload) {
+        final response = bridge.invoke(handleId, method, payload);
+        capture.recordUnaryRpc(
+          role: 'sync-node',
+          method: method,
+          requestBytes: payload,
+          responseBytes: response,
+        );
+        return response;
+      },
     );
-    final headSyncRequestBytes =
-        Uint8List.fromList(headSyncRequest.writeToBuffer());
-    final headSyncResponseBytes = bridge.invoke(
-      syncHandleId,
-      '/spacesync.SpaceSync/HeadSync',
-      headSyncRequestBytes,
-    );
-    capture.recordUnaryRpc(
-      role: 'sync-node',
-      method: '/spacesync.SpaceSync/HeadSync',
-      requestBytes: headSyncRequestBytes,
-      responseBytes: headSyncResponseBytes,
-    );
-    final headSyncResponse = HeadSyncResponse.fromBuffer(headSyncResponseBytes);
-
-    // Parse server heads into map: objectId -> Set<headCid>
-    final serverHeads = <String, Set<String>>{};
-    for (final result in headSyncResponse.results) {
-      for (final elem in result.elements) {
-        serverHeads.putIfAbsent(elem.id, () => <String>{}).add(elem.head);
-      }
-    }
+    final serverHeads = headSyncClient.fetchServerHeads(syncHandleId, spaceId);
     print('Server has ${serverHeads.length} objects');
 
     // Step 6: Compare local vs server heads
@@ -275,6 +285,144 @@ Future<void> syncCommand(
       bridge.freeHandle(coordinatorHandleId);
     }
     await capture.flush();
+  }
+}
+
+SyncDiscoveryResult discoverSyncTargetsForSync({
+  required SyncUnaryInvoker invoke,
+  required int coordinatorHandleId,
+  required String spaceId,
+  required bool officialInteropMode,
+  required String localServerAddress,
+  SyncUnaryRecorder? recordUnaryRpc,
+}) {
+  final netConfigRequest = NetworkConfigurationRequest();
+  final netConfigRequestBytes =
+      Uint8List.fromList(netConfigRequest.writeToBuffer());
+  final netConfigResponseBytes = invoke(
+    coordinatorHandleId,
+    '/coordinator.Coordinator/NetworkConfiguration',
+    netConfigRequestBytes,
+  );
+  recordUnaryRpc?.call(
+    role: 'coordinator',
+    method: '/coordinator.Coordinator/NetworkConfiguration',
+    requestBytes: netConfigRequestBytes,
+    responseBytes: netConfigResponseBytes,
+  );
+  final netConfig =
+      NetworkConfigurationResponse.fromBuffer(netConfigResponseBytes);
+
+  final syncAddress = officialInteropMode
+      ? chooseTreeAddressFromResponse(netConfig.nodes)
+      : localServerAddress;
+  if (syncAddress == null) {
+    throw StateError(
+      'Coordinator response did not include a tree node address',
+    );
+  }
+
+  final preflightRequest = SpaceStatusCheckRequest(spaceId: spaceId);
+  final preflightRequestBytes =
+      Uint8List.fromList(preflightRequest.writeToBuffer());
+  final preflightResponseBytes = invoke(
+    coordinatorHandleId,
+    '/coordinator.Coordinator/SpaceStatusCheck',
+    preflightRequestBytes,
+  );
+  recordUnaryRpc?.call(
+    role: 'coordinator',
+    method: '/coordinator.Coordinator/SpaceStatusCheck',
+    requestBytes: preflightRequestBytes,
+    responseBytes: preflightResponseBytes,
+  );
+  final preflight = SpaceStatusCheckResponse.fromBuffer(preflightResponseBytes);
+  final payload = preflight.payload;
+  if (payload.status != SpaceStatus.SpaceStatusCreated) {
+    throw StateError(
+      'Space $spaceId is not live: ${_spaceStatusName(payload.status)}',
+    );
+  }
+
+  return SyncDiscoveryResult(
+    networkConfig: netConfig,
+    syncAddress: syncAddress,
+    spaceStatus: payload,
+  );
+}
+
+Future<void> seedLiveSpaceForSync(
+  ManytypeDatabase db,
+  CliConfig config, {
+  required String networkConfigPath,
+}) async {
+  final identity = await Identity.fromMnemonic(config.mnemonic);
+  final bridge = NativeBridge();
+  final coordinatorAddress = chooseBestAddress(
+    requireCoordinatorNode(await loadNetworkConfig(networkConfigPath))
+        .addresses,
+  );
+  int? coordinatorHandleId;
+  int? syncHandleId;
+
+  try {
+    coordinatorHandleId =
+        bridge.connect(coordinatorAddress, identity.seed, identity.accountSeed);
+    final netConfigBytes = bridge.invoke(
+      coordinatorHandleId,
+      '/coordinator.Coordinator/NetworkConfiguration',
+      Uint8List.fromList(NetworkConfigurationRequest().writeToBuffer()),
+    );
+    final netConfig = NetworkConfigurationResponse.fromBuffer(netConfigBytes);
+    final syncAddress = chooseTreeAddressFromResponse(netConfig.nodes);
+    if (syncAddress == null) {
+      throw StateError(
+        'Coordinator response did not include a tree node address',
+      );
+    }
+
+    final signRequest = SpaceSignRequest(
+      spaceId: identity.spaceId,
+      header: identity.spaceHeader.rawHeader,
+    );
+    final signResponse = SpaceSignResponse.fromBuffer(
+      bridge.invoke(
+        coordinatorHandleId,
+        '/coordinator.Coordinator/SpaceSign',
+        Uint8List.fromList(signRequest.writeToBuffer()),
+      ),
+    );
+
+    syncHandleId =
+        bridge.connect(syncAddress, identity.seed, identity.accountSeed);
+    final bootstrap = await _loadSpaceBootstrap(db, identity.spaceId);
+    if (bootstrap == null) {
+      throw StateError('Local space bootstrap data is missing');
+    }
+
+    final payload = SpacePayload(
+      spaceHeader: identity.spaceHeader,
+      aclPayload: Uint8List.fromList(bootstrap.aclPayload),
+      aclPayloadId: bootstrap.aclPayloadId,
+      spaceSettingsPayload: Uint8List.fromList(bootstrap.spaceSettingsPayload),
+      spaceSettingsPayloadId: bootstrap.spaceSettingsPayloadId,
+    );
+    final pushRequest = SpacePushRequest(
+      payload: payload,
+      credential: signResponse.receipt.writeToBuffer(),
+    );
+    bridge.invoke(
+      syncHandleId,
+      '/spacesync.SpaceSync/SpacePush',
+      Uint8List.fromList(pushRequest.writeToBuffer()),
+    );
+  } finally {
+    if (syncHandleId != null) {
+      bridge.freeHandle(syncHandleId);
+    }
+    if (coordinatorHandleId != null) {
+      bridge.freeHandle(coordinatorHandleId);
+    }
   }
 }
 
@@ -593,6 +741,8 @@ String _storeHeadFromValue(Uint8List valueBytes) {
     return '';
   }
 }
+
+String _spaceStatusName(SpaceStatus status) => status.name;
 
 Uint8List _marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
       Key(

@@ -42,8 +42,8 @@ void main() {
 
       // The encryptedReadKey should decrypt back to the original readKey
       // For simplicity, the builder uses the masterKeySeed-derived key for AES encryption
-      final decrypted =
-          await aesGcmDecrypt(masterKeySeed, Uint8List.fromList(aclRoot.encryptedReadKey));
+      final decrypted = await aesGcmDecrypt(
+          masterKeySeed, Uint8List.fromList(aclRoot.encryptedReadKey));
       expect(decrypted, equals(readKey));
     });
 
@@ -141,8 +141,7 @@ void main() {
       );
 
       // The CID should be computed from the RawRecord bytes (the payload of RawRecordWithId)
-      final computedCid =
-          await computeCid(Uint8List.fromList(result.payload));
+      final computedCid = await computeCid(Uint8List.fromList(result.payload));
       expect(computedCid, equals(result.id));
     });
   });
@@ -225,6 +224,118 @@ void main() {
 
       final joinerHex = hex.encode(joinerKeyPair.publicKey);
       expect(state.getPermission(joinerHex), equals(AclUserPermissions.Writer));
+      expect(state.getStatus(joinerHex), equals(AclAccountStatus.active));
+    });
+
+    test('AclState decodes marshalled nested identities and tracks removal',
+        () async {
+      final root = await buildAclRoot(
+        spaceId: spaceId,
+        masterKeySeed: masterKeySeed,
+        identityPrivateKey: identitySeed,
+        readKey: readKey,
+      );
+
+      final verifiedRoot = await verifyAndDecodeAclRecord(root);
+      final state = AclState();
+      state.applyRoot(verifiedRoot);
+
+      final inviteSeed =
+          Uint8List.fromList(List<int>.generate(32, (i) => i + 90));
+      final inviteKeyPair = await ed25519KeyPairFromSeed(inviteSeed);
+      final inviteRecord = await buildAclRecord(
+        prevId: root.id,
+        aclData: AclData(
+          aclContent: [
+            AclContentValue(
+              invite: AclAccountInvite(
+                inviteKey: _marshalEd25519PublicKey(inviteKeyPair.publicKey),
+                permissions: AclUserPermissions.Writer,
+              ),
+            ),
+          ],
+        ),
+        identityPrivateKey: identitySeed,
+      );
+      state.applyRecord(await verifyAndDecodeAclRecord(inviteRecord));
+
+      final joinerSeed = Uint8List.fromList(List.generate(32, (i) => i + 140));
+      final joinerKeyPair = await ed25519KeyPairFromSeed(joinerSeed);
+      final joinRecord = await buildAclRecord(
+        prevId: inviteRecord.id,
+        aclData: AclData(
+          aclContent: [
+            AclContentValue(
+              requestJoin: AclAccountRequestJoin(
+                inviteIdentity:
+                    _marshalEd25519PublicKey(joinerKeyPair.publicKey),
+                inviteRecordId: inviteRecord.id,
+                inviteIdentitySignature: Uint8List(64),
+                metadata: Uint8List(0),
+              ),
+            ),
+          ],
+        ),
+        identityPrivateKey: joinerSeed,
+      );
+      state.applyRecord(await verifyAndDecodeAclRecord(joinRecord));
+
+      final joinerHex = hex.encode(joinerKeyPair.publicKey);
+      expect(state.getStatus(joinerHex), equals(AclAccountStatus.pending));
+
+      final acceptRecord = await buildAclRecord(
+        prevId: joinRecord.id,
+        aclData: AclData(
+          aclContent: [
+            AclContentValue(
+              requestAccept: AclAccountRequestAccept(
+                identity: _marshalEd25519PublicKey(joinerKeyPair.publicKey),
+                requestRecordId: joinRecord.id,
+                encryptedReadKey: Uint8List.fromList(const [1, 2, 3]),
+                permissions: AclUserPermissions.Writer,
+              ),
+            ),
+          ],
+        ),
+        identityPrivateKey: identitySeed,
+      );
+      state.applyRecord(await verifyAndDecodeAclRecord(acceptRecord));
+
+      expect(state.getPermission(joinerHex), equals(AclUserPermissions.Writer));
+      expect(state.getStatus(joinerHex), equals(AclAccountStatus.active));
+
+      final removeRecord = await buildAclRecord(
+        prevId: acceptRecord.id,
+        aclData: AclData(
+          aclContent: [
+            AclContentValue(
+              accountRemove: AclAccountRemove(
+                identities: [_marshalEd25519PublicKey(joinerKeyPair.publicKey)],
+                readKeyChange: AclReadKeyChange(
+                  accountKeys: [
+                    AclEncryptedReadKey(
+                      identity: _marshalEd25519PublicKey(
+                        verifiedRoot.identity,
+                      ),
+                      encryptedReadKey: Uint8List.fromList(const [4, 5, 6]),
+                    ),
+                  ],
+                  metadataPubKey: _marshalEd25519PublicKey(
+                    verifiedRoot.identity,
+                  ),
+                  encryptedMetadataPrivKey: Uint8List.fromList(const [7, 8]),
+                  encryptedOldReadKey: Uint8List.fromList(const [9, 10]),
+                ),
+              ),
+            ),
+          ],
+        ),
+        identityPrivateKey: identitySeed,
+      );
+      state.applyRecord(await verifyAndDecodeAclRecord(removeRecord));
+
+      expect(state.getPermission(joinerHex), isNull);
+      expect(state.getStatus(joinerHex), equals(AclAccountStatus.removed));
     });
 
     test('AclState rejects record with invalid prevId', () async {
@@ -260,3 +371,10 @@ void main() {
     });
   });
 }
+
+Uint8List _marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
+      Key(
+        type: KeyType.Ed25519Public,
+        data: publicKey,
+      ).writeToBuffer(),
+    );

@@ -11,6 +11,7 @@ import 'acl_record.dart';
 /// a permission map. Supports all AclContentValue variants per D-11.
 class AclState {
   final Map<String, AclUserPermissions> _permissions = {};
+  final Map<String, AclAccountStatus> _statuses = {};
   final List<VerifiedAclRecord> _records = [];
   final Map<String, _PendingInvite> _pendingInvites = {};
   final Map<String, _PendingRequest> _pendingRequests = {};
@@ -35,6 +36,7 @@ class AclState {
 
     final identityHex = hex.encode(record.identity);
     _permissions[identityHex] = AclUserPermissions.Owner;
+    _statuses[identityHex] = AclAccountStatus.active;
     _headId = record.id;
     _records.add(record);
   }
@@ -67,6 +69,9 @@ class AclState {
   /// Get the permission level for an identity (hex-encoded public key).
   AclUserPermissions? getPermission(String identityHex) =>
       _permissions[identityHex];
+
+  /// Get the lifecycle status for an identity (hex-encoded public key).
+  AclAccountStatus? getStatus(String identityHex) => _statuses[identityHex];
 
   /// Check if an identity has at least the minimum required permission level.
   ///
@@ -114,7 +119,7 @@ class AclState {
   }
 
   void _handleInvite(AclAccountInvite invite, String recordId) {
-    final inviteKeyHex = hex.encode(invite.inviteKey);
+    final inviteKeyHex = _identityHex(invite.inviteKey);
     _pendingInvites[recordId] = _PendingInvite(
       inviteKeyHex: inviteKeyHex,
       permissions: invite.permissions,
@@ -126,29 +131,36 @@ class AclState {
   }
 
   void _handleRequestJoin(AclAccountRequestJoin request, String recordId) {
-    final identityHex = hex.encode(request.inviteIdentity);
+    final identityHex = _identityHex(request.inviteIdentity);
     _pendingRequests[recordId] = _PendingRequest(
       identityHex: identityHex,
       inviteRecordId: request.inviteRecordId,
     );
+    _statuses[identityHex] = AclAccountStatus.pending;
   }
 
   void _handleRequestAccept(AclAccountRequestAccept accept) {
-    final identityHex = hex.encode(accept.identity);
+    final identityHex = _identityHex(accept.identity);
     _permissions[identityHex] = accept.permissions;
+    _statuses[identityHex] = AclAccountStatus.active;
     _pendingRequests.remove(accept.requestRecordId);
   }
 
   void _handleRequestDecline(AclAccountRequestDecline decline) {
-    _pendingRequests.remove(decline.requestRecordId);
+    final pending = _pendingRequests.remove(decline.requestRecordId);
+    if (pending != null) {
+      _statuses[pending.identityHex] = AclAccountStatus.declined;
+    }
   }
 
   void _handlePermissionChange(AclAccountPermissionChange change) {
-    final identityHex = hex.encode(change.identity);
+    final identityHex = _identityHex(change.identity);
     if (change.permissions == AclUserPermissions.None) {
       _permissions.remove(identityHex);
+      _statuses[identityHex] = AclAccountStatus.removed;
     } else {
       _permissions[identityHex] = change.permissions;
+      _statuses[identityHex] = AclAccountStatus.active;
     }
   }
 
@@ -160,26 +172,32 @@ class AclState {
 
   void _handleAccountRemove(AclAccountRemove remove) {
     for (final identity in remove.identities) {
-      final identityHex = hex.encode(identity);
+      final identityHex = _identityHex(identity);
       _permissions.remove(identityHex);
+      _statuses[identityHex] = AclAccountStatus.removed;
     }
   }
 
   void _handleAccountsAdd(AclAccountsAdd accountsAdd) {
     for (final addition in accountsAdd.additions) {
-      final identityHex = hex.encode(addition.identity);
+      final identityHex = _identityHex(addition.identity);
       _permissions[identityHex] = addition.permissions;
+      _statuses[identityHex] = AclAccountStatus.active;
     }
   }
 
   void _handleRequestCancel(AclAccountRequestCancel cancel) {
-    _pendingRequests.remove(cancel.recordId);
+    final pending = _pendingRequests.remove(cancel.recordId);
+    if (pending != null) {
+      _statuses[pending.identityHex] = AclAccountStatus.canceled;
+    }
   }
 
   void _handleInviteJoin(AclAccountInviteJoin join) {
-    final identityHex = hex.encode(join.identity);
+    final identityHex = _identityHex(join.identity);
     // Use the permissions from the join message
     _permissions[identityHex] = join.permissions;
+    _statuses[identityHex] = AclAccountStatus.active;
   }
 
   void _handleInviteChange(AclAccountInviteChange change) {
@@ -191,6 +209,14 @@ class AclState {
       );
     }
   }
+}
+
+enum AclAccountStatus {
+  active,
+  pending,
+  declined,
+  canceled,
+  removed,
 }
 
 class _PendingInvite {
@@ -205,4 +231,19 @@ class _PendingRequest {
   final String inviteRecordId;
 
   _PendingRequest({required this.identityHex, required this.inviteRecordId});
+}
+
+String _identityHex(List<int> identityBytes) =>
+    hex.encode(_decodeIdentityPublicKey(identityBytes));
+
+Uint8List _decodeIdentityPublicKey(List<int> identityBytes) {
+  try {
+    final key = Key.fromBuffer(identityBytes);
+    if (key.type == KeyType.Ed25519Public && key.data.length == 32) {
+      return Uint8List.fromList(key.data);
+    }
+  } catch (_) {
+    // Fall back to legacy raw 32-byte identities used in earlier local tests.
+  }
+  return Uint8List.fromList(identityBytes);
 }

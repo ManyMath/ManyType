@@ -5,6 +5,7 @@
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::time::{Duration, timeout};
 
 use manytype_server::drpc::codec::{
     DrpcFrame, KIND_CLOSE, KIND_CLOSE_SEND, KIND_ERROR, KIND_INVOKE, KIND_MESSAGE,
@@ -12,6 +13,7 @@ use manytype_server::drpc::codec::{
 use manytype_server::drpc::stream::DrpcStream;
 
 const STREAM_ID: u64 = 1;
+const EMPTY_UNARY_RESPONSE_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn trace(message: impl FnOnce() -> String) {
     if std::env::var_os("MANYTYPE_QUIC_TRACE").is_some() {
@@ -19,7 +21,13 @@ fn trace(message: impl FnOnce() -> String) {
     }
 }
 
-/// Invoke a unary RPC: send INVOKE+MESSAGE, read response MESSAGE.
+/// Invoke a unary RPC: send INVOKE+MESSAGE, then read the server response.
+///
+/// Most Any-Sync unary handlers reply with a MESSAGE frame, including empty
+/// protobuf bodies encoded as a zero-length MESSAGE. Some official-node paths
+/// close the send side without emitting a MESSAGE body for empty responses.
+/// Treat that CLOSE_SEND-or-EOF case as a successful empty payload so unary
+/// helpers like SpacePush do not hang waiting for a body that never arrives.
 pub async fn invoke<T>(
     drpc_stream: &mut DrpcStream<T>,
     method: &str,
@@ -70,19 +78,75 @@ where
     trace(|| format!("invoke wrote KIND_CLOSE_SEND method={method}"));
 
     // Official dRPC unary semantics are: request message -> CloseSend -> response
-    // message -> client closes the stream. Do not block waiting for a server
-    // CloseSend here; the official coordinator returns the message body and expects
-    // the client to close the stream afterward.
-    let response = drpc_stream
-        .read_message()
-        .await
-        .context("failed to read response message")?;
+    // message -> client closes the stream. In practice, some official-node
+    // handlers with empty protobuf responses either terminate with CLOSE_SEND
+    // and no MESSAGE or never emit a body frame at all after accepting the
+    // request. Accept either shape for the known empty-response methods.
+    let allow_empty_timeout = matches!(
+        method,
+        "/spacesync.SpaceSync/SpacePush" | "/coordinator.Coordinator/SpaceMakeShareable"
+    );
+
+    let mut response = Vec::new();
+    let mut saw_message = false;
+    let mut first_frame = if allow_empty_timeout {
+        match timeout(EMPTY_UNARY_RESPONSE_TIMEOUT, drpc_stream.read_frame()).await {
+            Ok(result) => result.context("failed to read unary response frame")?,
+            Err(_) => {
+                trace(|| {
+                    format!(
+                        "invoke empty-response timeout method={method} timeout_ms={}",
+                        EMPTY_UNARY_RESPONSE_TIMEOUT.as_millis()
+                    )
+                });
+                return Ok(Vec::new());
+            }
+        }
+    } else {
+        drpc_stream
+            .read_frame()
+            .await
+            .context("failed to read unary response frame")?
+    };
+
+    loop {
+        let next_frame = match first_frame.take() {
+            Some(frame) => Some(frame),
+            None => drpc_stream
+                .read_frame()
+                .await
+                .context("failed to read unary response frame")?,
+        };
+        let Some(frame) = next_frame else {
+            break;
+        };
+
+        match frame.kind {
+            KIND_MESSAGE => {
+                response.extend_from_slice(&frame.data);
+                if frame.done {
+                    saw_message = true;
+                    break;
+                }
+            }
+            KIND_CLOSE_SEND | KIND_CLOSE => {
+                break;
+            }
+            KIND_ERROR => {
+                anyhow::bail!("remote error: {}", String::from_utf8_lossy(&frame.data));
+            }
+            other => {
+                anyhow::bail!("unexpected frame kind={other} while reading unary response");
+            }
+        }
+    }
     trace(|| {
         format!(
             "invoke read response method={method} response_len={}",
             response.len()
         )
     });
+    trace(|| format!("invoke response shape method={method} saw_message={saw_message}"));
 
     if let Err(err) = drpc_stream
         .write_frame(DrpcFrame {
@@ -326,6 +390,40 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response, response_data);
+
+        server_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_invoke_empty_response_via_close_send() {
+        let (client_io, server_io) = duplex(8192);
+        let mut client_stream = DrpcStream::new(client_io);
+        let mut server_stream = DrpcStream::new(server_io);
+
+        let server_handle = tokio::spawn(async move {
+            let (_, method) = server_stream.read_invoke().await.unwrap();
+            assert_eq!(method, "/test.Svc/Empty");
+
+            let msg = server_stream.read_message().await.unwrap();
+            assert_eq!(msg, b"test-request");
+
+            server_stream
+                .write_frame(DrpcFrame {
+                    kind: KIND_CLOSE_SEND,
+                    done: true,
+                    control: false,
+                    stream_id: 1,
+                    message_id: 2,
+                    data: Bytes::new(),
+                })
+                .await
+                .unwrap();
+        });
+
+        let response = invoke(&mut client_stream, "/test.Svc/Empty", b"test-request")
+            .await
+            .unwrap();
+        assert!(response.is_empty());
 
         server_handle.await.unwrap();
     }

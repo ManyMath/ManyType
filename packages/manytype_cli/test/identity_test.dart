@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:fixnum/fixnum.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_cli/src/identity.dart';
 import 'package:manytype_protocol/manytype_protocol.dart' show Key, KeyType;
@@ -80,6 +81,20 @@ void main() {
         Uint8List.fromList(rawHeader.signature),
       );
       expect(valid, isTrue);
+    });
+
+    test('space header timestamp is non-zero and deterministic', () async {
+      final identity1 = await Identity.fromMnemonic(testMnemonic);
+      final identity2 = await Identity.fromMnemonic(testMnemonic);
+      final header1 =
+          RawSpaceHeader.fromBuffer(identity1.spaceHeader.rawHeader);
+      final header2 =
+          RawSpaceHeader.fromBuffer(identity2.spaceHeader.rawHeader);
+      final spaceHeader1 = SpaceHeader.fromBuffer(header1.spaceHeader);
+      final spaceHeader2 = SpaceHeader.fromBuffer(header2.spaceHeader);
+
+      expect(spaceHeader1.timestamp, isNot(Int64.ZERO));
+      expect(spaceHeader1.timestamp, spaceHeader2.timestamp);
     });
   });
 }

@@ -192,6 +192,27 @@ where
                 coordinator::handle_space_status_check(&request_bytes, &state.sync_state)?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
+        "/coordinator.Coordinator/SpaceMakeShareable" => {
+            let request_bytes = stream.read_message().await?;
+            let response_bytes =
+                coordinator::handle_space_make_shareable(&request_bytes, &state.sync_state)?;
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+        }
+        "/coordinator.Coordinator/AclAddRecord" => {
+            let request_bytes = stream.read_message().await?;
+            let response_bytes = coordinator::handle_acl_add_record(
+                &request_bytes,
+                &state.sync_state,
+                &state.local_signing_key,
+            )?;
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+        }
+        "/coordinator.Coordinator/AclGetRecords" => {
+            let request_bytes = stream.read_message().await?;
+            let response_bytes =
+                coordinator::handle_acl_get_records(&request_bytes, &state.sync_state)?;
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+        }
         "/spacesync.SpaceSync/HeadSync" => {
             let request_bytes = stream.read_message().await?;
             let response_bytes = sync_node::handle_head_sync(&request_bytes, &state.sync_state)?;
@@ -322,6 +343,11 @@ where
             )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
+        "/spacesync.SpaceSync/SpacePull" => {
+            let request_bytes = stream.read_message().await?;
+            let response_bytes = sync_node::handle_space_pull(&request_bytes, &state.sync_state)?;
+            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+        }
         "/consensusProto.Consensus/LogAdd" => {
             let request_bytes = stream.read_message().await?;
             let response_bytes = consensus::handle_log_add(&request_bytes)?;
@@ -359,7 +385,10 @@ where
                 let Some(frame) = stream.read_frame().await? else {
                     break;
                 };
-                if matches!(frame.kind, super::codec::KIND_CLOSE | super::codec::KIND_CANCEL) {
+                if matches!(
+                    frame.kind,
+                    super::codec::KIND_CLOSE | super::codec::KIND_CANCEL
+                ) {
                     break;
                 }
             }
@@ -468,9 +497,15 @@ mod tests {
         let state = test_state();
 
         let handle = tokio::spawn(async move {
-            dispatch(1, "/filesync.File/Check", &mut server_stream, &state, b"peer")
-                .await
-                .unwrap();
+            dispatch(
+                1,
+                "/filesync.File/Check",
+                &mut server_stream,
+                &state,
+                b"peer",
+            )
+            .await
+            .unwrap();
         });
 
         client_stream
@@ -495,9 +530,15 @@ mod tests {
         let state = test_state();
 
         let handle = tokio::spawn(async move {
-            dispatch(1, "/filesync.File/SpaceInfo", &mut server_stream, &state, b"peer")
-                .await
-                .unwrap();
+            dispatch(
+                1,
+                "/filesync.File/SpaceInfo",
+                &mut server_stream,
+                &state,
+                b"peer",
+            )
+            .await
+            .unwrap();
         });
 
         client_stream

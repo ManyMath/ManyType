@@ -106,10 +106,26 @@ mod tests {
     fn test_check_returns_known_spaces_and_write_access() {
         let sync_state = new_shared_sync_state();
         sync_state
-            .upsert_space_metadata("space-b", Some(vec![1]), None)
+            .upsert_space_metadata(
+                "space-b",
+                Some(vec![1]),
+                None,
+                None,
+                None,
+                None,
+                Some(false),
+            )
             .unwrap();
         sync_state
-            .upsert_space_metadata("space-a", Some(vec![2]), None)
+            .upsert_space_metadata(
+                "space-a",
+                Some(vec![2]),
+                None,
+                None,
+                None,
+                None,
+                Some(false),
+            )
             .unwrap();
 
         let response_bytes = handle_check(&CheckRequest {}.encode_to_vec(), &sync_state).unwrap();

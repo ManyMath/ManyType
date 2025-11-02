@@ -6,13 +6,17 @@ use anyhow::Result;
 use ed25519_dalek::{Signer, Verifier};
 use prost::Message;
 
+use manytype_proto::consensus::{RawRecord, RawRecordWithId, RecordAddRequest};
 use manytype_proto::coordinator::{
-    NetworkConfigurationRequest, NetworkConfigurationResponse, Node, NodeType, SpacePermissions,
-    SpaceReceipt, SpaceReceiptWithSignature, SpaceSignRequest, SpaceSignResponse, SpaceStatus,
+    AclAddRecordRequest, AclAddRecordResponse, AclGetRecordsRequest, AclGetRecordsResponse,
+    NetworkConfigurationRequest, NetworkConfigurationResponse, Node, NodeType,
+    SpaceMakeShareableRequest, SpaceMakeShareableResponse, SpacePermissions, SpaceReceipt,
+    SpaceReceiptWithSignature, SpaceSignRequest, SpaceSignResponse, SpaceStatus,
     SpaceStatusCheckRequest, SpaceStatusCheckResponse, SpaceStatusPayload,
 };
 use manytype_proto::spacesync::{RawSpaceHeader, SpaceHeader};
 
+use crate::consensus;
 use crate::storage::sync_state::SharedSyncState;
 
 /// Configuration for the coordinator subsystem.
@@ -95,11 +99,11 @@ pub fn handle_space_status_check(
 ) -> Result<Vec<u8>> {
     let request = SpaceStatusCheckRequest::decode(request_bytes)?;
     let state = sync_state.read().unwrap();
-    let payload = if state.contains_key(&request.space_id) {
+    let payload = if let Some(space) = state.get(&request.space_id) {
         SpaceStatusPayload {
             status: SpaceStatus::Created as i32,
             permissions: SpacePermissions::Owner as i32,
-            is_shared: false,
+            is_shared: space.is_shared,
             ..Default::default()
         }
     } else {
@@ -112,6 +116,71 @@ pub fn handle_space_status_check(
     };
     let response = SpaceStatusCheckResponse {
         payload: Some(payload),
+    };
+    Ok(response.encode_to_vec())
+}
+
+/// Handle /coordinator.Coordinator/SpaceMakeShareable
+pub fn handle_space_make_shareable(
+    request_bytes: &[u8],
+    sync_state: &SharedSyncState,
+) -> Result<Vec<u8>> {
+    let request = SpaceMakeShareableRequest::decode(request_bytes)?;
+    sync_state.mark_space_shared(&request.space_id)?;
+    Ok(SpaceMakeShareableResponse::default().encode_to_vec())
+}
+
+/// Handle /coordinator.Coordinator/AclAddRecord
+pub fn handle_acl_add_record(
+    request_bytes: &[u8],
+    sync_state: &SharedSyncState,
+    signing_key: &ed25519_dalek::SigningKey,
+) -> Result<Vec<u8>> {
+    let request = AclAddRecordRequest::decode(request_bytes)?;
+    let raw_record = RawRecord::decode(request.payload.as_slice())?;
+
+    let seed_head = {
+        let state = sync_state.read().unwrap();
+        let space = state
+            .get(&request.space_id)
+            .ok_or_else(|| anyhow::anyhow!("space not found: {}", request.space_id))?;
+
+        if !space.acl_head.is_empty() {
+            space.acl_head.clone()
+        } else if !space.acl_root_id.is_empty() {
+            space.acl_root_id.clone()
+        } else {
+            return Err(anyhow::anyhow!(
+                "space ACL root not initialized: {}",
+                request.space_id
+            ));
+        }
+    };
+
+    consensus::ensure_log_exists(&request.space_id, &seed_head);
+    let record_add_request = RecordAddRequest {
+        log_id: request.space_id.clone(),
+        record: Some(raw_record),
+    };
+    let raw_with_id_bytes =
+        consensus::handle_record_add(&record_add_request.encode_to_vec(), signing_key)?;
+    let raw_with_id = RawRecordWithId::decode(raw_with_id_bytes.as_slice())?;
+    let record_id = raw_with_id.id.clone();
+    let payload = raw_with_id.payload.clone();
+
+    sync_state.append_acl_record(&request.space_id, raw_with_id_bytes, &record_id)?;
+
+    Ok(AclAddRecordResponse { record_id, payload }.encode_to_vec())
+}
+
+/// Handle /coordinator.Coordinator/AclGetRecords
+pub fn handle_acl_get_records(
+    request_bytes: &[u8],
+    sync_state: &SharedSyncState,
+) -> Result<Vec<u8>> {
+    let request = AclGetRecordsRequest::decode(request_bytes)?;
+    let response = AclGetRecordsResponse {
+        records: sync_state.list_acl_records(&request.space_id, &request.acl_head),
     };
     Ok(response.encode_to_vec())
 }
@@ -191,9 +260,14 @@ fn unix_now_secs() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::consensus::reset_logs_for_tests;
     use crate::sync_node::new_shared_sync_state;
+    use crate::sync_node::new_shared_sync_state_at;
+    use manytype_core::crdt::cid::compute_cid;
     use manytype_core::crypto::ed25519;
+    use manytype_proto::consensus::{RawRecord, Record};
     use manytype_proto::spacesync::SpacePushRequest;
+    use tempfile::TempDir;
 
     fn test_signing_key() -> ed25519_dalek::SigningKey {
         ed25519::signing_key_from_seed(&[7u8; 32])
@@ -216,6 +290,24 @@ mod tests {
             signature: vec![1; 64],
         }
         .encode_to_vec()
+    }
+
+    fn acl_add_request(space_id: &str, prev_id: &str, data: &[u8]) -> AclAddRecordRequest {
+        AclAddRecordRequest {
+            space_id: space_id.to_string(),
+            payload: RawRecord {
+                payload: Record {
+                    prev_id: prev_id.to_string(),
+                    identity: vec![7; 32],
+                    data: data.to_vec(),
+                    timestamp: 1,
+                }
+                .encode_to_vec(),
+                signature: b"sig".to_vec(),
+                ..Default::default()
+            }
+            .encode_to_vec(),
+        }
     }
 
     #[test]
@@ -338,6 +430,8 @@ mod tests {
 
     #[test]
     fn test_space_status_check_reports_known_space_as_owner() {
+        let _guard = crate::consensus::TEST_MUTEX.lock().unwrap();
+        reset_logs_for_tests();
         let sync_state = new_shared_sync_state();
         let push_request = SpacePushRequest {
             payload: Some(manytype_proto::spacesync::SpacePayload {
@@ -351,7 +445,15 @@ mod tests {
             ..Default::default()
         };
         sync_state
-            .upsert_space_metadata("space-1", Some(b"raw".to_vec()), Some(b"acl".to_vec()))
+            .upsert_space_metadata(
+                "space-1",
+                Some(b"raw".to_vec()),
+                Some(b"acl".to_vec()),
+                Some("acl-root-id".to_string()),
+                None,
+                None,
+                Some(false),
+            )
             .unwrap();
 
         let response_bytes = handle_space_status_check(
@@ -366,6 +468,272 @@ mod tests {
         let payload = response.payload.unwrap();
         assert_eq!(payload.status, SpaceStatus::Created as i32);
         assert_eq!(payload.permissions, SpacePermissions::Owner as i32);
+        assert!(!payload.is_shared);
         let _ = push_request;
+    }
+
+    #[test]
+    fn space_make_shareable_updates_status_check() {
+        let sync_state = new_shared_sync_state();
+        sync_state
+            .upsert_space_metadata(
+                "space-1",
+                Some(b"raw".to_vec()),
+                Some(b"acl".to_vec()),
+                Some("acl-root-id".to_string()),
+                None,
+                None,
+                Some(false),
+            )
+            .unwrap();
+
+        handle_space_make_shareable(
+            &SpaceMakeShareableRequest {
+                space_id: "space-1".to_string(),
+            }
+            .encode_to_vec(),
+            &sync_state,
+        )
+        .unwrap();
+
+        let response = SpaceStatusCheckResponse::decode(
+            handle_space_status_check(
+                &SpaceStatusCheckRequest {
+                    space_id: "space-1".to_string(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+
+        assert!(response.payload.unwrap().is_shared);
+    }
+
+    #[test]
+    fn space_make_shareable_survives_restart() {
+        let temp_dir = TempDir::new().unwrap();
+        {
+            let sync_state = new_shared_sync_state_at(temp_dir.path()).unwrap();
+            sync_state
+                .upsert_space_metadata(
+                    "space-1",
+                    Some(b"raw".to_vec()),
+                    Some(b"acl".to_vec()),
+                    Some("acl-root-id".to_string()),
+                    None,
+                    None,
+                    Some(false),
+                )
+                .unwrap();
+
+            handle_space_make_shareable(
+                &SpaceMakeShareableRequest {
+                    space_id: "space-1".to_string(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+            )
+            .unwrap();
+        }
+
+        let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        let response = SpaceStatusCheckResponse::decode(
+            handle_space_status_check(
+                &SpaceStatusCheckRequest {
+                    space_id: "space-1".to_string(),
+                }
+                .encode_to_vec(),
+                &reopened,
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+
+        assert!(response.payload.unwrap().is_shared);
+    }
+
+    #[test]
+    fn acl_add_record_returns_server_confirmed_record_id() {
+        let _guard = crate::consensus::TEST_MUTEX.lock().unwrap();
+        reset_logs_for_tests();
+        let sync_state = new_shared_sync_state();
+        sync_state
+            .upsert_space_metadata(
+                "space-1",
+                Some(b"raw".to_vec()),
+                Some(b"acl-root".to_vec()),
+                Some("root-cid".to_string()),
+                None,
+                None,
+                Some(false),
+            )
+            .unwrap();
+
+        let response_bytes = handle_acl_add_record(
+            &acl_add_request("space-1", "root-cid", b"first").encode_to_vec(),
+            &sync_state,
+            &test_signing_key(),
+        )
+        .unwrap();
+        let response = AclAddRecordResponse::decode(response_bytes.as_slice()).unwrap();
+
+        assert_eq!(response.record_id, compute_cid(&response.payload));
+        let stored = sync_state.list_acl_records("space-1", "");
+        assert_eq!(stored.len(), 1);
+        assert_eq!(
+            RawRecordWithId::decode(stored[0].as_slice()).unwrap().id,
+            response.record_id
+        );
+    }
+
+    #[test]
+    fn acl_add_record_and_get_records_follow_cursor_rules() {
+        let _guard = crate::consensus::TEST_MUTEX.lock().unwrap();
+        reset_logs_for_tests();
+        let sync_state = new_shared_sync_state();
+        sync_state
+            .upsert_space_metadata(
+                "space-1",
+                Some(b"raw".to_vec()),
+                Some(b"acl-root".to_vec()),
+                Some("root-cid".to_string()),
+                None,
+                None,
+                Some(false),
+            )
+            .unwrap();
+
+        let first = AclAddRecordResponse::decode(
+            handle_acl_add_record(
+                &acl_add_request("space-1", "root-cid", b"first").encode_to_vec(),
+                &sync_state,
+                &test_signing_key(),
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        let second = AclAddRecordResponse::decode(
+            handle_acl_add_record(
+                &acl_add_request("space-1", &first.record_id, b"second").encode_to_vec(),
+                &sync_state,
+                &test_signing_key(),
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+
+        let all = AclGetRecordsResponse::decode(
+            handle_acl_get_records(
+                &AclGetRecordsRequest {
+                    space_id: "space-1".to_string(),
+                    acl_head: String::new(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(all.records.len(), 2);
+
+        let tail = AclGetRecordsResponse::decode(
+            handle_acl_get_records(
+                &AclGetRecordsRequest {
+                    space_id: "space-1".to_string(),
+                    acl_head: first.record_id.clone(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(tail.records.len(), 1);
+        assert_eq!(
+            RawRecordWithId::decode(tail.records[0].as_slice())
+                .unwrap()
+                .id,
+            second.record_id
+        );
+    }
+
+    #[test]
+    fn acl_add_record_reseeds_consensus_after_restart() {
+        let _guard = crate::consensus::TEST_MUTEX.lock().unwrap();
+        reset_logs_for_tests();
+        let temp_dir = TempDir::new().unwrap();
+        let signing_key = test_signing_key();
+        {
+            let sync_state = new_shared_sync_state_at(temp_dir.path()).unwrap();
+            sync_state
+                .upsert_space_metadata(
+                    "space-1",
+                    Some(b"raw".to_vec()),
+                    Some(b"acl-root".to_vec()),
+                    Some("root-cid".to_string()),
+                    None,
+                    None,
+                    Some(false),
+                )
+                .unwrap();
+
+            let first = AclAddRecordResponse::decode(
+                handle_acl_add_record(
+                    &acl_add_request("space-1", "root-cid", b"first").encode_to_vec(),
+                    &sync_state,
+                    &signing_key,
+                )
+                .unwrap()
+                .as_slice(),
+            )
+            .unwrap();
+            handle_acl_add_record(
+                &acl_add_request("space-1", &first.record_id, b"second").encode_to_vec(),
+                &sync_state,
+                &signing_key,
+            )
+            .unwrap();
+        }
+
+        reset_logs_for_tests();
+        let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        let get_response = AclGetRecordsResponse::decode(
+            handle_acl_get_records(
+                &AclGetRecordsRequest {
+                    space_id: "space-1".to_string(),
+                    acl_head: String::new(),
+                }
+                .encode_to_vec(),
+                &reopened,
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        let latest_id = RawRecordWithId::decode(get_response.records[1].as_slice())
+            .unwrap()
+            .id;
+
+        let third = AclAddRecordResponse::decode(
+            handle_acl_add_record(
+                &acl_add_request("space-1", &latest_id, b"third").encode_to_vec(),
+                &reopened,
+                &signing_key,
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+
+        assert_eq!(third.record_id, compute_cid(&third.payload));
+        assert_eq!(reopened.list_acl_records("space-1", "").len(), 3);
     }
 }

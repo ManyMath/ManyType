@@ -79,10 +79,17 @@ Future<RawSpaceHeaderWithId> _buildDerivedSpaceHeader({
   required Uint8List accountPublicKey,
 }) async {
   final replicationKey = _fnv64(accountPublicKey);
+  final timestamp = _stableNonZeroTimestamp(accountPublicKey);
   final header = SpaceHeader(
     identity: _marshalEd25519PublicKey(accountPublicKey),
     spaceType: _regularSpaceType,
     replicationKey: _toProtoUint64(replicationKey),
+    // Non-zero timestamp required: coordinator classifies timestamp==0 as
+    // SpaceTypePersonal (limits 1/1), which causes AclAddRecord invite to
+    // fail with ErrSpaceLimitReached.
+    // Keep the timestamp deterministic so repeated Identity.fromMnemonic calls
+    // derive the same spaceId for the same mnemonic.
+    timestamp: timestamp,
   );
   final headerBytes = Uint8List.fromList(header.writeToBuffer());
   final signature = await ed25519Sign(accountSeed, headerBytes);
@@ -120,6 +127,12 @@ Int64 _toProtoUint64(BigInt value) {
   final signed =
       normalized >= _u64SignBit ? normalized - _u64Modulus : normalized;
   return Int64.parseInt(signed.toString());
+}
+
+Int64 _stableNonZeroTimestamp(Uint8List accountPublicKey) {
+  final positive63Bit = _fnv64(accountPublicKey) & (_u64SignBit - BigInt.one);
+  final nonZero = positive63Bit == BigInt.zero ? BigInt.one : positive63Bit;
+  return Int64.parseInt(nonZero.toString());
 }
 
 String _formatUint64Radix36(BigInt value) =>
