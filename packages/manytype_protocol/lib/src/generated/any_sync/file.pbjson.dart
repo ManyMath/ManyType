@@ -22,10 +22,12 @@ const ErrCodes$json = {
     {'1': 'Unexpected', '2': 0},
     {'1': 'CIDNotFound', '2': 1},
     {'1': 'Forbidden', '2': 2},
-    {'1': 'LimitExceeded', '2': 3},
+    {'1': '_DeprecatedLimitExceeded', '2': 3},
     {'1': 'QuerySizeExceeded', '2': 4},
     {'1': 'WrongHash', '2': 5},
     {'1': 'NotEnoughSpace', '2': 6},
+    {'1': 'AclRecordNotFound', '2': 7},
+    {'1': 'LimitExceeded', '2': 8},
     {'1': 'ErrorOffset', '2': 200},
   ],
 };
@@ -33,8 +35,9 @@ const ErrCodes$json = {
 /// Descriptor for `ErrCodes`. Decode as a `google.protobuf.EnumDescriptorProto`.
 final $typed_data.Uint8List errCodesDescriptor = $convert.base64Decode(
     'CghFcnJDb2RlcxIOCgpVbmV4cGVjdGVkEAASDwoLQ0lETm90Rm91bmQQARINCglGb3JiaWRkZW'
-    '4QAhIRCg1MaW1pdEV4Y2VlZGVkEAMSFQoRUXVlcnlTaXplRXhjZWVkZWQQBBINCglXcm9uZ0hh'
-    'c2gQBRISCg5Ob3RFbm91Z2hTcGFjZRAGEhAKC0Vycm9yT2Zmc2V0EMgB');
+    '4QAhIcChhfRGVwcmVjYXRlZExpbWl0RXhjZWVkZWQQAxIVChFRdWVyeVNpemVFeGNlZWRlZBAE'
+    'Eg0KCVdyb25nSGFzaBAFEhIKDk5vdEVub3VnaFNwYWNlEAYSFQoRQWNsUmVjb3JkTm90Rm91bm'
+    'QQBxIRCg1MaW1pdEV4Y2VlZGVkEAgSEAoLRXJyb3JPZmZzZXQQyAE=');
 
 @$core.Deprecated('Use availabilityStatusDescriptor instead')
 const AvailabilityStatus$json = {
@@ -103,6 +106,61 @@ const BlockPushRequest$json = {
 final $typed_data.Uint8List blockPushRequestDescriptor = $convert.base64Decode(
     'ChBCbG9ja1B1c2hSZXF1ZXN0EhgKB3NwYWNlSWQYASABKAlSB3NwYWNlSWQSFgoGZmlsZUlkGA'
     'IgASgJUgZmaWxlSWQSEAoDY2lkGAMgASgMUgNjaWQSEgoEZGF0YRgEIAEoDFIEZGF0YQ==');
+
+@$core.Deprecated('Use blockPushManyRequestDescriptor instead')
+const BlockPushManyRequest$json = {
+  '1': 'BlockPushManyRequest',
+  '2': [
+    {
+      '1': 'fileBlocks',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.filesync.FileBlocks',
+      '10': 'fileBlocks'
+    },
+  ],
+};
+
+/// Descriptor for `BlockPushManyRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List blockPushManyRequestDescriptor = $convert.base64Decode(
+    'ChRCbG9ja1B1c2hNYW55UmVxdWVzdBI0CgpmaWxlQmxvY2tzGAEgAygLMhQuZmlsZXN5bmMuRm'
+    'lsZUJsb2Nrc1IKZmlsZUJsb2Nrcw==');
+
+@$core.Deprecated('Use fileBlocksDescriptor instead')
+const FileBlocks$json = {
+  '1': 'FileBlocks',
+  '2': [
+    {'1': 'fileId', '3': 1, '4': 1, '5': 9, '10': 'fileId'},
+    {'1': 'spaceId', '3': 2, '4': 1, '5': 9, '10': 'spaceId'},
+    {
+      '1': 'blocks',
+      '3': 3,
+      '4': 3,
+      '5': 11,
+      '6': '.filesync.Block',
+      '10': 'blocks'
+    },
+  ],
+};
+
+/// Descriptor for `FileBlocks`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List fileBlocksDescriptor = $convert.base64Decode(
+    'CgpGaWxlQmxvY2tzEhYKBmZpbGVJZBgBIAEoCVIGZmlsZUlkEhgKB3NwYWNlSWQYAiABKAlSB3'
+    'NwYWNlSWQSJwoGYmxvY2tzGAMgAygLMg8uZmlsZXN5bmMuQmxvY2tSBmJsb2Nrcw==');
+
+@$core.Deprecated('Use blockDescriptor instead')
+const Block$json = {
+  '1': 'Block',
+  '2': [
+    {'1': 'cid', '3': 2, '4': 1, '5': 12, '10': 'cid'},
+    {'1': 'data', '3': 3, '4': 1, '5': 12, '10': 'data'},
+  ],
+};
+
+/// Descriptor for `Block`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List blockDescriptor = $convert.base64Decode(
+    'CgVCbG9jaxIQCgNjaWQYAiABKAxSA2NpZBISCgRkYXRhGAMgASgMUgRkYXRh');
 
 @$core.Deprecated('Use blocksCheckRequestDescriptor instead')
 const BlocksCheckRequest$json = {
@@ -407,6 +465,11 @@ const $core.Map<$core.String, $core.dynamic> FileServiceBase$json = {
     },
     {'1': 'BlockPush', '2': '.filesync.BlockPushRequest', '3': '.filesync.Ok'},
     {
+      '1': 'BlockPushMany',
+      '2': '.filesync.BlockPushManyRequest',
+      '3': '.filesync.Ok'
+    },
+    {
       '1': 'BlocksCheck',
       '2': '.filesync.BlocksCheckRequest',
       '3': '.filesync.BlocksCheckResponse'
@@ -467,6 +530,9 @@ const $core.Map<$core.String, $core.Map<$core.String, $core.dynamic>>
   '.filesync.BlockGetResponse': BlockGetResponse$json,
   '.filesync.BlockPushRequest': BlockPushRequest$json,
   '.filesync.Ok': Ok$json,
+  '.filesync.BlockPushManyRequest': BlockPushManyRequest$json,
+  '.filesync.FileBlocks': FileBlocks$json,
+  '.filesync.Block': Block$json,
   '.filesync.BlocksCheckRequest': BlocksCheckRequest$json,
   '.filesync.BlocksCheckResponse': BlocksCheckResponse$json,
   '.filesync.BlockAvailability': BlockAvailability$json,
@@ -492,16 +558,17 @@ const $core.Map<$core.String, $core.Map<$core.String, $core.dynamic>>
 final $typed_data.Uint8List fileServiceDescriptor = $convert.base64Decode(
     'CgRGaWxlEkEKCEJsb2NrR2V0EhkuZmlsZXN5bmMuQmxvY2tHZXRSZXF1ZXN0GhouZmlsZXN5bm'
     'MuQmxvY2tHZXRSZXNwb25zZRI1CglCbG9ja1B1c2gSGi5maWxlc3luYy5CbG9ja1B1c2hSZXF1'
-    'ZXN0GgwuZmlsZXN5bmMuT2sSSgoLQmxvY2tzQ2hlY2sSHC5maWxlc3luYy5CbG9ja3NDaGVja1'
-    'JlcXVlc3QaHS5maWxlc3luYy5CbG9ja3NDaGVja1Jlc3BvbnNlEjcKCkJsb2Nrc0JpbmQSGy5m'
-    'aWxlc3luYy5CbG9ja3NCaW5kUmVxdWVzdBoMLmZpbGVzeW5jLk9rEkoKC0ZpbGVzRGVsZXRlEh'
-    'wuZmlsZXN5bmMuRmlsZXNEZWxldGVSZXF1ZXN0Gh0uZmlsZXN5bmMuRmlsZXNEZWxldGVSZXNw'
-    'b25zZRJECglGaWxlc0luZm8SGi5maWxlc3luYy5GaWxlc0luZm9SZXF1ZXN0GhsuZmlsZXN5bm'
-    'MuRmlsZXNJbmZvUmVzcG9uc2USQwoIRmlsZXNHZXQSGS5maWxlc3luYy5GaWxlc0dldFJlcXVl'
-    'c3QaGi5maWxlc3luYy5GaWxlc0dldFJlc3BvbnNlMAESOAoFQ2hlY2sSFi5maWxlc3luYy5DaG'
-    'Vja1JlcXVlc3QaFy5maWxlc3luYy5DaGVja1Jlc3BvbnNlEkQKCVNwYWNlSW5mbxIaLmZpbGVz'
-    'eW5jLlNwYWNlSW5mb1JlcXVlc3QaGy5maWxlc3luYy5TcGFjZUluZm9SZXNwb25zZRJKCgtBY2'
-    'NvdW50SW5mbxIcLmZpbGVzeW5jLkFjY291bnRJbmZvUmVxdWVzdBodLmZpbGVzeW5jLkFjY291'
-    'bnRJbmZvUmVzcG9uc2USQQoPQWNjb3VudExpbWl0U2V0EiAuZmlsZXN5bmMuQWNjb3VudExpbW'
-    'l0U2V0UmVxdWVzdBoMLmZpbGVzeW5jLk9rEj0KDVNwYWNlTGltaXRTZXQSHi5maWxlc3luYy5T'
-    'cGFjZUxpbWl0U2V0UmVxdWVzdBoMLmZpbGVzeW5jLk9r');
+    'ZXN0GgwuZmlsZXN5bmMuT2sSPQoNQmxvY2tQdXNoTWFueRIeLmZpbGVzeW5jLkJsb2NrUHVzaE'
+    '1hbnlSZXF1ZXN0GgwuZmlsZXN5bmMuT2sSSgoLQmxvY2tzQ2hlY2sSHC5maWxlc3luYy5CbG9j'
+    'a3NDaGVja1JlcXVlc3QaHS5maWxlc3luYy5CbG9ja3NDaGVja1Jlc3BvbnNlEjcKCkJsb2Nrc0'
+    'JpbmQSGy5maWxlc3luYy5CbG9ja3NCaW5kUmVxdWVzdBoMLmZpbGVzeW5jLk9rEkoKC0ZpbGVz'
+    'RGVsZXRlEhwuZmlsZXN5bmMuRmlsZXNEZWxldGVSZXF1ZXN0Gh0uZmlsZXN5bmMuRmlsZXNEZW'
+    'xldGVSZXNwb25zZRJECglGaWxlc0luZm8SGi5maWxlc3luYy5GaWxlc0luZm9SZXF1ZXN0Ghsu'
+    'ZmlsZXN5bmMuRmlsZXNJbmZvUmVzcG9uc2USQwoIRmlsZXNHZXQSGS5maWxlc3luYy5GaWxlc0'
+    'dldFJlcXVlc3QaGi5maWxlc3luYy5GaWxlc0dldFJlc3BvbnNlMAESOAoFQ2hlY2sSFi5maWxl'
+    'c3luYy5DaGVja1JlcXVlc3QaFy5maWxlc3luYy5DaGVja1Jlc3BvbnNlEkQKCVNwYWNlSW5mbx'
+    'IaLmZpbGVzeW5jLlNwYWNlSW5mb1JlcXVlc3QaGy5maWxlc3luYy5TcGFjZUluZm9SZXNwb25z'
+    'ZRJKCgtBY2NvdW50SW5mbxIcLmZpbGVzeW5jLkFjY291bnRJbmZvUmVxdWVzdBodLmZpbGVzeW'
+    '5jLkFjY291bnRJbmZvUmVzcG9uc2USQQoPQWNjb3VudExpbWl0U2V0EiAuZmlsZXN5bmMuQWNj'
+    'b3VudExpbWl0U2V0UmVxdWVzdBoMLmZpbGVzeW5jLk9rEj0KDVNwYWNlTGltaXRTZXQSHi5maW'
+    'xlc3luYy5TcGFjZUxpbWl0U2V0UmVxdWVzdBoMLmZpbGVzeW5jLk9r');

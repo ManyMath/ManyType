@@ -7,10 +7,12 @@ enum ErrCodes {
     Unexpected = 0;
     CIDNotFound = 1;
     Forbidden = 2;
-    LimitExceeded = 3;
+    _DeprecatedLimitExceeded = 3;
     QuerySizeExceeded = 4;
     WrongHash = 5;
     NotEnoughSpace = 6;
+    AclRecordNotFound = 7;
+    LimitExceeded = 8;
     ErrorOffset = 200;
 }
 
@@ -19,6 +21,8 @@ service File {
     rpc BlockGet(BlockGetRequest) returns (BlockGetResponse);
     // BlockPush pushes one block to a server
     rpc BlockPush(BlockPushRequest) returns (Ok);
+    // BlockPushMany pushes many blocks to a server
+    rpc BlockPushMany(BlockPushManyRequest) returns (Ok);
     // BlocksCheck checks is CIDs exists
     rpc BlocksCheck(BlocksCheckRequest) returns (BlocksCheckResponse);
     // BlocksBind binds CIDs to space
@@ -59,6 +63,21 @@ message BlockPushRequest {
     string fileId = 2;
     bytes cid = 3;
     bytes data = 4;
+}
+
+message BlockPushManyRequest {
+    repeated FileBlocks fileBlocks = 1;
+}
+
+message FileBlocks {
+    string fileId = 1;
+    string spaceId = 2;
+    repeated Block blocks = 3;
+}
+
+message Block {
+    bytes cid = 2;
+    bytes data = 3;
 }
 
 message BlocksCheckRequest {

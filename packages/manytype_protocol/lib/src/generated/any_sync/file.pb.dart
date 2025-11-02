@@ -298,6 +298,193 @@ class BlockPushRequest extends $pb.GeneratedMessage {
   void clearData() => $_clearField(4);
 }
 
+class BlockPushManyRequest extends $pb.GeneratedMessage {
+  factory BlockPushManyRequest({
+    $core.Iterable<FileBlocks>? fileBlocks,
+  }) {
+    final result = create();
+    if (fileBlocks != null) result.fileBlocks.addAll(fileBlocks);
+    return result;
+  }
+
+  BlockPushManyRequest._();
+
+  factory BlockPushManyRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory BlockPushManyRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'BlockPushManyRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'filesync'),
+      createEmptyInstance: create)
+    ..pPM<FileBlocks>(1, _omitFieldNames ? '' : 'fileBlocks',
+        protoName: 'fileBlocks', subBuilder: FileBlocks.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  BlockPushManyRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  BlockPushManyRequest copyWith(void Function(BlockPushManyRequest) updates) =>
+      super.copyWith((message) => updates(message as BlockPushManyRequest))
+          as BlockPushManyRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static BlockPushManyRequest create() => BlockPushManyRequest._();
+  @$core.override
+  BlockPushManyRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static BlockPushManyRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<BlockPushManyRequest>(create);
+  static BlockPushManyRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<FileBlocks> get fileBlocks => $_getList(0);
+}
+
+class FileBlocks extends $pb.GeneratedMessage {
+  factory FileBlocks({
+    $core.String? fileId,
+    $core.String? spaceId,
+    $core.Iterable<Block>? blocks,
+  }) {
+    final result = create();
+    if (fileId != null) result.fileId = fileId;
+    if (spaceId != null) result.spaceId = spaceId;
+    if (blocks != null) result.blocks.addAll(blocks);
+    return result;
+  }
+
+  FileBlocks._();
+
+  factory FileBlocks.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory FileBlocks.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'FileBlocks',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'filesync'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'fileId', protoName: 'fileId')
+    ..aOS(2, _omitFieldNames ? '' : 'spaceId', protoName: 'spaceId')
+    ..pPM<Block>(3, _omitFieldNames ? '' : 'blocks', subBuilder: Block.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  FileBlocks clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  FileBlocks copyWith(void Function(FileBlocks) updates) =>
+      super.copyWith((message) => updates(message as FileBlocks)) as FileBlocks;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static FileBlocks create() => FileBlocks._();
+  @$core.override
+  FileBlocks createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static FileBlocks getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<FileBlocks>(create);
+  static FileBlocks? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get fileId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set fileId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasFileId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearFileId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get spaceId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set spaceId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasSpaceId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearSpaceId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $pb.PbList<Block> get blocks => $_getList(2);
+}
+
+class Block extends $pb.GeneratedMessage {
+  factory Block({
+    $core.List<$core.int>? cid,
+    $core.List<$core.int>? data,
+  }) {
+    final result = create();
+    if (cid != null) result.cid = cid;
+    if (data != null) result.data = data;
+    return result;
+  }
+
+  Block._();
+
+  factory Block.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory Block.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'Block',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'filesync'),
+      createEmptyInstance: create)
+    ..a<$core.List<$core.int>>(
+        2, _omitFieldNames ? '' : 'cid', $pb.PbFieldType.OY)
+    ..a<$core.List<$core.int>>(
+        3, _omitFieldNames ? '' : 'data', $pb.PbFieldType.OY)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  Block clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  Block copyWith(void Function(Block) updates) =>
+      super.copyWith((message) => updates(message as Block)) as Block;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static Block create() => Block._();
+  @$core.override
+  Block createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static Block getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<Block>(create);
+  static Block? _defaultInstance;
+
+  @$pb.TagNumber(2)
+  $core.List<$core.int> get cid => $_getN(0);
+  @$pb.TagNumber(2)
+  set cid($core.List<$core.int> value) => $_setBytes(0, value);
+  @$pb.TagNumber(2)
+  $core.bool hasCid() => $_has(0);
+  @$pb.TagNumber(2)
+  void clearCid() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.List<$core.int> get data => $_getN(1);
+  @$pb.TagNumber(3)
+  set data($core.List<$core.int> value) => $_setBytes(1, value);
+  @$pb.TagNumber(3)
+  $core.bool hasData() => $_has(1);
+  @$pb.TagNumber(3)
+  void clearData() => $_clearField(3);
+}
+
 class BlocksCheckRequest extends $pb.GeneratedMessage {
   factory BlocksCheckRequest({
     $core.String? spaceId,
@@ -1516,6 +1703,11 @@ class FileApi {
   $async.Future<Ok> blockPush(
           $pb.ClientContext? ctx, BlockPushRequest request) =>
       _client.invoke<Ok>(ctx, 'File', 'BlockPush', request, Ok());
+
+  /// BlockPushMany pushes many blocks to a server
+  $async.Future<Ok> blockPushMany(
+          $pb.ClientContext? ctx, BlockPushManyRequest request) =>
+      _client.invoke<Ok>(ctx, 'File', 'BlockPushMany', request, Ok());
 
   /// BlocksCheck checks is CIDs exists
   $async.Future<BlocksCheckResponse> blocksCheck(

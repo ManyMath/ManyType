@@ -30,6 +30,19 @@ Future<String> computeCid(Uint8List data) async {
   return 'b${_base32LowerEncode(cidBytes)}';
 }
 
+/// Decode a base32lower CID string into the raw bytes expected by file-node
+/// RPCs.
+Uint8List cidToBytes(String cid) {
+  final trimmed = cid.trim();
+  if (trimmed.isEmpty) {
+    throw FormatException('CID cannot be empty');
+  }
+  if (!trimmed.startsWith('b')) {
+    throw FormatException('Only base32lower multibase CIDs are supported');
+  }
+  return _base32LowerDecode(trimmed.substring(1));
+}
+
 /// RFC 4648 base32 lowercase encoding without padding.
 ///
 /// Alphabet: abcdefghijklmnopqrstuvwxyz234567
@@ -54,4 +67,28 @@ String _base32LowerEncode(Uint8List data) {
   }
 
   return buffer.toString();
+}
+
+Uint8List _base32LowerDecode(String data) {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz234567';
+  final cleaned = data.trim().toLowerCase();
+  final bytes = BytesBuilder();
+  var bits = 0;
+  var value = 0;
+
+  for (final codeUnit in cleaned.codeUnits) {
+    final char = String.fromCharCode(codeUnit);
+    final index = alphabet.indexOf(char);
+    if (index < 0) {
+      throw FormatException('Invalid base32 character: $char');
+    }
+    value = (value << 5) | index;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes.addByte((value >> bits) & 0xff);
+    }
+  }
+
+  return bytes.toBytes();
 }

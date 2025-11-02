@@ -2,6 +2,9 @@
 //!
 //! Algorithm: CIDv1 + dag-cbor (0x71) + SHA2-256 + base32lower
 
+use std::io::Cursor;
+
+use anyhow::{Context, Result};
 use cid::Cid;
 use multihash_codetable::{Code, MultihashDigest};
 
@@ -21,6 +24,19 @@ pub fn compute_cid(data: &[u8]) -> String {
 /// Verify that the CID of `data` matches `expected_cid`.
 pub fn verify_cid(data: &[u8], expected_cid: &str) -> bool {
     compute_cid(data) == expected_cid
+}
+
+/// Decode raw CID bytes from the file-node RPC surface into the canonical
+/// base32lower CID string used everywhere else in Manytype.
+pub fn cid_bytes_to_string(bytes: &[u8]) -> Result<String> {
+    let cid = Cid::read_bytes(Cursor::new(bytes)).context("invalid cid")?;
+    cid.to_string_of_base(multibase::Base::Base32Lower)
+        .context("invalid cid")
+}
+
+/// Encode a canonical CID string into the raw bytes used by file-node RPCs.
+pub fn cid_string_to_bytes(cid: &str) -> Result<Vec<u8>> {
+    Ok(Cid::try_from(cid)?.to_bytes())
 }
 
 #[cfg(test)]
@@ -70,5 +86,27 @@ mod tests {
         let cid_str = compute_cid(b"");
         assert!(cid_str.starts_with("b"));
         assert!(!cid_str.is_empty());
+    }
+
+    #[test]
+    fn cid_bytes_round_trip_to_canonical_string() {
+        let cid_str = compute_cid(b"hello anytype");
+        let cid = Cid::try_from(cid_str.as_str()).unwrap();
+        let decoded = cid_bytes_to_string(&cid.to_bytes()).unwrap();
+        assert_eq!(decoded, cid_str);
+    }
+
+    #[test]
+    fn invalid_cid_bytes_fail() {
+        let error = cid_bytes_to_string(&[1, 2, 3]).unwrap_err().to_string();
+        assert!(error.contains("invalid cid"));
+    }
+
+    #[test]
+    fn cid_string_bytes_round_trip() {
+        let cid_str = compute_cid(b"hello anytype");
+        let encoded = cid_string_to_bytes(&cid_str).unwrap();
+        let decoded = cid_bytes_to_string(&encoded).unwrap();
+        assert_eq!(decoded, cid_str);
     }
 }

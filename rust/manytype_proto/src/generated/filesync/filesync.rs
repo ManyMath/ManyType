@@ -30,6 +30,27 @@ pub struct BlockPushRequest {
     #[prost(bytes = "vec", tag = "4")]
     pub data: ::prost::alloc::vec::Vec<u8>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BlockPushManyRequest {
+    #[prost(message, repeated, tag = "1")]
+    pub file_blocks: ::prost::alloc::vec::Vec<FileBlocks>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FileBlocks {
+    #[prost(string, tag = "1")]
+    pub file_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub space_id: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "3")]
+    pub blocks: ::prost::alloc::vec::Vec<Block>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Block {
+    #[prost(bytes = "vec", tag = "2")]
+    pub cid: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "3")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BlocksCheckRequest {
     #[prost(string, tag = "1")]
@@ -167,10 +188,12 @@ pub enum ErrCodes {
     Unexpected = 0,
     CidNotFound = 1,
     Forbidden = 2,
-    LimitExceeded = 3,
+    DeprecatedLimitExceeded = 3,
     QuerySizeExceeded = 4,
     WrongHash = 5,
     NotEnoughSpace = 6,
+    AclRecordNotFound = 7,
+    LimitExceeded = 8,
     ErrorOffset = 200,
 }
 impl ErrCodes {
@@ -183,10 +206,12 @@ impl ErrCodes {
             Self::Unexpected => "Unexpected",
             Self::CidNotFound => "CIDNotFound",
             Self::Forbidden => "Forbidden",
-            Self::LimitExceeded => "LimitExceeded",
+            Self::DeprecatedLimitExceeded => "_DeprecatedLimitExceeded",
             Self::QuerySizeExceeded => "QuerySizeExceeded",
             Self::WrongHash => "WrongHash",
             Self::NotEnoughSpace => "NotEnoughSpace",
+            Self::AclRecordNotFound => "AclRecordNotFound",
+            Self::LimitExceeded => "LimitExceeded",
             Self::ErrorOffset => "ErrorOffset",
         }
     }
@@ -196,10 +221,12 @@ impl ErrCodes {
             "Unexpected" => Some(Self::Unexpected),
             "CIDNotFound" => Some(Self::CidNotFound),
             "Forbidden" => Some(Self::Forbidden),
-            "LimitExceeded" => Some(Self::LimitExceeded),
+            "_DeprecatedLimitExceeded" => Some(Self::DeprecatedLimitExceeded),
             "QuerySizeExceeded" => Some(Self::QuerySizeExceeded),
             "WrongHash" => Some(Self::WrongHash),
             "NotEnoughSpace" => Some(Self::NotEnoughSpace),
+            "AclRecordNotFound" => Some(Self::AclRecordNotFound),
+            "LimitExceeded" => Some(Self::LimitExceeded),
             "ErrorOffset" => Some(Self::ErrorOffset),
             _ => None,
         }

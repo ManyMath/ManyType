@@ -21,14 +21,18 @@ class ErrCodes extends $pb.ProtobufEnum {
       ErrCodes._(1, _omitEnumNames ? '' : 'CIDNotFound');
   static const ErrCodes Forbidden =
       ErrCodes._(2, _omitEnumNames ? '' : 'Forbidden');
-  static const ErrCodes LimitExceeded =
-      ErrCodes._(3, _omitEnumNames ? '' : 'LimitExceeded');
+  static const ErrCodes DeprecatedLimitExceeded_ =
+      ErrCodes._(3, _omitEnumNames ? '' : '_DeprecatedLimitExceeded');
   static const ErrCodes QuerySizeExceeded =
       ErrCodes._(4, _omitEnumNames ? '' : 'QuerySizeExceeded');
   static const ErrCodes WrongHash =
       ErrCodes._(5, _omitEnumNames ? '' : 'WrongHash');
   static const ErrCodes NotEnoughSpace =
       ErrCodes._(6, _omitEnumNames ? '' : 'NotEnoughSpace');
+  static const ErrCodes AclRecordNotFound =
+      ErrCodes._(7, _omitEnumNames ? '' : 'AclRecordNotFound');
+  static const ErrCodes LimitExceeded =
+      ErrCodes._(8, _omitEnumNames ? '' : 'LimitExceeded');
   static const ErrCodes ErrorOffset =
       ErrCodes._(200, _omitEnumNames ? '' : 'ErrorOffset');
 
@@ -36,10 +40,12 @@ class ErrCodes extends $pb.ProtobufEnum {
     Unexpected,
     CIDNotFound,
     Forbidden,
-    LimitExceeded,
+    DeprecatedLimitExceeded_,
     QuerySizeExceeded,
     WrongHash,
     NotEnoughSpace,
+    AclRecordNotFound,
+    LimitExceeded,
     ErrorOffset,
   ];
 

@@ -25,6 +25,8 @@ abstract class FileServiceBase extends $pb.GeneratedService {
       $pb.ServerContext ctx, $0.BlockGetRequest request);
   $async.Future<$0.Ok> blockPush(
       $pb.ServerContext ctx, $0.BlockPushRequest request);
+  $async.Future<$0.Ok> blockPushMany(
+      $pb.ServerContext ctx, $0.BlockPushManyRequest request);
   $async.Future<$0.BlocksCheckResponse> blocksCheck(
       $pb.ServerContext ctx, $0.BlocksCheckRequest request);
   $async.Future<$0.Ok> blocksBind(
@@ -52,6 +54,8 @@ abstract class FileServiceBase extends $pb.GeneratedService {
         return $0.BlockGetRequest();
       case 'BlockPush':
         return $0.BlockPushRequest();
+      case 'BlockPushMany':
+        return $0.BlockPushManyRequest();
       case 'BlocksCheck':
         return $0.BlocksCheckRequest();
       case 'BlocksBind':
@@ -84,6 +88,8 @@ abstract class FileServiceBase extends $pb.GeneratedService {
         return blockGet(ctx, request as $0.BlockGetRequest);
       case 'BlockPush':
         return blockPush(ctx, request as $0.BlockPushRequest);
+      case 'BlockPushMany':
+        return blockPushMany(ctx, request as $0.BlockPushManyRequest);
       case 'BlocksCheck':
         return blocksCheck(ctx, request as $0.BlocksCheckRequest);
       case 'BlocksBind':

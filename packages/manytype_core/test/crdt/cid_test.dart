@@ -40,5 +40,23 @@ void main() {
       final cid = await computeCid(knownBytes);
       expect(cid, equals(expectedCid));
     });
+
+    test('decodes computed CID strings back into raw CID bytes', () async {
+      final cid = await computeCid(knownBytes);
+      final cidBytes = cidToBytes(cid);
+
+      expect(cidBytes, hasLength(36));
+      expect(cidBytes[0], 0x01);
+      expect(cidBytes[1], 0x71);
+      expect(cidBytes[2], 0x12);
+      expect(cidBytes[3], 0x20);
+    });
+
+    test('rejects non-base32lower CID strings', () {
+      expect(
+        () => cidToBytes('zdj7WkFakeCid'),
+        throwsA(isA<FormatException>()),
+      );
+    });
   });
 }
