@@ -119,16 +119,39 @@ String chooseBestAddress(Iterable<String> addresses) {
 }
 
 NetworkConfigNode requireCoordinatorNode(NetworkConfigFile config) {
+  return requireNodeByType(config, 'coordinator');
+}
+
+NetworkConfigNode requireFileNode(NetworkConfigFile config) {
+  return requireNodeByType(config, 'file');
+}
+
+NetworkConfigNode requireNodeByType(
+  NetworkConfigFile config,
+  String nodeType,
+) {
+  final normalized = nodeType.toLowerCase();
   return config.nodes.firstWhere(
-    (node) => node.types.contains('coordinator'),
-    orElse: () =>
-        throw StateError('No coordinator node found in network config'),
+    (node) =>
+        node.types.map((value) => value.toLowerCase()).contains(normalized),
+    orElse: () => throw StateError('No $nodeType node found in network config'),
   );
 }
 
 String? chooseTreeAddressFromResponse(Iterable<Node> nodes) {
+  return chooseAddressForTypeFromResponse(nodes, NodeType.TreeAPI);
+}
+
+String? chooseFileAddressFromResponse(Iterable<Node> nodes) {
+  return chooseAddressForTypeFromResponse(nodes, NodeType.FileAPI);
+}
+
+String? chooseAddressForTypeFromResponse(
+  Iterable<Node> nodes,
+  NodeType nodeType,
+) {
   for (final node in nodes) {
-    if (node.types.contains(NodeType.TreeAPI) && node.addresses.isNotEmpty) {
+    if (node.types.contains(nodeType) && node.addresses.isNotEmpty) {
       return chooseBestAddress(node.addresses);
     }
   }

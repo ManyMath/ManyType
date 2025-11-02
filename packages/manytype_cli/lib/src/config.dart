@@ -37,6 +37,13 @@ class CliConfig {
 
   static String get configPath => p.join(configDir, 'config.toml');
   static String get dbPath => p.join(configDir, 'store.db');
+  static String get downloadsDir => p.join(configDir, 'downloads');
+
+  static String downloadPath(String fileId, String cid) {
+    final safeFileId = fileId.replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
+    final safeCid = cid.replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
+    return p.join(downloadsDir, '${safeFileId}_$safeCid.bin');
+  }
 
   /// Load config from ~/.manytype/config.toml.
   /// Per D-10: serverAddress can be overridden by --server flag.

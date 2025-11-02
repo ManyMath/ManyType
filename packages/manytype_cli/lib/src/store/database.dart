@@ -37,14 +37,38 @@ class StoreEntries extends Table {
   Set<Column> get primaryKey => {keyPeerId};
 }
 
-@DriftDatabase(tables: [Objects, Changes, StoreEntries])
+@DataClassName('StoredAttachmentRef')
+class AttachmentRefs extends Table {
+  TextColumn get spaceId => text()();
+  TextColumn get objectId => text().references(Objects, #id)();
+  TextColumn get fileId => text()();
+  TextColumn get cid => text().withDefault(const Constant(''))();
+  DateTimeColumn get discoveredAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {spaceId, objectId, fileId, cid};
+}
+
+@DataClassName('StoredCachedBlob')
+class CachedBlobs extends Table {
+  TextColumn get spaceId => text()();
+  TextColumn get fileId => text()();
+  TextColumn get cid => text()();
+  BlobColumn get bytes => blob()();
+  DateTimeColumn get cachedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {spaceId, fileId, cid};
+}
+
+@DriftDatabase(tables: [Objects, Changes, StoreEntries, AttachmentRefs, CachedBlobs])
 class ManytypeDatabase extends _$ManytypeDatabase {
   ManytypeDatabase(String dbPath) : super(_openConnection(dbPath));
 
   ManytypeDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   /// Insert a new object. Returns the created object.
   Future<void> insertObject(String id, String spaceId) async {
@@ -126,6 +150,78 @@ class ManytypeDatabase extends _$ManytypeDatabase {
             ..where((entry) => entry.spaceId.equals(spaceId))
             ..orderBy([(entry) => OrderingTerm.asc(entry.keyPeerId)]))
           .get();
+
+  Future<void> upsertAttachmentRef({
+    required String spaceId,
+    required String objectId,
+    required String fileId,
+    String cid = '',
+  }) async {
+    await into(attachmentRefs).insert(
+      AttachmentRefsCompanion.insert(
+        spaceId: spaceId,
+        objectId: objectId,
+        fileId: fileId,
+        cid: Value(cid),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<List<StoredAttachmentRef>> getAttachmentRefsByObject(String objectId) =>
+      (select(attachmentRefs)
+            ..where((entry) => entry.objectId.equals(objectId))
+            ..orderBy([
+              (entry) => OrderingTerm.asc(entry.fileId),
+              (entry) => OrderingTerm.asc(entry.cid),
+            ]))
+          .get();
+
+  Future<List<StoredAttachmentRef>> getAttachmentRefsByFileId(
+    String spaceId,
+    String fileId,
+  ) =>
+      (select(attachmentRefs)
+            ..where(
+              (entry) =>
+                  entry.spaceId.equals(spaceId) & entry.fileId.equals(fileId),
+            )
+            ..orderBy([
+              (entry) => OrderingTerm.asc(entry.objectId),
+              (entry) => OrderingTerm.asc(entry.cid),
+            ]))
+          .get();
+
+  Future<void> cacheBlob({
+    required String spaceId,
+    required String fileId,
+    required String cid,
+    required List<int> bytes,
+  }) async {
+    await into(cachedBlobs).insert(
+      CachedBlobsCompanion.insert(
+        spaceId: spaceId,
+        fileId: fileId,
+        cid: cid,
+        bytes: Uint8List.fromList(bytes),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<StoredCachedBlob?> getCachedBlob({
+    required String spaceId,
+    required String fileId,
+    required String cid,
+  }) =>
+      (select(cachedBlobs)
+            ..where(
+              (entry) =>
+                  entry.spaceId.equals(spaceId) &
+                  entry.fileId.equals(fileId) &
+                  entry.cid.equals(cid),
+            ))
+          .getSingleOrNull();
 }
 
 LazyDatabase _openConnection(String dbPath) {

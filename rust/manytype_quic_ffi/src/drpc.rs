@@ -320,7 +320,7 @@ where
             )
         });
 
-        if frame.kind == KIND_CLOSE_SEND {
+        if frame.kind == KIND_CLOSE_SEND || frame.kind == KIND_CLOSE {
             break;
         }
 

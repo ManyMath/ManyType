@@ -44,6 +44,26 @@ nodes:
       expect(chooseBestAddress(coordinator.addresses), '127.0.0.1:1014');
     });
 
+    test('loads file node from client.yml', () async {
+      final file = File('${tempDir.path}/client.yml');
+      await file.writeAsString('''
+id: test
+networkId: test-net
+nodes:
+  - peerId: peer-file
+    addresses:
+      - quic://127.0.0.1:1015
+    types:
+      - file
+''');
+
+      final config = await loadNetworkConfig(file.path);
+      final fileNode = requireFileNode(config);
+
+      expect(fileNode.peerId, 'peer-file');
+      expect(chooseBestAddress(fileNode.addresses), '127.0.0.1:1015');
+    });
+
     test('prefers localhost tree address from coordinator response', () {
       final address = chooseTreeAddressFromResponse([
         Node(
@@ -53,6 +73,17 @@ nodes:
       ]);
 
       expect(address, '127.0.0.1:1011');
+    });
+
+    test('prefers localhost file address from coordinator response', () {
+      final address = chooseFileAddressFromResponse([
+        Node(
+          addresses: ['quic://node.internal:1015', 'quic://127.0.0.1:1015'],
+          types: [NodeType.FileAPI],
+        ),
+      ]);
+
+      expect(address, '127.0.0.1:1015');
     });
   });
 }

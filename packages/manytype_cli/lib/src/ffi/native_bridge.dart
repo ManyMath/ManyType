@@ -171,21 +171,21 @@ class NativeBridge {
   ///
   /// [handleId] is the connection handle from [connect].
   /// [spaceId] and [objectId] identify the object.
-  /// [changesData] is the length-prefixed changes payload.
-  /// Returns the length-prefixed response bytes.
+  /// [payload] is the serialized TreeSyncMessage (or empty for pull).
+  /// Returns raw response bytes (length-prefixed ObjectSyncMessages).
   Uint8List syncObject(
     int handleId,
     String spaceId,
     String objectId,
-    Uint8List changesData,
+    Uint8List payload,
   ) {
     final spacePtr = spaceId.toNativeUtf8();
     final objPtr = objectId.toNativeUtf8();
-    final dataPtr = calloc<Uint8>(changesData.length);
-    dataPtr.asTypedList(changesData.length).setAll(0, changesData);
+    final dataPtr = calloc<Uint8>(payload.length);
+    dataPtr.asTypedList(payload.length).setAll(0, payload);
 
     final result =
-        _syncObject(handleId, spacePtr, objPtr, dataPtr, changesData.length);
+        _syncObject(handleId, spacePtr, objPtr, dataPtr, payload.length);
 
     calloc.free(spacePtr);
     calloc.free(objPtr);

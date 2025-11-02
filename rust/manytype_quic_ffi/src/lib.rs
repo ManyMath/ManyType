@@ -197,25 +197,23 @@ pub unsafe extern "C" fn ffi_invoke(
     }
 }
 
-/// Sync an object by sending changes via ObjectSyncStream.
+/// Sync an object by sending a single TreeSyncMessage via ObjectSyncStream.
 ///
-/// `changes_data`: length-prefixed array of changes.
-///   Format: [u32 LE length][bytes] repeated for each change.
+/// `payload`: serialized TreeSyncMessage (or empty for pull).
 ///
-/// When `changes_data` is empty, this sends a pull request for the object and
-/// returns raw change payloads in the same length-prefixed format.
+/// Returns raw response bytes (serialized ObjectSyncMessage(s)).
 ///
 /// # Safety
 ///
 /// - `space_id` and `object_id` must be valid, NUL-terminated C strings.
-/// - `changes_data` must point to at least `changes_len` readable bytes (or be null when `changes_len` is 0).
+/// - `payload` must point to at least `payload_len` readable bytes (or be null when `payload_len` is 0).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ffi_sync_object(
     handle_id: u64,
     space_id: *const c_char,
     object_id: *const c_char,
-    changes_data: *const u8,
-    changes_len: u32,
+    payload: *const u8,
+    payload_len: u32,
 ) -> *mut FfiResult {
     let space_id = unsafe { CStr::from_ptr(space_id) }
         .to_str()
@@ -226,54 +224,22 @@ pub unsafe extern "C" fn ffi_sync_object(
         .unwrap_or("")
         .to_string();
 
-    // Parse length-prefixed raw changes
-    let changes_slice = if changes_len > 0 {
-        unsafe { std::slice::from_raw_parts(changes_data, changes_len as usize) }
+    let payload_slice = if payload_len > 0 {
+        unsafe { std::slice::from_raw_parts(payload, payload_len as usize) }
     } else {
         &[]
     };
 
-    let mut raw_changes = Vec::new();
-    let mut offset = 0usize;
-    while offset + 4 <= changes_slice.len() {
-        let len =
-            u32::from_le_bytes(changes_slice[offset..offset + 4].try_into().unwrap()) as usize;
-        offset += 4;
-        if offset + len > changes_slice.len() {
-            return FfiResult::error("changes_data truncated".to_string());
+    let messages: Vec<Vec<u8>> = vec![
+        ObjectSyncMessage {
+            space_id: space_id.clone(),
+            object_id: object_id.clone(),
+            request_id: "req-0".to_string(),
+            payload: payload_slice.to_vec(),
+            ..Default::default()
         }
-        raw_changes.push(changes_slice[offset..offset + len].to_vec());
-        offset += len;
-    }
-
-    let pull_request = raw_changes.is_empty();
-    let messages: Vec<Vec<u8>> = if pull_request {
-        vec![
-            ObjectSyncMessage {
-                space_id: space_id.clone(),
-                object_id: object_id.clone(),
-                request_id: "pull-0".to_string(),
-                payload: Vec::new(),
-                ..Default::default()
-            }
-            .encode_to_vec(),
-        ]
-    } else {
-        raw_changes
-            .into_iter()
-            .enumerate()
-            .map(|(i, payload)| {
-                let msg = ObjectSyncMessage {
-                    space_id: space_id.clone(),
-                    object_id: object_id.clone(),
-                    request_id: format!("req-{i}"),
-                    payload,
-                    ..Default::default()
-                };
-                msg.encode_to_vec()
-            })
-            .collect()
-    };
+        .encode_to_vec(),
+    ];
 
     let connection = {
         let handles = HANDLES.lock().unwrap();
@@ -285,28 +251,18 @@ pub unsafe extern "C" fn ffi_sync_object(
 
     match RUNTIME.block_on(async {
         let mut drpc_stream = client::open_drpc_stream(&connection).await?;
-        drpc::sync_object(&mut drpc_stream, &messages).await
+        drpc::exchange_stream(
+            &mut drpc_stream,
+            "/spacesync.SpaceSync/ObjectSyncStream",
+            &messages,
+        )
+        .await
     }) {
         Ok(responses) => {
             let mut out = Vec::new();
             for resp in responses {
-                let msg = match ObjectSyncMessage::decode(resp.as_slice()) {
-                    Ok(msg) => msg,
-                    Err(e) => {
-                        return FfiResult::error(format!(
-                            "sync_object returned invalid ObjectSyncMessage: {e}"
-                        ));
-                    }
-                };
-                if msg.payload.is_empty() {
-                    continue;
-                }
-                if pull_request {
-                    out.extend_from_slice(&msg.payload);
-                } else {
-                    out.extend_from_slice(&(msg.payload.len() as u32).to_le_bytes());
-                    out.extend_from_slice(&msg.payload);
-                }
+                out.extend_from_slice(&(resp.len() as u32).to_le_bytes());
+                out.extend_from_slice(&resp);
             }
             FfiResult::success(out)
         }

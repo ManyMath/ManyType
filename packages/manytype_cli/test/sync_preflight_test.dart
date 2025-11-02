@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:manytype_cli/src/commands/sync.dart';
 import 'package:manytype_protocol/coordinator.dart';
 import 'package:test/test.dart';
@@ -20,6 +18,11 @@ void main() {
                     peerId: 'tree-peer',
                     addresses: ['quic://127.0.0.1:31001'],
                     types: [NodeType.TreeAPI],
+                  ),
+                  Node(
+                    peerId: 'file-peer',
+                    addresses: ['quic://127.0.0.1:31005'],
+                    types: [NodeType.FileAPI],
                   ),
                 ],
               ).writeToBuffer();
@@ -47,6 +50,7 @@ void main() {
         ]),
       );
       expect(discovery.syncAddress, '127.0.0.1:31001');
+      expect(discovery.fileAddress, '127.0.0.1:31005');
       expect(discovery.spaceStatus.status, SpaceStatus.SpaceStatusCreated);
     });
 
@@ -63,6 +67,11 @@ void main() {
                       peerId: 'tree-peer',
                       addresses: ['quic://127.0.0.1:31001'],
                       types: [NodeType.TreeAPI],
+                    ),
+                    Node(
+                      peerId: 'file-peer',
+                      addresses: ['quic://127.0.0.1:31005'],
+                      types: [NodeType.FileAPI],
                     ),
                   ],
                 ).writeToBuffer();

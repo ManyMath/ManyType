@@ -30,6 +30,7 @@ class HeadSyncClient {
     var pending = <HeadSyncRange>[_fullRange(elements: false)];
 
     while (pending.isNotEmpty) {
+      print('HeadSync: pending ranges=${pending.length}');
       final request = HeadSyncRequest(
         spaceId: spaceId,
         diffType: _diffType,

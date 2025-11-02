@@ -127,5 +127,77 @@ void main() {
       expect(entries.first.identitySignature, [30]);
       expect(entries.first.peerSignature, [31]);
     });
+
+    test('upserts attachment refs and queries them by object and file ID',
+        () async {
+      await db.insertObject('obj-1', 'space-a');
+      await db.insertObject('obj-2', 'space-a');
+      await db.upsertAttachmentRef(
+        spaceId: 'space-a',
+        objectId: 'obj-1',
+        fileId: 'file-1',
+        cid: 'bafy-a',
+      );
+      await db.upsertAttachmentRef(
+        spaceId: 'space-a',
+        objectId: 'obj-1',
+        fileId: 'file-1',
+        cid: 'bafy-a',
+      );
+      await db.upsertAttachmentRef(
+        spaceId: 'space-a',
+        objectId: 'obj-1',
+        fileId: 'file-1',
+        cid: '',
+      );
+      await db.upsertAttachmentRef(
+        spaceId: 'space-a',
+        objectId: 'obj-2',
+        fileId: 'file-1',
+        cid: 'bafy-b',
+      );
+
+      final objectRefs = await db.getAttachmentRefsByObject('obj-1');
+      expect(objectRefs.length, 2);
+      expect(objectRefs.map((entry) => entry.cid).toList(), ['', 'bafy-a']);
+
+      final fileRefs = await db.getAttachmentRefsByFileId('space-a', 'file-1');
+      expect(fileRefs.length, 3);
+      expect(fileRefs.map((entry) => entry.objectId).toList(), ['obj-1', 'obj-1', 'obj-2']);
+    });
+
+    test('stores cached blobs independently from attachment metadata', () async {
+      await db.insertObject('obj-1', 'space-a');
+      await db.upsertAttachmentRef(
+        spaceId: 'space-a',
+        objectId: 'obj-1',
+        fileId: 'file-1',
+        cid: 'bafy-a',
+      );
+
+      expect(
+        await db.getCachedBlob(
+          spaceId: 'space-a',
+          fileId: 'file-1',
+          cid: 'bafy-a',
+        ),
+        isNull,
+      );
+
+      await db.cacheBlob(
+        spaceId: 'space-a',
+        fileId: 'file-1',
+        cid: 'bafy-a',
+        bytes: [1, 2, 3],
+      );
+
+      final cached = await db.getCachedBlob(
+        spaceId: 'space-a',
+        fileId: 'file-1',
+        cid: 'bafy-a',
+      );
+      expect(cached, isNotNull);
+      expect(cached!.bytes, [1, 2, 3]);
+    });
   });
 }

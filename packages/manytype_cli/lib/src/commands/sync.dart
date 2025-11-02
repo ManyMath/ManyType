@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:fixnum/fixnum.dart';
 import 'package:manytype_core/manytype_core.dart';
+import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/coordinator.dart';
 import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
@@ -33,11 +34,13 @@ class SyncDiscoveryResult {
   const SyncDiscoveryResult({
     required this.networkConfig,
     required this.syncAddress,
+    required this.fileAddress,
     required this.spaceStatus,
   });
 
   final NetworkConfigurationResponse networkConfig;
   final String syncAddress;
+  final String? fileAddress;
   final SpaceStatusPayload spaceStatus;
 }
 
@@ -201,53 +204,61 @@ Future<void> syncCommand(
         final localHeadSet = (localHeads[entry.key] ?? <String>[]).toSet();
         return entry.value.difference(localHeadSet).isNotEmpty;
       }).length;
+      capture.recordNote(
+        'official-object-diff-summary',
+        {
+          'local_diff_count': localOnlyObjectCount,
+          'remote_diff_count': remoteOnlyObjectCount,
+          if (discovery.fileAddress != null)
+            'file_address': discovery.fileAddress,
+        },
+      );
+    }
 
-      if (localOnlyObjectCount > 0 || remoteOnlyObjectCount > 0) {
-        print(
-          'Skipping object-tree sync against official Any-sync nodes: '
-          'direct client upload/download of tree objects is not supported by '
-          'the peer-mesh protocol yet '
-          '(local diffs: $localOnlyObjectCount, remote diffs: $remoteOnlyObjectCount)',
+    // Push: objects local has that server lacks or has different heads.
+    for (final entry in localHeads.entries) {
+      final objectId = entry.key;
+      final localHeadSet = entry.value.toSet();
+      final serverHeadSet = serverHeads[objectId] ?? <String>{};
+
+      if (localHeadSet.difference(serverHeadSet).isNotEmpty) {
+        final changes = await db.getChangesForObject(objectId);
+        final treeSyncMsg = _buildTreeSyncMessage(objectId, changes);
+        final payload = Uint8List.fromList(treeSyncMsg.writeToBuffer());
+
+        final responseData =
+            bridge.syncObject(syncHandleId, spaceId, objectId, payload);
+        capture.recordStreamRpc(
+          role: 'sync-node',
+          method: '/spacesync.SpaceSync/ObjectSyncStream',
+          requestMessages: [payload],
+          responseMessages: _decodeMessagesFromFfi(responseData),
         );
-        capture.recordNote(
-          'official-object-sync-skipped',
-          {
-            'local_diff_count': localOnlyObjectCount,
-            'remote_diff_count': remoteOnlyObjectCount,
-          },
-        );
+        pushed++;
+        print('  Pushed: $objectId (${changes.length} changes)');
       }
-    } else {
-      // Push: objects local has that server lacks or has different heads.
-      for (final entry in localHeads.entries) {
-        final objectId = entry.key;
-        final localHeadSet = entry.value.toSet();
-        final serverHeadSet = serverHeads[objectId] ?? <String>{};
+    }
 
-        if (localHeadSet.difference(serverHeadSet).isNotEmpty) {
-          final changes = await db.getChangesForObject(objectId);
-          final changesData = _encodeChangesForFfi(changes);
-          bridge.syncObject(syncHandleId, spaceId, objectId, changesData);
-          pushed++;
-          print('  Pushed: $objectId (${changes.length} changes)');
-        }
-      }
+    // Pull: objects server has that local lacks or has different heads.
+    for (final entry in serverHeads.entries) {
+      final objectId = entry.key;
+      final serverHeadSet = entry.value;
+      final localHeadSet = (localHeads[objectId] ?? <String>[]).toSet();
 
-      // Pull: objects server has that local lacks or has different heads.
-      for (final entry in serverHeads.entries) {
-        final objectId = entry.key;
-        final serverHeadSet = entry.value;
-        final localHeadSet = (localHeads[objectId] ?? <String>[]).toSet();
+      if (serverHeadSet.difference(localHeadSet).isNotEmpty) {
+        final responseData =
+            bridge.syncObject(syncHandleId, spaceId, objectId, Uint8List(0));
 
-        if (serverHeadSet.difference(localHeadSet).isNotEmpty) {
-          final responseData =
-              bridge.syncObject(syncHandleId, spaceId, objectId, Uint8List(0));
-
-          if (responseData.isNotEmpty) {
-            await _storePulledChanges(db, spaceId, objectId, responseData);
-            pulled++;
-            print('  Pulled: $objectId');
-          }
+        if (responseData.isNotEmpty) {
+          capture.recordStreamRpc(
+            role: 'sync-node',
+            method: '/spacesync.SpaceSync/ObjectSyncStream',
+            requestMessages: [Uint8List(0)],
+            responseMessages: _decodeMessagesFromFfi(responseData),
+          );
+          await storePulledChanges(db, spaceId, objectId, responseData);
+          pulled++;
+          print('  Pulled: $objectId');
         }
       }
     }
@@ -281,7 +292,7 @@ Future<void> syncCommand(
     if (syncHandleId != null) {
       bridge.freeHandle(syncHandleId);
     }
-    if (coordinatorHandleId != null && coordinatorHandleId != syncHandleId) {
+    if (coordinatorHandleId != syncHandleId) {
       bridge.freeHandle(coordinatorHandleId);
     }
     await capture.flush();
@@ -316,6 +327,9 @@ SyncDiscoveryResult discoverSyncTargetsForSync({
   final syncAddress = officialInteropMode
       ? chooseTreeAddressFromResponse(netConfig.nodes)
       : localServerAddress;
+  final fileAddress = officialInteropMode
+      ? chooseFileAddressFromResponse(netConfig.nodes)
+      : null;
   if (syncAddress == null) {
     throw StateError(
       'Coordinator response did not include a tree node address',
@@ -347,6 +361,7 @@ SyncDiscoveryResult discoverSyncTargetsForSync({
   return SyncDiscoveryResult(
     networkConfig: netConfig,
     syncAddress: syncAddress,
+    fileAddress: fileAddress,
     spaceStatus: payload,
   );
 }
@@ -481,20 +496,6 @@ Future<_SpaceBootstrap?> _loadSpaceBootstrap(
   );
 }
 
-/// Encode changes as length-prefixed byte array for FFI boundary.
-///
-/// Format: [u32 LE len1][bytes1][u32 LE len2][bytes2]...
-Uint8List _encodeChangesForFfi(List<Change> changes) {
-  final buffer = BytesBuilder();
-  for (final change in changes) {
-    final raw = change.rawBytes;
-    final lenBytes = ByteData(4)..setUint32(0, raw.length, Endian.little);
-    buffer.add(lenBytes.buffer.asUint8List());
-    buffer.add(raw);
-  }
-  return buffer.toBytes();
-}
-
 Uint8List _encodeMessagesForFfi(Iterable<Uint8List> messages) {
   final buffer = BytesBuilder();
   for (final message in messages) {
@@ -506,7 +507,11 @@ Uint8List _encodeMessagesForFfi(Iterable<Uint8List> messages) {
 }
 
 /// Store pulled changes from the server into the local database.
-Future<void> _storePulledChanges(
+///
+/// Accepts either:
+/// - length-prefixed ObjectSyncMessages from the FFI pull path, or
+/// - length-prefixed raw tree changes for direct tests/helpers.
+Future<void> storePulledChanges(
   ManytypeDatabase db,
   String spaceId,
   String objectId,
@@ -515,9 +520,7 @@ Future<void> _storePulledChanges(
   // Ensure object exists in local store
   await db.insertObject(objectId, spaceId);
 
-  // Parse response data: length-prefixed changes [u32 LE len][bytes]...
-  // For v1 we store the raw response as a single change if we cannot decode
-  // individual changes.
+  // Parse response data: length-prefixed ObjectSyncMessages [u32 LE len][bytes]...
   if (data.length >= 4) {
     final bd = ByteData.sublistView(data);
     int offset = 0;
@@ -525,17 +528,177 @@ Future<void> _storePulledChanges(
       final len = bd.getUint32(offset, Endian.little);
       offset += 4;
       if (offset + len > data.length) break;
-      final changeBytes = data.sublist(offset, offset + len);
+      final msgBytes = data.sublist(offset, offset + len);
       offset += len;
-      final changeId = await computeCid(Uint8List.fromList(changeBytes));
-      await db.insertChange(
-        changeId,
+
+      final stored = await _storePulledMessageBytes(
+        db,
+        spaceId,
         objectId,
-        changeBytes,
-        jsonEncode(_extractParentHeads(changeBytes)),
+        msgBytes,
+      );
+      if (stored) {
+        continue;
+      }
+
+      await _storeRawPulledChange(
+        db,
+        spaceId,
+        objectId,
+        msgBytes,
       );
     }
   }
+}
+
+Future<bool> _storePulledMessageBytes(
+  ManytypeDatabase db,
+  String spaceId,
+  String objectId,
+  Uint8List msgBytes,
+) async {
+  try {
+    final msg = ObjectSyncMessage.fromBuffer(msgBytes);
+    final looksLikeObjectSyncMessage = msg.hasPayload() ||
+        (msg.hasObjectId() &&
+            (msg.hasSpaceId() || msg.hasRequestId() || msg.hasReplyId()));
+    if (!looksLikeObjectSyncMessage) {
+      return false;
+    }
+    if (msg.payload.isEmpty) {
+      return true;
+    }
+
+    final treeMsg = TreeSyncMessage.fromBuffer(msg.payload);
+    final changes = <RawTreeChangeWithId>[];
+    if (treeMsg.hasRootChange()) {
+      changes.add(treeMsg.rootChange);
+    }
+    if (treeMsg.hasContent()) {
+      if (treeMsg.content.hasHeadUpdate()) {
+        changes.addAll(treeMsg.content.headUpdate.changes);
+      }
+      if (treeMsg.content.hasFullSyncResponse()) {
+        changes.addAll(treeMsg.content.fullSyncResponse.changes);
+      }
+    }
+
+    for (final raw in changes) {
+      final changeBytes = Uint8List.fromList(raw.rawChange);
+      await _storeRawPulledChange(
+        db,
+        spaceId,
+        objectId,
+        changeBytes,
+        changeId: raw.id,
+      );
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<void> _storeRawPulledChange(
+  ManytypeDatabase db,
+  String spaceId,
+  String objectId,
+  Uint8List changeBytes, {
+  String? changeId,
+}) async {
+  final resolvedChangeId = changeId ?? await computeCid(changeBytes);
+  await db.insertChange(
+    resolvedChangeId,
+    objectId,
+    changeBytes,
+    jsonEncode(_extractParentHeads(changeBytes)),
+  );
+
+  for (final ref in extractAttachmentRefsFromRawChangeBytes(changeBytes)) {
+    await db.upsertAttachmentRef(
+      spaceId: spaceId,
+      objectId: objectId,
+      fileId: ref.fileId,
+      cid: ref.cid,
+    );
+  }
+}
+
+List<({String fileId, String cid})> extractAttachmentRefsFromRawChangeBytes(
+  List<int> rawChangeBytes,
+) {
+  final refs = <({String fileId, String cid})>[];
+
+  try {
+    final rawTreeChange = RawTreeChange.fromBuffer(rawChangeBytes);
+    if (rawTreeChange.payload.isEmpty) {
+      return const [];
+    }
+
+    final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+    if (treeChange.changesData.isEmpty) {
+      return const [];
+    }
+
+    final change = changes_proto.Change.fromBuffer(
+        Uint8List.fromList(treeChange.changesData));
+    final fileIds = <String>{};
+    final cids = <String>{};
+
+    if (change.hasSnapshot()) {
+      final snapshot = change.snapshot;
+      if (snapshot.hasData() && snapshot.data.hasFileInfo()) {
+        final fileId = snapshot.data.fileInfo.fileId.trim();
+        if (fileId.isNotEmpty) {
+          fileIds.add(fileId);
+        }
+      }
+      for (final fileKey in snapshot.fileKeys) {
+        final cid = fileKey.hash.trim();
+        if (cid.isNotEmpty) {
+          cids.add(cid);
+        }
+      }
+    }
+
+    for (final content in change.content) {
+      if (content.hasSetFileInfo()) {
+        final fileId = content.setFileInfo.fileInfo.fileId.trim();
+        if (fileId.isNotEmpty) {
+          fileIds.add(fileId);
+        }
+      }
+    }
+
+    for (final fileKey in change.fileKeys) {
+      final cid = fileKey.hash.trim();
+      if (cid.isNotEmpty) {
+        cids.add(cid);
+      }
+    }
+
+    if (fileIds.isEmpty) {
+      return const [];
+    }
+
+    final orderedFileIds = fileIds.toList()..sort();
+    final orderedCids = cids.toList()..sort();
+    if (orderedCids.isEmpty) {
+      return [
+        for (final fileId in orderedFileIds) (fileId: fileId, cid: ''),
+      ];
+    }
+
+    for (final fileId in orderedFileIds) {
+      for (final cid in orderedCids) {
+        refs.add((fileId: fileId, cid: cid));
+      }
+    }
+  } catch (_) {
+    return const [];
+  }
+
+  return refs;
 }
 
 Future<(int, int)> _syncStoreValues(
@@ -869,6 +1032,63 @@ class _SessionCapture {
     final encoder = JsonEncoder.withIndent('  ');
     await file.writeAsString('${encoder.convert(_payload)}\n');
   }
+}
+
+List<Uint8List> _decodeMessagesFromFfi(Uint8List data) {
+  final messages = <Uint8List>[];
+  if (data.length >= 4) {
+    final bd = ByteData.sublistView(data);
+    int offset = 0;
+    while (offset + 4 <= data.length) {
+      final len = bd.getUint32(offset, Endian.little);
+      offset += 4;
+      if (offset + len > data.length) break;
+      messages.add(data.sublist(offset, offset + len));
+      offset += len;
+    }
+  }
+  return messages;
+}
+
+TreeSyncMessage _buildTreeSyncMessage(String objectId, List<Change> changes) {
+  if (changes.isEmpty) {
+    return TreeSyncMessage();
+  }
+
+  // Find root change (the one with no parents)
+  Change? rootChange;
+  final otherChanges = <Change>[];
+
+  for (final c in changes) {
+    final parents = _extractParentHeads(c.rawBytes);
+    if (parents.isEmpty) {
+      rootChange = c;
+    } else {
+      otherChanges.add(c);
+    }
+  }
+
+  final heads = changes.map((c) => c.id).toSet().toList();
+
+  return TreeSyncMessage(
+    rootChange: rootChange != null
+        ? RawTreeChangeWithId(
+            id: rootChange.id,
+            rawChange: rootChange.rawBytes,
+          )
+        : null,
+    content: TreeSyncContentValue(
+      headUpdate: TreeHeadUpdate(
+        heads: heads,
+        changes: otherChanges
+            .map((c) => RawTreeChangeWithId(
+                  id: c.id,
+                  rawChange: c.rawBytes,
+                ))
+            .toList(),
+      ),
+    ),
+  );
 }
 
 HeadSyncRange _fullHeadSyncRange({required bool elements}) => HeadSyncRange(

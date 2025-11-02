@@ -37,6 +37,7 @@ Future<void> _listObjects(ManytypeDatabase db, String spaceId) async {
   for (final obj in objects) {
     final changes = await db.getChangesForObject(obj.id);
     final heads = await db.getObjectHeads(obj.id);
+    final attachments = await db.getAttachmentRefsByObject(obj.id);
     final textPreview = _extractTextPreview(changes);
 
     print('  ${obj.id}');
@@ -46,6 +47,7 @@ Future<void> _listObjects(ManytypeDatabase db, String spaceId) async {
     if (textPreview.isNotEmpty) {
       print('    Text: $textPreview');
     }
+    _printAttachmentRefs(attachments, indent: '    ');
     print('');
   }
 }
@@ -60,6 +62,7 @@ Future<void> _showObject(ManytypeDatabase db, String objectId) async {
 
   print('Object: $objectId');
   print('Changes: ${changes.length}');
+  _printAttachmentRefs(await db.getAttachmentRefsByObject(objectId));
   print('');
 
   for (final change in changes) {
@@ -85,6 +88,22 @@ Future<void> _showObject(ManytypeDatabase db, String objectId) async {
     } catch (e) {
       print('  Change ${change.id}: (binary, ${change.rawBytes.length} bytes)');
     }
+  }
+}
+
+void _printAttachmentRefs(
+  List<StoredAttachmentRef> attachments, {
+  String indent = '',
+}) {
+  if (attachments.isEmpty) {
+    return;
+  }
+
+  print('${indent}Attachments:');
+  for (final attachment in attachments) {
+    final cidLabel =
+        attachment.cid.isEmpty ? 'metadata only' : 'cid=${attachment.cid}';
+    print('${indent}  ${attachment.fileId} ($cidLabel)');
   }
 }
 

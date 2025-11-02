@@ -1,6 +1,8 @@
 import 'package:args/args.dart';
 
 import 'package:manytype_cli/src/commands/create.dart';
+import 'package:manytype_cli/src/commands/file_transfer.dart';
+import 'package:manytype_cli/src/commands/probe_file_node.dart';
 import 'package:manytype_cli/src/commands/probe_network.dart';
 import 'package:manytype_cli/src/commands/read.dart';
 import 'package:manytype_cli/src/commands/sync.dart';
@@ -17,17 +19,35 @@ Future<void> main(List<String> arguments) async {
         defaultsTo: null);
 
   final createParser = ArgParser();
+  final fileUploadParser = ArgParser()
+    ..addOption('file-id', help: 'Stable file ID for upload', defaultsTo: null);
+  final fileOpenParser = ArgParser()
+    ..addOption('file-id', help: 'File ID to open', defaultsTo: null)
+    ..addOption('cid', help: 'Explicit CID to download/open', defaultsTo: null)
+    ..addOption('output', help: 'Output path for opened bytes', defaultsTo: null);
+  final probeFileNodeParser = ArgParser()
+    ..addFlag(
+      'read-only',
+      negatable: false,
+      help: 'Skip mutating file RPCs such as BlockPush',
+    );
   parser.addCommand('create', createParser);
   parser.addCommand('sync');
   parser.addCommand('read');
   parser.addCommand('init');
+  parser.addCommand('file-upload', fileUploadParser);
+  parser.addCommand('file-open', fileOpenParser);
   parser.addCommand('probe-network');
+  parser.addCommand('probe-file-node', probeFileNodeParser);
 
   final results = parser.parse(arguments);
 
   if (results['help'] == true || results.command == null) {
     print('Usage: manytype <command> [options]');
-    print('Commands: init, create, sync, read, probe-network');
+    print(
+      'Commands: init, create, sync, read, file-upload, file-open, '
+      'probe-network, probe-file-node',
+    );
     print(parser.usage);
     return;
   }
@@ -67,6 +87,54 @@ Future<void> main(List<String> arguments) async {
       await db.close();
       break;
 
+    case 'file-upload':
+      if (networkConfigPath == null) {
+        throw StateError(
+          'file-upload requires --network-config <path>',
+        );
+      }
+      final fileId = command['file-id'] as String?;
+      if (fileId == null || fileId.isEmpty) {
+        throw StateError('file-upload requires --file-id <id>');
+      }
+      if (command.rest.isEmpty) {
+        throw StateError('file-upload requires a source file path');
+      }
+      final config = await CliConfig.load(serverOverride: serverOverride);
+      final db = ManytypeDatabase(CliConfig.dbPath);
+      await fileUploadCommand(
+        db,
+        config,
+        networkConfigPath: networkConfigPath,
+        fileId: fileId,
+        sourcePath: command.rest.first,
+      );
+      await db.close();
+      break;
+
+    case 'file-open':
+      if (networkConfigPath == null) {
+        throw StateError(
+          'file-open requires --network-config <path>',
+        );
+      }
+      final fileId = command['file-id'] as String?;
+      if (fileId == null || fileId.isEmpty) {
+        throw StateError('file-open requires --file-id <id>');
+      }
+      final config = await CliConfig.load(serverOverride: serverOverride);
+      final db = ManytypeDatabase(CliConfig.dbPath);
+      await fileOpenCommand(
+        db,
+        config,
+        networkConfigPath: networkConfigPath,
+        fileId: fileId,
+        cid: command['cid'] as String?,
+        outputPath: command['output'] as String?,
+      );
+      await db.close();
+      break;
+
     case 'probe-network':
       if (networkConfigPath == null) {
         throw StateError(
@@ -75,6 +143,20 @@ Future<void> main(List<String> arguments) async {
       }
       final config = await CliConfig.load(serverOverride: serverOverride);
       await probeNetworkCommand(config, networkConfigPath: networkConfigPath);
+      break;
+
+    case 'probe-file-node':
+      if (networkConfigPath == null) {
+        throw StateError(
+          'probe-file-node requires --network-config <path>',
+        );
+      }
+      final config = await CliConfig.load(serverOverride: serverOverride);
+      await probeFileNodeCommand(
+        config,
+        networkConfigPath: networkConfigPath,
+        readOnly: command['read-only'] == true,
+      );
       break;
   }
 }

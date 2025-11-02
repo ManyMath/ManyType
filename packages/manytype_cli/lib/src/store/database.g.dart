@@ -833,18 +833,641 @@ class StoreEntriesCompanion extends UpdateCompanion<StoredStoreEntry> {
   }
 }
 
+class $AttachmentRefsTable extends AttachmentRefs
+    with TableInfo<$AttachmentRefsTable, StoredAttachmentRef> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AttachmentRefsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _spaceIdMeta =
+      const VerificationMeta('spaceId');
+  @override
+  late final GeneratedColumn<String> spaceId = GeneratedColumn<String>(
+      'space_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _objectIdMeta =
+      const VerificationMeta('objectId');
+  @override
+  late final GeneratedColumn<String> objectId = GeneratedColumn<String>(
+      'object_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _fileIdMeta = const VerificationMeta('fileId');
+  @override
+  late final GeneratedColumn<String> fileId = GeneratedColumn<String>(
+      'file_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _cidMeta = const VerificationMeta('cid');
+  @override
+  late final GeneratedColumn<String> cid = GeneratedColumn<String>(
+      'cid', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
+  static const VerificationMeta _discoveredAtMeta =
+      const VerificationMeta('discoveredAt');
+  @override
+  late final GeneratedColumn<DateTime> discoveredAt = GeneratedColumn<DateTime>(
+      'discovered_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [spaceId, objectId, fileId, cid, discoveredAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'attachment_refs';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<StoredAttachmentRef> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('space_id')) {
+      context.handle(_spaceIdMeta,
+          spaceId.isAcceptableOrUnknown(data['space_id']!, _spaceIdMeta));
+    } else if (isInserting) {
+      context.missing(_spaceIdMeta);
+    }
+    if (data.containsKey('object_id')) {
+      context.handle(_objectIdMeta,
+          objectId.isAcceptableOrUnknown(data['object_id']!, _objectIdMeta));
+    } else if (isInserting) {
+      context.missing(_objectIdMeta);
+    }
+    if (data.containsKey('file_id')) {
+      context.handle(_fileIdMeta,
+          fileId.isAcceptableOrUnknown(data['file_id']!, _fileIdMeta));
+    } else if (isInserting) {
+      context.missing(_fileIdMeta);
+    }
+    if (data.containsKey('cid')) {
+      context.handle(
+          _cidMeta, cid.isAcceptableOrUnknown(data['cid']!, _cidMeta));
+    }
+    if (data.containsKey('discovered_at')) {
+      context.handle(
+          _discoveredAtMeta,
+          discoveredAt.isAcceptableOrUnknown(
+              data['discovered_at']!, _discoveredAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {spaceId, objectId, fileId, cid};
+  @override
+  StoredAttachmentRef map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredAttachmentRef(
+      spaceId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}space_id'])!,
+      objectId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}object_id'])!,
+      fileId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}file_id'])!,
+      cid: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}cid'])!,
+      discoveredAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}discovered_at'])!,
+    );
+  }
+
+  @override
+  $AttachmentRefsTable createAlias(String alias) {
+    return $AttachmentRefsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredAttachmentRef extends DataClass
+    implements Insertable<StoredAttachmentRef> {
+  final String spaceId;
+  final String objectId;
+  final String fileId;
+  final String cid;
+  final DateTime discoveredAt;
+  const StoredAttachmentRef(
+      {required this.spaceId,
+      required this.objectId,
+      required this.fileId,
+      required this.cid,
+      required this.discoveredAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['space_id'] = Variable<String>(spaceId);
+    map['object_id'] = Variable<String>(objectId);
+    map['file_id'] = Variable<String>(fileId);
+    map['cid'] = Variable<String>(cid);
+    map['discovered_at'] = Variable<DateTime>(discoveredAt);
+    return map;
+  }
+
+  AttachmentRefsCompanion toCompanion(bool nullToAbsent) {
+    return AttachmentRefsCompanion(
+      spaceId: Value(spaceId),
+      objectId: Value(objectId),
+      fileId: Value(fileId),
+      cid: Value(cid),
+      discoveredAt: Value(discoveredAt),
+    );
+  }
+
+  factory StoredAttachmentRef.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredAttachmentRef(
+      spaceId: serializer.fromJson<String>(json['spaceId']),
+      objectId: serializer.fromJson<String>(json['objectId']),
+      fileId: serializer.fromJson<String>(json['fileId']),
+      cid: serializer.fromJson<String>(json['cid']),
+      discoveredAt: serializer.fromJson<DateTime>(json['discoveredAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'spaceId': serializer.toJson<String>(spaceId),
+      'objectId': serializer.toJson<String>(objectId),
+      'fileId': serializer.toJson<String>(fileId),
+      'cid': serializer.toJson<String>(cid),
+      'discoveredAt': serializer.toJson<DateTime>(discoveredAt),
+    };
+  }
+
+  StoredAttachmentRef copyWith(
+          {String? spaceId,
+          String? objectId,
+          String? fileId,
+          String? cid,
+          DateTime? discoveredAt}) =>
+      StoredAttachmentRef(
+        spaceId: spaceId ?? this.spaceId,
+        objectId: objectId ?? this.objectId,
+        fileId: fileId ?? this.fileId,
+        cid: cid ?? this.cid,
+        discoveredAt: discoveredAt ?? this.discoveredAt,
+      );
+  StoredAttachmentRef copyWithCompanion(AttachmentRefsCompanion data) {
+    return StoredAttachmentRef(
+      spaceId: data.spaceId.present ? data.spaceId.value : this.spaceId,
+      objectId: data.objectId.present ? data.objectId.value : this.objectId,
+      fileId: data.fileId.present ? data.fileId.value : this.fileId,
+      cid: data.cid.present ? data.cid.value : this.cid,
+      discoveredAt: data.discoveredAt.present
+          ? data.discoveredAt.value
+          : this.discoveredAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredAttachmentRef(')
+          ..write('spaceId: $spaceId, ')
+          ..write('objectId: $objectId, ')
+          ..write('fileId: $fileId, ')
+          ..write('cid: $cid, ')
+          ..write('discoveredAt: $discoveredAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(spaceId, objectId, fileId, cid, discoveredAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredAttachmentRef &&
+          other.spaceId == this.spaceId &&
+          other.objectId == this.objectId &&
+          other.fileId == this.fileId &&
+          other.cid == this.cid &&
+          other.discoveredAt == this.discoveredAt);
+}
+
+class AttachmentRefsCompanion extends UpdateCompanion<StoredAttachmentRef> {
+  final Value<String> spaceId;
+  final Value<String> objectId;
+  final Value<String> fileId;
+  final Value<String> cid;
+  final Value<DateTime> discoveredAt;
+  final Value<int> rowid;
+  const AttachmentRefsCompanion({
+    this.spaceId = const Value.absent(),
+    this.objectId = const Value.absent(),
+    this.fileId = const Value.absent(),
+    this.cid = const Value.absent(),
+    this.discoveredAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AttachmentRefsCompanion.insert({
+    required String spaceId,
+    required String objectId,
+    required String fileId,
+    this.cid = const Value.absent(),
+    this.discoveredAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : spaceId = Value(spaceId),
+        objectId = Value(objectId),
+        fileId = Value(fileId);
+  static Insertable<StoredAttachmentRef> custom({
+    Expression<String>? spaceId,
+    Expression<String>? objectId,
+    Expression<String>? fileId,
+    Expression<String>? cid,
+    Expression<DateTime>? discoveredAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (spaceId != null) 'space_id': spaceId,
+      if (objectId != null) 'object_id': objectId,
+      if (fileId != null) 'file_id': fileId,
+      if (cid != null) 'cid': cid,
+      if (discoveredAt != null) 'discovered_at': discoveredAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AttachmentRefsCompanion copyWith(
+      {Value<String>? spaceId,
+      Value<String>? objectId,
+      Value<String>? fileId,
+      Value<String>? cid,
+      Value<DateTime>? discoveredAt,
+      Value<int>? rowid}) {
+    return AttachmentRefsCompanion(
+      spaceId: spaceId ?? this.spaceId,
+      objectId: objectId ?? this.objectId,
+      fileId: fileId ?? this.fileId,
+      cid: cid ?? this.cid,
+      discoveredAt: discoveredAt ?? this.discoveredAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (spaceId.present) {
+      map['space_id'] = Variable<String>(spaceId.value);
+    }
+    if (objectId.present) {
+      map['object_id'] = Variable<String>(objectId.value);
+    }
+    if (fileId.present) {
+      map['file_id'] = Variable<String>(fileId.value);
+    }
+    if (cid.present) {
+      map['cid'] = Variable<String>(cid.value);
+    }
+    if (discoveredAt.present) {
+      map['discovered_at'] = Variable<DateTime>(discoveredAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AttachmentRefsCompanion(')
+          ..write('spaceId: $spaceId, ')
+          ..write('objectId: $objectId, ')
+          ..write('fileId: $fileId, ')
+          ..write('cid: $cid, ')
+          ..write('discoveredAt: $discoveredAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CachedBlobsTable extends CachedBlobs
+    with TableInfo<$CachedBlobsTable, StoredCachedBlob> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CachedBlobsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _spaceIdMeta =
+      const VerificationMeta('spaceId');
+  @override
+  late final GeneratedColumn<String> spaceId = GeneratedColumn<String>(
+      'space_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _fileIdMeta = const VerificationMeta('fileId');
+  @override
+  late final GeneratedColumn<String> fileId = GeneratedColumn<String>(
+      'file_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _cidMeta = const VerificationMeta('cid');
+  @override
+  late final GeneratedColumn<String> cid = GeneratedColumn<String>(
+      'cid', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _bytesMeta = const VerificationMeta('bytes');
+  @override
+  late final GeneratedColumn<Uint8List> bytes = GeneratedColumn<Uint8List>(
+      'bytes', aliasedName, false,
+      type: DriftSqlType.blob, requiredDuringInsert: true);
+  static const VerificationMeta _cachedAtMeta =
+      const VerificationMeta('cachedAt');
+  @override
+  late final GeneratedColumn<DateTime> cachedAt = GeneratedColumn<DateTime>(
+      'cached_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns => [spaceId, fileId, cid, bytes, cachedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'cached_blobs';
+  @override
+  VerificationContext validateIntegrity(Insertable<StoredCachedBlob> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('space_id')) {
+      context.handle(_spaceIdMeta,
+          spaceId.isAcceptableOrUnknown(data['space_id']!, _spaceIdMeta));
+    } else if (isInserting) {
+      context.missing(_spaceIdMeta);
+    }
+    if (data.containsKey('file_id')) {
+      context.handle(_fileIdMeta,
+          fileId.isAcceptableOrUnknown(data['file_id']!, _fileIdMeta));
+    } else if (isInserting) {
+      context.missing(_fileIdMeta);
+    }
+    if (data.containsKey('cid')) {
+      context.handle(
+          _cidMeta, cid.isAcceptableOrUnknown(data['cid']!, _cidMeta));
+    } else if (isInserting) {
+      context.missing(_cidMeta);
+    }
+    if (data.containsKey('bytes')) {
+      context.handle(
+          _bytesMeta, bytes.isAcceptableOrUnknown(data['bytes']!, _bytesMeta));
+    } else if (isInserting) {
+      context.missing(_bytesMeta);
+    }
+    if (data.containsKey('cached_at')) {
+      context.handle(_cachedAtMeta,
+          cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {spaceId, fileId, cid};
+  @override
+  StoredCachedBlob map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredCachedBlob(
+      spaceId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}space_id'])!,
+      fileId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}file_id'])!,
+      cid: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}cid'])!,
+      bytes: attachedDatabase.typeMapping
+          .read(DriftSqlType.blob, data['${effectivePrefix}bytes'])!,
+      cachedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}cached_at'])!,
+    );
+  }
+
+  @override
+  $CachedBlobsTable createAlias(String alias) {
+    return $CachedBlobsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredCachedBlob extends DataClass
+    implements Insertable<StoredCachedBlob> {
+  final String spaceId;
+  final String fileId;
+  final String cid;
+  final Uint8List bytes;
+  final DateTime cachedAt;
+  const StoredCachedBlob(
+      {required this.spaceId,
+      required this.fileId,
+      required this.cid,
+      required this.bytes,
+      required this.cachedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['space_id'] = Variable<String>(spaceId);
+    map['file_id'] = Variable<String>(fileId);
+    map['cid'] = Variable<String>(cid);
+    map['bytes'] = Variable<Uint8List>(bytes);
+    map['cached_at'] = Variable<DateTime>(cachedAt);
+    return map;
+  }
+
+  CachedBlobsCompanion toCompanion(bool nullToAbsent) {
+    return CachedBlobsCompanion(
+      spaceId: Value(spaceId),
+      fileId: Value(fileId),
+      cid: Value(cid),
+      bytes: Value(bytes),
+      cachedAt: Value(cachedAt),
+    );
+  }
+
+  factory StoredCachedBlob.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredCachedBlob(
+      spaceId: serializer.fromJson<String>(json['spaceId']),
+      fileId: serializer.fromJson<String>(json['fileId']),
+      cid: serializer.fromJson<String>(json['cid']),
+      bytes: serializer.fromJson<Uint8List>(json['bytes']),
+      cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'spaceId': serializer.toJson<String>(spaceId),
+      'fileId': serializer.toJson<String>(fileId),
+      'cid': serializer.toJson<String>(cid),
+      'bytes': serializer.toJson<Uint8List>(bytes),
+      'cachedAt': serializer.toJson<DateTime>(cachedAt),
+    };
+  }
+
+  StoredCachedBlob copyWith(
+          {String? spaceId,
+          String? fileId,
+          String? cid,
+          Uint8List? bytes,
+          DateTime? cachedAt}) =>
+      StoredCachedBlob(
+        spaceId: spaceId ?? this.spaceId,
+        fileId: fileId ?? this.fileId,
+        cid: cid ?? this.cid,
+        bytes: bytes ?? this.bytes,
+        cachedAt: cachedAt ?? this.cachedAt,
+      );
+  StoredCachedBlob copyWithCompanion(CachedBlobsCompanion data) {
+    return StoredCachedBlob(
+      spaceId: data.spaceId.present ? data.spaceId.value : this.spaceId,
+      fileId: data.fileId.present ? data.fileId.value : this.fileId,
+      cid: data.cid.present ? data.cid.value : this.cid,
+      bytes: data.bytes.present ? data.bytes.value : this.bytes,
+      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredCachedBlob(')
+          ..write('spaceId: $spaceId, ')
+          ..write('fileId: $fileId, ')
+          ..write('cid: $cid, ')
+          ..write('bytes: $bytes, ')
+          ..write('cachedAt: $cachedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      spaceId, fileId, cid, $driftBlobEquality.hash(bytes), cachedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredCachedBlob &&
+          other.spaceId == this.spaceId &&
+          other.fileId == this.fileId &&
+          other.cid == this.cid &&
+          $driftBlobEquality.equals(other.bytes, this.bytes) &&
+          other.cachedAt == this.cachedAt);
+}
+
+class CachedBlobsCompanion extends UpdateCompanion<StoredCachedBlob> {
+  final Value<String> spaceId;
+  final Value<String> fileId;
+  final Value<String> cid;
+  final Value<Uint8List> bytes;
+  final Value<DateTime> cachedAt;
+  final Value<int> rowid;
+  const CachedBlobsCompanion({
+    this.spaceId = const Value.absent(),
+    this.fileId = const Value.absent(),
+    this.cid = const Value.absent(),
+    this.bytes = const Value.absent(),
+    this.cachedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CachedBlobsCompanion.insert({
+    required String spaceId,
+    required String fileId,
+    required String cid,
+    required Uint8List bytes,
+    this.cachedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : spaceId = Value(spaceId),
+        fileId = Value(fileId),
+        cid = Value(cid),
+        bytes = Value(bytes);
+  static Insertable<StoredCachedBlob> custom({
+    Expression<String>? spaceId,
+    Expression<String>? fileId,
+    Expression<String>? cid,
+    Expression<Uint8List>? bytes,
+    Expression<DateTime>? cachedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (spaceId != null) 'space_id': spaceId,
+      if (fileId != null) 'file_id': fileId,
+      if (cid != null) 'cid': cid,
+      if (bytes != null) 'bytes': bytes,
+      if (cachedAt != null) 'cached_at': cachedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CachedBlobsCompanion copyWith(
+      {Value<String>? spaceId,
+      Value<String>? fileId,
+      Value<String>? cid,
+      Value<Uint8List>? bytes,
+      Value<DateTime>? cachedAt,
+      Value<int>? rowid}) {
+    return CachedBlobsCompanion(
+      spaceId: spaceId ?? this.spaceId,
+      fileId: fileId ?? this.fileId,
+      cid: cid ?? this.cid,
+      bytes: bytes ?? this.bytes,
+      cachedAt: cachedAt ?? this.cachedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (spaceId.present) {
+      map['space_id'] = Variable<String>(spaceId.value);
+    }
+    if (fileId.present) {
+      map['file_id'] = Variable<String>(fileId.value);
+    }
+    if (cid.present) {
+      map['cid'] = Variable<String>(cid.value);
+    }
+    if (bytes.present) {
+      map['bytes'] = Variable<Uint8List>(bytes.value);
+    }
+    if (cachedAt.present) {
+      map['cached_at'] = Variable<DateTime>(cachedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedBlobsCompanion(')
+          ..write('spaceId: $spaceId, ')
+          ..write('fileId: $fileId, ')
+          ..write('cid: $cid, ')
+          ..write('bytes: $bytes, ')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ManytypeDatabase extends GeneratedDatabase {
   _$ManytypeDatabase(QueryExecutor e) : super(e);
   $ManytypeDatabaseManager get managers => $ManytypeDatabaseManager(this);
   late final $ObjectsTable objects = $ObjectsTable(this);
   late final $ChangesTable changes = $ChangesTable(this);
   late final $StoreEntriesTable storeEntries = $StoreEntriesTable(this);
+  late final $AttachmentRefsTable attachmentRefs = $AttachmentRefsTable(this);
+  late final $CachedBlobsTable cachedBlobs = $CachedBlobsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [objects, changes, storeEntries];
+      [objects, changes, storeEntries, attachmentRefs, cachedBlobs];
 }
 
 typedef $$ObjectsTableCreateCompanionBuilder = ObjectsCompanion Function({
@@ -1315,6 +1938,356 @@ typedef $$StoreEntriesTableProcessedTableManager = ProcessedTableManager<
     ),
     StoredStoreEntry,
     PrefetchHooks Function()>;
+typedef $$AttachmentRefsTableCreateCompanionBuilder = AttachmentRefsCompanion
+    Function({
+  required String spaceId,
+  required String objectId,
+  required String fileId,
+  Value<String> cid,
+  Value<DateTime> discoveredAt,
+  Value<int> rowid,
+});
+typedef $$AttachmentRefsTableUpdateCompanionBuilder = AttachmentRefsCompanion
+    Function({
+  Value<String> spaceId,
+  Value<String> objectId,
+  Value<String> fileId,
+  Value<String> cid,
+  Value<DateTime> discoveredAt,
+  Value<int> rowid,
+});
+
+class $$AttachmentRefsTableFilterComposer
+    extends Composer<_$ManytypeDatabase, $AttachmentRefsTable> {
+  $$AttachmentRefsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get spaceId => $composableBuilder(
+      column: $table.spaceId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get objectId => $composableBuilder(
+      column: $table.objectId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get fileId => $composableBuilder(
+      column: $table.fileId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get cid => $composableBuilder(
+      column: $table.cid, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get discoveredAt => $composableBuilder(
+      column: $table.discoveredAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$AttachmentRefsTableOrderingComposer
+    extends Composer<_$ManytypeDatabase, $AttachmentRefsTable> {
+  $$AttachmentRefsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get spaceId => $composableBuilder(
+      column: $table.spaceId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get objectId => $composableBuilder(
+      column: $table.objectId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get fileId => $composableBuilder(
+      column: $table.fileId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get cid => $composableBuilder(
+      column: $table.cid, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get discoveredAt => $composableBuilder(
+      column: $table.discoveredAt,
+      builder: (column) => ColumnOrderings(column));
+}
+
+class $$AttachmentRefsTableAnnotationComposer
+    extends Composer<_$ManytypeDatabase, $AttachmentRefsTable> {
+  $$AttachmentRefsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get spaceId =>
+      $composableBuilder(column: $table.spaceId, builder: (column) => column);
+
+  GeneratedColumn<String> get objectId =>
+      $composableBuilder(column: $table.objectId, builder: (column) => column);
+
+  GeneratedColumn<String> get fileId =>
+      $composableBuilder(column: $table.fileId, builder: (column) => column);
+
+  GeneratedColumn<String> get cid =>
+      $composableBuilder(column: $table.cid, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get discoveredAt => $composableBuilder(
+      column: $table.discoveredAt, builder: (column) => column);
+}
+
+class $$AttachmentRefsTableTableManager extends RootTableManager<
+    _$ManytypeDatabase,
+    $AttachmentRefsTable,
+    StoredAttachmentRef,
+    $$AttachmentRefsTableFilterComposer,
+    $$AttachmentRefsTableOrderingComposer,
+    $$AttachmentRefsTableAnnotationComposer,
+    $$AttachmentRefsTableCreateCompanionBuilder,
+    $$AttachmentRefsTableUpdateCompanionBuilder,
+    (
+      StoredAttachmentRef,
+      BaseReferences<_$ManytypeDatabase, $AttachmentRefsTable,
+          StoredAttachmentRef>
+    ),
+    StoredAttachmentRef,
+    PrefetchHooks Function()> {
+  $$AttachmentRefsTableTableManager(
+      _$ManytypeDatabase db, $AttachmentRefsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AttachmentRefsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AttachmentRefsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AttachmentRefsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> spaceId = const Value.absent(),
+            Value<String> objectId = const Value.absent(),
+            Value<String> fileId = const Value.absent(),
+            Value<String> cid = const Value.absent(),
+            Value<DateTime> discoveredAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              AttachmentRefsCompanion(
+            spaceId: spaceId,
+            objectId: objectId,
+            fileId: fileId,
+            cid: cid,
+            discoveredAt: discoveredAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String spaceId,
+            required String objectId,
+            required String fileId,
+            Value<String> cid = const Value.absent(),
+            Value<DateTime> discoveredAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              AttachmentRefsCompanion.insert(
+            spaceId: spaceId,
+            objectId: objectId,
+            fileId: fileId,
+            cid: cid,
+            discoveredAt: discoveredAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$AttachmentRefsTableProcessedTableManager = ProcessedTableManager<
+    _$ManytypeDatabase,
+    $AttachmentRefsTable,
+    StoredAttachmentRef,
+    $$AttachmentRefsTableFilterComposer,
+    $$AttachmentRefsTableOrderingComposer,
+    $$AttachmentRefsTableAnnotationComposer,
+    $$AttachmentRefsTableCreateCompanionBuilder,
+    $$AttachmentRefsTableUpdateCompanionBuilder,
+    (
+      StoredAttachmentRef,
+      BaseReferences<_$ManytypeDatabase, $AttachmentRefsTable,
+          StoredAttachmentRef>
+    ),
+    StoredAttachmentRef,
+    PrefetchHooks Function()>;
+typedef $$CachedBlobsTableCreateCompanionBuilder = CachedBlobsCompanion
+    Function({
+  required String spaceId,
+  required String fileId,
+  required String cid,
+  required Uint8List bytes,
+  Value<DateTime> cachedAt,
+  Value<int> rowid,
+});
+typedef $$CachedBlobsTableUpdateCompanionBuilder = CachedBlobsCompanion
+    Function({
+  Value<String> spaceId,
+  Value<String> fileId,
+  Value<String> cid,
+  Value<Uint8List> bytes,
+  Value<DateTime> cachedAt,
+  Value<int> rowid,
+});
+
+class $$CachedBlobsTableFilterComposer
+    extends Composer<_$ManytypeDatabase, $CachedBlobsTable> {
+  $$CachedBlobsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get spaceId => $composableBuilder(
+      column: $table.spaceId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get fileId => $composableBuilder(
+      column: $table.fileId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get cid => $composableBuilder(
+      column: $table.cid, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<Uint8List> get bytes => $composableBuilder(
+      column: $table.bytes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get cachedAt => $composableBuilder(
+      column: $table.cachedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$CachedBlobsTableOrderingComposer
+    extends Composer<_$ManytypeDatabase, $CachedBlobsTable> {
+  $$CachedBlobsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get spaceId => $composableBuilder(
+      column: $table.spaceId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get fileId => $composableBuilder(
+      column: $table.fileId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get cid => $composableBuilder(
+      column: $table.cid, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<Uint8List> get bytes => $composableBuilder(
+      column: $table.bytes, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
+      column: $table.cachedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$CachedBlobsTableAnnotationComposer
+    extends Composer<_$ManytypeDatabase, $CachedBlobsTable> {
+  $$CachedBlobsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get spaceId =>
+      $composableBuilder(column: $table.spaceId, builder: (column) => column);
+
+  GeneratedColumn<String> get fileId =>
+      $composableBuilder(column: $table.fileId, builder: (column) => column);
+
+  GeneratedColumn<String> get cid =>
+      $composableBuilder(column: $table.cid, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get bytes =>
+      $composableBuilder(column: $table.bytes, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get cachedAt =>
+      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+}
+
+class $$CachedBlobsTableTableManager extends RootTableManager<
+    _$ManytypeDatabase,
+    $CachedBlobsTable,
+    StoredCachedBlob,
+    $$CachedBlobsTableFilterComposer,
+    $$CachedBlobsTableOrderingComposer,
+    $$CachedBlobsTableAnnotationComposer,
+    $$CachedBlobsTableCreateCompanionBuilder,
+    $$CachedBlobsTableUpdateCompanionBuilder,
+    (
+      StoredCachedBlob,
+      BaseReferences<_$ManytypeDatabase, $CachedBlobsTable, StoredCachedBlob>
+    ),
+    StoredCachedBlob,
+    PrefetchHooks Function()> {
+  $$CachedBlobsTableTableManager(_$ManytypeDatabase db, $CachedBlobsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CachedBlobsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CachedBlobsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CachedBlobsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> spaceId = const Value.absent(),
+            Value<String> fileId = const Value.absent(),
+            Value<String> cid = const Value.absent(),
+            Value<Uint8List> bytes = const Value.absent(),
+            Value<DateTime> cachedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              CachedBlobsCompanion(
+            spaceId: spaceId,
+            fileId: fileId,
+            cid: cid,
+            bytes: bytes,
+            cachedAt: cachedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String spaceId,
+            required String fileId,
+            required String cid,
+            required Uint8List bytes,
+            Value<DateTime> cachedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              CachedBlobsCompanion.insert(
+            spaceId: spaceId,
+            fileId: fileId,
+            cid: cid,
+            bytes: bytes,
+            cachedAt: cachedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$CachedBlobsTableProcessedTableManager = ProcessedTableManager<
+    _$ManytypeDatabase,
+    $CachedBlobsTable,
+    StoredCachedBlob,
+    $$CachedBlobsTableFilterComposer,
+    $$CachedBlobsTableOrderingComposer,
+    $$CachedBlobsTableAnnotationComposer,
+    $$CachedBlobsTableCreateCompanionBuilder,
+    $$CachedBlobsTableUpdateCompanionBuilder,
+    (
+      StoredCachedBlob,
+      BaseReferences<_$ManytypeDatabase, $CachedBlobsTable, StoredCachedBlob>
+    ),
+    StoredCachedBlob,
+    PrefetchHooks Function()>;
 
 class $ManytypeDatabaseManager {
   final _$ManytypeDatabase _db;
@@ -1325,4 +2298,8 @@ class $ManytypeDatabaseManager {
       $$ChangesTableTableManager(_db, _db.changes);
   $$StoreEntriesTableTableManager get storeEntries =>
       $$StoreEntriesTableTableManager(_db, _db.storeEntries);
+  $$AttachmentRefsTableTableManager get attachmentRefs =>
+      $$AttachmentRefsTableTableManager(_db, _db.attachmentRefs);
+  $$CachedBlobsTableTableManager get cachedBlobs =>
+      $$CachedBlobsTableTableManager(_db, _db.cachedBlobs);
 }
