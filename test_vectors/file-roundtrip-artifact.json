@@ -1,0 +1,113 @@
+{
+  "captured_at": "2026-04-06T02:04:11.966846Z",
+  "events": [
+    {
+      "type": "connection",
+      "role": "coordinator",
+      "address": "127.0.0.1:1014"
+    },
+    {
+      "type": "unary_rpc",
+      "role": "coordinator",
+      "method": "/coordinator.Coordinator/NetworkConfiguration",
+      "request_len": 0,
+      "response_len": 1010,
+      "request_base64": "",
+      "response_base64": "Chg2OWQxZTNjOGI3MjU0MThkZTNkMDI3NzcSME45TUdRdW9hZm5kSGlqbkVKbVdHSmVzTFNlcEJRTFhaV3F2amVqRFk0aFA3bUZ0NRqTAQo0MTJEM0tvb1dSZ3BDdlo0NlZqYndMQ1NlcEM3eUs3Nk5XQ24zS0hTdndhcUZScGJzaFQ0cRIUYW55LXN5bmMtbm9kZS0xOjEwMDESG3F1aWM6Ly9hbnktc3luYy1ub2RlLTE6MTAxMRIOMTI3LjAuMC4xOjEwMDESFXF1aWM6Ly8xMjcuMC4wLjE6MTAxMRoBABqTAQo0MTJEM0tvb1dEbXA2WEFhZXFjSnZVNHg2TTlrR2dpSFJBc3ZHdzhqcU1YcnE0ZGhVUlp3eRIUYW55LXN5bmMtbm9kZS0yOjEwMDISG3F1aWM6Ly9hbnktc3luYy1ub2RlLTI6MTAxMhIOMTI3LjAuMC4xOjEwMDISFXF1aWM6Ly8xMjcuMC4wLjE6MTAxMhoBABqTAQo0MTJEM0tvb1dKUXZ1eXE4WFF2UVFKUlJnZTJzU0Y3ZFVBZFpmbUVMNEJrRHcxYlRIUllkRRIUYW55LXN5bmMtbm9kZS0zOjEwMDMSG3F1aWM6Ly9hbnktc3luYy1ub2RlLTM6MTAxMxIOMTI3LjAuMC4xOjEwMDMSFXF1aWM6Ly8xMjcuMC4wLjE6MTAxMxoBABqdAQo0MTJEM0tvb1dOS2pnclFCS240Yk5yNnhQaUFYN3k3VnRvRkFLZ2phOGVBa2lxd3oxcmhEUhIZYW55LXN5bmMtY29vcmRpbmF0b3I6MTAwNBIgcXVpYzovL2FueS1zeW5jLWNvb3JkaW5hdG9yOjEwMTQSDjEyNy4wLjAuMToxMDA0EhVxdWljOi8vMTI3LjAuMC4xOjEwMTQaAQIalwEKNDEyRDNLb29XUGREV2NYdEt6UndaazFzeUZiNHNIV1p5ekZ6bmNVaHljRVNtaUFlbWRXUFQSFmFueS1zeW5jLWZpbGVub2RlOjEwMDUSHXF1aWM6Ly9hbnktc3luYy1maWxlbm9kZToxMDE1Eg4xMjcuMC4wLjE6MTAwNRIVcXVpYzovLzEyNy4wLjAuMToxMDE1GgEBGqEBCjQxMkQzS29vV1BhUGVlM1VHamM1UlNyUHhMaWY4OEo0S0p2eHl3Tnc0SENtMUJIVVZIeEZYEhthbnktc3luYy1jb25zZW5zdXNub2RlOjEwMDYSInF1aWM6Ly9hbnktc3luYy1jb25zZW5zdXNub2RlOjEwMTYSDjEyNy4wLjAuMToxMDA2EhVxdWljOi8vMTI3LjAuMC4xOjEwMTYaAQMgyMfHzgY="
+    },
+    {
+      "type": "resolved_file_node",
+      "network_id": "N9MGQuoafndHijnEJmWGJesLSepBQLXZWqvjejDY4hP7mFt5",
+      "configuration_id": "69d1e3c8b725418de3d02777",
+      "file_address": "127.0.0.1:1015"
+    },
+    {
+      "type": "connection",
+      "role": "file-node",
+      "address": "127.0.0.1:1015"
+    },
+    {
+      "type": "unary_rpc",
+      "role": "file-node",
+      "method": "/filesync.File/BlocksCheck",
+      "request_len": 111,
+      "response_len": 40,
+      "request_base64": "CkdiYWZ5cmVpaHFvZWF5a2R1MjRoc2d5MjZ6dnNyazc1bG9oczR2aTNrd3lmeWphY3k3bnNwc2RrdHpwYS5mMmF4ajJ0NW84ZRIkAXESIJDRzufKZDUdwTKVwJfnO7S/lzKV3PEZ69GWOau8EpiW",
+      "response_base64": "CiYKJAFxEiCQ0c7nymQ1HcEylcCX5zu0v5cyldzxGevRljmrvBKYlg=="
+    },
+    {
+      "type": "unary_rpc",
+      "role": "file-node",
+      "method": "/filesync.File/BlockPush",
+      "request_len": 159,
+      "response_len": 0,
+      "request_base64": "CkdiYWZ5cmVpaHFvZWF5a2R1MjRoc2d5MjZ6dnNyazc1bG9oczR2aTNrd3lmeWphY3k3bnNwc2RrdHpwYS5mMmF4ajJ0NW84ZRIMcGhhc2UyMi1saXZlGiQBcRIgkNHO58pkNR3BMpXAl+c7tL+XMpXc8Rnr0ZY5q7wSmJYiIHBoYXNlMjItbGl2ZS0xNzc1NDQxMDQwMjA0NjA5Mjc2",
+      "response_base64": ""
+    },
+    {
+      "type": "upload_result",
+      "file_id": "phase22-live",
+      "cid": "bafyreieq2hhopsteguo4cmuvycl6oo5ux6ltffo46em6xumwhgv3yeuysy",
+      "uploaded": true
+    },
+    {
+      "type": "connection",
+      "role": "coordinator",
+      "address": "127.0.0.1:1014"
+    },
+    {
+      "type": "unary_rpc",
+      "role": "coordinator",
+      "method": "/coordinator.Coordinator/NetworkConfiguration",
+      "request_len": 0,
+      "response_len": 1010,
+      "request_base64": "",
+      "response_base64": "Chg2OWQxZTNjOGI3MjU0MThkZTNkMDI3NzcSME45TUdRdW9hZm5kSGlqbkVKbVdHSmVzTFNlcEJRTFhaV3F2amVqRFk0aFA3bUZ0NRqTAQo0MTJEM0tvb1dSZ3BDdlo0NlZqYndMQ1NlcEM3eUs3Nk5XQ24zS0hTdndhcUZScGJzaFQ0cRIUYW55LXN5bmMtbm9kZS0xOjEwMDESG3F1aWM6Ly9hbnktc3luYy1ub2RlLTE6MTAxMRIOMTI3LjAuMC4xOjEwMDESFXF1aWM6Ly8xMjcuMC4wLjE6MTAxMRoBABqTAQo0MTJEM0tvb1dEbXA2WEFhZXFjSnZVNHg2TTlrR2dpSFJBc3ZHdzhqcU1YcnE0ZGhVUlp3eRIUYW55LXN5bmMtbm9kZS0yOjEwMDISG3F1aWM6Ly9hbnktc3luYy1ub2RlLTI6MTAxMhIOMTI3LjAuMC4xOjEwMDISFXF1aWM6Ly8xMjcuMC4wLjE6MTAxMhoBABqTAQo0MTJEM0tvb1dKUXZ1eXE4WFF2UVFKUlJnZTJzU0Y3ZFVBZFpmbUVMNEJrRHcxYlRIUllkRRIUYW55LXN5bmMtbm9kZS0zOjEwMDMSG3F1aWM6Ly9hbnktc3luYy1ub2RlLTM6MTAxMxIOMTI3LjAuMC4xOjEwMDMSFXF1aWM6Ly8xMjcuMC4wLjE6MTAxMxoBABqdAQo0MTJEM0tvb1dOS2pnclFCS240Yk5yNnhQaUFYN3k3VnRvRkFLZ2phOGVBa2lxd3oxcmhEUhIZYW55LXN5bmMtY29vcmRpbmF0b3I6MTAwNBIgcXVpYzovL2FueS1zeW5jLWNvb3JkaW5hdG9yOjEwMTQSDjEyNy4wLjAuMToxMDA0EhVxdWljOi8vMTI3LjAuMC4xOjEwMTQaAQIalwEKNDEyRDNLb29XUGREV2NYdEt6UndaazFzeUZiNHNIV1p5ekZ6bmNVaHljRVNtaUFlbWRXUFQSFmFueS1zeW5jLWZpbGVub2RlOjEwMDUSHXF1aWM6Ly9hbnktc3luYy1maWxlbm9kZToxMDE1Eg4xMjcuMC4wLjE6MTAwNRIVcXVpYzovLzEyNy4wLjAuMToxMDE1GgEBGqEBCjQxMkQzS29vV1BhUGVlM1VHamM1UlNyUHhMaWY4OEo0S0p2eHl3Tnc0SENtMUJIVVZIeEZYEhthbnktc3luYy1jb25zZW5zdXNub2RlOjEwMDYSInF1aWM6Ly9hbnktc3luYy1jb25zZW5zdXNub2RlOjEwMTYSDjEyNy4wLjAuMToxMDA2EhVxdWljOi8vMTI3LjAuMC4xOjEwMTYaAQMgyMfHzgY="
+    },
+    {
+      "type": "resolved_file_node",
+      "network_id": "N9MGQuoafndHijnEJmWGJesLSepBQLXZWqvjejDY4hP7mFt5",
+      "configuration_id": "69d1e3c8b725418de3d02777",
+      "file_address": "127.0.0.1:1015"
+    },
+    {
+      "type": "connection",
+      "role": "file-node",
+      "address": "127.0.0.1:1015"
+    },
+    {
+      "type": "cache_miss",
+      "file_id": "phase22-live",
+      "cid": "bafyreieq2hhopsteguo4cmuvycl6oo5ux6ltffo46em6xumwhgv3yeuysy"
+    },
+    {
+      "type": "unary_rpc",
+      "role": "file-node",
+      "method": "/filesync.File/BlockGet",
+      "request_len": 113,
+      "response_len": 72,
+      "request_base64": "CkdiYWZ5cmVpaHFvZWF5a2R1MjRoc2d5MjZ6dnNyazc1bG9oczR2aTNrd3lmeWphY3k3bnNwc2RrdHpwYS5mMmF4ajJ0NW84ZRIkAXESIJDRzufKZDUdwTKVwJfnO7S/lzKV3PEZ69GWOau8EpiWGAA=",
+      "response_base64": "CiQBcRIgkNHO58pkNR3BMpXAl+c7tL+XMpXc8Rnr0ZY5q7wSmJYSIHBoYXNlMjItbGl2ZS0xNzc1NDQxMDQwMjA0NjA5Mjc2"
+    },
+    {
+      "type": "wrote_output",
+      "file_id": "phase22-live",
+      "cid": "bafyreieq2hhopsteguo4cmuvycl6oo5ux6ltffo46em6xumwhgv3yeuysy",
+      "output_path": "/tmp/tmp.kqFSh7RH9Z/.manytype/downloads/phase22-live_bafyreieq2hhopsteguo4cmuvycl6oo5ux6ltffo46em6xumwhgv3yeuysy.bin",
+      "source": "network"
+    },
+    {
+      "type": "cache_hit",
+      "file_id": "phase22-live",
+      "cid": "bafyreieq2hhopsteguo4cmuvycl6oo5ux6ltffo46em6xumwhgv3yeuysy",
+      "bytes": 32
+    },
+    {
+      "type": "wrote_output",
+      "file_id": "phase22-live",
+      "cid": "bafyreieq2hhopsteguo4cmuvycl6oo5ux6ltffo46em6xumwhgv3yeuysy",
+      "output_path": "/tmp/tmp.kqFSh7RH9Z/.manytype/downloads/phase22-live_bafyreieq2hhopsteguo4cmuvycl6oo5ux6ltffo46em6xumwhgv3yeuysy.bin",
+      "source": "cache"
+    }
+  ]
+}

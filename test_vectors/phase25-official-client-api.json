@@ -1,0 +1,66 @@
+{
+  "captured_at": "2026-04-06T03:30:05.327120Z",
+  "harness_script": "/home/user/src/manytype/manytype/scripts/phase25_official_client_api_probe.sh",
+  "harness_exit_code": 0,
+  "required_markers": [
+    "Credential handshake complete",
+    "Proto handshake complete"
+  ],
+  "observed_markers": [
+    "Credential handshake complete",
+    "Proto handshake complete"
+  ],
+  "api_version": "2025-11-08",
+  "server_peer_id": "12D3KooWJWoaqZhDaoEFshF7Rh1bpY9ohihFhzcW6d69Lr2NASuq",
+  "initial_space_count": 1,
+  "restart_space_count": 1,
+  "space_ids": [
+    "bafyreierbarrhfwlmkzuvfmpk2fcqki23ujf57voeuohq4aurhfe22loai.29d1idang8k9"
+  ],
+  "space_id_used": "bafyreierbarrhfwlmkzuvfmpk2fcqki23ujf57voeuohq4aurhfe22loai.29d1idang8k9",
+  "gateway_urls": [
+    "http://127.0.0.1:47800"
+  ],
+  "file_method_sequence": [
+    "/filesync.File/Check",
+    "/filesync.File/SpaceInfo",
+    "/filesync.File/AccountInfo",
+    "/filesync.File/BlocksCheck",
+    "/filesync.File/SpaceInfo",
+    "/filesync.File/BlockPushMany",
+    "/filesync.File/AccountInfo",
+    "/filesync.File/Check",
+    "/filesync.File/BlockGet"
+  ],
+  "file_methods_observed": [
+    "/filesync.File/Check",
+    "/filesync.File/SpaceInfo",
+    "/filesync.File/AccountInfo",
+    "/filesync.File/BlocksCheck",
+    "/filesync.File/BlockPushMany",
+    "/filesync.File/BlockGet"
+  ],
+  "required_file_method_sequence": [
+    "/filesync.File/Check",
+    "/filesync.File/BlocksCheck"
+  ],
+  "roundtrip_method_order_ok": true,
+  "cache_eviction_strategy": "flatfs_reset",
+  "api_probe_success": true,
+  "automation_surface": "headless_grpc",
+  "automation_status": "full_file_roundtrip",
+  "limitation": "The shipped official anytype-cli headless gRPC surface can upload and download attachments against manytype_server after restart. Background advisory calls still probe unsupported or unauthorized file-node methods such as FilesDelete or stale SpaceInfo entries.",
+  "roundtrip_success": true,
+  "roundtrip_object_id": "bafyreifnxj5lhztnfzwu3nqyszeaxivap5s2gjzxfvn73nngsauwrwch7m",
+  "roundtrip_download_path": "/tmp/tmp.ZQcHYq5Yhd/downloads/official-client-payload.txt",
+  "payload_sha256": "f7b776272e8074aba533fc2ba5f93f765f1565b4a0952777ec9530f8bcfed032",
+  "downloaded_sha256": "f7b776272e8074aba533fc2ba5f93f765f1565b4a0952777ec9530f8bcfed032",
+  "byte_match": true,
+  "error_lines": [
+    "2026-04-06T03:29:45.583538Z ERROR manytype_server: RPC error on /filesync.File/SpaceInfo: Forbidden: peer does not own or cannot access space bafyreierbarrhfwlmkzuvfmpk2fcqki23ujf57voeuohq4aurhfe22loai.29d1idang8k9"
+  ],
+  "advisory_error_lines": [
+    "2026-04-06T03:29:45.583538Z ERROR manytype_server: RPC error on /filesync.File/SpaceInfo: Forbidden: peer does not own or cannot access space bafyreierbarrhfwlmkzuvfmpk2fcqki23ujf57voeuohq4aurhfe22loai.29d1idang8k9"
+  ],
+  "fatal_error_lines": []
+}
