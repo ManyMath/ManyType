@@ -1,0 +1,31 @@
+--- rust/manytype_quic_ffi/src/lib.rs
++++ rust/manytype_quic_ffi/src/lib.rs
+@@ -14,7 +14,7 @@
+ 
+ use client::ConnHandle;
+ use manytype_core::crypto::ed25519;
+-use manytype_proto::spacesync::ObjectSyncMessage;
++use manytype_proto::spacesync::{ObjectSyncMessage, SpaceSubscription, space_subscription::Action};
+ use prost::Message;
+ use runtime::RUNTIME;
+ 
+@@ -194,6 +194,18 @@
+         &[]
+     };
+ 
++    let sub_payload = SpaceSubscription {
++        space_ids: vec![space_id.clone()],
++        action: Action::Subscribe as i32,
++    }.encode_to_vec();
++
+     let messages: Vec<Vec<u8>> = vec![
++        ObjectSyncMessage {
++            space_id: space_id.clone(),
++            object_id: "".to_string(),
++            request_id: "req-sub".to_string(),
++            payload: sub_payload,
++            ..Default::default()
++        }
++        .encode_to_vec(),
+         ObjectSyncMessage {
+             space_id: space_id.clone(),

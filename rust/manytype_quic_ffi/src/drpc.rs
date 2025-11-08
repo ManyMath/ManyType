@@ -181,7 +181,6 @@ pub async fn sync_object<T>(
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    // Write INVOKE frame for ObjectSyncStream
     drpc_stream
         .write_frame(DrpcFrame {
             kind: KIND_INVOKE,
@@ -194,30 +193,36 @@ where
         .await
         .context("failed to write invoke frame for ObjectSyncStream")?;
 
-    let mut responses = Vec::with_capacity(changes.len());
-
     for (i, change) in changes.iter().enumerate() {
-        // Write each change as a MESSAGE frame (done=true, self-contained)
         drpc_stream
             .write_message(STREAM_ID, (i as u64) + 2, change)
             .await
             .context("failed to write change message")?;
+    }
 
-        // Read confirmation from server (non-final message frame)
-        let frame = drpc_stream
-            .read_frame()
-            .await
-            .context("failed to read confirmation frame")?
-            .context("connection closed while awaiting confirmation")?;
-
-        if frame.kind == KIND_MESSAGE {
-            responses.push(frame.data.to_vec());
-        } else {
-            anyhow::bail!("expected MESSAGE confirmation, got kind={}", frame.kind);
+    let mut responses = Vec::new();
+    
+    // We sent `changes.len()` messages. Some may not elicit a response.
+    // So we just read with a timeout.
+    loop {
+        match timeout(Duration::from_millis(500), drpc_stream.read_frame()).await {
+            Ok(Ok(Some(frame))) => {
+                if frame.kind == KIND_MESSAGE {
+                    responses.push(frame.data.to_vec());
+                } else if frame.kind == KIND_CLOSE_SEND || frame.kind == KIND_CLOSE {
+                    break;
+                }
+            }
+            Ok(Ok(None)) => break,
+            Ok(Err(e)) => anyhow::bail!("error reading frame: {}", e),
+            Err(_) => {
+                // Timeout reached, assume no more responses are coming.
+                break;
+            }
         }
     }
 
-    // Send KIND_CLOSE_SEND to terminate the stream
+    // Now send CLOSE_SEND
     drpc_stream
         .write_frame(DrpcFrame {
             kind: KIND_CLOSE_SEND,
@@ -229,19 +234,6 @@ where
         })
         .await
         .context("failed to write close-send")?;
-
-    // Read server's KIND_CLOSE_SEND
-    let frame = drpc_stream
-        .read_frame()
-        .await
-        .context("failed to read server close-send")?
-        .context("connection closed before server close-send")?;
-
-    anyhow::ensure!(
-        frame.kind == KIND_CLOSE_SEND,
-        "expected CLOSE_SEND from server, got kind={}",
-        frame.kind
-    );
 
     Ok(responses)
 }

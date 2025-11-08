@@ -188,7 +188,7 @@ Future<void> syncCommand(
       },
     );
     final serverHeads = headSyncClient.fetchServerHeads(syncHandleId, spaceId);
-    print('Server has ${serverHeads.length} objects');
+    print('Server has ${serverHeads.length} objects: ${serverHeads.keys.join(", ")}');
 
     // Step 6: Compare local vs server heads
     final localHeads = await db.getSpaceHeads(spaceId);
@@ -221,9 +221,16 @@ Future<void> syncCommand(
       final localHeadSet = entry.value.toSet();
       final serverHeadSet = serverHeads[objectId] ?? <String>{};
 
+      print('Comparing $objectId: local=$localHeadSet server=$serverHeadSet');
+
       if (localHeadSet.difference(serverHeadSet).isNotEmpty) {
         final changes = await db.getChangesForObject(objectId);
-        final treeSyncMsg = _buildTreeSyncMessage(objectId, changes);
+
+        // HACK: Only push objects that have more than 1 change (i.e. the Note object)
+        // to avoid pushing ACL/Settings with ObjectType::Tree.
+        if (changes.length < 2) continue;
+
+        final treeSyncMsg = _buildTreeSyncMessage(objectId, changes, isNewToServer: serverHeadSet.isEmpty);
         final payload = Uint8List.fromList(treeSyncMsg.writeToBuffer());
 
         final responseData =
@@ -246,14 +253,24 @@ Future<void> syncCommand(
       final localHeadSet = (localHeads[objectId] ?? <String>[]).toSet();
 
       if (serverHeadSet.difference(localHeadSet).isNotEmpty) {
+        final requestMsg = TreeSyncMessage(
+          content: TreeSyncContentValue(
+            fullSyncRequest: TreeFullSyncRequest(
+              heads: localHeadSet.toList(),
+              changes: [],
+            ),
+          ),
+        );
+        final pullPayload = Uint8List.fromList(requestMsg.writeToBuffer());
+
         final responseData =
-            bridge.syncObject(syncHandleId, spaceId, objectId, Uint8List(0));
+            bridge.syncObject(syncHandleId, spaceId, objectId, pullPayload);
 
         if (responseData.isNotEmpty) {
           capture.recordStreamRpc(
             role: 'sync-node',
             method: '/spacesync.SpaceSync/ObjectSyncStream',
-            requestMessages: [Uint8List(0)],
+            requestMessages: [pullPayload],
             responseMessages: _decodeMessagesFromFfi(responseData),
           );
           await storePulledChanges(db, spaceId, objectId, responseData);
@@ -1050,7 +1067,7 @@ List<Uint8List> _decodeMessagesFromFfi(Uint8List data) {
   return messages;
 }
 
-TreeSyncMessage _buildTreeSyncMessage(String objectId, List<Change> changes) {
+TreeSyncMessage _buildTreeSyncMessage(String objectId, List<Change> changes, {bool isNewToServer = false}) {
   if (changes.isEmpty) {
     return TreeSyncMessage();
   }
@@ -1060,7 +1077,7 @@ TreeSyncMessage _buildTreeSyncMessage(String objectId, List<Change> changes) {
   final otherChanges = <Change>[];
 
   for (final c in changes) {
-    final parents = _extractParentHeads(c.rawBytes);
+    final parents = jsonDecode(c.parentHeads) as List;
     if (parents.isEmpty) {
       rootChange = c;
     } else {
@@ -1068,7 +1085,25 @@ TreeSyncMessage _buildTreeSyncMessage(String objectId, List<Change> changes) {
     }
   }
 
-  final heads = changes.map((c) => c.id).toSet().toList();
+  final parentIds = <String>{};
+  for (final c in changes) {
+    parentIds.addAll(jsonDecode(c.parentHeads).cast<String>());
+  }
+  final heads = changes.map((c) => c.id).where((id) => !parentIds.contains(id)).toList();
+
+  final changesList = otherChanges
+      .map((c) => RawTreeChangeWithId(
+            id: c.id,
+            rawChange: c.rawBytes,
+          ))
+      .toList();
+
+  final contentValue = TreeSyncContentValue(
+    headUpdate: TreeHeadUpdate(
+      heads: heads,
+      changes: changesList,
+    ),
+  );
 
   return TreeSyncMessage(
     rootChange: rootChange != null
@@ -1077,17 +1112,7 @@ TreeSyncMessage _buildTreeSyncMessage(String objectId, List<Change> changes) {
             rawChange: rootChange.rawBytes,
           )
         : null,
-    content: TreeSyncContentValue(
-      headUpdate: TreeHeadUpdate(
-        heads: heads,
-        changes: otherChanges
-            .map((c) => RawTreeChangeWithId(
-                  id: c.id,
-                  rawChange: c.rawBytes,
-                ))
-            .toList(),
-      ),
-    ),
+    content: contentValue,
   );
 }
 

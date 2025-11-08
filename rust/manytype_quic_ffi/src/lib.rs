@@ -230,16 +230,18 @@ pub unsafe extern "C" fn ffi_sync_object(
         &[]
     };
 
-    let messages: Vec<Vec<u8>> = vec![
-        ObjectSyncMessage {
-            space_id: space_id.clone(),
-            object_id: object_id.clone(),
-            request_id: "req-0".to_string(),
-            payload: payload_slice.to_vec(),
-            ..Default::default()
-        }
-        .encode_to_vec(),
-    ];
+    use manytype_proto::spacesync::ObjectType;
+
+    let main_msg = ObjectSyncMessage {
+        space_id: space_id.clone(),
+        object_id: object_id.clone(),
+        request_id: "req-0".to_string(),
+        payload: payload_slice.to_vec(),
+        object_type: ObjectType::Tree as i32,
+        ..Default::default()
+    };
+
+    let messages: Vec<Vec<u8>> = vec![main_msg.encode_to_vec()];
 
     let connection = {
         let handles = HANDLES.lock().unwrap();
@@ -251,14 +253,14 @@ pub unsafe extern "C" fn ffi_sync_object(
 
     match RUNTIME.block_on(async {
         let mut drpc_stream = client::open_drpc_stream(&connection).await?;
-        drpc::exchange_stream(
+        drpc::sync_object(
             &mut drpc_stream,
-            "/spacesync.SpaceSync/ObjectSyncStream",
             &messages,
         )
         .await
     }) {
         Ok(responses) => {
+            trace(|| format!("ffi_sync_object success handle_id={} responses={}", handle_id, responses.len()));
             let mut out = Vec::new();
             for resp in responses {
                 out.extend_from_slice(&(resp.len() as u32).to_le_bytes());
@@ -266,7 +268,10 @@ pub unsafe extern "C" fn ffi_sync_object(
             }
             FfiResult::success(out)
         }
-        Err(e) => FfiResult::error(format!("sync_object failed: {e:#}")),
+        Err(e) => {
+            trace(|| format!("ffi_sync_object error handle_id={} err={:#}", handle_id, e));
+            FfiResult::error(format!("sync_object failed: {e:#}"))
+        }
     }
 }
 

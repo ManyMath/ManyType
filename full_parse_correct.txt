@@ -1,0 +1,18 @@
+
+=============================================
+Role: sync-node
+--- Request messages (Client -> Server) ---
+--- Req Msg 0 ---
+--- Response messages (Server -> Client) ---
+
+=============================================
+Role: sync-node
+--- Request messages (Client -> Server) ---
+--- Req Msg 0 ---
+--- Response messages (Server -> Client) ---
+
+=============================================
+Role: sync-node
+--- Request messages (Client -> Server) ---
+--- Req Msg 0 ---
+--- Response messages (Server -> Client) ---

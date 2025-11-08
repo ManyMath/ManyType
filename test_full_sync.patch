@@ -1,0 +1,66 @@
+--- packages/manytype_cli/lib/src/commands/sync.dart
++++ packages/manytype_cli/lib/src/commands/sync.dart
+@@ -194,7 +194,7 @@
+ 
+       if (localHeadSet.difference(serverHeadSet).isNotEmpty) {
+         final changes = await db.getChangesForObject(objectId);
+-        final treeSyncMsg = _buildTreeSyncMessage(objectId, changes);
++        final treeSyncMsg = _buildTreeSyncMessage(objectId, changes, isNewToServer: serverHeadSet.isEmpty);
+         final payload = Uint8List.fromList(treeSyncMsg.writeToBuffer());
+ 
+         final responseData =
+@@ -530,7 +530,7 @@
+   return messages;
+ }
+ 
+-TreeSyncMessage _buildTreeSyncMessage(String objectId, List<Change> changes) {
++TreeSyncMessage _buildTreeSyncMessage(String objectId, List<Change> changes, {bool isNewToServer = false}) {
+   if (changes.isEmpty) {
+     return TreeSyncMessage();
+   }
+@@ -549,20 +549,32 @@
+ 
+   final heads = changes.map((c) => c.id).toSet().toList();
+ 
++  final changesList = otherChanges
++      .map((c) => RawTreeChangeWithId(
++            id: c.id,
++            rawChange: c.rawBytes,
++          ))
++      .toList();
++
++  final contentValue = isNewToServer
++      ? TreeSyncContentValue(
++          fullSyncRequest: TreeFullSyncRequest(
++            heads: heads,
++            changes: changesList,
++          ),
++        )
++      : TreeSyncContentValue(
++          headUpdate: TreeHeadUpdate(
++            heads: heads,
++            changes: changesList,
++          ),
++        );
++
+   return TreeSyncMessage(
+     rootChange: rootChange != null
+         ? RawTreeChangeWithId(
+             id: rootChange.id,
+             rawChange: rootChange.rawBytes,
+           )
+         : null,
+-    content: TreeSyncContentValue(
+-      headUpdate: TreeHeadUpdate(
+-        heads: heads,
+-        changes: otherChanges
+-            .map((c) => RawTreeChangeWithId(
+-                  id: c.id,
+-                  rawChange: c.rawBytes,
+-                ))
+-            .toList(),
+-      ),
+-    ),
++    content: contentValue,
+   );
+ }

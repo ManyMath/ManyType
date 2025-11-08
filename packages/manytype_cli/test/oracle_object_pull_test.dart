@@ -86,9 +86,26 @@ void main() {
         environment: envA,
         workingDirectory: repoRoot,
       );
+      print('syncA stderr:\n${syncA.stderr}');
       expect(syncA.exitCode, equals(0),
           reason: 'home A sync failed: ${syncA.stderr}');
       final syncAOutput = syncA.stdout.toString();
+
+      final syncA2 = await Process.run(
+        'dart',
+        [
+          'run',
+          'packages/manytype_cli/bin/manytype.dart',
+          '--network-config',
+          'docker/any-sync/etc/client.yml',
+          'sync',
+        ],
+        environment: envA,
+        workingDirectory: repoRoot,
+      );
+      expect(syncA2.exitCode, equals(0),
+          reason: 'home A sync 2 failed: ${syncA2.stderr}');
+      final syncA2Output = syncA2.stdout.toString();
 
       final syncB = await Process.run(
         'dart',
@@ -102,6 +119,7 @@ void main() {
         environment: envB,
         workingDirectory: repoRoot,
       );
+      print('syncB stderr:\n${syncB.stderr}');
       expect(syncB.exitCode, equals(0),
           reason: 'home B sync failed: ${syncB.stderr}');
       final syncBOutput = syncB.stdout.toString();
@@ -144,8 +162,6 @@ void main() {
           reason: 'home B read failed: ${readB.stderr}');
       expect(readB.stdout.toString(), contains('Phase 28: oracle pull reread'));
     },
-    skip: 'Phase 28 blocker: official tree node does not advertise a Manytype-'
-        'pushed object back to a fresh peer yet.',
     timeout: const Timeout(Duration(minutes: 4)),
   );
 }
