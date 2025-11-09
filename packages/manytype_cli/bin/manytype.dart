@@ -1,6 +1,7 @@
 import 'package:args/args.dart';
 
 import 'package:manytype_cli/src/commands/create.dart';
+import 'package:manytype_cli/src/commands/edit.dart';
 import 'package:manytype_cli/src/commands/file_transfer.dart';
 import 'package:manytype_cli/src/commands/probe_file_node.dart';
 import 'package:manytype_cli/src/commands/probe_network.dart';
@@ -19,17 +20,21 @@ Future<void> main(List<String> arguments) async {
         defaultsTo: null);
 
   final createParser = ArgParser()
-    ..addFlag('sync',
-        negatable: false, help: 'Sync after creating the object');
+    ..addFlag('sync', negatable: false, help: 'Sync after creating the object');
   final readParser = ArgParser()
-    ..addFlag('sync',
-        negatable: false, help: 'Sync before reading the object');
+    ..addFlag('sync', negatable: false, help: 'Sync before reading the object');
+  final editParser = ArgParser()
+    ..addOption('id',
+        help: 'Object ID to edit (from manytype read output)', mandatory: true)
+    ..addOption('text',
+        help: 'New text content for the object', mandatory: true);
   final fileUploadParser = ArgParser()
     ..addOption('file-id', help: 'Stable file ID for upload', defaultsTo: null);
   final fileOpenParser = ArgParser()
     ..addOption('file-id', help: 'File ID to open', defaultsTo: null)
     ..addOption('cid', help: 'Explicit CID to download/open', defaultsTo: null)
-    ..addOption('output', help: 'Output path for opened bytes', defaultsTo: null);
+    ..addOption('output',
+        help: 'Output path for opened bytes', defaultsTo: null);
   final probeFileNodeParser = ArgParser()
     ..addFlag(
       'read-only',
@@ -39,6 +44,7 @@ Future<void> main(List<String> arguments) async {
   parser.addCommand('create', createParser);
   parser.addCommand('sync');
   parser.addCommand('read', readParser);
+  parser.addCommand('edit', editParser);
   parser.addCommand('init');
   parser.addCommand('file-upload', fileUploadParser);
   parser.addCommand('file-open', fileOpenParser);
@@ -50,7 +56,7 @@ Future<void> main(List<String> arguments) async {
   if (results['help'] == true || results.command == null) {
     print('Usage: manytype <command> [options]');
     print(
-      'Commands: init, create, sync, read, file-upload, file-open, '
+      'Commands: init, create, sync, read, edit, file-upload, file-open, '
       'probe-network, probe-file-node',
     );
     print(parser.usage);
@@ -97,7 +103,7 @@ Future<void> main(List<String> arguments) async {
 
     case 'read':
       final config = await CliConfig.load(serverOverride: serverOverride);
-      
+
       if (command['sync'] == true) {
         if (networkConfigPath == null) {
           throw StateError(
@@ -108,10 +114,25 @@ Future<void> main(List<String> arguments) async {
         await syncCommand(syncDb, config, networkConfigPath: networkConfigPath);
         await syncDb.close();
       }
-      
+
       final db = ManytypeDatabase(CliConfig.dbPath);
       final objId = command.rest.isNotEmpty ? command.rest.first : null;
       await readCommand(db, config, objectId: objId);
+      await db.close();
+      break;
+
+    case 'edit':
+      if (networkConfigPath == null) {
+        throw StateError(
+          'edit requires --network-config <path>',
+        );
+      }
+      final config = await CliConfig.load(serverOverride: serverOverride);
+      final db = ManytypeDatabase(CliConfig.dbPath);
+      final objectId = command['id'] as String;
+      final newText = command['text'] as String;
+      await editCommand(objectId, newText, db, config,
+          networkConfigPath: networkConfigPath);
       await db.close();
       break;
 

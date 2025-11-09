@@ -1,4 +1,5 @@
 import 'package:manytype_protocol/changes.dart' as changes_proto;
+import 'package:manytype_protocol/events.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 
 import '../config.dart';
@@ -38,7 +39,7 @@ Future<void> _listObjects(ManytypeDatabase db, String spaceId) async {
     final changes = await db.getChangesForObject(obj.id);
     final heads = await db.getObjectHeads(obj.id);
     final attachments = await db.getAttachmentRefsByObject(obj.id);
-    final textPreview = _extractTextPreview(changes);
+    final textPreview = extractTextPreview(changes);
 
     print('  ${obj.id}');
     print('    Created: ${obj.createdAt}');
@@ -108,7 +109,7 @@ void _printAttachmentRefs(
 }
 
 /// Extract text content preview from the most recent non-root change.
-String _extractTextPreview(List<Change> changes) {
+String extractTextPreview(List<Change> changes) {
   for (final change in changes.reversed) {
     try {
       final rawTreeChange = RawTreeChange.fromBuffer(change.rawBytes);
@@ -140,6 +141,18 @@ String _extractText(List<int> changesData) {
           }
         }
       }
+      if (content.hasBlockUpdate()) {
+        for (final eventBytes in content.blockUpdate.events) {
+          try {
+            final eventMsg = Event_Message.fromBuffer(eventBytes);
+            if (eventMsg.hasBlockSetText()) {
+              return eventMsg.blockSetText.text.value;
+            }
+          } catch (_) {
+            continue;
+          }
+        }
+      }
     }
   } catch (_) {}
   return '';
@@ -154,6 +167,19 @@ void _printBlockChanges(List<int> changesData) {
         for (final block in content.blockCreate.blocks) {
           if (block.hasText()) {
             print('    Text: "${block.text.text}"');
+          }
+        }
+      }
+      if (content.hasBlockUpdate()) {
+        for (final eventBytes in content.blockUpdate.events) {
+          try {
+            final eventMsg = Event_Message.fromBuffer(eventBytes);
+            if (eventMsg.hasBlockSetText()) {
+              print(
+                  '    Text (updated): "${eventMsg.blockSetText.text.value}"');
+            }
+          } catch (_) {
+            continue;
           }
         }
       }
