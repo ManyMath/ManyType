@@ -3,8 +3,8 @@ import 'dart:typed_data';
 
 import 'package:drift/native.dart';
 import 'package:manytype_cli/src/commands/read.dart';
-import 'package:manytype_cli/src/commands/sync.dart';
 import 'package:manytype_cli/src/config.dart';
+import 'package:manytype_cli/src/sync_service.dart';
 import 'package:manytype_cli/src/store/database.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;

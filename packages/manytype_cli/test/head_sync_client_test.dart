@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:fixnum/fixnum.dart';
 import 'package:manytype_cli/src/head_sync_client.dart';
 import 'package:manytype_protocol/spacesync.dart';

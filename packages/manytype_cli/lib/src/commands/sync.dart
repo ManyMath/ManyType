@@ -1,5 +1,3 @@
-
-import '../../manytype_cli.dart';
 import '../config.dart';
 import '../store/database.dart';
 import '../sync_service.dart';

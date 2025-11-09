@@ -1,4 +1,4 @@
-import 'package:manytype_cli/src/commands/sync.dart';
+import 'package:manytype_cli/src/sync_service.dart';
 import 'package:manytype_protocol/coordinator.dart';
 import 'package:test/test.dart';
 

@@ -43,7 +43,8 @@ class AttachmentRefs extends Table {
   TextColumn get objectId => text().references(Objects, #id)();
   TextColumn get fileId => text()();
   TextColumn get cid => text().withDefault(const Constant(''))();
-  DateTimeColumn get discoveredAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get discoveredAt =>
+      dateTime().withDefault(currentDateAndTime)();
 
   @override
   Set<Column> get primaryKey => {spaceId, objectId, fileId, cid};
@@ -61,7 +62,8 @@ class CachedBlobs extends Table {
   Set<Column> get primaryKey => {spaceId, fileId, cid};
 }
 
-@DriftDatabase(tables: [Objects, Changes, StoreEntries, AttachmentRefs, CachedBlobs])
+@DriftDatabase(
+    tables: [Objects, Changes, StoreEntries, AttachmentRefs, CachedBlobs])
 class ManytypeDatabase extends _$ManytypeDatabase {
   ManytypeDatabase(String dbPath) : super(_openConnection(dbPath));
 
@@ -69,6 +71,19 @@ class ManytypeDatabase extends _$ManytypeDatabase {
 
   @override
   int get schemaVersion => 3;
+
+  @override
+  MigrationStrategy get migration {
+    return MigrationStrategy(
+      onCreate: (Migrator m) async {
+        await m.createAll();
+      },
+      onUpgrade: (Migrator m, int from, int to) async {
+        // Simple strategy for now: let drift know we handled the bump.
+        // During early development, recreating tables or just an empty block works.
+      },
+    );
+  }
 
   /// Insert a new object. Returns the created object.
   Future<void> insertObject(String id, String spaceId) async {
@@ -168,7 +183,8 @@ class ManytypeDatabase extends _$ManytypeDatabase {
     );
   }
 
-  Future<List<StoredAttachmentRef>> getAttachmentRefsByObject(String objectId) =>
+  Future<List<StoredAttachmentRef>> getAttachmentRefsByObject(
+          String objectId) =>
       (select(attachmentRefs)
             ..where((entry) => entry.objectId.equals(objectId))
             ..orderBy([

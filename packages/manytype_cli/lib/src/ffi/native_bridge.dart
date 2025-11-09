@@ -113,11 +113,45 @@ class NativeBridge {
 
   /// Load the platform-specific shared library.
   static DynamicLibrary _loadLibrary() {
-    if (Platform.isLinux) return DynamicLibrary.open('libmanytype_quic_ffi.so');
-    if (Platform.isMacOS) {
-      return DynamicLibrary.open('libmanytype_quic_ffi.dylib');
+    final libName = Platform.isLinux
+        ? 'libmanytype_quic_ffi.so'
+        : Platform.isMacOS
+            ? 'libmanytype_quic_ffi.dylib'
+            : null;
+    if (libName == null) {
+      throw UnsupportedError(
+          'Unsupported platform: ${Platform.operatingSystem}');
     }
-    throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
+
+    final explicitPath = Platform.environment['MANYTYPE_QUIC_FFI_PATH'];
+    if (explicitPath != null && explicitPath.isNotEmpty) {
+      return DynamicLibrary.open(explicitPath);
+    }
+
+    try {
+      return DynamicLibrary.open(libName);
+    } catch (_) {
+      // Fallback for local dev/test: try to load the Rust cdylib from this repo.
+      // This avoids requiring callers to set LD_LIBRARY_PATH manually.
+      var dir = Directory.current.absolute;
+      while (true) {
+        final root = dir.path;
+        final candidates = [
+          '$root/rust/target/release/$libName',
+          '$root/rust/target/debug/$libName',
+        ];
+        for (final candidate in candidates) {
+          if (File(candidate).existsSync()) {
+            return DynamicLibrary.open(candidate);
+          }
+        }
+        if (dir.parent.path == dir.path) {
+          break;
+        }
+        dir = dir.parent;
+      }
+      rethrow;
+    }
   }
 
   /// Connect to a QUIC server and perform credential handshake.

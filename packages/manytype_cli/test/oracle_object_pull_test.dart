@@ -105,7 +105,6 @@ void main() {
       );
       expect(syncA2.exitCode, equals(0),
           reason: 'home A sync 2 failed: ${syncA2.stderr}');
-      final syncA2Output = syncA2.stdout.toString();
 
       final syncB = await Process.run(
         'dart',

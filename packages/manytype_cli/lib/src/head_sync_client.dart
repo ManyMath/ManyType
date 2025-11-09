@@ -58,6 +58,12 @@ class HeadSyncClient {
                 .putIfAbsent(element.id, () => <String>{})
                 .add(element.head);
           }
+          if (result.count > result.elements.length) {
+            // Some servers cap the number of elements returned per range even
+            // when `limit=0`. If we didn't receive all elements, subdivide and
+            // keep narrowing until we can fetch the complete set.
+            nextRanges.addAll(_subdivide(range));
+          }
           continue;
         }
 

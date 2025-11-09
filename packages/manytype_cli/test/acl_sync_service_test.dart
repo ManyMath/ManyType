@@ -78,86 +78,119 @@ void main() {
   });
 
   group('AclSyncService round trip', () {
-    late NativeBridge bridge;
-    late Phase17SpaceFixture fixture;
-    late AclSyncService service;
-    late int handleId;
-
-    setUp(() async {
-      bridge = NativeBridge();
-      final networkConfigPath = await writeLocalNetworkConfig(
-        Directory.systemTemp.createTempSync('manytype_phase17_local_cfg_'),
-      );
-      fixture =
-          await createPhase17Fixture(networkConfigPath: networkConfigPath);
-      await seedPhase17Fixture(fixture);
-      handleId = bridge.connect(
-        fixture.config.serverAddress,
-        fixture.identity.seed,
-        fixture.identity.accountSeed,
-      );
-      service = AclSyncService(invoker: bridge.invoke);
-    });
-
-    tearDown(() async {
-      bridge.freeHandle(handleId);
-      await fixture.dispose();
-    });
-
     test(
       'SpaceMakeShareable flips status and invite submission is readable via AclGetRecords',
       () async {
-        service.spaceMakeShareable(
-          handleId: handleId,
-          spaceId: fixture.identity.spaceId,
-        );
+        bool prereqsAvailable() {
+          if (Platform.environment['MANYTYPE_LIVE_SERVER_TESTS'] != '1') {
+            return false;
+          }
 
-        final statusBytes = bridge.invoke(
-          handleId,
-          '/coordinator.Coordinator/SpaceStatusCheck',
-          SpaceStatusCheckRequest(spaceId: fixture.identity.spaceId)
-              .writeToBuffer(),
-        );
-        final status = SpaceStatusCheckResponse.fromBuffer(statusBytes);
-        expect(status.payload.isShared, isTrue);
+          final libName = Platform.isLinux
+              ? 'libmanytype_quic_ffi.so'
+              : Platform.isMacOS
+                  ? 'libmanytype_quic_ffi.dylib'
+                  : null;
+          if (libName == null) return false;
 
-        final inviteKeyPair = await ed25519KeyPairFromSeed(
-          Uint8List.fromList(List<int>.generate(32, (index) => index + 51)),
-        );
-        final inviteRecord = await buildAclRecord(
-          prevId: fixture.aclRootId,
-          aclData: AclData(
-            aclContent: [
-              AclContentValue(
-                invite: AclAccountInvite(
-                  inviteKey: marshalEd25519PublicKey(inviteKeyPair.publicKey),
-                  permissions: AclUserPermissions.Writer,
+          var dir = Directory.current.absolute;
+          while (true) {
+            final root = dir.path;
+            if (File('$root/rust/target/release/$libName').existsSync() ||
+                File('$root/rust/target/debug/$libName').existsSync()) {
+              return true;
+            }
+            if (dir.parent.path == dir.path) {
+              break;
+            }
+            dir = dir.parent;
+          }
+          return false;
+        }
+
+        if (!prereqsAvailable()) {
+          print(
+            'Skipping live AclSyncService round-trip test: set MANYTYPE_LIVE_SERVER_TESTS=1 and build manytype_quic_ffi',
+          );
+          return;
+        }
+
+        final bridge = NativeBridge();
+        Phase17SpaceFixture? fixture;
+        var handleId = -1;
+        try {
+          final networkConfigPath = await writeLocalNetworkConfig(
+            Directory.systemTemp.createTempSync('manytype_phase17_local_cfg_'),
+          );
+          fixture =
+              await createPhase17Fixture(networkConfigPath: networkConfigPath);
+          await seedPhase17Fixture(fixture);
+          handleId = bridge.connect(
+            fixture.config.serverAddress,
+            fixture.identity.seed,
+            fixture.identity.accountSeed,
+          );
+          final service = AclSyncService(invoker: bridge.invoke);
+
+          service.spaceMakeShareable(
+            handleId: handleId,
+            spaceId: fixture.identity.spaceId,
+          );
+
+          final statusBytes = bridge.invoke(
+            handleId,
+            '/coordinator.Coordinator/SpaceStatusCheck',
+            SpaceStatusCheckRequest(spaceId: fixture.identity.spaceId)
+                .writeToBuffer(),
+          );
+          final status = SpaceStatusCheckResponse.fromBuffer(statusBytes);
+          expect(status.payload.isShared, isTrue);
+
+          final inviteKeyPair = await ed25519KeyPairFromSeed(
+            Uint8List.fromList(List<int>.generate(32, (index) => index + 51)),
+          );
+          final inviteRecord = await buildAclRecord(
+            prevId: fixture.aclRootId,
+            aclData: AclData(
+              aclContent: [
+                AclContentValue(
+                  invite: AclAccountInvite(
+                    inviteKey: marshalEd25519PublicKey(
+                      inviteKeyPair.publicKey,
+                    ),
+                    permissions: AclUserPermissions.Writer,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          identityPrivateKey: fixture.identity.accountSeed,
-        );
-        final inviteResponse = service.addRecord(
-          handleId: handleId,
-          spaceId: fixture.identity.spaceId,
-          record: RawRecord.fromBuffer(inviteRecord.payload),
-        );
+              ],
+            ),
+            identityPrivateKey: fixture.identity.accountSeed,
+          );
+          final inviteResponse = service.addRecord(
+            handleId: handleId,
+            spaceId: fixture.identity.spaceId,
+            record: RawRecord.fromBuffer(inviteRecord.payload),
+          );
 
-        final records = service.getRecords(
-          handleId: handleId,
-          spaceId: fixture.identity.spaceId,
-        );
+          final records = service.getRecords(
+            handleId: handleId,
+            spaceId: fixture.identity.spaceId,
+          );
 
-        expect(records, hasLength(1));
-        expect(records.single.id, inviteResponse.id);
+          expect(records, hasLength(1));
+          expect(records.single.id, inviteResponse.id);
 
-        final tail = service.getRecords(
-          handleId: handleId,
-          spaceId: fixture.identity.spaceId,
-          aclHead: inviteResponse.id,
-        );
-        expect(tail, isEmpty);
+          final tail = service.getRecords(
+            handleId: handleId,
+            spaceId: fixture.identity.spaceId,
+            aclHead: inviteResponse.id,
+          );
+          expect(tail, isEmpty);
+        } finally {
+          if (handleId != -1) {
+            bridge.freeHandle(handleId);
+          }
+          await fixture?.dispose();
+        }
       },
       timeout: const Timeout(Duration(minutes: 2)),
     );
