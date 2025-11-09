@@ -18,7 +18,12 @@ Future<void> main(List<String> arguments) async {
         help: 'Path to an any-sync client.yml network config',
         defaultsTo: null);
 
-  final createParser = ArgParser();
+  final createParser = ArgParser()
+    ..addFlag('sync',
+        negatable: false, help: 'Sync after creating the object');
+  final readParser = ArgParser()
+    ..addFlag('sync',
+        negatable: false, help: 'Sync before reading the object');
   final fileUploadParser = ArgParser()
     ..addOption('file-id', help: 'Stable file ID for upload', defaultsTo: null);
   final fileOpenParser = ArgParser()
@@ -33,7 +38,7 @@ Future<void> main(List<String> arguments) async {
     );
   parser.addCommand('create', createParser);
   parser.addCommand('sync');
-  parser.addCommand('read');
+  parser.addCommand('read', readParser);
   parser.addCommand('init');
   parser.addCommand('file-upload', fileUploadParser);
   parser.addCommand('file-open', fileOpenParser);
@@ -70,6 +75,17 @@ Future<void> main(List<String> arguments) async {
           command.rest.isNotEmpty ? command.rest.join(' ') : 'Untitled';
       await createCommand(text, db, config);
       await db.close();
+
+      if (command['sync'] == true) {
+        if (networkConfigPath == null) {
+          throw StateError(
+            'create --sync requires --network-config <path>',
+          );
+        }
+        final db = ManytypeDatabase(CliConfig.dbPath);
+        await syncCommand(db, config, networkConfigPath: networkConfigPath);
+        await db.close();
+      }
       break;
 
     case 'sync':
@@ -81,6 +97,18 @@ Future<void> main(List<String> arguments) async {
 
     case 'read':
       final config = await CliConfig.load(serverOverride: serverOverride);
+      
+      if (command['sync'] == true) {
+        if (networkConfigPath == null) {
+          throw StateError(
+            'read --sync requires --network-config <path>',
+          );
+        }
+        final syncDb = ManytypeDatabase(CliConfig.dbPath);
+        await syncCommand(syncDb, config, networkConfigPath: networkConfigPath);
+        await syncDb.close();
+      }
+      
       final db = ManytypeDatabase(CliConfig.dbPath);
       final objId = command.rest.isNotEmpty ? command.rest.first : null;
       await readCommand(db, config, objectId: objId);
