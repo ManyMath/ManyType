@@ -266,12 +266,28 @@ pub fn handle_space_info(
     remote_peer_id: &[u8],
 ) -> Result<Vec<u8>> {
     let request = SpaceInfoRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
-    ensure_space_authorized(&request.space_id, sync_state, remote_peer_id)?;
-    let usage = state
-        .blob_index
-        .get_space_usage(&request.space_id)
-        .map_err(FileNodeError::unexpected)?;
-    let account_snapshot = account_snapshot(sync_state, state, remote_peer_id)?;
+    // Official clients may call SpaceInfo early in bootstrap before the server
+    // has recorded space ownership metadata. This RPC is read-only, so return
+    // a conservative empty usage snapshot when the space isn't yet authorized.
+    let peer_id_hex = hex::encode(remote_peer_id);
+    let authorized = sync_state.peer_owns_space(&request.space_id, &peer_id_hex);
+    let usage = if authorized {
+        state
+            .blob_index
+            .get_space_usage(&request.space_id)
+            .map_err(FileNodeError::unexpected)?
+    } else {
+        SpaceUsage::default()
+    };
+    let account_snapshot = if authorized {
+        account_snapshot(sync_state, state, remote_peer_id)?
+    } else {
+        AccountSnapshot {
+            total_usage_bytes: 0,
+            total_cids_count: 0,
+            spaces: Vec::new(),
+        }
+    };
     Ok(SpaceInfoResponse {
         limit_bytes: DEFAULT_STORAGE_LIMIT_BYTES,
         total_usage_bytes: account_snapshot.total_usage_bytes,
