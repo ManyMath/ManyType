@@ -11,6 +11,7 @@ import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 import 'package:manytype_protocol/spacesync.dart';
 
+import 'acl_codec.dart';
 import 'config.dart';
 import 'identity.dart';
 import 'network_config.dart';
@@ -35,12 +36,14 @@ class SyncDiscoveryResult {
   const SyncDiscoveryResult({
     required this.networkConfig,
     required this.syncAddress,
+    required this.syncAddresses,
     required this.fileAddress,
     required this.spaceStatus,
   });
 
   final NetworkConfigurationResponse networkConfig;
   final String syncAddress;
+  final List<String> syncAddresses;
   final String? fileAddress;
   final SpaceStatusPayload spaceStatus;
 }
@@ -75,8 +78,8 @@ class SyncService {
     );
     final bridge = NativeBridge();
     int? coordinatorHandleId;
-    int? syncHandleId;
-    String? syncAddress;
+    final syncHandleIds = <int>[];
+    var syncAddresses = <String>[];
 
     final coordinatorAddress = capture.coordinatorAddress;
 
@@ -110,7 +113,10 @@ class SyncService {
       );
       final netConfig = discovery.networkConfig;
       print('Network: ${netConfig.networkId}, nodes: ${netConfig.nodes.length}');
-      syncAddress = discovery.syncAddress;
+      syncAddresses = discovery.syncAddresses;
+      if (officialInteropMode && syncAddresses.isNotEmpty) {
+        print('Tree nodes: ${syncAddresses.join(", ")}');
+      }
 
       // Step 3: SpaceSign (obtain receipt for SpacePush)
       final spaceSignResponseBytes = bridge.invoke(
@@ -137,13 +143,18 @@ class SyncService {
       final receiptBytes = spaceSignResponse.receipt.writeToBuffer();
 
       if (networkConfigPath == null) {
-        syncHandleId = coordinatorHandleId;
+        syncHandleIds.add(coordinatorHandleId);
       } else {
-        print('Connecting to sync node at $syncAddress...');
-        syncHandleId =
-            bridge.connect(syncAddress, identity.seed, identity.accountSeed);
-        print('Connected to sync node (handle: $syncHandleId)');
-        capture.recordConnection(role: 'sync-node', address: syncAddress);
+        if (syncAddresses.isEmpty) {
+          throw StateError('Coordinator response did not include a tree node address');
+        }
+        for (final address in syncAddresses) {
+          print('Connecting to sync node at $address...');
+          final handleId = bridge.connect(address, identity.seed, identity.accountSeed);
+          syncHandleIds.add(handleId);
+          print('Connected to sync node (handle: $handleId)');
+          capture.recordConnection(role: 'sync-node', address: address);
+        }
       }
 
       // Step 4: SpacePush (ensure server knows about our space)
@@ -162,11 +173,13 @@ class SyncService {
           credential: receiptBytes,
         );
         final pushRequestBytes = Uint8List.fromList(pushRequest.writeToBuffer());
-        bridge.invoke(
-          syncHandleId,
-          '/spacesync.SpaceSync/SpacePush',
-          pushRequestBytes,
-        );
+        for (final handleId in syncHandleIds) {
+          bridge.invoke(
+            handleId,
+            '/spacesync.SpaceSync/SpacePush',
+            pushRequestBytes,
+          );
+        }
         capture.recordUnaryRpc(
           role: 'sync-node',
           method: '/spacesync.SpaceSync/SpacePush',
@@ -189,7 +202,13 @@ class SyncService {
           return response;
         },
       );
-      final serverHeads = headSyncClient.fetchServerHeads(syncHandleId, spaceId);
+      var serverHeads = <String, Set<String>>{};
+      for (final handleId in syncHandleIds) {
+        final heads = headSyncClient.fetchServerHeads(handleId, spaceId);
+        for (final entry in heads.entries) {
+          serverHeads.putIfAbsent(entry.key, () => <String>{}).addAll(entry.value);
+        }
+      }
       print('Server has ${serverHeads.length} objects: ${serverHeads.keys.join(", ")}');
 
       // Step 6: Compare local vs server heads
@@ -228,24 +247,114 @@ class SyncService {
         if (localHeadSet.difference(serverHeadSet).isNotEmpty) {
           final changes = await db.getChangesForObject(objectId);
 
-          // HACK: Only push objects that have more than 1 change (i.e. the Note object)
-          // to avoid pushing ACL/Settings with ObjectType::Tree.
-          if (changes.length < 2) continue;
+          if (changes.isEmpty) {
+            continue;
+          }
 
-          final treeSyncMsg = _buildTreeSyncMessage(objectId, changes, isNewToServer: serverHeadSet.isEmpty);
-          final payload = Uint8List.fromList(treeSyncMsg.writeToBuffer());
+          // Official any-sync nodes expect ObjectSyncStream payloads to be raw
+          // `TreeSyncMessage` bytes (wrapped by FFI into ObjectSyncMessage).
+          //
+          // The official client typically sends a compact TreeHeadUpdate and
+          // then serves missing history over ObjectSyncRequestStream. The CLI
+          // FFI does not currently expose ObjectSyncRequestStream, so we must
+          // include the full change history in the push message to ensure the
+          // official sync nodes can persist the tree and make it visible via
+          // HeadSync on subsequent runs.
+          final payloads = <Uint8List>[
+            Uint8List.fromList(
+              (officialInteropMode
+                      ? _buildOfficialTreeHeadUpdateMessage(changes)
+                      : _buildTreeSyncMessage(objectId, changes))
+                  .writeToBuffer(),
+            ),
+          ];
 
-          final responseData =
-              bridge.syncObject(syncHandleId, spaceId, objectId, payload);
-          capture.recordStreamRpc(
-            role: 'sync-node',
-            method: '/spacesync.SpaceSync/ObjectSyncStream',
-            requestMessages: [payload],
-            responseMessages: _decodeMessagesFromFfi(responseData),
-          );
+          var pushSucceeded = false;
+          String? lastError;
+          for (var i = 0; i < syncHandleIds.length; i++) {
+            final handleId = syncHandleIds[i];
+            try {
+              Uint8List responseData = Uint8List(0);
+              for (final payload in payloads) {
+                responseData = bridge.syncObject(handleId, spaceId, objectId, payload);
+                capture.recordStreamRpc(
+                  role: 'sync-node',
+                  method: '/spacesync.SpaceSync/ObjectSyncStream',
+                  requestMessages: [payload],
+                  responseMessages: _decodeMessagesFromFfi(responseData),
+                );
+              }
+
+              // If the node returns an explicit TreeErrorResponse, try the next one.
+              final responseMessages = _decodeMessagesFromFfi(responseData);
+              var sawError = false;
+              for (final msgBytes in responseMessages) {
+                try {
+                  final msg = ObjectSyncMessage.fromBuffer(msgBytes);
+                  if (msg.payload.isEmpty) continue;
+                  final treeMsg = TreeSyncMessage.fromBuffer(msg.payload);
+                  if (treeMsg.hasContent() &&
+                      treeMsg.content.hasErrorResponse() &&
+                      treeMsg.content.errorResponse.errCode != 0) {
+                    lastError = treeMsg.content.errorResponse.error;
+                    sawError = true;
+                    break;
+                  }
+                } catch (_) {
+                  continue;
+                }
+              }
+              if (sawError) {
+                continue;
+              }
+
+              pushSucceeded = true;
+              // Still fan out to the remaining sync nodes. Official any-sync
+              // deployments can assign responsibility per object/tree; sending
+              // only to the first reachable node can silently miss the
+              // responsible peer, leaving mandatory derived trees absent and
+              // joined spaces unloadable.
+              continue;
+            } catch (error) {
+              lastError = error.toString();
+              continue;
+            }
+          }
+          if (!pushSucceeded) {
+            throw StateError(
+              'ObjectSyncStream push failed for $objectId${lastError != null ? ": $lastError" : ""}',
+            );
+          }
           pushed++;
           print('  Pushed: $objectId (${changes.length} changes)');
         }
+      }
+
+      if (officialInteropMode) {
+        final postPushHeads = <String, Set<String>>{};
+        for (final handleId in syncHandleIds) {
+          final heads = headSyncClient.fetchServerHeads(handleId, spaceId);
+          for (final entry in heads.entries) {
+            postPushHeads.putIfAbsent(entry.key, () => <String>{}).addAll(entry.value);
+          }
+        }
+        print('After push: server has ${postPushHeads.length} objects');
+        // Pull should be based on the post-push head snapshot, otherwise the
+        // following pull loop can re-fetch stale heads and reorder local
+        // change insertion (ManytypeDatabase.getObjectHeads currently uses
+        // "last inserted change" heuristics), breaking immediate verification.
+        serverHeads = postPushHeads;
+        final missingAfterPush = localHeads.entries.where((entry) {
+          final remote = postPushHeads[entry.key] ?? <String>{};
+          return entry.value.toSet().difference(remote).isNotEmpty;
+        }).length;
+        capture.recordNote(
+          'official-post-push-summary',
+          {
+            'server_object_count': postPushHeads.length,
+            'still_missing_count': missingAfterPush,
+          },
+        );
       }
 
       // Pull: objects server has that local lacks or has different heads.
@@ -265,16 +374,26 @@ class SyncService {
           );
           final pullPayload = Uint8List.fromList(requestMsg.writeToBuffer());
 
-          final responseData =
-              bridge.syncObject(syncHandleId, spaceId, objectId, pullPayload);
+          Uint8List responseData = Uint8List(0);
+          for (final handleId in syncHandleIds) {
+            try {
+              final resp = bridge.syncObject(handleId, spaceId, objectId, pullPayload);
+              if (resp.isNotEmpty) {
+                responseData = resp;
+                capture.recordStreamRpc(
+                  role: 'sync-node',
+                  method: '/spacesync.SpaceSync/ObjectSyncStream',
+                  requestMessages: [pullPayload],
+                  responseMessages: _decodeMessagesFromFfi(resp),
+                );
+                break;
+              }
+            } catch (_) {
+              continue;
+            }
+          }
 
           if (responseData.isNotEmpty) {
-            capture.recordStreamRpc(
-              role: 'sync-node',
-              method: '/spacesync.SpaceSync/ObjectSyncStream',
-              requestMessages: [pullPayload],
-              responseMessages: _decodeMessagesFromFfi(responseData),
-            );
             await storePulledChanges(db, spaceId, objectId, responseData);
             pulled++;
             print('  Pulled: $objectId');
@@ -283,13 +402,41 @@ class SyncService {
       }
 
       await _ensureBootstrapStoreEntry(db, identity, spaceId);
-      final (pushedStoreValues, pulledStoreValues) = await _syncStoreValues(
-        db,
-        bridge,
-        syncHandleId,
-        spaceId,
-        capture: capture,
-      );
+      var pushedStoreValues = 0;
+      var pulledStoreValues = 0;
+      for (final handleId in syncHandleIds) {
+        try {
+          final (pushed, pulled) = await _syncStoreValues(
+            db,
+            bridge,
+            handleId,
+            spaceId,
+            capture: capture,
+          );
+          pushedStoreValues += pushed;
+          pulledStoreValues += pulled;
+        } catch (error) {
+          // Store sync is a best-effort enhancement for official interop; tree
+          // sync is the critical path for cross-authored verification.
+          capture.recordNote('store-sync-error', {'message': error.toString()});
+          print('WARN: store sync failed for handle=$handleId: $error');
+        }
+      }
+
+      // Process settings tree for deletion entries (inbound + self-authored)
+      final bootstrapForDeletions = await _loadSpaceBootstrap(db, spaceId);
+      if (bootstrapForDeletions != null) {
+        final accountPrivRaw = Uint8List(64)
+          ..setRange(0, 32, identity.accountSeed)
+          ..setRange(32, 64, identity.accountKeyPair.publicKey);
+        final spaceKey = await deriveSpaceKey(accountPrivRaw);
+        await _processSettingsTreeDeletions(
+          db,
+          spaceId,
+          bootstrapForDeletions.spaceSettingsPayloadId,
+          spaceKey,
+        );
+      }
 
       print(
         'Sync complete: pushed $pushed, pulled $pulled objects, '
@@ -308,10 +455,13 @@ class SyncService {
       capture.recordError(error.toString());
       rethrow;
     } finally {
-      if (syncHandleId != null) {
-        bridge.freeHandle(syncHandleId);
+      for (final handleId in syncHandleIds) {
+        if (handleId == coordinatorHandleId) {
+          continue;
+        }
+        bridge.freeHandle(handleId);
       }
-      if (coordinatorHandleId != syncHandleId) {
+      if (coordinatorHandleId != null) {
         bridge.freeHandle(coordinatorHandleId);
       }
       await capture.flush();
@@ -330,7 +480,7 @@ class SyncService {
           .addresses,
     );
     int? coordinatorHandleId;
-    int? syncHandleId;
+    final syncHandleIds = <int>[];
 
     try {
       coordinatorHandleId =
@@ -341,8 +491,8 @@ class SyncService {
         Uint8List.fromList(NetworkConfigurationRequest().writeToBuffer()),
       );
       final netConfig = NetworkConfigurationResponse.fromBuffer(netConfigBytes);
-      final syncAddress = chooseTreeAddressFromResponse(netConfig.nodes);
-      if (syncAddress == null) {
+      final syncAddresses = chooseTreeAddressesFromResponse(netConfig.nodes);
+      if (syncAddresses.isEmpty) {
         throw StateError(
           'Coordinator response did not include a tree node address',
         );
@@ -360,8 +510,6 @@ class SyncService {
         ),
       );
 
-      syncHandleId =
-          bridge.connect(syncAddress, identity.seed, identity.accountSeed);
       final bootstrap = await _loadSpaceBootstrap(db, identity.spaceId);
       if (bootstrap == null) {
         throw StateError('Local space bootstrap data is missing');
@@ -378,14 +526,19 @@ class SyncService {
         payload: payload,
         credential: signResponse.receipt.writeToBuffer(),
       );
-      bridge.invoke(
-        syncHandleId,
-        '/spacesync.SpaceSync/SpacePush',
-        Uint8List.fromList(pushRequest.writeToBuffer()),
-      );
+      final pushBytes = Uint8List.fromList(pushRequest.writeToBuffer());
+      for (final address in syncAddresses) {
+        final handleId = bridge.connect(address, identity.seed, identity.accountSeed);
+        syncHandleIds.add(handleId);
+        bridge.invoke(
+          handleId,
+          '/spacesync.SpaceSync/SpacePush',
+          pushBytes,
+        );
+      }
     } finally {
-      if (syncHandleId != null) {
-        bridge.freeHandle(syncHandleId);
+      for (final handleId in syncHandleIds) {
+        bridge.freeHandle(handleId);
       }
       if (coordinatorHandleId != null) {
         bridge.freeHandle(coordinatorHandleId);
@@ -419,9 +572,11 @@ SyncDiscoveryResult discoverSyncTargetsForSync({
   final netConfig =
       NetworkConfigurationResponse.fromBuffer(netConfigResponseBytes);
 
-  final syncAddress = officialInteropMode
-      ? chooseTreeAddressFromResponse(netConfig.nodes)
-      : localServerAddress;
+  final syncAddresses = officialInteropMode
+      ? chooseTreeAddressesFromResponse(netConfig.nodes)
+      : [localServerAddress];
+  final String? syncAddress =
+      officialInteropMode ? (syncAddresses.isNotEmpty ? syncAddresses.first : null) : localServerAddress;
   final fileAddress = officialInteropMode
       ? chooseFileAddressFromResponse(netConfig.nodes)
       : null;
@@ -456,9 +611,58 @@ SyncDiscoveryResult discoverSyncTargetsForSync({
   return SyncDiscoveryResult(
     networkConfig: netConfig,
     syncAddress: syncAddress,
+    syncAddresses: syncAddresses,
     fileAddress: fileAddress,
     spaceStatus: payload,
   );
+}
+
+/// Scan settings tree changes for ObjectDelete entries and mark objects
+/// as deleted locally. Called after every sync pull to detect both
+/// self-authored and inbound (official-client) deletions.
+Future<void> _processSettingsTreeDeletions(
+  ManytypeDatabase db,
+  String spaceId,
+  String settingsPayloadId,
+  Uint8List spaceKey,
+) async {
+  final settingsTreeKey = await deriveTreeKey(spaceKey, settingsPayloadId);
+  final changes = await db.getChangesForObject(settingsPayloadId);
+
+  for (final change in changes) {
+    try {
+      final rawTreeChange = RawTreeChange.fromBuffer(change.rawBytes);
+      if (rawTreeChange.payload.isEmpty) continue;
+
+      final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+      if (treeChange.changesData.isEmpty) continue;
+
+      // Decrypt if encrypted
+      var data = Uint8List.fromList(treeChange.changesData);
+      if (treeChange.readKeyId.isNotEmpty) {
+        try {
+          data = await aesGcmDecrypt(settingsTreeKey, data);
+        } catch (_) {
+          // Cannot decrypt -- may be from a different key epoch; skip
+          continue;
+        }
+      }
+
+      // Parse as SettingsData (NOT Change proto!)
+      final settingsData = SettingsData.fromBuffer(data);
+      for (final content in settingsData.content) {
+        if (content.hasObjectDelete()) {
+          final deletedId = content.objectDelete.id;
+          if (deletedId.isNotEmpty) {
+            await db.markObjectDeleted(deletedId);
+          }
+        }
+      }
+    } catch (_) {
+      // Skip unparseable changes
+      continue;
+    }
+  }
 }
 
 Future<_SpaceBootstrap?> _loadSpaceBootstrap(
@@ -477,9 +681,8 @@ Future<_SpaceBootstrap?> _loadSpaceBootstrap(
     final rawBytes = Uint8List.fromList(changes.first.rawBytes);
 
     try {
-      final rawRecord = RawRecord.fromBuffer(rawBytes);
-      final aclRoot = AclRoot.fromBuffer(rawRecord.payload);
-      if (aclRoot.spaceId == spaceId) {
+      final aclRoot = tryDecodeAclRootFromRawRecordBytes(rawBytes);
+      if (aclRoot != null && aclRoot.spaceId == spaceId) {
         aclPayloadId = object.id;
         aclPayload = rawBytes;
         continue;
@@ -492,7 +695,8 @@ Future<_SpaceBootstrap?> _loadSpaceBootstrap(
       final rawTree = RawTreeChange.fromBuffer(rawBytes);
       final rootChange = RootChange.fromBuffer(rawTree.payload);
       if (rootChange.spaceId == spaceId &&
-          rootChange.changeType == 'any-sync.space') {
+          (rootChange.changeType == 'anytype.space' ||
+              rootChange.changeType == 'any-sync.space')) {
         settingsPayloadId = object.id;
         settingsPayload = rawBytes;
       }
@@ -851,9 +1055,9 @@ Future<void> _ensureBootstrapStoreEntry(
     final changes = await db.getChangesForObject(object.id);
     if (changes.isEmpty) continue;
     try {
-      final rawRecord = RawRecord.fromBuffer(changes.first.rawBytes);
-      final aclRoot = AclRoot.fromBuffer(rawRecord.payload);
-      if (aclRoot.spaceId == spaceId) {
+      final aclRoot =
+          tryDecodeAclRootFromRawRecordBytes(Uint8List.fromList(changes.first.rawBytes));
+      if (aclRoot != null && aclRoot.spaceId == spaceId) {
         aclHeadId = object.id;
         break;
       }
@@ -906,6 +1110,23 @@ Iterable<Uint8List> _decodeLengthPrefixedMessages(Uint8List data) sync* {
 List<String> _extractParentHeads(List<int> rawChangeBytes) {
   try {
     final rawTreeChange = RawTreeChange.fromBuffer(rawChangeBytes);
+    if (rawTreeChange.payload.isEmpty) {
+      return const [];
+    }
+
+    // Root changes carry a `RootChange` payload, not `TreeChange`. In Dart,
+    // decoding a RootChange payload as TreeChange does not reliably throw, and
+    // can incorrectly treat `aclHeadId` as a parent head, breaking root
+    // detection in the edit flow.
+    try {
+      final root = RootChange.fromBuffer(rawTreeChange.payload);
+      if (root.spaceId.isNotEmpty && root.changeType.isNotEmpty) {
+        return const [];
+      }
+    } catch (_) {
+      // ignore: fall through to TreeChange decode
+    }
+
     final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
     return treeChange.treeHeadIds;
   } catch (_) {
@@ -1070,22 +1291,12 @@ List<Uint8List> _decodeMessagesFromFfi(Uint8List data) {
   return messages;
 }
 
-TreeSyncMessage _buildTreeSyncMessage(String objectId, List<Change> changes, {bool isNewToServer = false}) {
+TreeSyncMessage _buildTreeSyncMessage(
+  String objectId,
+  List<Change> changes,
+) {
   if (changes.isEmpty) {
     return TreeSyncMessage();
-  }
-
-  // Find root change (the one with no parents)
-  Change? rootChange;
-  final otherChanges = <Change>[];
-
-  for (final c in changes) {
-    final parents = jsonDecode(c.parentHeads) as List;
-    if (parents.isEmpty) {
-      rootChange = c;
-    } else {
-      otherChanges.add(c);
-    }
   }
 
   final parentIds = <String>{};
@@ -1094,12 +1305,12 @@ TreeSyncMessage _buildTreeSyncMessage(String objectId, List<Change> changes, {bo
   }
   final heads = changes.map((c) => c.id).where((id) => !parentIds.contains(id)).toList();
 
-  final changesList = otherChanges
+  final changesList = changes
       .map((c) => RawTreeChangeWithId(
             id: c.id,
             rawChange: c.rawBytes,
           ))
-      .toList();
+      .toList(growable: false);
 
   final contentValue = TreeSyncContentValue(
     headUpdate: TreeHeadUpdate(
@@ -1109,13 +1320,42 @@ TreeSyncMessage _buildTreeSyncMessage(String objectId, List<Change> changes, {bo
   );
 
   return TreeSyncMessage(
-    rootChange: rootChange != null
-        ? RawTreeChangeWithId(
-            id: rootChange.id,
-            rawChange: rootChange.rawBytes,
-          )
-        : null,
     content: contentValue,
+  );
+}
+
+TreeSyncMessage _buildOfficialTreeHeadUpdateMessage(List<Change> changes) {
+  if (changes.isEmpty) {
+    return TreeSyncMessage();
+  }
+
+  final parentIds = <String>{};
+  for (final change in changes) {
+    parentIds.addAll(jsonDecode(change.parentHeads).cast<String>());
+  }
+  final heads =
+      changes.map((change) => change.id).where((id) => !parentIds.contains(id)).toList();
+
+  if (heads.isEmpty) {
+    return TreeSyncMessage();
+  }
+
+  final headChanges = changes
+      .map(
+        (change) => RawTreeChangeWithId(
+          id: change.id,
+          rawChange: change.rawBytes,
+        ),
+      )
+      .toList(growable: false);
+
+  final headUpdate = TreeHeadUpdate(
+    heads: heads,
+    changes: headChanges,
+  );
+
+  return TreeSyncMessage(
+    content: TreeSyncContentValue(headUpdate: headUpdate),
   );
 }
 
