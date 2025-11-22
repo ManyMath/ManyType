@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:drift/drift.dart';
@@ -10,6 +11,7 @@ class Objects extends Table {
   TextColumn get id => text()();
   TextColumn get spaceId => text()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -70,7 +72,7 @@ class ManytypeDatabase extends _$ManytypeDatabase {
   ManytypeDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration {
@@ -79,8 +81,9 @@ class ManytypeDatabase extends _$ManytypeDatabase {
         await m.createAll();
       },
       onUpgrade: (Migrator m, int from, int to) async {
-        // Simple strategy for now: let drift know we handled the bump.
-        // During early development, recreating tables or just an empty block works.
+        if (from < 4) {
+          await m.addColumn(objects, objects.isDeleted);
+        }
       },
     );
   }
@@ -123,12 +126,25 @@ class ManytypeDatabase extends _$ManytypeDatabase {
       (select(changes)..where((c) => c.objectId.equals(objectId))).get();
 
   /// Get head CIDs for an object (changes with no children).
-  /// For v1: return the last change's CID as the head.
   Future<List<String>> getObjectHeads(String objectId) async {
     final allChanges = await getChangesForObject(objectId);
     if (allChanges.isEmpty) return [];
-    // Simple approach: last change is the head
-    return [allChanges.last.id];
+    final parentIds = <String>{};
+    for (final change in allChanges) {
+      try {
+        final parents = (jsonDecode(change.parentHeads) as List).cast<String>();
+        parentIds.addAll(parents);
+      } catch (_) {
+        // Ignore malformed parentHeads rows.
+      }
+    }
+
+    final heads = allChanges
+        .map((change) => change.id)
+        .where((id) => !parentIds.contains(id))
+        .toList(growable: false);
+    final sorted = heads.toList()..sort();
+    return sorted;
   }
 
   /// Get all object IDs with their head CIDs for a space.
@@ -238,6 +254,23 @@ class ManytypeDatabase extends _$ManytypeDatabase {
                   entry.cid.equals(cid),
             ))
           .getSingleOrNull();
+  /// Mark an object as deleted (soft-delete via isDeleted flag).
+  Future<void> markObjectDeleted(String objectId) async {
+    (update(objects)..where((o) => o.id.equals(objectId)))
+        .write(const ObjectsCompanion(isDeleted: Value(true)));
+  }
+
+  /// Get all non-deleted objects for a space.
+  Future<List<StoredObject>> getNonDeletedObjectsBySpace(String spaceId) =>
+      (select(objects)
+            ..where((o) => o.spaceId.equals(spaceId) & o.isDeleted.equals(false)))
+          .get();
+
+  /// Check if an object is marked as deleted.
+  Future<bool> isObjectDeleted(String objectId) async {
+    final obj = await (select(objects)..where((o) => o.id.equals(objectId))).getSingleOrNull();
+    return obj?.isDeleted ?? false;
+  }
 }
 
 LazyDatabase _openConnection(String dbPath) {

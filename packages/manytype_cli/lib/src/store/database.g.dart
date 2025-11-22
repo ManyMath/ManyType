@@ -28,8 +28,18 @@ class $ObjectsTable extends Objects
       type: DriftSqlType.dateTime,
       requiredDuringInsert: false,
       defaultValue: currentDateAndTime);
+  static const VerificationMeta _isDeletedMeta =
+      const VerificationMeta('isDeleted');
   @override
-  List<GeneratedColumn> get $columns => [id, spaceId, createdAt];
+  late final GeneratedColumn<bool> isDeleted = GeneratedColumn<bool>(
+      'is_deleted', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_deleted" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  @override
+  List<GeneratedColumn> get $columns => [id, spaceId, createdAt, isDeleted];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -55,6 +65,10 @@ class $ObjectsTable extends Objects
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
     }
+    if (data.containsKey('is_deleted')) {
+      context.handle(_isDeletedMeta,
+          isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta));
+    }
     return context;
   }
 
@@ -70,6 +84,8 @@ class $ObjectsTable extends Objects
           .read(DriftSqlType.string, data['${effectivePrefix}space_id'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      isDeleted: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_deleted'])!,
     );
   }
 
@@ -83,14 +99,19 @@ class StoredObject extends DataClass implements Insertable<StoredObject> {
   final String id;
   final String spaceId;
   final DateTime createdAt;
+  final bool isDeleted;
   const StoredObject(
-      {required this.id, required this.spaceId, required this.createdAt});
+      {required this.id,
+      required this.spaceId,
+      required this.createdAt,
+      required this.isDeleted});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['space_id'] = Variable<String>(spaceId);
     map['created_at'] = Variable<DateTime>(createdAt);
+    map['is_deleted'] = Variable<bool>(isDeleted);
     return map;
   }
 
@@ -99,6 +120,7 @@ class StoredObject extends DataClass implements Insertable<StoredObject> {
       id: Value(id),
       spaceId: Value(spaceId),
       createdAt: Value(createdAt),
+      isDeleted: Value(isDeleted),
     );
   }
 
@@ -109,6 +131,7 @@ class StoredObject extends DataClass implements Insertable<StoredObject> {
       id: serializer.fromJson<String>(json['id']),
       spaceId: serializer.fromJson<String>(json['spaceId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      isDeleted: serializer.fromJson<bool>(json['isDeleted']),
     );
   }
   @override
@@ -118,20 +141,27 @@ class StoredObject extends DataClass implements Insertable<StoredObject> {
       'id': serializer.toJson<String>(id),
       'spaceId': serializer.toJson<String>(spaceId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'isDeleted': serializer.toJson<bool>(isDeleted),
     };
   }
 
-  StoredObject copyWith({String? id, String? spaceId, DateTime? createdAt}) =>
+  StoredObject copyWith(
+          {String? id,
+          String? spaceId,
+          DateTime? createdAt,
+          bool? isDeleted}) =>
       StoredObject(
         id: id ?? this.id,
         spaceId: spaceId ?? this.spaceId,
         createdAt: createdAt ?? this.createdAt,
+        isDeleted: isDeleted ?? this.isDeleted,
       );
   StoredObject copyWithCompanion(ObjectsCompanion data) {
     return StoredObject(
       id: data.id.present ? data.id.value : this.id,
       spaceId: data.spaceId.present ? data.spaceId.value : this.spaceId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
     );
   }
 
@@ -140,37 +170,42 @@ class StoredObject extends DataClass implements Insertable<StoredObject> {
     return (StringBuffer('StoredObject(')
           ..write('id: $id, ')
           ..write('spaceId: $spaceId, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('isDeleted: $isDeleted')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, spaceId, createdAt);
+  int get hashCode => Object.hash(id, spaceId, createdAt, isDeleted);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is StoredObject &&
           other.id == this.id &&
           other.spaceId == this.spaceId &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.isDeleted == this.isDeleted);
 }
 
 class ObjectsCompanion extends UpdateCompanion<StoredObject> {
   final Value<String> id;
   final Value<String> spaceId;
   final Value<DateTime> createdAt;
+  final Value<bool> isDeleted;
   final Value<int> rowid;
   const ObjectsCompanion({
     this.id = const Value.absent(),
     this.spaceId = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.isDeleted = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ObjectsCompanion.insert({
     required String id,
     required String spaceId,
     this.createdAt = const Value.absent(),
+    this.isDeleted = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : id = Value(id),
         spaceId = Value(spaceId);
@@ -178,12 +213,14 @@ class ObjectsCompanion extends UpdateCompanion<StoredObject> {
     Expression<String>? id,
     Expression<String>? spaceId,
     Expression<DateTime>? createdAt,
+    Expression<bool>? isDeleted,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (spaceId != null) 'space_id': spaceId,
       if (createdAt != null) 'created_at': createdAt,
+      if (isDeleted != null) 'is_deleted': isDeleted,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -192,11 +229,13 @@ class ObjectsCompanion extends UpdateCompanion<StoredObject> {
       {Value<String>? id,
       Value<String>? spaceId,
       Value<DateTime>? createdAt,
+      Value<bool>? isDeleted,
       Value<int>? rowid}) {
     return ObjectsCompanion(
       id: id ?? this.id,
       spaceId: spaceId ?? this.spaceId,
       createdAt: createdAt ?? this.createdAt,
+      isDeleted: isDeleted ?? this.isDeleted,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -213,6 +252,9 @@ class ObjectsCompanion extends UpdateCompanion<StoredObject> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<bool>(isDeleted.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -225,6 +267,7 @@ class ObjectsCompanion extends UpdateCompanion<StoredObject> {
           ..write('id: $id, ')
           ..write('spaceId: $spaceId, ')
           ..write('createdAt: $createdAt, ')
+          ..write('isDeleted: $isDeleted, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1474,12 +1517,14 @@ typedef $$ObjectsTableCreateCompanionBuilder = ObjectsCompanion Function({
   required String id,
   required String spaceId,
   Value<DateTime> createdAt,
+  Value<bool> isDeleted,
   Value<int> rowid,
 });
 typedef $$ObjectsTableUpdateCompanionBuilder = ObjectsCompanion Function({
   Value<String> id,
   Value<String> spaceId,
   Value<DateTime> createdAt,
+  Value<bool> isDeleted,
   Value<int> rowid,
 });
 
@@ -1500,6 +1545,9 @@ class $$ObjectsTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isDeleted => $composableBuilder(
+      column: $table.isDeleted, builder: (column) => ColumnFilters(column));
 }
 
 class $$ObjectsTableOrderingComposer
@@ -1519,6 +1567,9 @@ class $$ObjectsTableOrderingComposer
 
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isDeleted => $composableBuilder(
+      column: $table.isDeleted, builder: (column) => ColumnOrderings(column));
 }
 
 class $$ObjectsTableAnnotationComposer
@@ -1538,6 +1589,9 @@ class $$ObjectsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
 }
 
 class $$ObjectsTableTableManager extends RootTableManager<
@@ -1569,24 +1623,28 @@ class $$ObjectsTableTableManager extends RootTableManager<
             Value<String> id = const Value.absent(),
             Value<String> spaceId = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
+            Value<bool> isDeleted = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               ObjectsCompanion(
             id: id,
             spaceId: spaceId,
             createdAt: createdAt,
+            isDeleted: isDeleted,
             rowid: rowid,
           ),
           createCompanionCallback: ({
             required String id,
             required String spaceId,
             Value<DateTime> createdAt = const Value.absent(),
+            Value<bool> isDeleted = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               ObjectsCompanion.insert(
             id: id,
             spaceId: spaceId,
             createdAt: createdAt,
+            isDeleted: isDeleted,
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0
