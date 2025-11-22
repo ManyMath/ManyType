@@ -8,8 +8,10 @@ use prost::Message;
 
 use manytype_proto::consensus::{RawRecord, RawRecordWithId, RecordAddRequest};
 use manytype_proto::coordinator::{
-    AclAddRecordRequest, AclAddRecordResponse, AclGetRecordsRequest, AclGetRecordsResponse,
-    NetworkConfigurationRequest, NetworkConfigurationResponse, Node, NodeType,
+    AccountDeleteRequest, AccountDeleteResponse, AclAddRecordRequest, AclAddRecordResponse,
+    AclGetRecordsRequest, AclGetRecordsResponse, AclUploadInviteRequest, AclUploadInviteResponse,
+    DeletionLogRequest, DeletionLogResponse, NetworkConfigurationRequest,
+    NetworkConfigurationResponse, Node, NodeType, SpaceDeleteRequest, SpaceDeleteResponse,
     SpaceMakeShareableRequest, SpaceMakeShareableResponse, SpacePermissions, SpaceReceipt,
     SpaceReceiptWithSignature, SpaceSignRequest, SpaceSignResponse, SpaceStatus,
     SpaceStatusCheckRequest, SpaceStatusCheckResponse, SpaceStatusPayload,
@@ -17,6 +19,7 @@ use manytype_proto::coordinator::{
 use manytype_proto::spacesync::{RawSpaceHeader, SpaceHeader};
 
 use crate::consensus;
+use crate::file_node;
 use crate::storage::sync_state::SharedSyncState;
 
 /// Configuration for the coordinator subsystem.
@@ -40,22 +43,26 @@ pub fn handle_network_configuration(
     // Decode request (validates it's well-formed protobuf)
     let _request = NetworkConfigurationRequest::decode(request_bytes)?;
 
-    // Build response with this server as the only node.
-    // NodeType enum values: TreeApi=0, FileApi=1, CoordinatorApi=2, ConsensusApi=3
-    let node = Node {
+    // Build response with this server as the only physical peer, but advertise
+    // one Node entry per API type (mirrors the official any-sync config shape
+    // and avoids client code that assumes a single NodeType per entry).
+    let nodes = [
+        NodeType::TreeApi,
+        NodeType::FileApi,
+        NodeType::CoordinatorApi,
+        NodeType::ConsensusApi,
+    ]
+    .into_iter()
+    .map(|node_type| Node {
         peer_id: config.peer_id.clone(),
         addresses: config.addresses.clone(),
-        types: vec![
-            NodeType::TreeApi as i32,
-            NodeType::FileApi as i32,
-            NodeType::CoordinatorApi as i32,
-            NodeType::ConsensusApi as i32,
-        ],
-    };
+        types: vec![node_type as i32],
+    })
+    .collect();
 
     let response = NetworkConfigurationResponse {
         network_id: config.network_id.clone(),
-        nodes: vec![node],
+        nodes,
         configuration_id: "manytype-v1".to_string(),
         creation_time_unix: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -74,13 +81,13 @@ pub fn handle_space_sign(
     request_bytes: &[u8],
     config: &CoordinatorConfig,
     signing_key: &ed25519_dalek::SigningKey,
-    remote_peer_id: &[u8],
+    remote_peer_id: &str,
 ) -> Result<Vec<u8>> {
     let request = SpaceSignRequest::decode(request_bytes)?;
     let account_identity = decode_account_identity(&request.header)?;
     let receipt = build_signed_space_receipt(
         &request.space_id,
-        &hex::encode(remote_peer_id),
+        remote_peer_id,
         &account_identity,
         config,
         signing_key,
@@ -96,13 +103,19 @@ pub fn handle_space_sign(
 pub fn handle_space_status_check(
     request_bytes: &[u8],
     sync_state: &SharedSyncState,
+    remote_peer_id: &str,
 ) -> Result<Vec<u8>> {
     let request = SpaceStatusCheckRequest::decode(request_bytes)?;
     let state = sync_state.read().unwrap();
     let payload = if let Some(space) = state.get(&request.space_id) {
+        let permissions = if sync_state.peer_owns_space(&request.space_id, remote_peer_id) {
+            SpacePermissions::Owner
+        } else {
+            SpacePermissions::Unknown
+        };
         SpaceStatusPayload {
             status: SpaceStatus::Created as i32,
-            permissions: SpacePermissions::Owner as i32,
+            permissions: permissions as i32,
             is_shared: space.is_shared,
             ..Default::default()
         }
@@ -181,6 +194,57 @@ pub fn handle_acl_get_records(
     let request = AclGetRecordsRequest::decode(request_bytes)?;
     let response = AclGetRecordsResponse {
         records: sync_state.list_acl_records(&request.space_id, &request.acl_head),
+    };
+    Ok(response.encode_to_vec())
+}
+
+/// Handle /coordinator.Coordinator/AclUploadInvite
+///
+/// Stores a unixfs DAG-PB invite block in the file-node blob store and marks it
+/// as publicly readable by CID (invite flow requires unauthenticated fetch by
+/// joiners).
+pub fn handle_acl_upload_invite(
+    request_bytes: &[u8],
+    file_node: &file_node::FileNodeState,
+) -> Result<Vec<u8>> {
+    let request = AclUploadInviteRequest::decode(request_bytes)?;
+    file_node::store_public_invite_block(file_node, &request.cid, &request.data)?;
+    Ok(AclUploadInviteResponse {}.encode_to_vec())
+}
+
+/// Handle /coordinator.Coordinator/SpaceDelete
+///
+/// Stub: returns success with a future timestamp. No actual space teardown in v2.4.
+pub fn handle_space_delete(request_bytes: &[u8]) -> Result<Vec<u8>> {
+    let _request = SpaceDeleteRequest::decode(request_bytes)?;
+    let response = SpaceDeleteResponse {
+        to_be_deleted_timestamp: unix_now_secs() as i64,
+    };
+    tracing::info!("coordinator: SpaceDelete stub (no-op)");
+    Ok(response.encode_to_vec())
+}
+
+/// Handle /coordinator.Coordinator/AccountDelete
+///
+/// Stub: returns success with a future timestamp. No actual account teardown in v2.4.
+pub fn handle_account_delete(request_bytes: &[u8]) -> Result<Vec<u8>> {
+    let _request = AccountDeleteRequest::decode(request_bytes)?;
+    let response = AccountDeleteResponse {
+        to_be_deleted_timestamp: unix_now_secs() as i64,
+    };
+    tracing::info!("coordinator: AccountDelete stub (no-op)");
+    Ok(response.encode_to_vec())
+}
+
+/// Handle /coordinator.Coordinator/DeletionLog
+///
+/// Stub: returns an empty deletion log (no records). Sufficient for official
+/// client flows to complete without errors.
+pub fn handle_deletion_log(request_bytes: &[u8]) -> Result<Vec<u8>> {
+    let _request = DeletionLogRequest::decode(request_bytes)?;
+    let response = DeletionLogResponse {
+        records: vec![],
+        has_more: false,
     };
     Ok(response.encode_to_vec())
 }
@@ -346,32 +410,27 @@ mod tests {
         let response_bytes = handle_network_configuration(&request_bytes, &config).unwrap();
         let response = NetworkConfigurationResponse::decode(response_bytes.as_slice()).unwrap();
 
-        let node = &response.nodes[0];
-        assert!(
-            node.peer_id.starts_with("12D3KooW"),
-            "peer_id was: {}",
-            node.peer_id
-        );
-        assert_eq!(node.addresses.len(), 2);
-        assert_eq!(node.addresses[0], "127.0.0.1:4830");
+        assert!(response.nodes.len() >= 4);
 
-        // Should advertise all four roles
+        for node in &response.nodes {
+            assert!(
+                node.peer_id.starts_with("12D3KooW"),
+                "peer_id was: {}",
+                node.peer_id
+            );
+            assert_eq!(node.addresses.len(), 2);
+            assert_eq!(node.addresses[0], "127.0.0.1:4830");
+        }
+
+        let has_type = |want: NodeType| response.nodes.iter().any(|node| node.types.contains(&(want as i32)));
+
+        assert!(has_type(NodeType::TreeApi), "should have TreeApi");
         assert!(
-            node.types.contains(&(NodeType::TreeApi as i32)),
-            "should have TreeApi"
-        );
-        assert!(
-            node.types.contains(&(NodeType::CoordinatorApi as i32)),
+            has_type(NodeType::CoordinatorApi),
             "should have CoordinatorApi"
         );
-        assert!(
-            node.types.contains(&(NodeType::FileApi as i32)),
-            "should have FileApi"
-        );
-        assert!(
-            node.types.contains(&(NodeType::ConsensusApi as i32)),
-            "should have ConsensusApi"
-        );
+        assert!(has_type(NodeType::FileApi), "should have FileApi");
+        assert!(has_type(NodeType::ConsensusApi), "should have ConsensusApi");
     }
 
     #[test]
@@ -412,7 +471,7 @@ mod tests {
             &request.encode_to_vec(),
             &config,
             &signing_key,
-            b"remote-peer",
+            "remote-peer",
         )
         .unwrap();
         let response = SpaceSignResponse::decode(response_bytes.as_slice()).unwrap();
@@ -420,7 +479,7 @@ mod tests {
         validate_space_receipt(
             &receipt,
             "space-1",
-            &hex::encode(b"remote-peer"),
+            "remote-peer",
             &account_identity,
             &config,
             &ed25519::verifying_key(&signing_key),
@@ -463,6 +522,7 @@ mod tests {
             }
             .encode_to_vec(),
             &sync_state,
+            "remote-peer",
         )
         .unwrap();
         let response = SpaceStatusCheckResponse::decode(response_bytes.as_slice()).unwrap();
@@ -505,6 +565,7 @@ mod tests {
                 }
                 .encode_to_vec(),
                 &sync_state,
+                "remote-peer",
             )
             .unwrap()
             .as_slice(),
@@ -550,6 +611,7 @@ mod tests {
                 }
                 .encode_to_vec(),
                 &reopened,
+                "remote-peer",
             )
             .unwrap()
             .as_slice(),
@@ -587,9 +649,9 @@ mod tests {
 
         assert_eq!(response.record_id, compute_cid(&response.payload));
         let stored = sync_state.list_acl_records("space-1", "");
-        assert_eq!(stored.len(), 1);
+        assert_eq!(stored.len(), 2);
         assert_eq!(
-            RawRecordWithId::decode(stored[0].as_slice()).unwrap().id,
+            RawRecordWithId::decode(stored[1].as_slice()).unwrap().id,
             response.record_id
         );
     }
@@ -646,7 +708,7 @@ mod tests {
             .as_slice(),
         )
         .unwrap();
-        assert_eq!(all.records.len(), 2);
+        assert_eq!(all.records.len(), 3);
 
         let tail = AclGetRecordsResponse::decode(
             handle_acl_get_records(
@@ -724,7 +786,7 @@ mod tests {
             .as_slice(),
         )
         .unwrap();
-        let latest_id = RawRecordWithId::decode(get_response.records[1].as_slice())
+        let latest_id = RawRecordWithId::decode(get_response.records.last().unwrap().as_slice())
             .unwrap()
             .id;
 
@@ -740,6 +802,38 @@ mod tests {
         .unwrap();
 
         assert_eq!(third.record_id, compute_cid(&third.payload));
-        assert_eq!(reopened.list_acl_records("space-1", "").len(), 3);
+        assert_eq!(reopened.list_acl_records("space-1", "").len(), 4);
+    }
+
+    #[test]
+    fn space_delete_stub_returns_timestamp() {
+        let request = SpaceDeleteRequest {
+            space_id: "space-1".to_string(),
+            ..Default::default()
+        };
+        let response_bytes = handle_space_delete(&request.encode_to_vec()).unwrap();
+        let response = SpaceDeleteResponse::decode(response_bytes.as_slice()).unwrap();
+        assert!(response.to_be_deleted_timestamp > 0);
+    }
+
+    #[test]
+    fn account_delete_stub_returns_timestamp() {
+        let request = AccountDeleteRequest {
+            ..Default::default()
+        };
+        let response_bytes = handle_account_delete(&request.encode_to_vec()).unwrap();
+        let response = AccountDeleteResponse::decode(response_bytes.as_slice()).unwrap();
+        assert!(response.to_be_deleted_timestamp > 0);
+    }
+
+    #[test]
+    fn deletion_log_stub_returns_empty() {
+        let request = DeletionLogRequest {
+            ..Default::default()
+        };
+        let response_bytes = handle_deletion_log(&request.encode_to_vec()).unwrap();
+        let response = DeletionLogResponse::decode(response_bytes.as_slice()).unwrap();
+        assert!(response.records.is_empty());
+        assert!(!response.has_more);
     }
 }
