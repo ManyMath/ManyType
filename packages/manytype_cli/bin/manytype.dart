@@ -1,6 +1,7 @@
 import 'package:args/args.dart';
 
 import 'package:manytype_cli/src/commands/create.dart';
+import 'package:manytype_cli/src/commands/delete.dart';
 import 'package:manytype_cli/src/commands/edit.dart';
 import 'package:manytype_cli/src/commands/file_transfer.dart';
 import 'package:manytype_cli/src/commands/probe_file_node.dart';
@@ -41,10 +42,14 @@ Future<void> main(List<String> arguments) async {
       negatable: false,
       help: 'Skip mutating file RPCs such as BlockPush',
     );
+  final deleteParser = ArgParser()
+    ..addOption('id',
+        help: 'Object ID to delete (from manytype read output)', mandatory: true);
   parser.addCommand('create', createParser);
   parser.addCommand('sync');
   parser.addCommand('read', readParser);
   parser.addCommand('edit', editParser);
+  parser.addCommand('delete', deleteParser);
   parser.addCommand('init');
   parser.addCommand('file-upload', fileUploadParser);
   parser.addCommand('file-open', fileOpenParser);
@@ -56,8 +61,8 @@ Future<void> main(List<String> arguments) async {
   if (results['help'] == true || results.command == null) {
     print('Usage: manytype <command> [options]');
     print(
-      'Commands: init, create, sync, read, edit, file-upload, file-open, '
-      'probe-network, probe-file-node',
+      'Commands: init, create, sync, read, edit, delete, file-upload, '
+      'file-open, probe-network, probe-file-node',
     );
     print(parser.usage);
     return;
@@ -133,6 +138,23 @@ Future<void> main(List<String> arguments) async {
       final newText = command['text'] as String;
       await editCommand(objectId, newText, db, config,
           networkConfigPath: networkConfigPath);
+      await db.close();
+      break;
+
+    case 'delete':
+      if (networkConfigPath == null) {
+        throw StateError(
+          'delete requires --network-config <path>',
+        );
+      }
+      final config = await CliConfig.load(serverOverride: serverOverride);
+      final db = ManytypeDatabase(CliConfig.dbPath);
+      await deleteCommand(
+        command['id'] as String,
+        db,
+        config,
+        networkConfigPath: networkConfigPath,
+      );
       await db.close();
       break;
 
