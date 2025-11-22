@@ -854,7 +854,7 @@ mod tests {
                 "/unknown.Service/Method",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await;
             assert!(result.is_err());
@@ -892,7 +892,7 @@ mod tests {
                 "/filesync.File/Check",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await
             .unwrap();
@@ -925,7 +925,7 @@ mod tests {
                 "/filesync.File/SpaceInfo",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await
             .unwrap();
@@ -965,7 +965,7 @@ mod tests {
                 "/spacesync.SpaceSync/ObjectSyncRequestStream",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await
             .unwrap();
@@ -1010,7 +1010,7 @@ mod tests {
                 "/coordinator.Coordinator/NetworkConfiguration",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await
             .unwrap();
@@ -1060,7 +1060,7 @@ mod tests {
                 "/spacesync.SpaceSync/HeadSync",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await
             .unwrap();
@@ -1129,7 +1129,7 @@ mod tests {
                 "/spacesync.SpaceSync/SpacePush",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await
             .unwrap();
@@ -1181,7 +1181,7 @@ mod tests {
                 "/spacesync.SpaceSync/ObjectSyncStream",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await
             .unwrap();
@@ -1252,7 +1252,7 @@ mod tests {
                 "/spacesync.SpaceSync/StoreDiff",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await
             .unwrap();
@@ -1301,7 +1301,7 @@ mod tests {
                 "/spacesync.SpaceSync/StoreElements",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await
             .unwrap();
@@ -1373,7 +1373,7 @@ mod tests {
                 "/consensusProto.Consensus/LogAdd",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await
             .unwrap();
@@ -1437,7 +1437,7 @@ mod tests {
                 "/filesync.File/BlockPush",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await
             .unwrap();
@@ -1487,7 +1487,7 @@ mod tests {
                 "/filesync.File/BlockGet",
                 &mut server_stream,
                 &state,
-                b"peer",
+                "peer",
             )
             .await;
             assert!(result.is_err());
@@ -1551,7 +1551,7 @@ mod tests {
                     "/spacesync.SpaceSync/SpacePush",
                     &mut server_stream,
                     &state,
-                    b"peer",
+                    "peer",
                 )
                 .await
                 .unwrap();
@@ -1629,7 +1629,7 @@ mod tests {
                     "/spacesync.SpaceSync/HeadSync",
                     &mut server_stream,
                     &state,
-                    b"peer",
+                    "peer",
                 )
                 .await
                 .unwrap();
