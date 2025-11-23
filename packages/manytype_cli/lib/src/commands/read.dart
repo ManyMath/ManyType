@@ -5,6 +5,7 @@ import 'package:libcompress/libcompress.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/events.dart';
+import 'package:manytype_protocol/models.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 
 import '../config.dart';
@@ -220,15 +221,43 @@ Future<void> _printBlockChanges(
     );
     final change = changes_proto.Change.fromBuffer(decoded);
     for (final content in change.content) {
-      if (content.hasDetailsSet() &&
-          content.detailsSet.key == 'name' &&
-          content.detailsSet.value.hasStringValue()) {
-        print('    Text (updated): "${content.detailsSet.value.stringValue}"');
+      if (content.hasDetailsSet()) {
+        final key = content.detailsSet.key;
+        final val = content.detailsSet.value;
+        if (key == 'name' && val.hasStringValue()) {
+          print('    Text (updated): "${val.stringValue}"');
+        } else if (val.hasBoolValue()) {
+          print('    $key (bool): ${val.boolValue}');
+        } else if (val.hasNumberValue()) {
+          final dt = DateTime.fromMillisecondsSinceEpoch(
+            val.numberValue.toInt() * 1000,
+            isUtc: true,
+          );
+          print('    $key (date): ${dt.toIso8601String().substring(0, 10)}');
+        } else if (val.hasStringValue()) {
+          print('    $key (object): ${val.stringValue}');
+        }
       }
       if (content.hasBlockCreate()) {
         for (final block in content.blockCreate.blocks) {
           if (block.hasText()) {
-            print('    Text: "${block.text.text}"');
+            final style = block.text.style;
+            final text = block.text.text;
+            switch (style) {
+              case Block_Content_Text_Style.Checkbox:
+                final mark = block.text.checked ? '[x]' : '[ ]';
+                print('    $mark [Checkbox] $text');
+              case Block_Content_Text_Style.Numbered:
+                print('    [Numbered] $text');
+              case Block_Content_Text_Style.Toggle:
+                print('    [Toggle] $text');
+              case Block_Content_Text_Style.Quote:
+                print('    [Quote] $text');
+              case Block_Content_Text_Style.Callout:
+                print('    [Callout] $text');
+              default:
+                print('    Text: "$text"');
+            }
           }
         }
       }
