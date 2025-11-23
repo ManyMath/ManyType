@@ -1,3 +1,8 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:libcompress/libcompress.dart';
+import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/events.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
@@ -5,6 +10,8 @@ import 'package:manytype_protocol/manytype_protocol.dart';
 import '../config.dart';
 import '../identity.dart';
 import '../store/database.dart';
+
+final _snappy = SnappyCodec();
 
 /// Read and display objects from local store.
 ///
@@ -27,7 +34,7 @@ Future<void> readCommand(
 
 /// List all objects in the space with text previews.
 Future<void> _listObjects(ManytypeDatabase db, String spaceId) async {
-  final objects = await db.getObjectsBySpace(spaceId);
+  final objects = await db.getNonDeletedObjectsBySpace(spaceId);
   if (objects.isEmpty) {
     print('No objects found. Create one with: manytype create "your text"');
     return;
@@ -61,6 +68,28 @@ Future<void> _showObject(ManytypeDatabase db, String objectId) async {
     return;
   }
 
+  if (await db.isObjectDeleted(objectId)) {
+    print('Object $objectId has been deleted');
+    exit(1);
+  }
+
+  // Official Anytype trees encrypt `TreeChange.changesData` using a tree key
+  // derived from the space read key and object ID, and may additionally snappy
+  // compress the plaintext when `dataType == "1/s"`.
+  Uint8List? treeKey;
+  try {
+    final config = await CliConfig.load();
+    final identity = await Identity.fromMnemonic(config.mnemonic);
+    final accountKeyPair = await ed25519KeyPairFromSeed(identity.accountSeed);
+    final accountPrivRaw = Uint8List(64)
+      ..setRange(0, 32, identity.accountSeed)
+      ..setRange(32, 64, accountKeyPair.publicKey);
+    final spaceKey = await deriveSpaceKey(accountPrivRaw);
+    treeKey = await deriveTreeKey(spaceKey, objectId);
+  } catch (_) {
+    treeKey = null;
+  }
+
   print('Object: $objectId');
   print('Changes: ${changes.length}');
   _printAttachmentRefs(await db.getAttachmentRefsByObject(objectId));
@@ -77,7 +106,10 @@ Future<void> _showObject(ManytypeDatabase db, String objectId) async {
         try {
           final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
           if (treeChange.changesData.isNotEmpty) {
-            _printBlockChanges(treeChange.changesData);
+            await _printBlockChanges(
+              treeChange,
+              treeKey: treeKey,
+            );
           } else {
             print('    (no block data)');
           }
@@ -117,7 +149,8 @@ String extractTextPreview(List<Change> changes) {
 
       final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
       if (treeChange.changesData.isNotEmpty) {
-        final text = _extractText(treeChange.changesData);
+        final decoded = _decodeChangesDataForPreview(treeChange);
+        final text = _extractTextFromDecodedChangeBytes(decoded);
         if (text.isNotEmpty) return text;
       }
     } catch (_) {
@@ -127,13 +160,30 @@ String extractTextPreview(List<Change> changes) {
   return '';
 }
 
-/// Extract text from Change proto changesData bytes.
-///
-/// Uses [changes_proto.Change] to avoid name conflict with drift's Change class.
-String _extractText(List<int> changesData) {
+Uint8List _decodeChangesDataForPreview(TreeChange treeChange) {
+  if (treeChange.readKeyId.isNotEmpty) {
+    return Uint8List(0);
+  }
+  var data = Uint8List.fromList(treeChange.changesData);
+  if (treeChange.dataType == '1/s') {
+    data = _snappy.decompress(data);
+  }
+  return data;
+}
+
+/// Extract text from Change proto bytes.
+String _extractTextFromDecodedChangeBytes(Uint8List decoded) {
   try {
-    final change = changes_proto.Change.fromBuffer(changesData);
+    final change = changes_proto.Change.fromBuffer(decoded);
     for (final content in change.content) {
+      if (content.hasDetailsSet() &&
+          content.detailsSet.key == 'name' &&
+          content.detailsSet.value.hasStringValue()) {
+        final title = content.detailsSet.value.stringValue.trim();
+        if (title.isNotEmpty) {
+          return title;
+        }
+      }
       if (content.hasBlockCreate()) {
         for (final block in content.blockCreate.blocks) {
           if (block.hasText()) {
@@ -159,10 +209,22 @@ String _extractText(List<int> changesData) {
 }
 
 /// Print block content from changesData bytes.
-void _printBlockChanges(List<int> changesData) {
+Future<void> _printBlockChanges(
+  TreeChange treeChange, {
+  required Uint8List? treeKey,
+}) async {
   try {
-    final change = changes_proto.Change.fromBuffer(changesData);
+    final decoded = await _decodeTreeChangeChangesData(
+      treeChange,
+      treeKey: treeKey,
+    );
+    final change = changes_proto.Change.fromBuffer(decoded);
     for (final content in change.content) {
+      if (content.hasDetailsSet() &&
+          content.detailsSet.key == 'name' &&
+          content.detailsSet.value.hasStringValue()) {
+        print('    Text (updated): "${content.detailsSet.value.stringValue}"');
+      }
       if (content.hasBlockCreate()) {
         for (final block in content.blockCreate.blocks) {
           if (block.hasText()) {
@@ -187,4 +249,21 @@ void _printBlockChanges(List<int> changesData) {
   } catch (e) {
     print('    (could not decode block changes)');
   }
+}
+
+Future<Uint8List> _decodeTreeChangeChangesData(
+  TreeChange treeChange, {
+  required Uint8List? treeKey,
+}) async {
+  var data = Uint8List.fromList(treeChange.changesData);
+  if (treeChange.readKeyId.isNotEmpty) {
+    if (treeKey == null) {
+      throw StateError('missing tree key for encrypted changesData');
+    }
+    data = await aesGcmDecrypt(treeKey, data);
+  }
+  if (treeChange.dataType == '1/s') {
+    data = _snappy.decompress(data);
+  }
+  return data;
 }
