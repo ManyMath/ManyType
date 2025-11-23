@@ -59,6 +59,45 @@ Block createListBlock(String id, String text,
   );
 }
 
+/// Create a quote block.
+///
+/// Uses [Block_Content_Text_Style.Quote] style per Anytype proto format.
+Block createQuoteBlock(String id, String text) {
+  return Block(
+    id: id,
+    text: Block_Content_Text(
+      text: text,
+      style: Block_Content_Text_Style.Quote,
+    ),
+  );
+}
+
+/// Create a toggle block.
+///
+/// Uses [Block_Content_Text_Style.Toggle] style per Anytype proto format.
+Block createToggleBlock(String id, String text) {
+  return Block(
+    id: id,
+    text: Block_Content_Text(
+      text: text,
+      style: Block_Content_Text_Style.Toggle,
+    ),
+  );
+}
+
+/// Create a callout block.
+///
+/// Uses [Block_Content_Text_Style.Callout] style per Anytype proto format.
+Block createCalloutBlock(String id, String text) {
+  return Block(
+    id: id,
+    text: Block_Content_Text(
+      text: text,
+      style: Block_Content_Text_Style.Callout,
+    ),
+  );
+}
+
 /// Create a minimal SmartBlock snapshot structure.
 ///
 /// Per Anytype's block model, a snapshot contains:
@@ -87,6 +126,53 @@ SmartBlockSnapshotBase createMinimalSnapshot(
 
   return SmartBlockSnapshotBase()
     ..blocks.addAll([rootBlock, layoutBlock, ...contentBlocks]);
+}
+
+/// Create a minimal snapshot base compatible with official Anytype "page" trees.
+///
+/// The official client bootstraps pages with a 4-block skeleton:
+/// - smartblock root (id = object id) -> child "header"
+/// - header layout (style Header) -> children ["title", "featuredRelations"]
+/// - title text block (id "title", style Title)
+/// - featured relations block (id "featuredRelations")
+SmartBlockSnapshotBase createMinimalPageSnapshotBase({
+  required String objectId,
+  String title = '',
+}) {
+  final rootBlock = Block(
+    id: objectId,
+    smartblock: Block_Content_Smartblock(),
+    childrenIds: const ['header'],
+  );
+
+  final headerBlock = Block(
+    id: 'header',
+    layout: Block_Content_Layout(
+      style: Block_Content_Layout_Style.Header,
+    ),
+    childrenIds: const ['title', 'featuredRelations'],
+  );
+
+  final titleBlock = Block(
+    id: 'title',
+    text: Block_Content_Text(
+      text: title,
+      style: Block_Content_Text_Style.Title,
+    ),
+  );
+
+  final featuredRelationsBlock = Block(
+    id: 'featuredRelations',
+    featuredRelations: Block_Content_FeaturedRelations(),
+  );
+
+  return SmartBlockSnapshotBase()
+    ..blocks.addAll([
+      rootBlock,
+      headerBlock,
+      titleBlock,
+      featuredRelationsBlock,
+    ]);
 }
 
 /// Marshal a list of [Change_Content] operations into bytes for

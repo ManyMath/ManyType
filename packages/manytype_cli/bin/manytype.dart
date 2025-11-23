@@ -22,14 +22,20 @@ Future<void> main(List<String> arguments) async {
         defaultsTo: null);
 
   final createParser = ArgParser()
-    ..addFlag('sync', negatable: false, help: 'Sync after creating the object');
+    ..addFlag('sync', negatable: false, help: 'Sync after creating the object')
+    ..addFlag('checkbox', negatable: false, help: 'Add a checkbox block')
+    ..addFlag('numbered-list', negatable: false, help: 'Add a numbered list block')
+    ..addFlag('toggle', negatable: false, help: 'Add a toggle block')
+    ..addFlag('quote', negatable: false, help: 'Add a quote block')
+    ..addFlag('callout', negatable: false, help: 'Add a callout block');
   final readParser = ArgParser()
     ..addFlag('sync', negatable: false, help: 'Sync before reading the object');
   final editParser = ArgParser()
     ..addOption('id',
         help: 'Object ID to edit (from manytype read output)', mandatory: true)
     ..addOption('text',
-        help: 'New text content for the object', mandatory: true);
+        help: 'New text content for the object')
+    ..addFlag('checkbox', negatable: false, help: 'Add a checkbox block');
   final fileUploadParser = ArgParser()
     ..addOption('file-id', help: 'Stable file ID for upload', defaultsTo: null);
   final fileOpenParser = ArgParser()
@@ -89,7 +95,13 @@ Future<void> main(List<String> arguments) async {
       final db = ManytypeDatabase(CliConfig.dbPath);
       final text =
           command.rest.isNotEmpty ? command.rest.join(' ') : 'Untitled';
-      await createCommand(text, db, config);
+      await createCommand(text, db, config,
+        checkbox: command['checkbox'] == true,
+        numberedList: command['numbered-list'] == true,
+        toggle: command['toggle'] == true,
+        quote: command['quote'] == true,
+        callout: command['callout'] == true,
+      );
       await db.close();
 
       if (command['sync'] == true) {
@@ -140,9 +152,17 @@ Future<void> main(List<String> arguments) async {
       final config = await CliConfig.load(serverOverride: serverOverride);
       final db = ManytypeDatabase(CliConfig.dbPath);
       final objectId = command['id'] as String;
-      final newText = command['text'] as String;
+      final hasCheckbox = command['checkbox'] == true;
+      final newText = command['text'] as String?;
+      if (newText == null && !hasCheckbox) {
+        throw StateError('edit requires --text or --checkbox');
+      }
       await editCommand(objectId, newText, db, config,
-          networkConfigPath: networkConfigPath);
+          networkConfigPath: networkConfigPath,
+          checkbox: hasCheckbox,
+          checkboxText: hasCheckbox
+              ? (command.rest.isNotEmpty ? command.rest.join(' ') : 'Todo')
+              : null);
       await db.close();
       break;
 
