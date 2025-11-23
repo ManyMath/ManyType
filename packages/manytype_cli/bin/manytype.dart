@@ -3,6 +3,7 @@ import 'package:args/args.dart';
 import 'package:manytype_cli/src/commands/create.dart';
 import 'package:manytype_cli/src/commands/delete.dart';
 import 'package:manytype_cli/src/commands/edit.dart';
+import 'package:manytype_cli/src/commands/list.dart';
 import 'package:manytype_cli/src/commands/file_transfer.dart';
 import 'package:manytype_cli/src/commands/probe_file_node.dart';
 import 'package:manytype_cli/src/commands/probe_network.dart';
@@ -45,11 +46,15 @@ Future<void> main(List<String> arguments) async {
   final deleteParser = ArgParser()
     ..addOption('id',
         help: 'Object ID to delete (from manytype read output)', mandatory: true);
+  final listParser = ArgParser()
+    ..addOption('type', help: 'Filter by object type key (e.g. ot-page)')
+    ..addOption('where', help: 'Filter by relation key=value (e.g. done=true)');
   parser.addCommand('create', createParser);
   parser.addCommand('sync');
   parser.addCommand('read', readParser);
   parser.addCommand('edit', editParser);
   parser.addCommand('delete', deleteParser);
+  parser.addCommand('list', listParser);
   parser.addCommand('init');
   parser.addCommand('file-upload', fileUploadParser);
   parser.addCommand('file-open', fileOpenParser);
@@ -61,7 +66,7 @@ Future<void> main(List<String> arguments) async {
   if (results['help'] == true || results.command == null) {
     print('Usage: manytype <command> [options]');
     print(
-      'Commands: init, create, sync, read, edit, delete, file-upload, '
+      'Commands: init, create, sync, read, edit, delete, list, file-upload, '
       'file-open, probe-network, probe-file-node',
     );
     print(parser.usage);
@@ -154,6 +159,24 @@ Future<void> main(List<String> arguments) async {
         db,
         config,
         networkConfigPath: networkConfigPath,
+      );
+      await db.close();
+      break;
+
+    case 'list':
+      if (networkConfigPath == null) {
+        throw StateError(
+          'list requires --network-config <path>',
+        );
+      }
+      final config = await CliConfig.load(serverOverride: serverOverride);
+      final db = ManytypeDatabase(CliConfig.dbPath);
+      await listCommand(
+        db,
+        config,
+        networkConfigPath: networkConfigPath,
+        typeFilter: command['type'] as String?,
+        whereFilter: command['where'] as String?,
       );
       await db.close();
       break;
