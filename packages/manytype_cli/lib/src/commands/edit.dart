@@ -27,6 +27,10 @@ Future<void> editCommand(
   required String networkConfigPath,
   bool checkbox = false,
   String? checkboxText,
+  String? relationKey,
+  String? boolValue,
+  String? dateValue,
+  String? objectIdValue,
 }) async {
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
@@ -137,6 +141,49 @@ Future<void> editCommand(
     latestHeads = [blockTreeChange.id];
   }
 
+  String? relationChangeId;
+
+  // If a relation key is provided, build a DetailsSet with the typed Value.
+  if (relationKey != null) {
+    Value relationValue;
+    if (boolValue != null) {
+      relationValue = Value(boolValue: boolValue == 'true');
+    } else if (dateValue != null) {
+      relationValue = Value(numberValue: int.parse(dateValue).toDouble());
+    } else if (objectIdValue != null) {
+      relationValue = Value(stringValue: objectIdValue);
+    } else {
+      throw StateError('relation requires a typed value');
+    }
+
+    final relationContent = changes_proto.Change_Content(
+      detailsSet: changes_proto.Change_DetailsSet(
+        key: relationKey,
+        value: relationValue,
+      ),
+    );
+    final relationData = marshalChangeContent([relationContent]);
+
+    final relationTreeChange = await buildTreeChange(
+      currentHeads: latestHeads,
+      aclHeadId: aclHeadId,
+      snapshotBaseId: snapshotBaseId,
+      changesData: await aesGcmEncrypt(treeKey, relationData),
+      identityPrivateKey: identity.accountSeed,
+      readKeyId: aclHeadId,
+    );
+
+    await db.insertChange(
+      relationTreeChange.id,
+      objectId,
+      relationTreeChange.rawChange,
+      jsonEncode(latestHeads),
+    );
+
+    relationChangeId = relationTreeChange.id;
+    latestHeads = [relationTreeChange.id];
+  }
+
   await syncService.sync(db, config, networkConfigPath: networkConfigPath);
 
   // Verify text change if a name update was made.
@@ -154,6 +201,10 @@ Future<void> editCommand(
   print('Edited object: $objectId');
   if (nameChangeId != null) print('Name change: $nameChangeId');
   if (blockChangeId != null) print('Block change: $blockChangeId');
+  if (relationChangeId != null) {
+    final displayValue = boolValue ?? dateValue ?? objectIdValue ?? '';
+    print('Relation change: $relationChangeId ($relationKey = $displayValue)');
+  }
 }
 
 Future<String> _extractTextPreviewWithTreeKey(

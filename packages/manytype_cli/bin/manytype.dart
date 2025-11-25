@@ -35,7 +35,11 @@ Future<void> main(List<String> arguments) async {
         help: 'Object ID to edit (from manytype read output)', mandatory: true)
     ..addOption('text',
         help: 'New text content for the object')
-    ..addFlag('checkbox', negatable: false, help: 'Add a checkbox block');
+    ..addFlag('checkbox', negatable: false, help: 'Add a checkbox block')
+    ..addOption('relation', help: 'Relation key to set')
+    ..addOption('bool', help: 'Bool relation value: true or false')
+    ..addOption('date', help: 'Unix timestamp for date relation')
+    ..addOption('object-id', help: 'Object ID for object-ref relation');
   final fileUploadParser = ArgParser()
     ..addOption('file-id', help: 'Stable file ID for upload', defaultsTo: null);
   final fileOpenParser = ArgParser()
@@ -154,15 +158,40 @@ Future<void> main(List<String> arguments) async {
       final objectId = command['id'] as String;
       final hasCheckbox = command['checkbox'] == true;
       final newText = command['text'] as String?;
-      if (newText == null && !hasCheckbox) {
-        throw StateError('edit requires --text or --checkbox');
+      final relationKey = command['relation'] as String?;
+      final boolValue = command['bool'] as String?;
+      final dateValue = command['date'] as String?;
+      final objectIdValue = command['object-id'] as String?;
+
+      // Validate relation flags.
+      if (relationKey != null) {
+        final typedCount = [boolValue, dateValue, objectIdValue]
+            .where((v) => v != null)
+            .length;
+        if (typedCount != 1) {
+          throw StateError(
+            '--relation requires exactly one of --bool, --date, or --object-id',
+          );
+        }
+      } else if (boolValue != null || dateValue != null || objectIdValue != null) {
+        throw StateError(
+          '--bool, --date, and --object-id require --relation <key>',
+        );
+      }
+
+      if (newText == null && !hasCheckbox && relationKey == null) {
+        throw StateError('edit requires --text, --checkbox, or --relation');
       }
       await editCommand(objectId, newText, db, config,
           networkConfigPath: networkConfigPath,
           checkbox: hasCheckbox,
           checkboxText: hasCheckbox
               ? (command.rest.isNotEmpty ? command.rest.join(' ') : 'Todo')
-              : null);
+              : null,
+          relationKey: relationKey,
+          boolValue: boolValue,
+          dateValue: dateValue,
+          objectIdValue: objectIdValue);
       await db.close();
       break;
 
