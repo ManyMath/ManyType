@@ -93,6 +93,25 @@ Future<void> _showObject(ManytypeDatabase db, String objectId) async {
 
   print('Object: $objectId');
   print('Changes: ${changes.length}');
+
+  // Extract and display SmartBlockType from root change.
+  final smartBlockType = _extractSmartBlockType(changes);
+  if (smartBlockType != null) {
+    switch (smartBlockType) {
+      case 528: // SmartBlockType.STType
+        print('  Kind: [Type]');
+      case 521: // SmartBlockType.STRelation
+        print('  Kind: [Relation]');
+      case 16: // SmartBlockType.Page
+        print('  Kind: [Page]');
+      default:
+        print('  Kind: [$smartBlockType]');
+    }
+  }
+
+  // Extract snapshot metadata (objectTypes, relationLinks, details, Dataview blocks).
+  await _printSnapshotMetadata(changes, treeKey: treeKey, smartBlockType: smartBlockType);
+
   _printAttachmentRefs(await db.getAttachmentRefsByObject(objectId));
   print('');
 
@@ -209,6 +228,74 @@ String _extractTextFromDecodedChangeBytes(Uint8List decoded) {
   return '';
 }
 
+/// Extract and print metadata from the first snapshot change in the tree.
+Future<void> _printSnapshotMetadata(
+  List<Change> changes, {
+  required Uint8List? treeKey,
+  int? smartBlockType,
+}) async {
+  for (final change in changes) {
+    try {
+      final rawTreeChange = RawTreeChange.fromBuffer(change.rawBytes);
+      if (rawTreeChange.payload.isEmpty) continue;
+
+      TreeChange treeChange;
+      try {
+        treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+      } catch (_) {
+        continue; // Root change -- skip.
+      }
+      if (treeChange.changesData.isEmpty) continue;
+
+      final decoded = await _decodeTreeChangeChangesData(
+        treeChange,
+        treeKey: treeKey,
+      );
+      final changeProto = changes_proto.Change.fromBuffer(decoded);
+
+      if (!changeProto.hasSnapshot()) continue;
+
+      final snapData = changeProto.snapshot.data;
+
+      // objectTypes
+      if (snapData.objectTypes.isNotEmpty) {
+        print('  Type: ${snapData.objectTypes.join(', ')}');
+      }
+
+      // relationLinks
+      if (snapData.relationLinks.isNotEmpty) {
+        print('  Relations: ${snapData.relationLinks.map((l) => l.key).join(', ')}');
+      }
+
+      // Type/Relation-specific details from snapshot.
+      if (snapData.hasDetails()) {
+        final fields = snapData.details.fields;
+        if (fields.containsKey('name')) {
+          print('  Name: ${fields['name']!.stringValue}');
+        }
+        if (smartBlockType == 521 && fields.containsKey('relationFormat')) {
+          print('  Format: ${_formatName(fields['relationFormat']!.numberValue)}');
+        }
+      }
+
+      // Dataview blocks in snapshot.
+      for (final block in snapData.blocks) {
+        if (block.hasDataview()) {
+          final dv = block.dataview;
+          final sources = dv.source.join(', ');
+          final viewCount = dv.views.length;
+          print('  [Dataview] source: $sources, views: $viewCount');
+        }
+      }
+
+      // Found snapshot -- stop looking.
+      return;
+    } catch (_) {
+      continue;
+    }
+  }
+}
+
 /// Print block content from changesData bytes.
 Future<void> _printBlockChanges(
   TreeChange treeChange, {
@@ -259,6 +346,10 @@ Future<void> _printBlockChanges(
                 print('    Text: "$text"');
             }
           }
+          if (block.hasDataview()) {
+            final dv = block.dataview;
+            print('    [Dataview] source: ${dv.source.join(', ')}, views: ${dv.views.length}');
+          }
         }
       }
       if (content.hasBlockUpdate()) {
@@ -295,4 +386,57 @@ Future<Uint8List> _decodeTreeChangeChangesData(
     data = _snappy.decompress(data);
   }
   return data;
+}
+
+/// Decode a protobuf varint from a byte list (handles multi-byte values like
+/// SmartBlockType.STType=528 and STRelation=521 which exceed single-byte range).
+int _decodeVarint(List<int> bytes) {
+  int result = 0;
+  int shift = 0;
+  for (final b in bytes) {
+    result |= (b & 0x7F) << shift;
+    shift += 7;
+    if (b < 0x80) break;
+  }
+  return result;
+}
+
+/// Extract SmartBlockType value from the root change's changePayload field.
+/// Returns null if the root change cannot be parsed or has no changePayload.
+int? _extractSmartBlockType(List<Change> changes) {
+  try {
+    final rawTreeChange = RawTreeChange.fromBuffer(changes.first.rawBytes);
+    if (rawTreeChange.payload.isEmpty) return null;
+    final rootChange = RootChange.fromBuffer(rawTreeChange.payload);
+    if (rootChange.changePayload.isEmpty) return null;
+    final bytes = rootChange.changePayload;
+    // changePayload is a proto message where field 1 (tag 0x08) is the
+    // SmartBlockType enum value encoded as a varint.
+    if (bytes.isEmpty || bytes[0] != 0x08) return null;
+    return _decodeVarint(bytes.sublist(1));
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Map a RelationFormat enum value to a human-readable name.
+String _formatName(double numberValue) {
+  final intVal = numberValue.toInt();
+  const names = {
+    0: 'longtext',
+    1: 'shorttext',
+    2: 'number',
+    3: 'status',
+    4: 'date',
+    5: 'file',
+    6: 'checkbox',
+    7: 'url',
+    8: 'email',
+    9: 'phone',
+    10: 'emoji',
+    11: 'tag',
+    100: 'object',
+    101: 'relations',
+  };
+  return names[intVal] ?? 'unknown($intVal)';
 }
