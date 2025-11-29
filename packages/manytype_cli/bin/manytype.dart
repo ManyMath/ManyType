@@ -27,7 +27,13 @@ Future<void> main(List<String> arguments) async {
     ..addFlag('numbered-list', negatable: false, help: 'Add a numbered list block')
     ..addFlag('toggle', negatable: false, help: 'Add a toggle block')
     ..addFlag('quote', negatable: false, help: 'Add a quote block')
-    ..addFlag('callout', negatable: false, help: 'Add a callout block');
+    ..addFlag('callout', negatable: false, help: 'Add a callout block')
+    ..addFlag('as-type', negatable: false, help: 'Create a custom object type (STType)')
+    ..addFlag('as-relation', negatable: false, help: 'Create a custom relation (STRelation)')
+    ..addFlag('as-set', negatable: false, help: 'Create a set object with Dataview')
+    ..addOption('name', help: 'Name for type/relation/set objects')
+    ..addOption('format', help: 'Relation format: text, number, date, checkbox, url, email, phone, object')
+    ..addOption('source-type', help: 'Source type key for set (e.g. ot-page)');
   final readParser = ArgParser()
     ..addFlag('sync', negatable: false, help: 'Sync before reading the object');
   final editParser = ArgParser()
@@ -99,12 +105,32 @@ Future<void> main(List<String> arguments) async {
       final db = ManytypeDatabase(CliConfig.dbPath);
       final text =
           command.rest.isNotEmpty ? command.rest.join(' ') : 'Untitled';
+      final asType = command['as-type'] == true;
+      final asRelation = command['as-relation'] == true;
+      final asSet = command['as-set'] == true;
+      final name = command['name'] as String?;
+      final format = command['format'] as String?;
+      final sourceType = command['source-type'] as String?;
+
+      if ([asType, asRelation, asSet].where((f) => f).length > 1) {
+        throw StateError('--as-type, --as-relation, and --as-set are mutually exclusive');
+      }
+      if ((asType || asRelation || asSet) && name == null) {
+        throw StateError('--as-type, --as-relation, and --as-set require --name');
+      }
+
       await createCommand(text, db, config,
         checkbox: command['checkbox'] == true,
         numberedList: command['numbered-list'] == true,
         toggle: command['toggle'] == true,
         quote: command['quote'] == true,
         callout: command['callout'] == true,
+        asType: asType,
+        asRelation: asRelation,
+        asSet: asSet,
+        name: name,
+        format: format,
+        sourceType: sourceType,
       );
       await db.close();
 
