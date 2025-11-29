@@ -38,6 +38,29 @@ Uint8List _encodeObjectChangePayloadSmartblockType(int smartBlockType) {
   return bytes.toBytes();
 }
 
+/// Convert a human-readable name to a URL-safe unique key.
+String _toUniqueKey(String name) => name
+    .toLowerCase()
+    .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+    .replaceAll(RegExp(r'-+'), '-')
+    .replaceAll(RegExp(r'^-|-$'), '');
+
+/// Map a CLI format string to a [RelationFormat] enum value.
+RelationFormat _parseRelationFormat(String? format) {
+  return switch (format?.toLowerCase()) {
+    'text' || null => RelationFormat.longtext,
+    'shorttext' => RelationFormat.shorttext,
+    'number' => RelationFormat.number,
+    'date' => RelationFormat.date,
+    'checkbox' => RelationFormat.checkbox,
+    'url' => RelationFormat.url,
+    'email' => RelationFormat.email,
+    'phone' => RelationFormat.phone,
+    'object' => RelationFormat.object,
+    _ => RelationFormat.longtext,
+  };
+}
+
 /// Create a new text object and persist to local store.
 ///
 /// Builds an ObjectTree with a signed root change and a text block change,
@@ -54,6 +77,12 @@ Future<void> createCommand(
   bool toggle = false,
   bool quote = false,
   bool callout = false,
+  bool asType = false,
+  bool asRelation = false,
+  bool asSet = false,
+  String? name,
+  String? format,
+  String? sourceType,
 }) async {
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final spaceId = identity.spaceId;
@@ -172,17 +201,29 @@ Future<void> createCommand(
     aclHeadId = await _findAclRootId(db, existingObjects, spaceId);
   }
 
+  // Determine SmartBlockType based on --as-type/--as-relation/--as-set flags
+  final int smartBlockTypeValue;
+  if (asType) {
+    smartBlockTypeValue = SmartBlockType.STType.value;
+  } else if (asRelation) {
+    smartBlockTypeValue = SmartBlockType.STRelation.value;
+  } else {
+    // Both sets and plain pages use Page SmartBlockType
+    smartBlockTypeValue = SmartBlockType.Page.value;
+  }
+
   // Build root change for new object tree
   final rootChange = await buildRootChange(
     spaceId: spaceId,
     aclHeadId: aclHeadId,
     identityPrivateKey: identity.accountSeed,
     changePayload: _encodeObjectChangePayloadSmartblockType(
-      SmartBlockType.Page.value,
+      smartBlockTypeValue,
     ),
   );
 
   final objectId = rootChange.id;
+  final displayName = name ?? text;
 
   // Build a minimal snapshot for official client compatibility.
   //
@@ -191,13 +232,54 @@ Future<void> createCommand(
   // object materializes with a valid smartblock root + layout + content blocks.
   final snapshotBase = createMinimalPageSnapshotBase(
     objectId: objectId,
-    title: text,
+    title: displayName,
   );
-  snapshotBase.objectTypes.add('ot-page');
-  snapshotBase.details = Struct()
-    ..fields['name'] = Value(stringValue: text)
-    ..fields['tag'] = Value(listValue: ListValue())
-    ..fields['internalFlags'] = Value(listValue: ListValue());
+
+  final rng = Random.secure();
+
+  if (asType) {
+    snapshotBase.objectTypes.add('ot-objectType');
+    snapshotBase.details = Struct()
+      ..fields['name'] = Value(stringValue: displayName)
+      ..fields['uniqueKey'] = Value(stringValue: _toUniqueKey(displayName))
+      ..fields['layout'] = Value(numberValue: 4.0)
+      ..fields['tag'] = Value(listValue: ListValue())
+      ..fields['internalFlags'] = Value(listValue: ListValue());
+  } else if (asRelation) {
+    snapshotBase.objectTypes.add('ot-relation');
+    snapshotBase.details = Struct()
+      ..fields['name'] = Value(stringValue: displayName)
+      ..fields['uniqueKey'] = Value(stringValue: _toUniqueKey(displayName))
+      ..fields['layout'] = Value(numberValue: 5.0)
+      ..fields['relationFormat'] =
+          Value(numberValue: _parseRelationFormat(format).value.toDouble())
+      ..fields['tag'] = Value(listValue: ListValue())
+      ..fields['internalFlags'] = Value(listValue: ListValue());
+  } else if (asSet) {
+    snapshotBase.objectTypes.add('ot-page');
+    snapshotBase.details = Struct()
+      ..fields['name'] = Value(stringValue: displayName)
+      ..fields['layout'] = Value(numberValue: 3.0)
+      ..fields['tag'] = Value(listValue: ListValue())
+      ..fields['internalFlags'] = Value(listValue: ListValue());
+
+    // Add Dataview block for set objects
+    final dvBlockId =
+        'dv-${rng.nextInt(0xFFFFFF).toRadixString(16)}';
+    final dvBlock =
+        createDataviewBlock(dvBlockId, [sourceType ?? 'ot-page']);
+    snapshotBase.blocks.add(dvBlock);
+    // Insert Dataview block ID into header's childrenIds
+    final headerBlock =
+        snapshotBase.blocks.firstWhere((b) => b.id == 'header');
+    headerBlock.childrenIds.add(dvBlockId);
+  } else {
+    snapshotBase.objectTypes.add('ot-page');
+    snapshotBase.details = Struct()
+      ..fields['name'] = Value(stringValue: text)
+      ..fields['tag'] = Value(listValue: ListValue())
+      ..fields['internalFlags'] = Value(listValue: ListValue());
+  }
   final snapshotChangeBytes = Uint8List.fromList(
     Change(snapshot: Change_Snapshot(data: snapshotBase)).writeToBuffer(),
   );
@@ -230,7 +312,6 @@ Future<void> createCommand(
 
   // Append block type changes if any block flag is set.
   final blockOps = <Change_Content>[];
-  final rng = Random.secure();
   String _blockId(String prefix) =>
       '$prefix${rng.nextInt(0xFFFFFF).toRadixString(16)}';
 
@@ -300,8 +381,15 @@ Future<void> createCommand(
     changeCount++;
   }
 
-  print('Created object: $objectId');
-  print('Text: $text');
+  final objectKind = asType
+      ? 'type'
+      : asRelation
+          ? 'relation'
+          : asSet
+              ? 'set'
+              : 'object';
+  print('Created $objectKind: $objectId');
+  print('Text: $displayName');
   print('Changes: $changeCount (root + snapshot${blockOps.isNotEmpty ? ' + blocks' : ''})');
 }
 

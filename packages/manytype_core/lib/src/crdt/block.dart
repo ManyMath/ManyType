@@ -175,6 +175,26 @@ SmartBlockSnapshotBase createMinimalPageSnapshotBase({
     ]);
 }
 
+/// Create a Dataview block for set/collection objects.
+///
+/// Sets in Anytype are pages with a Dataview block that references one or more
+/// [source] type keys (e.g. 'ot-page') and provides a default table view.
+Block createDataviewBlock(String id, List<String> source) {
+  return Block(
+    id: id,
+    dataview: Block_Content_Dataview(
+      source: source,
+      views: [
+        Block_Content_Dataview_View(
+          id: 'view-default',
+          type: Block_Content_Dataview_View_Type.Table,
+          name: 'All',
+        ),
+      ],
+    ),
+  );
+}
+
 /// Marshal a list of [Change_Content] operations into bytes for
 /// [TreeChange.changesData].
 ///
