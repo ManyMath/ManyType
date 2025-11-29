@@ -175,7 +175,7 @@ printf 'Manytype deletes the object...\n'
 HOME="$MANYTYPE_HOME" MANYTYPE_SYNC_CAPTURE_PATH="$MANYTYPE_DELETE_SYNC_CAPTURE" \
   dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --server "127.0.0.1:$PORT" --network-config "$NETWORK_YML" \
-  delete "$OBJECT_ID"
+  delete --id "$OBJECT_ID"
 
 # Generate invite so official client can join
 (cd "$ROOT_DIR/scripts/phase31_invite_gen" && go run . \
