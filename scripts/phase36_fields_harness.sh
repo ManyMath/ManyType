@@ -152,6 +152,11 @@ if [[ -z "$OBJECT_ID" ]]; then
   exit 1
 fi
 
+printf 'Seeding space before edit (edit syncs, needs live space)...\n'
+HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/tool/phase31_seed_live_space.dart" \
+  --network-config "$NETWORK_YML" \
+  --wait-seconds 2 >/dev/null
+
 printf 'Setting bool relation (done=true)...\n'
 HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --server "127.0.0.1:$PORT" --network-config "$NETWORK_YML" \
@@ -162,10 +167,7 @@ HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dar
   --server "127.0.0.1:$PORT" --network-config "$NETWORK_YML" \
   edit --id "$OBJECT_ID" --relation dueDate --date 1744329600
 
-printf 'Seeding space + syncing...\n'
-HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/tool/phase31_seed_live_space.dart" \
-  --network-config "$NETWORK_YML" \
-  --wait-seconds 2 >/dev/null
+printf 'Syncing after edits...\n'
 HOME="$MANYTYPE_HOME" MANYTYPE_SYNC_CAPTURE_PATH="$MANYTYPE_SYNC_CAPTURE" \
   dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --server "127.0.0.1:$PORT" --network-config "$NETWORK_YML" sync >/dev/null
