@@ -152,7 +152,7 @@ printf 'Manytype creates an object...\n'
 HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --server "127.0.0.1:$PORT" \
   create "Phase36DeleteTest" >"$TMPDIR/manytype-create.txt"
-OBJECT_ID="$(sed -n 's/^Created object: //p' "$TMPDIR/manytype-create.txt" | head -1)"
+OBJECT_ID="$(sed -n 's/^Created [a-z]*: //p' "$TMPDIR/manytype-create.txt" | head -1)"
 if [[ -z "$OBJECT_ID" ]]; then
   printf 'FAIL: could not parse object id from Manytype create output\n' >&2
   cat "$TMPDIR/manytype-create.txt" >&2 || true
@@ -335,7 +335,7 @@ HOME="$MANYTYPE_HOME_B" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.d
 printf 'Manytype creates an object for direction B...\n'
 HOME="$MANYTYPE_HOME_B" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   create "Phase36DelTestB" >"$TMPDIR/manytype-create-b.txt"
-OBJECT_ID_B="$(sed -n 's/^Created object: //p' "$TMPDIR/manytype-create-b.txt" | head -1)"
+OBJECT_ID_B="$(sed -n 's/^Created [a-z]*: //p' "$TMPDIR/manytype-create-b.txt" | head -1)"
 if [[ -z "$OBJECT_ID_B" ]]; then
   printf 'FAIL: could not parse object id (direction B)\n' >&2
   exit 1

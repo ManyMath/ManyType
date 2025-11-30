@@ -145,7 +145,7 @@ printf 'Manytype creates object with --checkbox...\n'
 HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --server "127.0.0.1:$PORT" --network-config "$NETWORK_YML" \
   create --name "Phase36FieldTest" --checkbox >"$TMPDIR/manytype-create-field.txt"
-OBJECT_ID="$(sed -n 's/^Created object: //p' "$TMPDIR/manytype-create-field.txt" | head -1)"
+OBJECT_ID="$(sed -n 's/^Created [a-z]*: //p' "$TMPDIR/manytype-create-field.txt" | head -1)"
 if [[ -z "$OBJECT_ID" ]]; then
   printf 'FAIL: could not parse object id\n' >&2
   cat "$TMPDIR/manytype-create-field.txt" >&2 || true

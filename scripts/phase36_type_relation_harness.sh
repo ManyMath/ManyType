@@ -150,7 +150,7 @@ printf 'Manytype creates a custom type...\n'
 HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --server "127.0.0.1:$PORT" --network-config "$NETWORK_YML" \
   create --as-type --name "Phase36Type" >"$TMPDIR/manytype-create-type.txt"
-TYPE_OBJECT_ID="$(sed -n 's/^Created object: //p' "$TMPDIR/manytype-create-type.txt" | head -1)"
+TYPE_OBJECT_ID="$(sed -n 's/^Created [a-z]*: //p' "$TMPDIR/manytype-create-type.txt" | head -1)"
 if [[ -z "$TYPE_OBJECT_ID" ]]; then
   printf 'FAIL: could not parse type object id\n' >&2
   cat "$TMPDIR/manytype-create-type.txt" >&2 || true
@@ -161,7 +161,7 @@ printf 'Manytype creates a custom relation...\n'
 HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --server "127.0.0.1:$PORT" --network-config "$NETWORK_YML" \
   create --as-relation --name "Phase36Rel" --format text >"$TMPDIR/manytype-create-rel.txt"
-RELATION_OBJECT_ID="$(sed -n 's/^Created object: //p' "$TMPDIR/manytype-create-rel.txt" | head -1)"
+RELATION_OBJECT_ID="$(sed -n 's/^Created [a-z]*: //p' "$TMPDIR/manytype-create-rel.txt" | head -1)"
 if [[ -z "$RELATION_OBJECT_ID" ]]; then
   printf 'FAIL: could not parse relation object id\n' >&2
   cat "$TMPDIR/manytype-create-rel.txt" >&2 || true

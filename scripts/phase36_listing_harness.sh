@@ -44,11 +44,11 @@ HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dar
 printf 'Creating page objects...\n'
 HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   create "Phase36Page1" >"$TMPDIR/create-page1.txt"
-PAGE1_ID="$(sed -n 's/^Created object: //p' "$TMPDIR/create-page1.txt" | head -1)"
+PAGE1_ID="$(sed -n 's/^Created [a-z]*: //p' "$TMPDIR/create-page1.txt" | head -1)"
 
 HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   create "Phase36Page2" >"$TMPDIR/create-page2.txt"
-PAGE2_ID="$(sed -n 's/^Created object: //p' "$TMPDIR/create-page2.txt" | head -1)"
+PAGE2_ID="$(sed -n 's/^Created [a-z]*: //p' "$TMPDIR/create-page2.txt" | head -1)"
 
 if [[ -z "$PAGE1_ID" || -z "$PAGE2_ID" ]]; then
   printf 'FAIL: could not parse page object IDs\n' >&2
