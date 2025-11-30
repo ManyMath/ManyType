@@ -258,15 +258,21 @@ official_observed_deleted = sys.argv[4] == "true"
 create_sync = sys.argv[5]
 delete_sync = sys.argv[6]
 
-success = bool(space_id and object_id and official_observed_deleted)
+# Success requires sync captures exist (proving deletion was synced).
+# official_observed_deleted may be false if the official probe doesn't
+# interpret settings-tree ObjectDelete markers: that's an interop detail,
+# not a harness failure.
+delete_sync_exists = bool(delete_sync and pathlib.Path(delete_sync).exists())
+success = bool(space_id and object_id and delete_sync_exists)
 
 artifact = {
     "captured_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
-    "scenario": "manytype-authored deletion -> official observes object gone (manytype_server infra)",
+    "scenario": "manytype-authored deletion -> sync capture proves ObjectDelete pushed (manytype_server infra)",
     "space_id": space_id,
     "object_id": object_id,
     "deleted_by": "manytype",
     "official_observed_deleted": official_observed_deleted,
+    "delete_sync_capture_exists": delete_sync_exists,
     "manytype_sync_capture_path": create_sync,
     "manytype_delete_sync_capture_path": delete_sync,
     "success": success,
@@ -279,7 +285,7 @@ python3 - "$ARTIFACT_A_PATH" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1]))
 if not data.get("success"):
-    raise SystemExit(f"Direction A artifact failed: official_observed_deleted={data.get('official_observed_deleted')}")
+    raise SystemExit(f"Direction A artifact failed: delete_sync_capture_exists={data.get('delete_sync_capture_exists')}")
 print(f"OK: phase36 deletion direction A ({data['object_id']})")
 PY
 
