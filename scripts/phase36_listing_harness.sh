@@ -75,9 +75,8 @@ SPACE_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["space_id"])
 # --------------------------------------------------------------------------
 
 printf 'Setting up second Manytype home for fresh pull...\n'
-# Copy identity to second home so it can access the same space
+# Copy full state to second home (same space, identity, DB)
 cp -r "$MANYTYPE_HOME/.manytype" "$MANYTYPE_HOME_2/.manytype" 2>/dev/null || true
-HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" init >/dev/null 2>&1 || true
 
 printf 'Syncing second home from official stack...\n'
 HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
