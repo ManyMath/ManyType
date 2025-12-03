@@ -237,12 +237,10 @@ fi
 
 printf '=== Direction B: Round-trip via second Manytype instance ===\n'
 
-# Copy identity to second home so it can access the same space
+# Copy full state to second home (identity, DB, config: same space)
 cp -r "$MANYTYPE_HOME/.manytype" "$MANYTYPE_HOME_2/.manytype" 2>/dev/null || true
-# Re-init if needed
-HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" init >/dev/null 2>&1 || true
 
-# Sync second instance from the server
+# Sync second instance from the server (space already seeded)
 HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --server "127.0.0.1:$PORT" --network-config "$NETWORK_YML" sync >/dev/null
 
