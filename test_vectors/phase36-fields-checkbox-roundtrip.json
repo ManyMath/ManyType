@@ -1,0 +1,15 @@
+{
+  "captured_at": "2026-04-10T18:21:47.219361Z",
+  "scenario": "manytype-authored checkbox + date relation -> official confirms + roundtrip verified",
+  "space_id": "bafyreienb23pjuo2tnvtik7ezgft7genlntberfj7etbkc4l5rrgssv4a4.2oupcghvw6sc5",
+  "object_id": "bafyreifeov3nrj4bqd4awa4g5igmzhgd4ljh2nmcgbwxnahmyfdxyevjlq",
+  "checkbox_created": true,
+  "bool_relation_set": true,
+  "date_relation_set": true,
+  "date_value": 1744329600,
+  "official_confirmed": true,
+  "roundtrip_checkbox_visible": true,
+  "roundtrip_relations_visible": true,
+  "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase36-fields-sync.json",
+  "success": true
+}

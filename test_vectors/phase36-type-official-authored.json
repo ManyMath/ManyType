@@ -1,0 +1,10 @@
+{
+  "captured_at": "2026-04-10T18:16:50.928655Z",
+  "scenario": "official-authored object -> manytype reads type metadata (official infra)",
+  "space_id": "bafyreihpkv6cy5jqspkbe7rx6gmgnxzx4amhr7ygpt2qm35u5emm6x7mb4.2j5dokaoao11b",
+  "object_id": "bafyreigvga6o72hhw5isqnf45icpujphc6c6q46iw43bemimk2r7p7wphm",
+  "expected_type": "ot-page",
+  "manytype_observed_type": "ot-page",
+  "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase36-type-official-pull-sync.json",
+  "success": true
+}

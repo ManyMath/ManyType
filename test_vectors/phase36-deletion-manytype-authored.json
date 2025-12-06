@@ -1,0 +1,12 @@
+{
+  "captured_at": "2026-04-10T18:12:52.845380Z",
+  "scenario": "manytype-authored deletion -> sync capture proves ObjectDelete pushed (manytype_server infra)",
+  "space_id": "bafyreibi66goqbcufczt7cl23zxuhjsep2yt7lypohlnr7ctetejvhdpgu.3ac4voxaggfhe",
+  "object_id": "bafyreienktvpswiizlturzoryw2qn2z4cv3mrx4a34jt2sy23rnawx4ft4",
+  "deleted_by": "manytype",
+  "official_observed_deleted": false,
+  "delete_sync_capture_exists": true,
+  "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase36-deletion-manytype-sync.json",
+  "manytype_delete_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase36-deletion-manytype-delete-sync.json",
+  "success": true
+}

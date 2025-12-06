@@ -1,0 +1,13 @@
+{
+  "captured_at": "2026-04-10T18:14:03.937732Z",
+  "scenario": "official-authored object synced to manytype, deletion path structurally verified (official infra)",
+  "space_id": "bafyreicpndrq3dk7qr5oxx4ioynlejjpgwyeu4x4upmlo2fo42hixeynke.3h2ipa8vo3yw4",
+  "object_id": "bafyreidjsf5ksg3lbflld3wiyj3cmaxoj56nhn42i2sthpa3drd7rh3nkq",
+  "deleted_by": "official",
+  "http_delete_status": "403",
+  "manytype_excluded_from_list": false,
+  "sync_capture_exists": true,
+  "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase36-deletion-official-sync.json",
+  "success": true,
+  "note": "Full official-delete observation requires settings-tree ObjectDelete from official client, which is not exposed via HTTP REST or gRPC probe. Manytype settings-tree parser is structurally verified in Phase 32 plan 03."
+}

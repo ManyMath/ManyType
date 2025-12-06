@@ -1,0 +1,11 @@
+{
+  "captured_at": "2026-04-10T18:15:47.505074Z",
+  "scenario": "manytype-authored STType/STRelation -> official observes in space (manytype_server infra)",
+  "space_id": "bafyreigffmyiwepbrlhxrgzooxwnjg2r474xhwvtc5wes7wbfju2ro5mjq.j6p0r8drmshf",
+  "type_object_id": "bafyreiciqmwbqb7aabsz2pkllrhmp45x3l3zqj2eeuheg2fz5vj3356jne",
+  "relation_object_id": "bafyreies4rpayrwmupbjjm7law5ri5nuuz2wrpjdaikyziqcy6r2cxlkgu",
+  "official_space_joined": true,
+  "official_type_visible": true,
+  "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase36-type-manytype-sync.json",
+  "success": true
+}
