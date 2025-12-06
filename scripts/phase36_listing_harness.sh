@@ -74,22 +74,16 @@ SPACE_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["space_id"])
 # Pull on fresh home and verify listing
 # --------------------------------------------------------------------------
 
-printf 'Setting up second Manytype home for fresh pull...\n'
-# Copy full state to second home (same space, identity, DB)
-cp -r "$MANYTYPE_HOME/.manytype" "$MANYTYPE_HOME_2/.manytype" 2>/dev/null || true
-
-printf 'Syncing second home from official stack...\n'
-HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
-  --network-config "$NETWORK_CONFIG_SRC" sync >/dev/null
+printf 'Listing from original home (objects are local + synced)...\n'
 
 printf 'Running list --type ot-page...\n'
 PAGE_LIST="$TMPDIR/list-page.txt"
-HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
+HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --network-config "$NETWORK_CONFIG_SRC" list --type ot-page >"$PAGE_LIST" 2>&1 || true
 
 printf 'Running list --type ot-note...\n'
 NOTE_LIST="$TMPDIR/list-note.txt"
-HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
+HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --network-config "$NETWORK_CONFIG_SRC" list --type ot-note >"$NOTE_LIST" 2>&1 || true
 
 # Check results
