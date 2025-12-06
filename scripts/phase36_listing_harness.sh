@@ -90,11 +90,18 @@ HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dar
 PAGE_IDS_IN_LIST="false"
 NOTE_IDS_ABSENT="false"
 
-if grep -q "$PAGE1_ID" "$PAGE_LIST" && grep -q "$PAGE2_ID" "$PAGE_LIST"; then
+# Filter list output to table lines only (skip sync debug output).
+# Table lines start with a bafyrei CID in the first column.
+PAGE_TABLE="$TMPDIR/list-page-table.txt"
+NOTE_TABLE="$TMPDIR/list-note-table.txt"
+grep -E '^bafyrei' "$PAGE_LIST" > "$PAGE_TABLE" 2>/dev/null || true
+grep -E '^bafyrei' "$NOTE_LIST" > "$NOTE_TABLE" 2>/dev/null || true
+
+if grep -q "$PAGE1_ID" "$PAGE_TABLE" && grep -q "$PAGE2_ID" "$PAGE_TABLE"; then
   PAGE_IDS_IN_LIST="true"
 fi
 
-if ! grep -q "$PAGE1_ID" "$NOTE_LIST" && ! grep -q "$PAGE2_ID" "$NOTE_LIST"; then
+if ! grep -q "$PAGE1_ID" "$NOTE_TABLE" && ! grep -q "$PAGE2_ID" "$NOTE_TABLE"; then
   NOTE_IDS_ABSENT="true"
 fi
 
