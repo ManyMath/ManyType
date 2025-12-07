@@ -288,10 +288,69 @@ Future<void> _printSnapshotMetadata(
         }
       }
 
+      // Text/checkbox/header blocks in the snapshot — prefixes each with
+      // the stable block id so users can pass it to `edit --block-id`.
+      _printSnapshotBlocks(snapData);
+
       // Found snapshot -- stop looking.
       return;
     } catch (_) {
       continue;
+    }
+  }
+}
+
+/// Walk the snapshot's block list and render user-visible text blocks with
+/// their stable block ID as an `[id]` prefix. Structural / container blocks
+/// (smartblock root, header layout, title, featuredRelations, dataview) are
+/// skipped so the output stays focused on blocks the user can mutate via
+/// `edit --block-id <id>`.
+void _printSnapshotBlocks(SmartBlockSnapshotBase snapData) {
+  // Structural blocks with well-known fixed ids (see
+  // manytype_core/lib/src/crdt/block.dart createMinimalPageSnapshotBase).
+  const structuralIds = <String>{
+    'header',
+    'title',
+    'featuredRelations',
+  };
+
+  for (final block in snapData.blocks) {
+    if (structuralIds.contains(block.id)) continue;
+    // Skip the smartblock root (no text content, serves as container).
+    if (!block.hasText()) continue;
+
+    final text = block.text.text;
+    final style = block.text.style;
+    switch (style) {
+      case Block_Content_Text_Style.Checkbox:
+        final mark = block.text.checked ? '[x]' : '[ ]';
+        print('    [${block.id}] $mark [Checkbox] $text');
+        break;
+      case Block_Content_Text_Style.Header1:
+        print('    [${block.id}] [Header1] $text');
+        break;
+      case Block_Content_Text_Style.Header2:
+        print('    [${block.id}] [Header2] $text');
+        break;
+      case Block_Content_Text_Style.Header3:
+        print('    [${block.id}] [Header3] $text');
+        break;
+      case Block_Content_Text_Style.Quote:
+        print('    [${block.id}] [Quote] $text');
+        break;
+      case Block_Content_Text_Style.Numbered:
+        print('    [${block.id}] [Numbered] $text');
+        break;
+      case Block_Content_Text_Style.Toggle:
+        print('    [${block.id}] [Toggle] $text');
+        break;
+      case Block_Content_Text_Style.Callout:
+        print('    [${block.id}] [Callout] $text');
+        break;
+      case Block_Content_Text_Style.Paragraph:
+      default:
+        print('    [${block.id}] [Paragraph] $text');
+        break;
     }
   }
 }
@@ -333,22 +392,22 @@ Future<void> _printBlockChanges(
             switch (style) {
               case Block_Content_Text_Style.Checkbox:
                 final mark = block.text.checked ? '[x]' : '[ ]';
-                print('    $mark [Checkbox] $text');
+                print('    [${block.id}] $mark [Checkbox] $text');
               case Block_Content_Text_Style.Numbered:
-                print('    [Numbered] $text');
+                print('    [${block.id}] [Numbered] $text');
               case Block_Content_Text_Style.Toggle:
-                print('    [Toggle] $text');
+                print('    [${block.id}] [Toggle] $text');
               case Block_Content_Text_Style.Quote:
-                print('    [Quote] $text');
+                print('    [${block.id}] [Quote] $text');
               case Block_Content_Text_Style.Callout:
-                print('    [Callout] $text');
+                print('    [${block.id}] [Callout] $text');
               default:
-                print('    Text: "$text"');
+                print('    [${block.id}] Text: "$text"');
             }
           }
           if (block.hasDataview()) {
             final dv = block.dataview;
-            print('    [Dataview] source: ${dv.source.join(', ')}, views: ${dv.views.length}');
+            print('    [${block.id}] [Dataview] source: ${dv.source.join(', ')}, views: ${dv.views.length}');
           }
         }
       }
