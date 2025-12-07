@@ -31,6 +31,10 @@ Future<void> editCommand(
   String? boolValue,
   String? dateValue,
   String? objectIdValue,
+  String? blockId,
+  String? setText,
+  bool? setChecked,
+  Block_Content_Text_Style? setStyle,
 }) async {
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
@@ -184,6 +188,55 @@ Future<void> editCommand(
     latestHeads = [relationTreeChange.id];
   }
 
+  String? blockUpdateChangeId;
+  String? blockUpdateDescription;
+
+  // Branch D: BlockUpdate write path (BLKUPD-01/02/03). Absolute semantics
+  // per D-07: we do NOT read current block state before writing. ID stability
+  // is guaranteed because buildBlockSet* helpers target an existing block by
+  // ID and never construct a new one.
+  if (blockId != null) {
+    final Uint8List eventBytes;
+    if (setText != null) {
+      eventBytes = buildBlockSetTextEvent(blockId, setText);
+      blockUpdateDescription = 'set-text';
+    } else if (setChecked != null) {
+      eventBytes = buildBlockSetCheckedEvent(blockId, setChecked);
+      blockUpdateDescription = 'set-checked=$setChecked';
+    } else if (setStyle != null) {
+      eventBytes = buildBlockSetStyleEvent(blockId, setStyle);
+      blockUpdateDescription = 'set-style=${setStyle.name}';
+    } else {
+      throw StateError(
+        '--block-id requires --set-text, --set-checked, or --set-style',
+      );
+    }
+
+    final updateContent = changes_proto.Change_Content(
+      blockUpdate: changes_proto.Change_BlockUpdate(events: [eventBytes]),
+    );
+    final updateData = marshalChangeContent([updateContent]);
+
+    final updateTreeChange = await buildTreeChange(
+      currentHeads: latestHeads,
+      aclHeadId: aclHeadId,
+      snapshotBaseId: snapshotBaseId,
+      changesData: await aesGcmEncrypt(treeKey, updateData),
+      identityPrivateKey: identity.accountSeed,
+      readKeyId: aclHeadId,
+    );
+
+    await db.insertChange(
+      updateTreeChange.id,
+      objectId,
+      updateTreeChange.rawChange,
+      jsonEncode(latestHeads),
+    );
+
+    blockUpdateChangeId = updateTreeChange.id;
+    latestHeads = [updateTreeChange.id];
+  }
+
   await syncService.sync(db, config, networkConfigPath: networkConfigPath);
 
   // Verify text change if a name update was made.
@@ -204,6 +257,11 @@ Future<void> editCommand(
   if (relationChangeId != null) {
     final displayValue = boolValue ?? dateValue ?? objectIdValue ?? '';
     print('Relation change: $relationChangeId ($relationKey = $displayValue)');
+  }
+  if (blockUpdateChangeId != null) {
+    print(
+      'Block update: $blockUpdateChangeId (block-id=$blockId, $blockUpdateDescription)',
+    );
   }
 }
 
