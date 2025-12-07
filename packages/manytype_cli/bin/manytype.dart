@@ -1,5 +1,8 @@
 import 'package:args/args.dart';
 
+import 'package:manytype_core/manytype_core.dart';
+import 'package:manytype_protocol/models.dart';
+
 import 'package:manytype_cli/src/commands/create.dart';
 import 'package:manytype_cli/src/commands/delete.dart';
 import 'package:manytype_cli/src/commands/edit.dart';
@@ -45,7 +48,16 @@ Future<void> main(List<String> arguments) async {
     ..addOption('relation', help: 'Relation key to set')
     ..addOption('bool', help: 'Bool relation value: true or false')
     ..addOption('date', help: 'Unix timestamp for date relation')
-    ..addOption('object-id', help: 'Object ID for object-ref relation');
+    ..addOption('object-id', help: 'Object ID for object-ref relation')
+    ..addOption('block-id',
+        help: 'Target block ID for in-place mutation (BlockUpdate)')
+    ..addOption('set-text', help: "Rewrite the target block's text content")
+    ..addOption('set-checked',
+        help: 'Set the target checkbox block state: true or false')
+    ..addOption('set-style',
+        help: "Change the target block's style (one of: paragraph, "
+            'header1, header2, header3, checkbox, numbered, toggle, '
+            'quote, callout)');
   final fileUploadParser = ArgParser()
     ..addOption('file-id', help: 'Stable file ID for upload', defaultsTo: null);
   final fileOpenParser = ArgParser()
@@ -205,8 +217,54 @@ Future<void> main(List<String> arguments) async {
         );
       }
 
-      if (newText == null && !hasCheckbox && relationKey == null) {
-        throw StateError('edit requires --text, --checkbox, or --relation');
+      // Validate BlockUpdate flags (exactly one of set-text/set-checked/set-style
+      // when --block-id is present, and each set-* requires --block-id).
+      final blockId = command['block-id'] as String?;
+      final setTextArg = command['set-text'] as String?;
+      final setCheckedRaw = command['set-checked'] as String?;
+      final setStyleName = command['set-style'] as String?;
+
+      final setCount = [setTextArg, setCheckedRaw, setStyleName]
+          .where((v) => v != null)
+          .length;
+
+      if (blockId != null) {
+        if (setCount != 1) {
+          throw StateError(
+            '--block-id requires exactly one of --set-text, --set-checked, or --set-style',
+          );
+        }
+      } else if (setCount > 0) {
+        throw StateError(
+          '--set-text, --set-checked, and --set-style require --block-id <id>',
+        );
+      }
+
+      bool? setChecked;
+      if (setCheckedRaw != null) {
+        if (setCheckedRaw != 'true' && setCheckedRaw != 'false') {
+          throw StateError('--set-checked must be "true" or "false"');
+        }
+        setChecked = setCheckedRaw == 'true';
+      }
+
+      Block_Content_Text_Style? setStyle;
+      if (setStyleName != null) {
+        setStyle = parseStyleName(setStyleName);
+        if (setStyle == null) {
+          throw StateError(
+            '--set-style must be one of: ${acceptedStyleNames.join(", ")}',
+          );
+        }
+      }
+
+      if (newText == null &&
+          !hasCheckbox &&
+          relationKey == null &&
+          blockId == null) {
+        throw StateError(
+          'edit requires --text, --checkbox, --relation, or --block-id',
+        );
       }
       await editCommand(objectId, newText, db, config,
           networkConfigPath: networkConfigPath,
@@ -217,7 +275,11 @@ Future<void> main(List<String> arguments) async {
           relationKey: relationKey,
           boolValue: boolValue,
           dateValue: dateValue,
-          objectIdValue: objectIdValue);
+          objectIdValue: objectIdValue,
+          blockId: blockId,
+          setText: setTextArg,
+          setChecked: setChecked,
+          setStyle: setStyle);
       await db.close();
       break;
 
