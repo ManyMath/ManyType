@@ -1,0 +1,14 @@
+{
+  "captured_at": "2026-04-12T00:19:41.429416Z",
+  "scenario": "manytype-authored BlockUpdate blockSetText.checked -> two-home roundtrip",
+  "object_id": "bafyreihfxg2tjrrni53diu4vh4wslo7yd4oszikyzfjkdk6ecp4yy2ygsi",
+  "block_id": "cb-897471",
+  "mutation": "set-checked-true",
+  "expected_block_update_variant": "blockSetText",
+  "expected_field": "checked",
+  "expected_value": true,
+  "post_mutation_block_id_unchanged": true,
+  "roundtrip_observed": true,
+  "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase37-blockupdate-checkbox-sync.json",
+  "success": true
+}
