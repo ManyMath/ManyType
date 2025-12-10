@@ -229,14 +229,22 @@ String _extractTextFromDecodedChangeBytes(Uint8List decoded) {
 }
 
 /// Extract and print metadata from the first snapshot change in the tree.
+///
+/// After finding the snapshot, iterates through all subsequent non-snapshot
+/// changes and applies BlockCreate / BlockUpdate(blockSetText) deltas so
+/// `_printSnapshotBlocks` can render the *current* replayed state (Phase 37:
+/// BlockUpdate mutations must be visible on re-read).
 Future<void> _printSnapshotMetadata(
   List<Change> changes, {
   required Uint8List? treeKey,
   int? smartBlockType,
 }) async {
-  for (final change in changes) {
+  // Locate the first snapshot change.
+  int? snapshotIndex;
+  changes_proto.Change? snapshotChangeProto;
+  for (var i = 0; i < changes.length; i++) {
     try {
-      final rawTreeChange = RawTreeChange.fromBuffer(change.rawBytes);
+      final rawTreeChange = RawTreeChange.fromBuffer(changes[i].rawBytes);
       if (rawTreeChange.payload.isEmpty) continue;
 
       TreeChange treeChange;
@@ -252,60 +260,128 @@ Future<void> _printSnapshotMetadata(
         treeKey: treeKey,
       );
       final changeProto = changes_proto.Change.fromBuffer(decoded);
-
       if (!changeProto.hasSnapshot()) continue;
-
-      final snapData = changeProto.snapshot.data;
-
-      // objectTypes
-      if (snapData.objectTypes.isNotEmpty) {
-        print('  Type: ${snapData.objectTypes.join(', ')}');
-      }
-
-      // relationLinks
-      if (snapData.relationLinks.isNotEmpty) {
-        print('  Relations: ${snapData.relationLinks.map((l) => l.key).join(', ')}');
-      }
-
-      // Type/Relation-specific details from snapshot.
-      if (snapData.hasDetails()) {
-        final fields = snapData.details.fields;
-        if (fields.containsKey('name')) {
-          print('  Name: ${fields['name']!.stringValue}');
-        }
-        if (smartBlockType == 521 && fields.containsKey('relationFormat')) {
-          print('  Format: ${_formatName(fields['relationFormat']!.numberValue)}');
-        }
-      }
-
-      // Dataview blocks in snapshot.
-      for (final block in snapData.blocks) {
-        if (block.hasDataview()) {
-          final dv = block.dataview;
-          final sources = dv.source.join(', ');
-          final viewCount = dv.views.length;
-          print('  [Dataview] source: $sources, views: $viewCount');
-        }
-      }
-
-      // Text/checkbox/header blocks in the snapshot — prefixes each with
-      // the stable block id so users can pass it to `edit --block-id`.
-      _printSnapshotBlocks(snapData);
-
-      // Found snapshot -- stop looking.
-      return;
+      snapshotIndex = i;
+      snapshotChangeProto = changeProto;
+      break;
     } catch (_) {
       continue;
     }
   }
+  if (snapshotIndex == null || snapshotChangeProto == null) return;
+
+  final snapData = snapshotChangeProto.snapshot.data;
+
+  // objectTypes
+  if (snapData.objectTypes.isNotEmpty) {
+    print('  Type: ${snapData.objectTypes.join(', ')}');
+  }
+
+  // relationLinks
+  if (snapData.relationLinks.isNotEmpty) {
+    print('  Relations: ${snapData.relationLinks.map((l) => l.key).join(', ')}');
+  }
+
+  // Type/Relation-specific details from snapshot.
+  if (snapData.hasDetails()) {
+    final fields = snapData.details.fields;
+    if (fields.containsKey('name')) {
+      print('  Name: ${fields['name']!.stringValue}');
+    }
+    if (smartBlockType == 521 && fields.containsKey('relationFormat')) {
+      print('  Format: ${_formatName(fields['relationFormat']!.numberValue)}');
+    }
+  }
+
+  // Dataview blocks in snapshot.
+  for (final block in snapData.blocks) {
+    if (block.hasDataview()) {
+      final dv = block.dataview;
+      final sources = dv.source.join(', ');
+      final viewCount = dv.views.length;
+      print('  [Dataview] source: $sources, views: $viewCount');
+    }
+  }
+
+  // Build mutable block state from snapshot, then replay subsequent
+  // non-snapshot changes' BlockCreate and BlockUpdate(blockSetText) deltas.
+  final blockState = <String, Block>{};
+  final blockOrder = <String>[];
+  for (final block in snapData.blocks) {
+    blockState[block.id] = block.deepCopy();
+    blockOrder.add(block.id);
+  }
+
+  for (var i = snapshotIndex + 1; i < changes.length; i++) {
+    try {
+      final rawTreeChange = RawTreeChange.fromBuffer(changes[i].rawBytes);
+      if (rawTreeChange.payload.isEmpty) continue;
+      TreeChange treeChange;
+      try {
+        treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+      } catch (_) {
+        continue;
+      }
+      if (treeChange.changesData.isEmpty) continue;
+
+      final decoded = await _decodeTreeChangeChangesData(
+        treeChange,
+        treeKey: treeKey,
+      );
+      final changeProto = changes_proto.Change.fromBuffer(decoded);
+      // Skip downstream snapshots: we only show the first snapshot's
+      // blocks plus deltas to keep CLI read deterministic.
+      if (changeProto.hasSnapshot()) continue;
+
+      for (final content in changeProto.content) {
+        if (content.hasBlockCreate()) {
+          for (final newBlock in content.blockCreate.blocks) {
+            if (!blockState.containsKey(newBlock.id)) {
+              blockOrder.add(newBlock.id);
+            }
+            blockState[newBlock.id] = newBlock.deepCopy();
+          }
+        }
+        if (content.hasBlockUpdate()) {
+          for (final eventBytes in content.blockUpdate.events) {
+            try {
+              final eventMsg = Event_Message.fromBuffer(eventBytes);
+              if (eventMsg.hasBlockSetText()) {
+                final set = eventMsg.blockSetText;
+                final target = blockState[set.id];
+                if (target == null) continue;
+                if (!target.hasText()) {
+                  target.text = Block_Content_Text();
+                }
+                if (set.hasText()) target.text.text = set.text.value;
+                if (set.hasStyle()) target.text.style = set.style.value;
+                if (set.hasChecked()) {
+                  target.text.checked = set.checked.value;
+                }
+              }
+            } catch (_) {
+              continue;
+            }
+          }
+        }
+      }
+    } catch (_) {
+      continue;
+    }
+  }
+
+  _printSnapshotBlocks(blockOrder, blockState);
 }
 
-/// Walk the snapshot's block list and render user-visible text blocks with
-/// their stable block ID as an `[id]` prefix. Structural / container blocks
-/// (smartblock root, header layout, title, featuredRelations, dataview) are
-/// skipped so the output stays focused on blocks the user can mutate via
+/// Walk the replayed block map in insertion order and render user-visible
+/// text blocks with their stable block ID as an `[id]` prefix. Structural /
+/// container blocks (header, title, featuredRelations) are skipped so the
+/// output stays focused on blocks the user can mutate via
 /// `edit --block-id <id>`.
-void _printSnapshotBlocks(SmartBlockSnapshotBase snapData) {
+void _printSnapshotBlocks(
+  List<String> blockOrder,
+  Map<String, Block> blockState,
+) {
   // Structural blocks with well-known fixed ids (see
   // manytype_core/lib/src/crdt/block.dart createMinimalPageSnapshotBase).
   const structuralIds = <String>{
@@ -314,8 +390,10 @@ void _printSnapshotBlocks(SmartBlockSnapshotBase snapData) {
     'featuredRelations',
   };
 
-  for (final block in snapData.blocks) {
-    if (structuralIds.contains(block.id)) continue;
+  for (final id in blockOrder) {
+    if (structuralIds.contains(id)) continue;
+    final block = blockState[id];
+    if (block == null) continue;
     // Skip the smartblock root (no text content, serves as container).
     if (!block.hasText()) continue;
 
