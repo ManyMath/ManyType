@@ -27,5 +27,5 @@ toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 rand = "0.9"
-libp2p-identity = { version = "0.2.9", default-features = false }
+libp2p-identity = { version = "0.2.13", default-features = false }
 libp2p-tls = "0.6.2"
