@@ -11,6 +11,8 @@ dependencies:
   bip39_mnemonic: any
   ed25519_hd_key: any
   fixnum: any
+  libcompress: ^1.0.0
+  pinenacl: ^0.6.0
   manytype_protocol:
     path: ../manytype_protocol
 dev_dependencies:
