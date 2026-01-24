@@ -1,7 +1,54 @@
+import 'dart:typed_data';
+
 import 'package:manytype_core/manytype_core.dart';
+import 'package:manytype_protocol/changes.dart' as changes_proto;
+import 'package:manytype_protocol/manytype_protocol.dart'
+    show RawTreeChange, RootChange, TreeChange;
 import 'package:manytype_protocol/models.dart';
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart';
 import 'package:test/test.dart';
+
+/// Encode an unsigned integer as a protobuf varint.
+List<int> _encodeVarint(int value) {
+  final out = <int>[];
+  var v = value;
+  while (v >= 0x80) {
+    out.add((v & 0x7F) | 0x80);
+    v >>= 7;
+  }
+  out.add(v & 0x7F);
+  return out;
+}
+
+/// Build a [RawTreeChange] blob whose payload is a [RootChange] carrying a
+/// `changePayload` that begins with the `SmartBlockType` varint tagged as
+/// proto field 1 (tag byte `0x08`). This is the exact shape that
+/// [extractRootSmartBlockType] scans.
+Uint8List _rootRawTreeChangeWithSbType(int sbType) {
+  final changePayload = <int>[0x08, ..._encodeVarint(sbType)];
+  final root = RootChange()..changePayload = changePayload;
+  final raw = RawTreeChange()..payload = root.writeToBuffer();
+  return Uint8List.fromList(raw.writeToBuffer());
+}
+
+/// Build a [RawTreeChange] blob whose payload is a plaintext
+/// (un-encrypted, un-compressed) [TreeChange] wrapping a [Change] with a
+/// single snapshot carrying the given [details]. Matches the test helper
+/// used by `snapshot_details_test.dart` so `loadLocalOptionIndex`'s
+/// internal call to `replayObjectDetails` exercises its merge logic.
+Uint8List _snapshotRawTreeChange(Map<String, Value> details) {
+  final struct = Struct();
+  details.forEach((k, v) => struct.fields[k] = v);
+  final change = changes_proto.Change()
+    ..snapshot = (changes_proto.Change_Snapshot()
+      ..data = (SmartBlockSnapshotBase()..details = struct));
+  final tc = TreeChange()
+    ..changesData = change.writeToBuffer()
+    ..readKeyId = ''
+    ..dataType = '';
+  final raw = RawTreeChange()..payload = tc.writeToBuffer();
+  return Uint8List.fromList(raw.writeToBuffer());
+}
 
 void main() {
   group('optionColorPalette', () {
@@ -182,6 +229,138 @@ void main() {
         ).isOrphaned,
         isTrue,
       );
+    });
+  });
+
+  group('extractRootSmartBlockType', () {
+    test('returns -1 for empty input', () {
+      expect(extractRootSmartBlockType(const <Uint8List>[]), -1);
+    });
+
+    test('decodes single-byte varint (small smart_block_type)', () {
+      // 16 / 0x10 fits in a single-byte varint.
+      final raw = _rootRawTreeChangeWithSbType(16);
+      expect(extractRootSmartBlockType(<Uint8List>[raw]), 16);
+    });
+
+    test(
+        'decodes multi-byte varint 529 (STRelationOption = 0x211, '
+        'two-byte encoding)', () {
+      final raw = _rootRawTreeChangeWithSbType(smartBlockTypeRelationOption);
+      expect(
+        extractRootSmartBlockType(<Uint8List>[raw]),
+        smartBlockTypeRelationOption,
+      );
+    });
+
+    test('decodes multi-byte varint 528 (STType)', () {
+      final raw = _rootRawTreeChangeWithSbType(528);
+      expect(extractRootSmartBlockType(<Uint8List>[raw]), 528);
+    });
+  });
+
+  group('loadLocalOptionIndex', () {
+    final emptyKey = Uint8List(32);
+
+    test('empty input list returns an empty map', () async {
+      final out = await loadLocalOptionIndex(const <OptionIndexInput>[]);
+      expect(out, isEmpty);
+    });
+
+    test(
+        'single STRelationOption input -> ResolvedOption with name/color/'
+        'relationKey and isOrphaned=false', () async {
+      final input = OptionIndexInput(
+        objectId: 'opt-done',
+        rawTreeChanges: <Uint8List>[
+          _rootRawTreeChangeWithSbType(smartBlockTypeRelationOption),
+          _snapshotRawTreeChange(<String, Value>{
+            'name': Value(stringValue: 'Done'),
+            'text': Value(stringValue: 'Done'),
+            'relationOptionColor': Value(stringValue: 'red'),
+            'color': Value(stringValue: 'red'),
+            'relationKey': Value(stringValue: 'status'),
+          }),
+        ],
+        treeKey: emptyKey,
+      );
+
+      final out = await loadLocalOptionIndex(<OptionIndexInput>[input]);
+      expect(out.keys, contains('opt-done'));
+      final resolved = out['opt-done']!;
+      expect(resolved.id, 'opt-done');
+      expect(resolved.name, 'Done');
+      expect(resolved.color, 'red');
+      expect(resolved.relationKey, 'status');
+      expect(resolved.isOrphaned, isFalse);
+    });
+
+    test('non-option sbType is excluded from the result', () async {
+      // 528 is STType, not STRelationOption.
+      final input = OptionIndexInput(
+        objectId: 'type-abc',
+        rawTreeChanges: <Uint8List>[
+          _rootRawTreeChangeWithSbType(528),
+          _snapshotRawTreeChange(<String, Value>{
+            'name': Value(stringValue: 'SomeType'),
+          }),
+        ],
+        treeKey: emptyKey,
+      );
+      final out = await loadLocalOptionIndex(<OptionIndexInput>[input]);
+      expect(out, isEmpty);
+    });
+
+    test(
+        'STRelationOption with missing details yields isOrphaned=true',
+        () async {
+      final input = OptionIndexInput(
+        objectId: 'opt-broken',
+        rawTreeChanges: <Uint8List>[
+          _rootRawTreeChangeWithSbType(smartBlockTypeRelationOption),
+          // No snapshot change at all: replay returns an empty map.
+        ],
+        treeKey: emptyKey,
+      );
+      final out = await loadLocalOptionIndex(<OptionIndexInput>[input]);
+      expect(out.keys, contains('opt-broken'));
+      final resolved = out['opt-broken']!;
+      expect(resolved.name, isNull);
+      expect(resolved.color, isNull);
+      expect(resolved.relationKey, isNull);
+      expect(resolved.isOrphaned, isTrue);
+    });
+
+    test('mixed inputs return only the option entries', () async {
+      final optionInput = OptionIndexInput(
+        objectId: 'opt-a',
+        rawTreeChanges: <Uint8List>[
+          _rootRawTreeChangeWithSbType(smartBlockTypeRelationOption),
+          _snapshotRawTreeChange(<String, Value>{
+            'name': Value(stringValue: 'A'),
+            'color': Value(stringValue: 'blue'),
+            'relationKey': Value(stringValue: 'tag'),
+          }),
+        ],
+        treeKey: emptyKey,
+      );
+      final nonOptionInput = OptionIndexInput(
+        objectId: 'page-b',
+        rawTreeChanges: <Uint8List>[
+          _rootRawTreeChangeWithSbType(16),
+          _snapshotRawTreeChange(<String, Value>{
+            'name': Value(stringValue: 'B'),
+          }),
+        ],
+        treeKey: emptyKey,
+      );
+      final out = await loadLocalOptionIndex(
+        <OptionIndexInput>[optionInput, nonOptionInput],
+      );
+      expect(out.keys.toSet(), <String>{'opt-a'});
+      expect(out['opt-a']!.name, 'A');
+      expect(out['opt-a']!.color, 'blue');
+      expect(out['opt-a']!.relationKey, 'tag');
     });
   });
 }

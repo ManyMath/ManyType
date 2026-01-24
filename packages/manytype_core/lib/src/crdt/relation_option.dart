@@ -1,5 +1,10 @@
+import 'dart:typed_data';
+
+import 'package:manytype_protocol/manytype_protocol.dart' show RawTreeChange, RootChange;
 import 'package:manytype_protocol/models.dart';
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart';
+
+import 'snapshot_details.dart';
 
 /// Official Anytype relation-option color palette.
 ///
@@ -107,6 +112,125 @@ class ResolvedOption {
   bool get isOrphaned => name == null;
 }
 
-// TODO(Task 3): loadLocalOptionIndex — added after snapshot_details.dart
-// exists. Scans space objects, filters by smart_block_type == 529, and
-// returns a Map<String, ResolvedOption> keyed by option ID.
+/// Numeric `SmartBlockType.STRelationOption` value (0x211 / 529).
+///
+/// Lifted from `models.pbenum.dart` so manytype_core callers can filter for
+/// option objects without importing the full proto enum just for one
+/// constant. Verified against `SmartBlockType.STRelationOption`: Phase 38
+/// research Q2.
+const int smartBlockTypeRelationOption = 529;
+
+/// Minimal per-object input to [loadLocalOptionIndex]. The CLI layer
+/// assembles this list by querying Drift for all non-deleted objects in
+/// a space and lifting each object's raw tree-change rows into
+/// [rawTreeChanges]. This keeps `manytype_core` free of any Drift /
+/// `ManytypeDatabase` dependency.
+class OptionIndexInput {
+  final String objectId;
+  final List<Uint8List> rawTreeChanges;
+  final Uint8List treeKey;
+
+  const OptionIndexInput({
+    required this.objectId,
+    required this.rawTreeChanges,
+    required this.treeKey,
+  });
+}
+
+/// Scan a list of space objects, filter those whose root change's
+/// `smart_block_type` varint equals [smartBlockTypeRelationOption] (529),
+/// replay their details, and return a map from option ID -> [ResolvedOption].
+///
+/// Does NOT bump the Drift schema (Phase 38 RESEARCH Q6). The cost of
+/// the per-object root-change varint decode is O(objects-in-space), which
+/// is already the dominant cost of `list.dart`'s existing per-object walk.
+///
+/// Call once per `read` / `list` invocation, cache the result in-scope,
+/// then look up `map[optionId]` per option ID encountered in a relation
+/// value. A lookup miss indicates an orphaned ID (not yet synced) and
+/// callers should render `<unknown:${id.substring(0, 8)}>` per D-13.
+///
+/// A [ResolvedOption] is emitted for every object whose root change's
+/// smart_block_type matches 529, even if its details turn out to be
+/// malformed or missing `name`/`text`: in that case
+/// [ResolvedOption.isOrphaned] will be `true`, giving callers an
+/// explicit signal about partially-synced option objects.
+Future<Map<String, ResolvedOption>> loadLocalOptionIndex(
+  List<OptionIndexInput> inputs,
+) async {
+  final result = <String, ResolvedOption>{};
+  for (final input in inputs) {
+    final sbType = extractRootSmartBlockType(input.rawTreeChanges);
+    if (sbType != smartBlockTypeRelationOption) continue;
+
+    Map<String, Value> details;
+    try {
+      details = await replayObjectDetails(
+        rawTreeChanges: input.rawTreeChanges,
+        treeKey: input.treeKey,
+      );
+    } catch (_) {
+      details = const <String, Value>{};
+    }
+
+    final name =
+        details['name']?.stringValue ?? details['text']?.stringValue;
+    final color = details['relationOptionColor']?.stringValue ??
+        details['color']?.stringValue;
+    final relationKey = details['relationKey']?.stringValue;
+
+    result[input.objectId] = ResolvedOption(
+      id: input.objectId,
+      name: (name != null && name.isNotEmpty) ? name : null,
+      color: (color != null && color.isNotEmpty) ? color : null,
+      relationKey:
+          (relationKey != null && relationKey.isNotEmpty) ? relationKey : null,
+    );
+  }
+  return result;
+}
+
+/// Extract the `SmartBlockType` varint from the FIRST raw tree change in
+/// the sequence, which must be a [RootChange] envelope. Returns `-1` if
+/// the input is empty, the payload cannot be parsed, or the
+/// `changePayload` field does not begin with tag 0x08 (field 1, wire
+/// type 0 = varint).
+///
+/// Mirrors `packages/manytype_cli/lib/src/commands/read.dart:541-557`
+/// (`_extractSmartBlockType` + `_decodeVarint`) verbatim: moved into
+/// `manytype_core` so Phase 38's [loadLocalOptionIndex] can scan root
+/// changes without depending on the CLI.
+///
+/// The `changePayload` is a protobuf message whose field 1 (tag 0x08) is
+/// the `SmartBlockType` enum value encoded as a varint. STRelationOption
+/// is 529 / 0x211 which is a MULTI-byte varint (`0x91 0x04`), so the
+/// decode loop must handle more than one continuation byte.
+int extractRootSmartBlockType(List<Uint8List> rawTreeChanges) {
+  if (rawTreeChanges.isEmpty) return -1;
+  try {
+    final rawTc = RawTreeChange.fromBuffer(rawTreeChanges.first);
+    if (rawTc.payload.isEmpty) return -1;
+    final rootChange = RootChange.fromBuffer(rawTc.payload);
+    if (rootChange.changePayload.isEmpty) return -1;
+    final bytes = rootChange.changePayload;
+    if (bytes[0] != 0x08) return -1;
+    return _decodeVarint(bytes.sublist(1));
+  } catch (_) {
+    return -1;
+  }
+}
+
+/// Decode an unsigned protobuf varint from the head of [bytes]. Handles
+/// multi-byte values (e.g. `SmartBlockType.STType = 528`, `STRelation =
+/// 521`, `STRelationOption = 529`) which all exceed the single-byte
+/// range.
+int _decodeVarint(List<int> bytes) {
+  int result = 0;
+  int shift = 0;
+  for (final b in bytes) {
+    result |= (b & 0x7F) << shift;
+    shift += 7;
+    if (b < 0x80) break;
+  }
+  return result;
+}
