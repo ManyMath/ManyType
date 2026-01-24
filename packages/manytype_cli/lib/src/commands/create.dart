@@ -80,9 +80,12 @@ Future<void> createCommand(
   bool asType = false,
   bool asRelation = false,
   bool asSet = false,
+  bool asRelationOption = false,
   String? name,
   String? format,
   String? sourceType,
+  String? forRelation,
+  String? color,
 }) async {
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final spaceId = identity.spaceId;
@@ -201,12 +204,15 @@ Future<void> createCommand(
     aclHeadId = await _findAclRootId(db, existingObjects, spaceId);
   }
 
-  // Determine SmartBlockType based on --as-type/--as-relation/--as-set flags
+  // Determine SmartBlockType based on --as-type/--as-relation/--as-set/--as-relation-option flags
   final int smartBlockTypeValue;
   if (asType) {
     smartBlockTypeValue = SmartBlockType.STType.value;
   } else if (asRelation) {
     smartBlockTypeValue = SmartBlockType.STRelation.value;
+  } else if (asRelationOption) {
+    // Phase 38: STRelationOption SmartBlock (529 / 0x211)
+    smartBlockTypeValue = smartBlockTypeRelationOption;
   } else {
     // Both sets and plain pages use Page SmartBlockType
     smartBlockTypeValue = SmartBlockType.Page.value;
@@ -273,6 +279,17 @@ Future<void> createCommand(
     final headerBlock =
         snapshotBase.blocks.firstWhere((b) => b.id == 'header');
     headerBlock.childrenIds.add(dvBlockId);
+  } else if (asRelationOption) {
+    // Phase 38: STRelationOption snapshot. bin/manytype.dart guarantees
+    // forRelation/color are non-null and color is palette-validated.
+    assert(forRelation != null, 'bin/manytype.dart validation guarantees this');
+    assert(color != null, 'bin/manytype.dart validation guarantees this');
+    snapshotBase.objectTypes.add('ot-relationOption');
+    snapshotBase.details = buildRelationOptionDetails(
+      name: displayName,
+      color: color!,
+      relationKey: forRelation!,
+    );
   } else {
     snapshotBase.objectTypes.add('ot-page');
     snapshotBase.details = Struct()
@@ -381,13 +398,144 @@ Future<void> createCommand(
     changeCount++;
   }
 
+  // Phase 38: atomic parent STRelation selectDict update (D-04). Executed
+  // only for --as-relation-option. Finds the parent STRelation locally by
+  // matching `uniqueKey` / `relationKey` against forRelation, replays its
+  // details via replayObjectDetails, appends the new Relation_Option to
+  // `selectDict`, and writes a DetailsSet on the parent's tree. This
+  // prevents the dangling-reference class of bug called out in STATE.md : 
+  // the option ID is referenceable the moment the STRelationOption exists.
+  if (asRelationOption) {
+    final allObjects = await db.getNonDeletedObjectsBySpace(spaceId);
+    String? parentStRelationId;
+    Uint8List? parentTreeKey;
+    Map<String, Value>? parentDetails;
+
+    for (final obj in allObjects) {
+      if (obj.id == objectId) continue;
+      final parentRawChanges = await db.getChangesForObject(obj.id);
+      if (parentRawChanges.isEmpty) continue;
+      final rawBytesList = parentRawChanges
+          .map((r) => Uint8List.fromList(r.rawBytes))
+          .toList();
+      // Filter by smart_block_type == STRelation (527) via the root-change
+      // varint helper shipped by Plan 01. This matches the list.dart pattern.
+      final sbType = extractRootSmartBlockType(rawBytesList);
+      if (sbType != SmartBlockType.STRelation.value) continue;
+
+      final candidateTreeKey = await deriveTreeKey(spaceKey, obj.id);
+      final Map<String, Value> candidateDetails;
+      try {
+        candidateDetails = await replayObjectDetails(
+          rawTreeChanges: rawBytesList,
+          treeKey: candidateTreeKey,
+        );
+      } catch (_) {
+        continue;
+      }
+
+      // Match by uniqueKey (create.dart's existing STRelation pattern) or
+      // relationKey as a defensive fallback. Accept exact match or a
+      // `rel-<key>` prefixed form in case official clients stored it that
+      // way.
+      final storedUnique =
+          candidateDetails['uniqueKey']?.stringValue ?? '';
+      final storedRelKey =
+          candidateDetails['relationKey']?.stringValue ?? '';
+      final matches = storedUnique == forRelation ||
+          storedUnique == 'rel-$forRelation' ||
+          storedRelKey == forRelation ||
+          storedRelKey == 'rel-$forRelation';
+      if (!matches) continue;
+
+      parentStRelationId = obj.id;
+      parentTreeKey = candidateTreeKey;
+      parentDetails = candidateDetails;
+      break;
+    }
+
+    if (parentStRelationId == null) {
+      throw StateError(
+        'Cannot find parent STRelation with key "$forRelation" in the local '
+        'store. Sync first, or create the relation via '
+        '`create --as-relation --name <key>`. Dangling references prevented.',
+      );
+    }
+
+    // Build the new Relation_Option proto entry. Relation.Option fields:
+    // 1=id, 2=text, 3=color, 5=relationKey.
+    final newOption = Relation_Option()
+      ..id = objectId
+      ..text = displayName
+      ..color = color!
+      ..relationKey = forRelation!;
+
+    final currentSelectDict = parentDetails!['selectDict'];
+    final updatedSelectDict =
+        appendOptionToSelectDict(currentSelectDict, newOption);
+
+    // Locate the parent's snapshot base (its root change: parents.isEmpty).
+    final parentChanges = await db.getChangesForObject(parentStRelationId);
+    String? parentSnapshotBaseId;
+    for (final c in parentChanges) {
+      final parents = jsonDecode(c.parentHeads) as List;
+      if (parents.isEmpty) {
+        parentSnapshotBaseId = c.id;
+        break;
+      }
+    }
+    if (parentSnapshotBaseId == null) {
+      throw StateError(
+        'Parent STRelation $parentStRelationId is missing a root change',
+      );
+    }
+
+    final parentLatestHeads = await db.getObjectHeads(parentStRelationId);
+    if (parentLatestHeads.isEmpty) {
+      throw StateError(
+        'Parent STRelation $parentStRelationId has no heads: cannot append',
+      );
+    }
+
+    final detailsContent = Change_Content(
+      detailsSet: Change_DetailsSet(
+        key: 'selectDict',
+        value: updatedSelectDict,
+      ),
+    );
+    final detailsData = marshalChangeContent([detailsContent]);
+
+    final parentTreeChange = await buildTreeChange(
+      currentHeads: parentLatestHeads,
+      aclHeadId: aclHeadId,
+      snapshotBaseId: parentSnapshotBaseId,
+      changesData: await aesGcmEncrypt(parentTreeKey!, detailsData),
+      identityPrivateKey: identity.accountSeed,
+      readKeyId: aclHeadId,
+    );
+
+    await db.insertChange(
+      parentTreeChange.id,
+      parentStRelationId,
+      parentTreeChange.rawChange,
+      jsonEncode(parentLatestHeads),
+    );
+
+    print(
+      'Appended option $objectId to STRelation $parentStRelationId '
+      '(selectDict now has ${updatedSelectDict.listValue.values.length} entries)',
+    );
+  }
+
   final objectKind = asType
       ? 'type'
       : asRelation
           ? 'relation'
           : asSet
               ? 'set'
-              : 'object';
+              : asRelationOption
+                  ? 'relation-option'
+                  : 'object';
   print('Created $objectKind: $objectId');
   print('Text: $displayName');
   print('Changes: $changeCount (root + snapshot${blockOps.isNotEmpty ? ' + blocks' : ''})');
