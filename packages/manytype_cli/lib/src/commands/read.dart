@@ -7,6 +7,8 @@ import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/events.dart';
 import 'package:manytype_protocol/models.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
+import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart'
+    show Value;
 
 import '../config.dart';
 import '../identity.dart';
@@ -78,6 +80,8 @@ Future<void> _showObject(ManytypeDatabase db, String objectId) async {
   // derived from the space read key and object ID, and may additionally snappy
   // compress the plaintext when `dataType == "1/s"`.
   Uint8List? treeKey;
+  Uint8List? spaceKeyForIndex;
+  String? spaceIdForIndex;
   try {
     final config = await CliConfig.load();
     final identity = await Identity.fromMnemonic(config.mnemonic);
@@ -87,8 +91,41 @@ Future<void> _showObject(ManytypeDatabase db, String objectId) async {
       ..setRange(32, 64, accountKeyPair.publicKey);
     final spaceKey = await deriveSpaceKey(accountPrivRaw);
     treeKey = await deriveTreeKey(spaceKey, objectId);
+    spaceKeyForIndex = spaceKey;
+    spaceIdForIndex = identity.spaceId;
   } catch (_) {
     treeKey = null;
+  }
+
+  // Phase 38: Build the STRelationOption index ONCE per read invocation.
+  // Scans every non-deleted object in the space, filters roots whose
+  // smart_block_type == 529 (STRelationOption), and returns a map from
+  // option ID -> ResolvedOption (name + color + relationKey or orphaned
+  // sentinel). Used by _formatOptionRelationValue below to resolve status
+  // and tag relation values on this object's snapshot details.
+  var optIndex = const <String, ResolvedOption>{};
+  if (spaceKeyForIndex != null && spaceIdForIndex != null) {
+    try {
+      final spaceObjects =
+          await db.getNonDeletedObjectsBySpace(spaceIdForIndex);
+      final optionInputs = <OptionIndexInput>[];
+      for (final obj in spaceObjects) {
+        final rawRows = await db.getChangesForObject(obj.id);
+        final objTreeKey = await deriveTreeKey(spaceKeyForIndex, obj.id);
+        optionInputs.add(OptionIndexInput(
+          objectId: obj.id,
+          rawTreeChanges:
+              rawRows.map((r) => Uint8List.fromList(r.rawBytes)).toList(),
+          treeKey: objTreeKey,
+        ));
+      }
+      optIndex = await loadLocalOptionIndex(optionInputs);
+    } catch (_) {
+      // Option index load failure is non-fatal: fall through with an
+      // empty map so status/tag relations render as orphans rather than
+      // crashing the whole read path.
+      optIndex = const <String, ResolvedOption>{};
+    }
   }
 
   print('Object: $objectId');
@@ -110,7 +147,12 @@ Future<void> _showObject(ManytypeDatabase db, String objectId) async {
   }
 
   // Extract snapshot metadata (objectTypes, relationLinks, details, Dataview blocks).
-  await _printSnapshotMetadata(changes, treeKey: treeKey, smartBlockType: smartBlockType);
+  await _printSnapshotMetadata(
+    changes,
+    treeKey: treeKey,
+    smartBlockType: smartBlockType,
+    optIndex: optIndex,
+  );
 
   _printAttachmentRefs(await db.getAttachmentRefsByObject(objectId));
   print('');
@@ -238,6 +280,7 @@ Future<void> _printSnapshotMetadata(
   List<Change> changes, {
   required Uint8List? treeKey,
   int? smartBlockType,
+  Map<String, ResolvedOption> optIndex = const <String, ResolvedOption>{},
 }) async {
   // Locate the first snapshot change.
   int? snapshotIndex;
@@ -290,6 +333,32 @@ Future<void> _printSnapshotMetadata(
     }
     if (smartBlockType == 521 && fields.containsKey('relationFormat')) {
       print('  Format: ${_formatName(fields['relationFormat']!.numberValue)}');
+    }
+  }
+
+  // Phase 38 — render status and tag relation VALUES using the local
+  // STRelationOption index. For each relation link whose format is
+  // RelationFormat.status (single option ID) or RelationFormat.tag
+  // (list_value of option IDs), resolve the value against optIndex and
+  // print a `[<relationKey>] <rendered>` line per D-10 / D-11 / D-13.
+  //
+  // Status: `[<relationKey>] <OptionName> (<color>)`
+  //   Tag:  `[<relationKey>] <name1>, <name2>, <name3>`
+  // Orphan: `<unknown:xxxxxxxx>` (first 8 chars of the unresolved ID)
+  //
+  // Intercepts BEFORE any generic relation rendering path. Non-option
+  // relations (bool, date, object-id, longtext, etc.) are unaffected.
+  if (snapData.hasDetails() && snapData.relationLinks.isNotEmpty) {
+    final fields = snapData.details.fields;
+    for (final link in snapData.relationLinks) {
+      if (link.format != RelationFormat.status &&
+          link.format != RelationFormat.tag) {
+        continue;
+      }
+      final val = fields[link.key];
+      if (val == null) continue;
+      final rendered = _formatOptionRelationValue(val, optIndex);
+      print('  [${link.key}] $rendered');
     }
   }
 
@@ -554,6 +623,49 @@ int? _extractSmartBlockType(List<Change> changes) {
   } catch (_) {
     return null;
   }
+}
+
+/// Phase 38: format a status/tag relation value using the STRelationOption
+/// index.
+///
+/// Returns the D-10 / D-11 / D-13 format strings:
+///  - Status: `<OptionName> (<color>)` for a resolved single option ID, or
+///    `<unknown:xxxxxxxx>` for an orphan/not-yet-synced ID.
+///  - Tag: `<name1>, <name2>, <name3>` for a list_value of option IDs,
+///    preserving the order in which they were stored, with orphan entries
+///    rendered inline as `<unknown:xxxxxxxx>`.
+///
+/// Non-option-shaped values fall through to `val.toString()` as a
+/// defensive last resort: callers should gate invocation by checking the
+/// RelationFormat enum on the parent relation link before calling this
+/// helper.
+String _formatOptionRelationValue(
+  Value val,
+  Map<String, ResolvedOption> optIndex,
+) {
+  if (val.hasStringValue()) {
+    // Status relation: single option ID.
+    final id = val.stringValue;
+    final opt = optIndex[id];
+    if (opt == null || opt.isOrphaned) {
+      return '<unknown:${id.length <= 8 ? id : id.substring(0, 8)}>';
+    }
+    final color = opt.color ?? 'default';
+    return '${opt.name} ($color)';
+  }
+  if (val.hasListValue()) {
+    // Tag relation: list of option IDs (order preserved).
+    return val.listValue.values.map((v) {
+      if (!v.hasStringValue()) return v.toString();
+      final id = v.stringValue;
+      final opt = optIndex[id];
+      if (opt == null || opt.isOrphaned) {
+        return '<unknown:${id.length <= 8 ? id : id.substring(0, 8)}>';
+      }
+      return opt.name!;
+    }).join(', ');
+  }
+  return val.toString();
 }
 
 /// Map a RelationFormat enum value to a human-readable name.
