@@ -2,6 +2,9 @@ import 'dart:typed_data';
 
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
+import 'package:manytype_protocol/manytype_protocol.dart'
+    show RawTreeChange, TreeChange;
+import 'package:manytype_protocol/models.dart' show SmartBlockSnapshotBase;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart';
 import 'package:test/test.dart';
 
@@ -10,11 +13,11 @@ import 'package:test/test.dart';
 /// dataType). This keeps the test off the real crypto + snappy code paths;
 /// `replayObjectDetails` then exercises only its replay merge logic.
 Uint8List _wrapAsRawTreeChange(changes_proto.Change change) {
-  final tc = changes_proto.TreeChange()
+  final tc = TreeChange()
     ..changesData = change.writeToBuffer()
     ..readKeyId = ''
     ..dataType = '';
-  final raw = changes_proto.RawTreeChange()..payload = tc.writeToBuffer();
+  final raw = RawTreeChange()..payload = tc.writeToBuffer();
   return Uint8List.fromList(raw.writeToBuffer());
 }
 
@@ -23,7 +26,7 @@ changes_proto.Change _snapshotChange(Map<String, Value> details) {
   details.forEach((k, v) => struct.fields[k] = v);
   return changes_proto.Change()
     ..snapshot = (changes_proto.Change_Snapshot()
-      ..data = (changes_proto.Change_Snapshot_Data()..details = struct));
+      ..data = (SmartBlockSnapshotBase()..details = struct));
 }
 
 changes_proto.Change _detailsSetChange(String key, Value value) {

@@ -10,6 +10,7 @@ export 'src/crypto/x25519.dart';
 export 'src/crdt/block.dart';
 export 'src/crdt/block_update.dart';
 export 'src/crdt/relation_option.dart';
+export 'src/crdt/snapshot_details.dart';
 export 'src/crdt/cid.dart';
 export 'src/crdt/object_tree.dart';
 export 'src/crdt/tree_builder.dart';
