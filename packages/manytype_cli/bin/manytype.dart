@@ -34,6 +34,13 @@ Future<void> main(List<String> arguments) async {
     ..addFlag('as-type', negatable: false, help: 'Create a custom object type (STType)')
     ..addFlag('as-relation', negatable: false, help: 'Create a custom relation (STRelation)')
     ..addFlag('as-set', negatable: false, help: 'Create a set object with Dataview')
+    ..addFlag('as-relation-option',
+        negatable: false,
+        help: 'Create an STRelationOption SmartBlock bound to a parent relation')
+    ..addOption('for-relation',
+        help: 'Parent relation key (e.g. "status", "tag") — required with --as-relation-option')
+    ..addOption('color',
+        help: 'Option color — one of: default, grey, yellow, orange, red, pink, purple, blue, ice, teal, lime')
     ..addOption('name', help: 'Name for type/relation/set objects')
     ..addOption('format', help: 'Relation format: text, number, date, checkbox, url, email, phone, object')
     ..addOption('source-type', help: 'Source type key for set (e.g. ot-page)');
@@ -57,7 +64,15 @@ Future<void> main(List<String> arguments) async {
     ..addOption('set-style',
         help: "Change the target block's style (one of: paragraph, "
             'header1, header2, header3, checkbox, numbered, toggle, '
-            'quote, callout)');
+            'quote, callout)')
+    ..addOption('status',
+        help: 'Set a status-relation value to this STRelationOption ID (use with --relation)')
+    ..addOption('tag',
+        help: 'Set a tag-relation value to this comma-separated list of STRelationOption IDs (full replace; use with --relation)')
+    ..addMultiOption('tag-add',
+        help: 'Append an STRelationOption ID to a tag-relation (idempotent; use with --relation, may repeat)')
+    ..addMultiOption('tag-remove',
+        help: 'Remove an STRelationOption ID from a tag-relation (idempotent; use with --relation, may repeat)');
   final fileUploadParser = ArgParser()
     ..addOption('file-id', help: 'Stable file ID for upload', defaultsTo: null);
   final fileOpenParser = ArgParser()
@@ -120,15 +135,53 @@ Future<void> main(List<String> arguments) async {
       final asType = command['as-type'] == true;
       final asRelation = command['as-relation'] == true;
       final asSet = command['as-set'] == true;
+      final asRelationOption = command['as-relation-option'] == true;
       final name = command['name'] as String?;
       final format = command['format'] as String?;
       final sourceType = command['source-type'] as String?;
+      final forRelation = command['for-relation'] as String?;
+      final colorArg = command['color'] as String?;
 
-      if ([asType, asRelation, asSet].where((f) => f).length > 1) {
-        throw StateError('--as-type, --as-relation, and --as-set are mutually exclusive');
+      if ([asType, asRelation, asSet, asRelationOption].where((f) => f).length >
+          1) {
+        throw StateError(
+          '--as-type, --as-relation, --as-set, and --as-relation-option are '
+          'mutually exclusive',
+        );
       }
-      if ((asType || asRelation || asSet) && name == null) {
-        throw StateError('--as-type, --as-relation, and --as-set require --name');
+      if ((asType || asRelation || asSet || asRelationOption) && name == null) {
+        throw StateError(
+          '--as-type, --as-relation, --as-set, and --as-relation-option '
+          'require --name',
+        );
+      }
+
+      // Phase 38: create --as-relation-option validation
+      if (asRelationOption) {
+        if (forRelation == null || forRelation.isEmpty) {
+          throw StateError(
+            '--as-relation-option requires --for-relation <relationKey>',
+          );
+        }
+        if (colorArg == null || colorArg.isEmpty) {
+          throw StateError(
+            '--as-relation-option requires --color <name> (one of: '
+            '${optionColorPalette.join(", ")})',
+          );
+        }
+        if (!optionColorPalette.contains(colorArg)) {
+          throw StateError(
+            '--color "$colorArg" is not in the Anytype palette. Accepted: '
+            '${optionColorPalette.join(", ")}',
+          );
+        }
+      } else {
+        if (forRelation != null) {
+          throw StateError('--for-relation requires --as-relation-option');
+        }
+        if (colorArg != null) {
+          throw StateError('--color requires --as-relation-option');
+        }
       }
 
       await createCommand(text, db, config,
@@ -140,9 +193,12 @@ Future<void> main(List<String> arguments) async {
         asType: asType,
         asRelation: asRelation,
         asSet: asSet,
+        asRelationOption: asRelationOption,
         name: name,
         format: format,
         sourceType: sourceType,
+        forRelation: forRelation,
+        color: colorArg,
       );
       await db.close();
 
@@ -201,19 +257,76 @@ Future<void> main(List<String> arguments) async {
       final dateValue = command['date'] as String?;
       final objectIdValue = command['object-id'] as String?;
 
+      // Phase 38: status/tag relation-value flags.
+      final statusArg = command['status'] as String?;
+      final tagArg = command['tag'] as String?;
+      final tagAddList =
+          (command['tag-add'] as List?)?.cast<String>() ?? const <String>[];
+      final tagRemoveList =
+          (command['tag-remove'] as List?)?.cast<String>() ?? const <String>[];
+
+      final hasStatus = statusArg != null;
+      final hasTag = tagArg != null;
+      final hasTagDelta = tagAddList.isNotEmpty || tagRemoveList.isNotEmpty;
+
+      // Parse tag full-replace list.
+      final List<String>? tagIds;
+      if (hasTag) {
+        tagIds = tagArg
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+      } else {
+        tagIds = null;
+      }
+
       // Validate relation flags.
       if (relationKey != null) {
-        final typedCount = [boolValue, dateValue, objectIdValue]
-            .where((v) => v != null)
-            .length;
+        final typedCount = [
+          boolValue,
+          dateValue,
+          objectIdValue,
+          hasStatus ? statusArg : null,
+          hasTag ? tagArg : null,
+          hasTagDelta ? 'delta' : null,
+        ].where((v) => v != null).length;
         if (typedCount != 1) {
           throw StateError(
-            '--relation requires exactly one of --bool, --date, or --object-id',
+            '--relation requires exactly one of --bool, --date, --object-id, '
+            '--status, --tag, or --tag-add/--tag-remove',
           );
         }
-      } else if (boolValue != null || dateValue != null || objectIdValue != null) {
+        // --status is mutex with --bool / --date / --object-id.
+        if (hasStatus &&
+            (boolValue != null ||
+                dateValue != null ||
+                objectIdValue != null)) {
+          throw StateError(
+            '--status is mutex with --bool, --date, and --object-id',
+          );
+        }
+        // --tag is mutex with --tag-add / --tag-remove.
+        if (hasTag && hasTagDelta) {
+          throw StateError(
+            '--tag is mutex with --tag-add and --tag-remove (use one or the other)',
+          );
+        }
+        // --status and --tag/--tag* are mutex with each other.
+        if (hasStatus && (hasTag || hasTagDelta)) {
+          throw StateError(
+            '--status is mutex with --tag / --tag-add / --tag-remove',
+          );
+        }
+      } else if (boolValue != null ||
+          dateValue != null ||
+          objectIdValue != null) {
         throw StateError(
           '--bool, --date, and --object-id require --relation <key>',
+        );
+      } else if (hasStatus || hasTag || hasTagDelta) {
+        throw StateError(
+          '--status / --tag / --tag-add / --tag-remove require --relation <key>',
         );
       }
 
@@ -279,7 +392,11 @@ Future<void> main(List<String> arguments) async {
           blockId: blockId,
           setText: setTextArg,
           setChecked: setChecked,
-          setStyle: setStyle);
+          setStyle: setStyle,
+          status: statusArg,
+          tagIds: tagIds,
+          tagAdds: tagAddList,
+          tagRemoves: tagRemoveList);
       await db.close();
       break;
 
