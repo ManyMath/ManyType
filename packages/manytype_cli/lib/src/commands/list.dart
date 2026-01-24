@@ -5,6 +5,8 @@ import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/manytype_protocol.dart'
     show RawTreeChange, RootChange, TreeChange;
+import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart'
+    show Value;
 
 import '../config.dart';
 import '../identity.dart';
@@ -58,10 +60,35 @@ Future<void> listCommand(
   // Query all non-deleted objects.
   final objects = await db.getNonDeletedObjectsBySpace(identity.spaceId);
 
+  // Phase 38: Build the STRelationOption index ONCE per list invocation.
+  // We need every non-deleted object's raw changes both for this index and
+  // for per-object metadata extraction below, so fetch once and share the
+  // in-memory map to avoid double-fetching from Drift.
+  final rawChangesByObject = <String, List<Change>>{};
+  final optionInputs = <OptionIndexInput>[];
+  for (final obj in objects) {
+    final rawRows = await db.getChangesForObject(obj.id);
+    rawChangesByObject[obj.id] = rawRows;
+    final objTreeKey = await deriveTreeKey(spaceKey, obj.id);
+    optionInputs.add(OptionIndexInput(
+      objectId: obj.id,
+      rawTreeChanges: rawRows.map((r) => Uint8List.fromList(r.rawBytes)).toList(),
+      treeKey: objTreeKey,
+    ));
+  }
+  final Map<String, ResolvedOption> optIndex =
+      await loadLocalOptionIndex(optionInputs);
+
   // Extract metadata for each object, filtering out nulls (system/undecryptable).
   final metas = <ObjectMeta>[];
   for (final obj in objects) {
-    final meta = await _extractObjectMeta(db, obj, spaceKey);
+    final meta = await _extractObjectMeta(
+      db,
+      obj,
+      spaceKey,
+      optIndex: optIndex,
+      cachedChanges: rawChangesByObject[obj.id],
+    );
     if (meta != null) {
       metas.add(meta);
     }
@@ -74,6 +101,12 @@ Future<void> listCommand(
   }
 
   // Apply --where key=value filter.
+  //
+  // Phase 38 — D-12 behavior shift: `m.details[key]` is the output of
+  // `_valueToString(..., optIndex: optIndex)`, which now resolves option
+  // IDs to names. Users write `--where status="Done"`, NOT
+  // `--where status="opt-abc123"`. The matcher code itself does not
+  // change — the resolution happens upstream inside `_extractObjectMeta`.
   if (whereFilter != null) {
     final eqIndex = whereFilter.indexOf('=');
     if (eqIndex > 0) {
@@ -93,9 +126,11 @@ Future<void> listCommand(
 Future<ObjectMeta?> _extractObjectMeta(
   ManytypeDatabase db,
   StoredObject obj,
-  Uint8List spaceKey,
-) async {
-  final changes = await db.getChangesForObject(obj.id);
+  Uint8List spaceKey, {
+  Map<String, ResolvedOption>? optIndex,
+  List<Change>? cachedChanges,
+}) async {
+  final changes = cachedChanges ?? await db.getChangesForObject(obj.id);
   if (changes.isEmpty) return null;
 
   // Check for system object via root change.
@@ -161,7 +196,7 @@ Future<ObjectMeta?> _extractObjectMeta(
         }
         if (snapData.hasDetails()) {
           for (final entry in snapData.details.fields.entries) {
-            details[entry.key] = _valueToString(entry.value);
+            details[entry.key] = _valueToString(entry.value, optIndex: optIndex);
           }
           if (snapData.details.fields.containsKey('name')) {
             name = snapData.details.fields['name']!.stringValue;
@@ -173,7 +208,7 @@ Future<ObjectMeta?> _extractObjectMeta(
       for (final content in change.content) {
         if (content.hasDetailsSet()) {
           final key = content.detailsSet.key;
-          final val = _valueToString(content.detailsSet.value);
+          final val = _valueToString(content.detailsSet.value, optIndex: optIndex);
           details[key] = val;
           if (key == 'name') {
             name = content.detailsSet.value.hasStringValue()
@@ -211,12 +246,51 @@ Future<ObjectMeta?> _extractObjectMeta(
 }
 
 /// Convert a protobuf Value to a string for display and --where matching.
-String _valueToString(dynamic val) {
-  if (val.hasStringValue()) return val.stringValue as String;
+///
+/// When [optIndex] is provided, a stringValue that matches a known option
+/// ID is resolved to the option name (status-relation case). A listValue
+/// whose entries are option IDs is resolved to a comma-joined list of
+/// names (tag-relation case, Phase 38: closes RESEARCH Pitfall 1 where
+/// tag relations previously fell through to a raw protobuf debug string).
+/// Orphaned / not-yet-synced option IDs render as `<unknown:xxxxxxxx>`
+/// per Phase 38 D-13.
+///
+/// Non-option string values and non-option list entries are unaffected:
+/// they fall through to their existing serialization so Phase 37 behavior
+/// is preserved when no STRelationOption objects exist in the space.
+String _valueToString(Value val, {Map<String, ResolvedOption>? optIndex}) {
+  if (val.hasStringValue()) {
+    final s = val.stringValue;
+    // Status-relation resolution: if a status value's string happens to
+    // be an option ID in the index, resolve to name. Harmless for
+    // non-option strings (they aren't in the index and fall through).
+    if (optIndex != null && optIndex.containsKey(s)) {
+      final opt = optIndex[s]!;
+      return opt.isOrphaned ? '<unknown:${_truncate8(s)}>' : opt.name!;
+    }
+    return s;
+  }
   if (val.hasBoolValue()) return val.boolValue.toString();
   if (val.hasNumberValue()) return val.numberValue.toString();
+  if (val.hasListValue()) {
+    // Phase 38: RESEARCH Pitfall 1 fix: tag relations (list_value of
+    // stringValues) used to fall through to `.toString()` and emit a raw
+    // protobuf debug string. Now they join resolved names with ", ".
+    return val.listValue.values.map((v) {
+      if (!v.hasStringValue()) return v.toString();
+      final id = v.stringValue;
+      if (optIndex == null) return id;
+      final opt = optIndex[id];
+      if (opt == null || opt.isOrphaned) {
+        return '<unknown:${_truncate8(id)}>';
+      }
+      return opt.name!;
+    }).join(', ');
+  }
   return val.toString();
 }
+
+String _truncate8(String s) => s.length <= 8 ? s : s.substring(0, 8);
 
 /// Print an aligned three-column table of object metadata.
 void _printObjectTable(List<ObjectMeta> metas) {
