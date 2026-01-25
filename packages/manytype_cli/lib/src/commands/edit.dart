@@ -5,11 +5,10 @@ import 'dart:typed_data';
 
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
-import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/events.dart';
 import 'package:manytype_protocol/models.dart';
 import 'package:manytype_protocol/manytype_protocol.dart'
-    show AclRoot, RawTreeChange, TreeChange;
+    show RawTreeChange, TreeChange;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart';
 
 import '../acl_codec.dart';
@@ -17,7 +16,6 @@ import '../config.dart';
 import '../identity.dart';
 import '../store/database.dart';
 import '../sync_service.dart';
-import 'read.dart';
 
 Future<void> editCommand(
   String objectId,
@@ -35,6 +33,10 @@ Future<void> editCommand(
   String? setText,
   bool? setChecked,
   Block_Content_Text_Style? setStyle,
+  String? status,
+  List<String>? tagIds,
+  List<String> tagAdds = const <String>[],
+  List<String> tagRemoves = const <String>[],
 }) async {
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
@@ -156,6 +158,55 @@ Future<void> editCommand(
       relationValue = Value(numberValue: int.parse(dateValue).toDouble());
     } else if (objectIdValue != null) {
       relationValue = Value(stringValue: objectIdValue);
+    } else if (status != null) {
+      // Phase 38 D-05: single-value status write.
+      relationValue = Value(stringValue: status);
+    } else if (tagIds != null) {
+      // Phase 38 D-06: tag full-replace list_value.
+      relationValue = Value(
+        listValue: ListValue(
+          values: tagIds.map((id) => Value(stringValue: id)).toList(),
+        ),
+      );
+    } else if (tagAdds.isNotEmpty || tagRemoves.isNotEmpty) {
+      // Phase 38 D-07: read-modify-write tag delta. Replay the current
+      // object details via manytype_core's shared helper, extract the
+      // existing list_value for this relation key (if any), apply the
+      // deltas idempotently (re-add/no-op, remove-missing/no-op), and
+      // write the new full list. Uses `freshChanges` which reflects the
+      // post-sync state loaded above.
+      final rawBytesList = freshChanges
+          .map((r) => Uint8List.fromList(r.rawBytes))
+          .toList();
+      final currentDetails = await replayObjectDetails(
+        rawTreeChanges: rawBytesList,
+        treeKey: treeKey,
+      );
+
+      final List<String> currentIds;
+      final existing = currentDetails[relationKey];
+      if (existing != null && existing.hasListValue()) {
+        currentIds = existing.listValue.values
+            .where((v) => v.hasStringValue())
+            .map((v) => v.stringValue)
+            .toList();
+      } else {
+        currentIds = <String>[];
+      }
+
+      final newIds = List<String>.from(currentIds);
+      for (final id in tagAdds) {
+        if (!newIds.contains(id)) newIds.add(id);
+      }
+      for (final id in tagRemoves) {
+        newIds.remove(id);
+      }
+
+      relationValue = Value(
+        listValue: ListValue(
+          values: newIds.map((id) => Value(stringValue: id)).toList(),
+        ),
+      );
     } else {
       throw StateError('relation requires a typed value');
     }
@@ -255,8 +306,21 @@ Future<void> editCommand(
   if (nameChangeId != null) print('Name change: $nameChangeId');
   if (blockChangeId != null) print('Block change: $blockChangeId');
   if (relationChangeId != null) {
-    final displayValue = boolValue ?? dateValue ?? objectIdValue ?? '';
-    print('Relation change: $relationChangeId ($relationKey = $displayValue)');
+    if (status != null) {
+      print('Set status: $relationKey = $status');
+    } else if (tagIds != null) {
+      print(
+        'Set tag: $relationKey = [${tagIds.join(", ")}] (full replace, ${tagIds.length} values)',
+      );
+    } else if (tagAdds.isNotEmpty || tagRemoves.isNotEmpty) {
+      print(
+        'Updated tag: $relationKey '
+        '(added: ${tagAdds.join(", ")}; removed: ${tagRemoves.join(", ")})',
+      );
+    } else {
+      final displayValue = boolValue ?? dateValue ?? objectIdValue ?? '';
+      print('Relation change: $relationChangeId ($relationKey = $displayValue)');
+    }
   }
   if (blockUpdateChangeId != null) {
     print(

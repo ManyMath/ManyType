@@ -242,13 +242,6 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'edit':
-      if (networkConfigPath == null) {
-        throw StateError(
-          'edit requires --network-config <path>',
-        );
-      }
-      final config = await CliConfig.load(serverOverride: serverOverride);
-      final db = ManytypeDatabase(CliConfig.dbPath);
       final objectId = command['id'] as String;
       final hasCheckbox = command['checkbox'] == true;
       final newText = command['text'] as String?;
@@ -283,20 +276,8 @@ Future<void> main(List<String> arguments) async {
 
       // Validate relation flags.
       if (relationKey != null) {
-        final typedCount = [
-          boolValue,
-          dateValue,
-          objectIdValue,
-          hasStatus ? statusArg : null,
-          hasTag ? tagArg : null,
-          hasTagDelta ? 'delta' : null,
-        ].where((v) => v != null).length;
-        if (typedCount != 1) {
-          throw StateError(
-            '--relation requires exactly one of --bool, --date, --object-id, '
-            '--status, --tag, or --tag-add/--tag-remove',
-          );
-        }
+        // Run mutex checks BEFORE the "exactly one" count so the more
+        // specific error messages surface when multiple value types collide.
         // --status is mutex with --bool / --date / --object-id.
         if (hasStatus &&
             (boolValue != null ||
@@ -316,6 +297,31 @@ Future<void> main(List<String> arguments) async {
         if (hasStatus && (hasTag || hasTagDelta)) {
           throw StateError(
             '--status is mutex with --tag / --tag-add / --tag-remove',
+          );
+        }
+        // --tag/--tag* is mutex with --bool / --date / --object-id.
+        if ((hasTag || hasTagDelta) &&
+            (boolValue != null ||
+                dateValue != null ||
+                objectIdValue != null)) {
+          throw StateError(
+            '--tag / --tag-add / --tag-remove are mutex with --bool, '
+            '--date, and --object-id',
+          );
+        }
+
+        final typedCount = [
+          boolValue,
+          dateValue,
+          objectIdValue,
+          hasStatus ? statusArg : null,
+          hasTag ? tagArg : null,
+          hasTagDelta ? 'delta' : null,
+        ].where((v) => v != null).length;
+        if (typedCount != 1) {
+          throw StateError(
+            '--relation requires exactly one of --bool, --date, --object-id, '
+            '--status, --tag, or --tag-add/--tag-remove',
           );
         }
       } else if (boolValue != null ||
@@ -379,6 +385,14 @@ Future<void> main(List<String> arguments) async {
           'edit requires --text, --checkbox, --relation, or --block-id',
         );
       }
+
+      if (networkConfigPath == null) {
+        throw StateError(
+          'edit requires --network-config <path>',
+        );
+      }
+      final config = await CliConfig.load(serverOverride: serverOverride);
+      final db = ManytypeDatabase(CliConfig.dbPath);
       await editCommand(objectId, newText, db, config,
           networkConfigPath: networkConfigPath,
           checkbox: hasCheckbox,
