@@ -3,12 +3,14 @@ import 'dart:typed_data';
 import 'package:libcompress/libcompress.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
+import 'package:manytype_protocol/models.dart';
 import 'package:manytype_protocol/manytype_protocol.dart'
     show RawTreeChange, RootChange, TreeChange;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart'
-    show Value;
+    show ListValue, Value;
 
 import '../config.dart';
+import '../collection_keys.dart';
 import '../identity.dart';
 import '../store/database.dart';
 import '../sync_service.dart';
@@ -18,18 +20,25 @@ final _snappy = SnappyCodec();
 /// Lightweight metadata extracted from an object's change tree.
 class ObjectMeta {
   final String id;
-  final String? type;
+  final List<String> types;
   final String? name;
   final Map<String, String> details;
+  final bool isCollection;
+  final int collectionMemberCount;
 
   ObjectMeta({
     required this.id,
-    this.type,
+    this.types = const [],
     this.name,
     this.details = const {},
+    this.isCollection = false,
+    this.collectionMemberCount = 0,
   });
 
-  String get displayType => type ?? '<unknown>';
+  String? get type => types.isEmpty ? null : types.first;
+  String get displayType => isCollection
+      ? '[Collection] $collectionMemberCount members'
+      : (type ?? '<unknown>');
   String get displayName => name ?? '<unnamed>';
 }
 
@@ -72,7 +81,8 @@ Future<void> listCommand(
     final objTreeKey = await deriveTreeKey(spaceKey, obj.id);
     optionInputs.add(OptionIndexInput(
       objectId: obj.id,
-      rawTreeChanges: rawRows.map((r) => Uint8List.fromList(r.rawBytes)).toList(),
+      rawTreeChanges:
+          rawRows.map((r) => Uint8List.fromList(r.rawBytes)).toList(),
       treeKey: objTreeKey,
     ));
   }
@@ -95,28 +105,45 @@ Future<void> listCommand(
   }
 
   // Apply --type filter.
-  var results = metas;
-  if (typeFilter != null) {
-    results = results.where((m) => m.type == typeFilter).toList();
+  final results = metas
+      .where(
+        (m) => matchesObjectMetaFilters(
+          m,
+          typeFilter: typeFilter,
+          whereFilter: whereFilter,
+        ),
+      )
+      .toList();
+
+  _printObjectTable(results);
+}
+
+bool matchesObjectMetaFilters(
+  ObjectMeta meta, {
+  String? typeFilter,
+  String? whereFilter,
+}) {
+  if (typeFilter != null && !meta.types.contains(typeFilter)) {
+    return false;
   }
 
-  // Apply --where key=value filter.
-  //
-  // Phase 38 — D-12 behavior shift: `m.details[key]` is the output of
-  // `_valueToString(..., optIndex: optIndex)`, which now resolves option
-  // IDs to names. Users write `--where status="Done"`, NOT
-  // `--where status="opt-abc123"`. The matcher code itself does not
-  // change — the resolution happens upstream inside `_extractObjectMeta`.
+  // Phase 38: D-12 behavior shift: `meta.details[key]` is the output of
+  // `_valueToString(..., optIndex: optIndex)`, which resolves option IDs
+  // to names. Users write `--where status=Done`, NOT
+  // `--where status=opt-abc123`.
   if (whereFilter != null) {
     final eqIndex = whereFilter.indexOf('=');
-    if (eqIndex > 0) {
-      final key = whereFilter.substring(0, eqIndex);
-      final value = whereFilter.substring(eqIndex + 1);
-      results = results.where((m) => m.details[key] == value).toList();
+    if (eqIndex <= 0) {
+      return true;
+    }
+    final key = whereFilter.substring(0, eqIndex);
+    final value = whereFilter.substring(eqIndex + 1);
+    if (meta.details[key] != value) {
+      return false;
     }
   }
 
-  _printObjectTable(results);
+  return true;
 }
 
 /// Decode an object's change tree to extract name, type, and details metadata.
@@ -159,6 +186,9 @@ Future<ObjectMeta?> _extractObjectMeta(
   final objectTypes = <String>[];
   String? name;
   final details = <String, String>{};
+  var isCollection = false;
+  Block_Content_Dataview? collectionDataview;
+  final collections = <String, Value>{};
 
   for (var i = 0; i < changes.length; i++) {
     try {
@@ -194,9 +224,17 @@ Future<ObjectMeta?> _extractObjectMeta(
             ..clear()
             ..addAll(snapData.objectTypes);
         }
+        collectionDataview = _findCollectionDataview(snapData.blocks);
+        isCollection = collectionDataview != null;
+        collections
+          ..clear()
+          ..addEntries(snapData.collections.fields.entries.map(
+            (entry) => MapEntry(entry.key, entry.value.deepCopy()),
+          ));
         if (snapData.hasDetails()) {
           for (final entry in snapData.details.fields.entries) {
-            details[entry.key] = _valueToString(entry.value, optIndex: optIndex);
+            details[entry.key] =
+                _valueToString(entry.value, optIndex: optIndex);
           }
           if (snapData.details.fields.containsKey('name')) {
             name = snapData.details.fields['name']!.stringValue;
@@ -208,7 +246,8 @@ Future<ObjectMeta?> _extractObjectMeta(
       for (final content in change.content) {
         if (content.hasDetailsSet()) {
           final key = content.detailsSet.key;
-          final val = _valueToString(content.detailsSet.value, optIndex: optIndex);
+          final val =
+              _valueToString(content.detailsSet.value, optIndex: optIndex);
           details[key] = val;
           if (key == 'name') {
             name = content.detailsSet.value.hasStringValue()
@@ -230,6 +269,35 @@ Future<ObjectMeta?> _extractObjectMeta(
               : content.objectTypeRemove.url;
           objectTypes.remove(typeKey);
         }
+        if (content.hasBlockCreate()) {
+          for (final block in content.blockCreate.blocks) {
+            if (!block.hasDataview() || !block.dataview.isCollection) {
+              continue;
+            }
+            isCollection = true;
+            collectionDataview ??= block.dataview.deepCopy();
+            if (collectionDataview!.views.isEmpty &&
+                block.dataview.views.isNotEmpty) {
+              collectionDataview = block.dataview.deepCopy();
+            }
+          }
+        }
+        if (content.hasStoreKeySet()) {
+          final key = _topLevelCollectionKey(content.storeKeySet.path);
+          if (key != null) {
+            collections[key] = content.storeKeySet.value.deepCopy();
+          }
+        }
+        if (content.hasStoreKeyUnset()) {
+          final key = _topLevelCollectionKey(content.storeKeyUnset.path);
+          if (key != null) {
+            collections.remove(key);
+          }
+        }
+        if (content.hasStoreSliceUpdate()) {
+          _applyCollectionStoreSliceUpdate(
+              collections, content.storeSliceUpdate);
+        }
       }
     } catch (_) {
       // Encrypted or corrupt change -- skip silently.
@@ -239,9 +307,12 @@ Future<ObjectMeta?> _extractObjectMeta(
 
   return ObjectMeta(
     id: obj.id,
-    type: objectTypes.isNotEmpty ? objectTypes.first : null,
+    types: List<String>.from(objectTypes),
     name: name,
     details: details,
+    isCollection: isCollection,
+    collectionMemberCount:
+        _collectionMemberCount(collections, collectionDataview),
   );
 }
 
@@ -291,6 +362,93 @@ String _valueToString(Value val, {Map<String, ResolvedOption>? optIndex}) {
 }
 
 String _truncate8(String s) => s.length <= 8 ? s : s.substring(0, 8);
+
+Block_Content_Dataview? _findCollectionDataview(List<Block> blocks) {
+  for (final block in blocks) {
+    if (block.hasDataview() && block.dataview.isCollection) {
+      return block.dataview;
+    }
+  }
+  return null;
+}
+
+String? _topLevelCollectionKey(List<String> path) {
+  if (path.length != 1) {
+    return null;
+  }
+  return path.first;
+}
+
+int _collectionMemberCount(
+  Map<String, Value> collections,
+  Block_Content_Dataview? dataview,
+) {
+  if (dataview == null) {
+    return 0;
+  }
+  final storeKey = resolveCollectionStoreKeyFromValues(dataview, collections);
+  return _readCollectionStringList(collections[storeKey]).length;
+}
+
+void _applyCollectionStoreSliceUpdate(
+  Map<String, Value> collections,
+  changes_proto.Change_StoreSliceUpdate update,
+) {
+  final current = _readCollectionStringList(collections[update.key]);
+  switch (update.whichOperation()) {
+    case changes_proto.Change_StoreSliceUpdate_Operation.add:
+      _insertCollectionIds(current, update.add.afterId, update.add.ids);
+      break;
+    case changes_proto.Change_StoreSliceUpdate_Operation.remove:
+      current.removeWhere(update.remove.ids.contains);
+      break;
+    case changes_proto.Change_StoreSliceUpdate_Operation.move:
+      current.removeWhere(update.move.ids.contains);
+      _insertCollectionIds(current, update.move.afterId, update.move.ids);
+      break;
+    case changes_proto.Change_StoreSliceUpdate_Operation.notSet:
+      break;
+  }
+  collections[update.key] = Value(
+    listValue: ListValue(
+      values: current.map((value) => Value(stringValue: value)).toList(),
+    ),
+  );
+}
+
+List<String> _readCollectionStringList(Value? value) {
+  if (value == null || !value.hasListValue()) {
+    return <String>[];
+  }
+  return value.listValue.values
+      .where((item) => item.hasStringValue())
+      .map((item) => item.stringValue)
+      .toList();
+}
+
+void _insertCollectionIds(
+  List<String> current,
+  String afterId,
+  Iterable<String> ids,
+) {
+  final values = ids.toList();
+  if (values.isEmpty) {
+    return;
+  }
+
+  if (afterId.isEmpty) {
+    current.insertAll(0, values);
+    return;
+  }
+
+  final index = current.indexOf(afterId);
+  if (index < 0) {
+    current.addAll(values);
+    return;
+  }
+
+  current.insertAll(index + 1, values);
+}
 
 /// Print an aligned three-column table of object metadata.
 void _printObjectTable(List<ObjectMeta> metas) {

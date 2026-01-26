@@ -102,7 +102,10 @@ async fn main() -> Result<()> {
         coordinator_config: coordinator::CoordinatorConfig {
             network_id: config.network_id.clone(),
             peer_id: local_peer_id_libp2p.clone(),
-            addresses: vec![config.quic_listen.clone()],
+            addresses: vec![
+                config.quic_listen.clone(),
+                format!("quic://{}", config.quic_listen),
+            ],
         },
         sync_state,
         file_node,
@@ -222,7 +225,7 @@ async fn handle_stream(
             &method,
             &mut drpc_stream,
             &state,
-            &remote_peer_id,
+            &remote_tls_peer_id,
         )
         .await
         {

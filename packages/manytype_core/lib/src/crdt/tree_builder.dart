@@ -6,6 +6,40 @@ import 'package:manytype_core/src/crdt/cid.dart';
 import 'package:manytype_core/src/crypto/ed25519.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 
+/// Build a deterministic "derived" root change for a SmartBlock tree.
+///
+/// This matches any-sync's `BuildDerivedRoot` behavior:
+/// - `RootChange.isDerived = true`
+/// - no identity/seed/timestamp
+/// - no signature in the enclosing RawTreeChange
+///
+/// The resulting CID becomes the tree/object id used by official clients for
+/// mandatory derived objects (Home/Archive/Widgets/Workspace), so it must be
+/// byte-for-byte stable.
+Future<RawTreeChangeWithId> buildDerivedRootChange({
+  required String spaceId,
+  required Uint8List changePayload,
+  String changeType = 'anytype.object',
+}) async {
+  final rootChange = RootChange(
+    spaceId: spaceId,
+    changeType: changeType,
+    changePayload: changePayload,
+    isDerived: true,
+  );
+
+  final payload = Uint8List.fromList(rootChange.writeToBuffer());
+
+  final rawTreeChange = RawTreeChange(
+    payload: payload,
+    // Signature intentionally omitted for derived roots.
+  );
+
+  final rawBytes = Uint8List.fromList(rawTreeChange.writeToBuffer());
+  final cid = await computeCid(rawBytes);
+  return RawTreeChangeWithId(rawChange: rawBytes, id: cid);
+}
+
 /// Build a signed root change for a new ObjectTree.
 ///
 /// The root change contains the space ID, ACL head, and identity of the
@@ -18,7 +52,8 @@ Future<RawTreeChangeWithId> buildRootChange({
   required String spaceId,
   required String aclHeadId,
   required Uint8List identityPrivateKey,
-  String changeType = 'ct',
+  String changeType = 'anytype.object',
+  List<int> changePayload = const [],
 }) async {
   // Derive public key from seed
   final keyPair = await ed25519KeyPairFromSeed(identityPrivateKey);
@@ -34,6 +69,7 @@ Future<RawTreeChangeWithId> buildRootChange({
     aclHeadId: aclHeadId,
     spaceId: spaceId,
     changeType: changeType,
+    changePayload: changePayload,
     timestamp: Int64(DateTime.now().millisecondsSinceEpoch ~/ 1000),
     seed: seed,
     identity: _marshalEd25519PublicKey(keyPair.publicKey),

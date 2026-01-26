@@ -11,6 +11,7 @@ const SPACE_CIDS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("spa
 const FILE_CIDS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("file_cids");
 const SPACE_USAGE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("space_usage");
 const GLOBAL_USAGE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("global_usage");
+const PUBLIC_INVITES_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("public_invites");
 const GLOBAL_TOTALS_KEY: &str = "totals";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,6 +101,22 @@ impl BlobIndex {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(GLOBAL_USAGE_TABLE)?;
         Ok(decode_optional(table.get(GLOBAL_TOTALS_KEY)?)?.unwrap_or_default())
+    }
+
+    pub fn mark_public_invite(&self, cid: &str) -> Result<()> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(PUBLIC_INVITES_TABLE)?;
+            table.insert(cid, b"1".as_slice())?;
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    pub fn is_public_invite(&self, cid: &str) -> Result<bool> {
+        let read_txn = self.db.begin_read()?;
+        let table = read_txn.open_table(PUBLIC_INVITES_TABLE)?;
+        Ok(table.get(cid)?.is_some())
     }
 
     pub fn bind_blob(
@@ -198,6 +215,7 @@ fn ensure_tables(db: &Database) -> Result<()> {
         let _file_cids = write_txn.open_table(FILE_CIDS_TABLE)?;
         let _space_usage = write_txn.open_table(SPACE_USAGE_TABLE)?;
         let _global_usage = write_txn.open_table(GLOBAL_USAGE_TABLE)?;
+        let _public_invites = write_txn.open_table(PUBLIC_INVITES_TABLE)?;
     }
     write_txn.commit()?;
     Ok(())

@@ -93,15 +93,23 @@ pub fn handle_blocks_check(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &[u8],
+    remote_peer_id: &str,
 ) -> Result<Vec<u8>> {
     let request = BlocksCheckRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
-    ensure_space_authorized(&request.space_id, sync_state, remote_peer_id)?;
+    let is_authorized = sync_state.peer_owns_space(&request.space_id, remote_peer_id);
 
     let mut availability = Vec::with_capacity(request.cids.len());
     for cid_bytes in request.cids {
         let cid = cid_bytes_to_string(&cid_bytes).map_err(FileNodeError::invalid_cid)?;
+        let is_public = state
+            .blob_index
+            .is_public_invite(&cid)
+            .map_err(FileNodeError::unexpected)?;
         let status = if !state.blob_store.has(&cid) {
+            AvailabilityStatus::NotExists
+        } else if is_public {
+            AvailabilityStatus::Exists
+        } else if !is_authorized {
             AvailabilityStatus::NotExists
         } else if state
             .blob_index
@@ -128,7 +136,7 @@ pub fn handle_block_push(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &[u8],
+    remote_peer_id: &str,
 ) -> Result<Vec<u8>> {
     let request = BlockPushRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
     ensure_space_authorized(&request.space_id, sync_state, remote_peer_id)?;
@@ -147,7 +155,7 @@ pub fn handle_block_push_many(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &[u8],
+    remote_peer_id: &str,
 ) -> Result<Vec<u8>> {
     let request = BlockPushManyRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
     for file_blocks in request.file_blocks {
@@ -170,7 +178,7 @@ pub fn handle_blocks_bind(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &[u8],
+    remote_peer_id: &str,
 ) -> Result<Vec<u8>> {
     let request = BlocksBindRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
     ensure_space_authorized(&request.space_id, sync_state, remote_peer_id)?;
@@ -202,7 +210,7 @@ pub fn handle_files_delete(
     request_bytes: &[u8],
     _state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &[u8],
+    remote_peer_id: &str,
 ) -> Result<Vec<u8>> {
     let request = FilesDeleteRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
     ensure_space_authorized(&request.space_id, sync_state, remote_peer_id)?;
@@ -213,11 +221,38 @@ pub fn handle_block_get(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &[u8],
+    remote_peer_id: &str,
 ) -> Result<Vec<u8>> {
     let request = BlockGetRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
-    ensure_space_authorized(&request.space_id, sync_state, remote_peer_id)?;
     let cid = cid_bytes_to_string(&request.cid).map_err(FileNodeError::invalid_cid)?;
+    let is_public = state
+        .blob_index
+        .is_public_invite(&cid)
+        .map_err(FileNodeError::unexpected)?;
+    tracing::info!(
+        "file: BlockGet cid={} space_id={} wait={} public={}",
+        cid,
+        request.space_id,
+        request.wait,
+        is_public
+    );
+    if is_public {
+        let Some(data) = state
+            .blob_store
+            .get(&cid)
+            .map_err(FileNodeError::unexpected)?
+        else {
+            return Err(FileNodeError::cid_not_found(format!("cid {cid} not found")));
+        };
+
+        return Ok(BlockGetResponse {
+            cid: request.cid,
+            data,
+        }
+        .encode_to_vec());
+    }
+
+    ensure_space_authorized(&request.space_id, sync_state, remote_peer_id)?;
     if !state
         .blob_index
         .space_has_cid(&request.space_id, &cid)
@@ -246,14 +281,27 @@ pub fn handle_block_get(
 pub fn handle_check(
     request_bytes: &[u8],
     sync_state: &SharedSyncState,
-    remote_peer_id: &[u8],
+    _remote_peer_id: &str,
 ) -> Result<Vec<u8>> {
     let _request = CheckRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
 
-    let space_ids = sync_state.owned_space_ids(&hex::encode(remote_peer_id));
+    // Official Anytype clients gate *all* file-node activity behind a successful `Check`
+    // response. When running against a custom coordinator+file peer (like manytype_server),
+    // the client may not yet be registered as a space owner (e.g. before joining via invite).
+    // Returning `allowWrite=false` or an empty space list can cause the client to ignore the
+    // file node entirely, preventing invite fetch via `BlockGet`.
+    //
+    // We keep server-side authorization checks in the mutating RPCs, so advertising that the
+    // node is writable here is safe.
+    // Include the empty space id to support pre-join flows (SpaceInviteView) where
+    // the official client fetches invite blocks without a known space id.
+    let mut space_ids = sync_state.space_ids();
+    if space_ids.first().map(|id| !id.is_empty()).unwrap_or(true) {
+        space_ids.insert(0, String::new());
+    }
 
     Ok(CheckResponse {
-        allow_write: !space_ids.is_empty(),
+        allow_write: true,
         space_ids,
     }
     .encode_to_vec())
@@ -263,14 +311,13 @@ pub fn handle_space_info(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &[u8],
+    remote_peer_id: &str,
 ) -> Result<Vec<u8>> {
     let request = SpaceInfoRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
     // Official clients may call SpaceInfo early in bootstrap before the server
     // has recorded space ownership metadata. This RPC is read-only, so return
     // a conservative empty usage snapshot when the space isn't yet authorized.
-    let peer_id_hex = hex::encode(remote_peer_id);
-    let authorized = sync_state.peer_owns_space(&request.space_id, &peer_id_hex);
+    let authorized = sync_state.peer_owns_space(&request.space_id, remote_peer_id);
     let usage = if authorized {
         state
             .blob_index
@@ -303,7 +350,7 @@ pub fn handle_account_info(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &[u8],
+    remote_peer_id: &str,
 ) -> Result<Vec<u8>> {
     let _request = AccountInfoRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
     let snapshot = account_snapshot(sync_state, state, remote_peer_id)?;
@@ -331,10 +378,9 @@ pub fn handle_account_info(
 fn ensure_space_authorized(
     space_id: &str,
     sync_state: &SharedSyncState,
-    remote_peer_id: &[u8],
+    remote_peer_id: &str,
 ) -> Result<()> {
-    let peer_id_hex = hex::encode(remote_peer_id);
-    if sync_state.peer_owns_space(space_id, &peer_id_hex) {
+    if sync_state.peer_owns_space(space_id, remote_peer_id) {
         return Ok(());
     }
     Err(FileNodeError::forbidden(format!(
@@ -376,6 +422,38 @@ fn put_and_bind_block(
     Ok(())
 }
 
+pub fn store_public_invite_block(
+    state: &FileNodeState,
+    cid_bytes: &[u8],
+    data: &[u8],
+) -> Result<()> {
+    let claimed = Cid::read_bytes(Cursor::new(cid_bytes)).map_err(FileNodeError::invalid_cid)?;
+    let claimed_cid = claimed
+        .to_string_of_base(multibase::Base::Base32Lower)
+        .map_err(FileNodeError::invalid_cid)?;
+    let hash_code = Code::try_from(claimed.hash().code())
+        .map_err(|error| FileNodeError::invalid_cid(format!("unsupported multihash: {error}")))?;
+    let computed_hash = hash_code.digest(data);
+    if claimed.hash().to_bytes() != computed_hash.to_bytes() {
+        let computed_cid = Cid::new_v1(claimed.codec(), computed_hash)
+            .to_string_of_base(multibase::Base::Base32Lower)
+            .map_err(FileNodeError::invalid_cid)?;
+        return Err(FileNodeError::wrong_hash(format!(
+            "claimed {claimed_cid}, computed {computed_cid}"
+        )));
+    }
+
+    state
+        .blob_store
+        .put(&claimed_cid, data)
+        .map_err(FileNodeError::unexpected)?;
+    state
+        .blob_index
+        .mark_public_invite(&claimed_cid)
+        .map_err(FileNodeError::unexpected)?;
+    Ok(())
+}
+
 struct AccountSnapshot {
     total_usage_bytes: u64,
     total_cids_count: u64,
@@ -385,9 +463,9 @@ struct AccountSnapshot {
 fn account_snapshot(
     sync_state: &SharedSyncState,
     state: &FileNodeState,
-    remote_peer_id: &[u8],
+    remote_peer_id: &str,
 ) -> Result<AccountSnapshot> {
-    let owned_spaces = sync_state.owned_space_ids(&hex::encode(remote_peer_id));
+    let owned_spaces = sync_state.owned_space_ids(remote_peer_id);
     let mut spaces = Vec::with_capacity(owned_spaces.len());
     let mut total_usage_bytes = 0u64;
     let mut total_cids_count = 0u64;
@@ -418,8 +496,8 @@ mod tests {
     use super::*;
     use crate::storage::sync_state::new_shared_sync_state_at;
 
-    const OWNER_PEER_ID: &[u8] = b"peer-1";
-    const OTHER_PEER_ID: &[u8] = b"peer-2";
+    const OWNER_PEER_ID: &str = "peer-1";
+    const OTHER_PEER_ID: &str = "peer-2";
 
     fn seeded_sync_state(temp_dir: &TempDir) -> SharedSyncState {
         let path = temp_dir.path().join("sync.redb");
@@ -433,7 +511,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                Some(hex::encode(OWNER_PEER_ID)),
+                Some(OWNER_PEER_ID.to_string()),
             )
             .unwrap();
         state
@@ -906,12 +984,15 @@ mod tests {
     }
 
     #[test]
-    fn unauthorized_peer_is_forbidden_for_blocks_check() {
+    fn blocks_check_is_allowed_for_unbound_peers() {
+        use manytype_proto::filesync::{BlocksCheckResponse, AvailabilityStatus};
+
         let temp_dir = TempDir::new().unwrap();
         let sync_state = seeded_sync_state(&temp_dir);
         let state = file_node_state(&temp_dir);
 
-        let error = handle_blocks_check(
+        let response = BlocksCheckResponse::decode(
+            handle_blocks_check(
             &BlocksCheckRequest {
                 space_id: "space-1".to_string(),
                 cids: vec![cid_string_to_bytes(&compute_cid(b"missing")).unwrap()],
@@ -921,10 +1002,16 @@ mod tests {
             &sync_state,
             OTHER_PEER_ID,
         )
-        .unwrap_err()
-        .to_string();
+        .unwrap()
+        .as_slice(),
+        )
+        .unwrap();
 
-        assert!(error.contains("Forbidden"));
+        assert_eq!(response.blocks_availability.len(), 1);
+        assert_eq!(
+            response.blocks_availability[0].status,
+            AvailabilityStatus::NotExists as i32
+        );
     }
 
     #[test]

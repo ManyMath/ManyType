@@ -142,8 +142,16 @@ String? chooseTreeAddressFromResponse(Iterable<Node> nodes) {
   return chooseAddressForTypeFromResponse(nodes, NodeType.TreeAPI);
 }
 
+List<String> chooseTreeAddressesFromResponse(Iterable<Node> nodes) {
+  return chooseAddressesForTypeFromResponse(nodes, NodeType.TreeAPI);
+}
+
 String? chooseFileAddressFromResponse(Iterable<Node> nodes) {
   return chooseAddressForTypeFromResponse(nodes, NodeType.FileAPI);
+}
+
+List<String> chooseFileAddressesFromResponse(Iterable<Node> nodes) {
+  return chooseAddressesForTypeFromResponse(nodes, NodeType.FileAPI);
 }
 
 String? chooseAddressForTypeFromResponse(
@@ -156,4 +164,23 @@ String? chooseAddressForTypeFromResponse(
     }
   }
   return null;
+}
+
+List<String> chooseAddressesForTypeFromResponse(
+  Iterable<Node> nodes,
+  NodeType nodeType,
+) {
+  final results = <String>[];
+  for (final node in nodes) {
+    if (!node.types.contains(nodeType) || node.addresses.isEmpty) {
+      continue;
+    }
+    try {
+      results.add(chooseBestAddress(node.addresses));
+    } catch (_) {
+      // Skip nodes with no usable addresses.
+    }
+  }
+  results.sort();
+  return results;
 }

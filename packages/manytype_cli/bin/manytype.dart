@@ -27,34 +27,53 @@ Future<void> main(List<String> arguments) async {
   final createParser = ArgParser()
     ..addFlag('sync', negatable: false, help: 'Sync after creating the object')
     ..addFlag('checkbox', negatable: false, help: 'Add a checkbox block')
-    ..addFlag('numbered-list', negatable: false, help: 'Add a numbered list block')
+    ..addFlag('numbered-list',
+        negatable: false, help: 'Add a numbered list block')
     ..addFlag('toggle', negatable: false, help: 'Add a toggle block')
     ..addFlag('quote', negatable: false, help: 'Add a quote block')
     ..addFlag('callout', negatable: false, help: 'Add a callout block')
-    ..addFlag('as-type', negatable: false, help: 'Create a custom object type (STType)')
-    ..addFlag('as-relation', negatable: false, help: 'Create a custom relation (STRelation)')
-    ..addFlag('as-set', negatable: false, help: 'Create a set object with Dataview')
+    ..addFlag('as-type',
+        negatable: false, help: 'Create a custom object type (STType)')
+    ..addFlag('as-relation',
+        negatable: false, help: 'Create a custom relation (STRelation)')
+    ..addFlag('as-set',
+        negatable: false, help: 'Create a set object with Dataview')
+    ..addFlag('as-collection',
+        negatable: false, help: 'Create a collection object with Dataview')
+    ..addFlag('as-template',
+        negatable: false, help: 'Create a template object bound to an STType')
     ..addFlag('as-relation-option',
         negatable: false,
-        help: 'Create an STRelationOption SmartBlock bound to a parent relation')
+        help:
+            'Create an STRelationOption SmartBlock bound to a parent relation')
+    ..addOption('template',
+        help:
+            'Apply an existing template when creating a new object (template object ID)')
     ..addOption('for-relation',
-        help: 'Parent relation key (e.g. "status", "tag") — required with --as-relation-option')
+        help:
+            'Parent relation key (e.g. "status", "tag"): required with --as-relation-option')
+    ..addOption('target-object-type',
+        help: 'Target STType object ID: required with --as-template')
     ..addOption('color',
-        help: 'Option color — one of: default, grey, yellow, orange, red, pink, purple, blue, ice, teal, lime')
+        help:
+            'Option color: one of: default, grey, yellow, orange, red, pink, purple, blue, ice, teal, lime')
     ..addOption('name', help: 'Name for type/relation/set objects')
-    ..addOption('format', help: 'Relation format: text, number, date, checkbox, url, email, phone, object, status, tag')
+    ..addOption('format',
+        help:
+            'Relation format: text, number, date, file, checkbox, url, email, phone, object, status, tag')
     ..addOption('source-type', help: 'Source type key for set (e.g. ot-page)');
   final readParser = ArgParser()
     ..addFlag('sync', negatable: false, help: 'Sync before reading the object');
   final editParser = ArgParser()
     ..addOption('id',
         help: 'Object ID to edit (from manytype read output)', mandatory: true)
-    ..addOption('text',
-        help: 'New text content for the object')
+    ..addOption('text', help: 'New text content for the object')
     ..addFlag('checkbox', negatable: false, help: 'Add a checkbox block')
     ..addOption('relation', help: 'Relation key to set')
     ..addOption('bool', help: 'Bool relation value: true or false')
     ..addOption('date', help: 'Unix timestamp for date relation')
+    ..addOption('file-relation',
+        help: 'Source file path for a file-format relation value')
     ..addOption('object-id', help: 'Object ID for object-ref relation')
     ..addOption('block-id',
         help: 'Target block ID for in-place mutation (BlockUpdate)')
@@ -65,14 +84,27 @@ Future<void> main(List<String> arguments) async {
         help: "Change the target block's style (one of: paragraph, "
             'header1, header2, header3, checkbox, numbered, toggle, '
             'quote, callout)')
+    ..addOption('collection-add',
+        help: 'Add this object ID to the target collection')
+    ..addOption('collection-remove',
+        help: 'Remove this object ID from the target collection')
+    ..addOption('collection-move',
+        help: 'Move this object ID within the target collection')
+    ..addOption('after',
+        help:
+            'Insert moved collection member after this object ID; use empty string to move to front')
     ..addOption('status',
-        help: 'Set a status-relation value to this STRelationOption ID (use with --relation)')
+        help:
+            'Set a status-relation value to this STRelationOption ID (use with --relation)')
     ..addOption('tag',
-        help: 'Set a tag-relation value to this comma-separated list of STRelationOption IDs (full replace; use with --relation)')
+        help:
+            'Set a tag-relation value to this comma-separated list of STRelationOption IDs (full replace; use with --relation)')
     ..addMultiOption('tag-add',
-        help: 'Append an STRelationOption ID to a tag-relation (idempotent; use with --relation, may repeat)')
+        help:
+            'Append an STRelationOption ID to a tag-relation (idempotent; use with --relation, may repeat)')
     ..addMultiOption('tag-remove',
-        help: 'Remove an STRelationOption ID from a tag-relation (idempotent; use with --relation, may repeat)');
+        help:
+            'Remove an STRelationOption ID from a tag-relation (idempotent; use with --relation, may repeat)');
   final fileUploadParser = ArgParser()
     ..addOption('file-id', help: 'Stable file ID for upload', defaultsTo: null);
   final fileOpenParser = ArgParser()
@@ -88,7 +120,8 @@ Future<void> main(List<String> arguments) async {
     );
   final deleteParser = ArgParser()
     ..addOption('id',
-        help: 'Object ID to delete (from manytype read output)', mandatory: true);
+        help: 'Object ID to delete (from manytype read output)',
+        mandatory: true);
   final listParser = ArgParser()
     ..addOption('type', help: 'Filter by object type key (e.g. ot-page)')
     ..addOption('where', help: 'Filter by relation key=value (e.g. done=true)');
@@ -135,25 +168,82 @@ Future<void> main(List<String> arguments) async {
       final asType = command['as-type'] == true;
       final asRelation = command['as-relation'] == true;
       final asSet = command['as-set'] == true;
+      final asCollection = command['as-collection'] == true;
+      final asTemplate = command['as-template'] == true;
       final asRelationOption = command['as-relation-option'] == true;
+      final templateId = command['template'] as String?;
       final name = command['name'] as String?;
       final format = command['format'] as String?;
       final sourceType = command['source-type'] as String?;
       final forRelation = command['for-relation'] as String?;
+      final targetObjectType = command['target-object-type'] as String?;
       final colorArg = command['color'] as String?;
 
-      if ([asType, asRelation, asSet, asRelationOption].where((f) => f).length >
+      if ([
+            asType,
+            asRelation,
+            asSet,
+            asCollection,
+            asTemplate,
+            asRelationOption
+          ].where((f) => f).length >
           1) {
         throw StateError(
-          '--as-type, --as-relation, --as-set, and --as-relation-option are '
+          '--as-type, --as-relation, --as-set, --as-collection, '
+          '--as-template, and '
+          '--as-relation-option are '
           'mutually exclusive',
         );
       }
-      if ((asType || asRelation || asSet || asRelationOption) && name == null) {
+      if ((asType ||
+              asRelation ||
+              asSet ||
+              asCollection ||
+              asTemplate ||
+              asRelationOption) &&
+          name == null) {
         throw StateError(
-          '--as-type, --as-relation, --as-set, and --as-relation-option '
-          'require --name',
+          '--as-type, --as-relation, --as-set, --as-collection, '
+          '--as-template, and '
+          '--as-relation-option require --name',
         );
+      }
+      if (templateId != null &&
+          [
+            asType,
+            asRelation,
+            asSet,
+            asCollection,
+            asTemplate,
+            asRelationOption
+          ].any((f) => f)) {
+        throw StateError(
+          '--template cannot be combined with any --as-* creation mode',
+        );
+      }
+      if (templateId != null &&
+          (command['checkbox'] == true ||
+              command['numbered-list'] == true ||
+              command['toggle'] == true ||
+              command['quote'] == true ||
+              command['callout'] == true)) {
+        throw StateError(
+          '--template cannot be combined with block scaffold flags',
+        );
+      }
+      if (templateId != null && name != null) {
+        throw StateError(
+          '--name cannot be combined with --template; use positional text instead',
+        );
+      }
+      if (asTemplate) {
+        if (targetObjectType == null || targetObjectType.isEmpty) {
+          throw StateError(
+            '--as-template requires --target-object-type <stTypeObjectId>',
+          );
+        }
+      } else if (targetObjectType != null) {
+        throw StateError('--target-object-type requires --as-template');
       }
 
       // Phase 38: create --as-relation-option validation
@@ -184,7 +274,10 @@ Future<void> main(List<String> arguments) async {
         }
       }
 
-      await createCommand(text, db, config,
+      await createCommand(
+        text,
+        db,
+        config,
         checkbox: command['checkbox'] == true,
         numberedList: command['numbered-list'] == true,
         toggle: command['toggle'] == true,
@@ -193,12 +286,17 @@ Future<void> main(List<String> arguments) async {
         asType: asType,
         asRelation: asRelation,
         asSet: asSet,
+        asCollection: asCollection,
+        asTemplate: asTemplate,
         asRelationOption: asRelationOption,
         name: name,
         format: format,
         sourceType: sourceType,
         forRelation: forRelation,
+        targetObjectType: targetObjectType,
+        templateId: templateId,
         color: colorArg,
+        textProvided: command.rest.isNotEmpty,
       );
       await db.close();
 
@@ -248,11 +346,16 @@ Future<void> main(List<String> arguments) async {
       final relationKey = command['relation'] as String?;
       final boolValue = command['bool'] as String?;
       final dateValue = command['date'] as String?;
+      final fileRelationPath = command['file-relation'] as String?;
       final objectIdValue = command['object-id'] as String?;
 
       // Phase 38: status/tag relation-value flags.
       final statusArg = command['status'] as String?;
       final tagArg = command['tag'] as String?;
+      final collectionAddId = command['collection-add'] as String?;
+      final collectionRemoveId = command['collection-remove'] as String?;
+      final collectionMoveId = command['collection-move'] as String?;
+      final afterArg = command['after'] as String?;
       final tagAddList =
           (command['tag-add'] as List?)?.cast<String>() ?? const <String>[];
       final tagRemoveList =
@@ -282,9 +385,10 @@ Future<void> main(List<String> arguments) async {
         if (hasStatus &&
             (boolValue != null ||
                 dateValue != null ||
+                fileRelationPath != null ||
                 objectIdValue != null)) {
           throw StateError(
-            '--status is mutex with --bool, --date, and --object-id',
+            '--status is mutex with --bool, --date, --file-relation, and --object-id',
           );
         }
         // --tag is mutex with --tag-add / --tag-remove.
@@ -303,16 +407,18 @@ Future<void> main(List<String> arguments) async {
         if ((hasTag || hasTagDelta) &&
             (boolValue != null ||
                 dateValue != null ||
+                fileRelationPath != null ||
                 objectIdValue != null)) {
           throw StateError(
             '--tag / --tag-add / --tag-remove are mutex with --bool, '
-            '--date, and --object-id',
+            '--date, --file-relation, and --object-id',
           );
         }
 
         final typedCount = [
           boolValue,
           dateValue,
+          fileRelationPath,
           objectIdValue,
           hasStatus ? statusArg : null,
           hasTag ? tagArg : null,
@@ -320,15 +426,18 @@ Future<void> main(List<String> arguments) async {
         ].where((v) => v != null).length;
         if (typedCount != 1) {
           throw StateError(
-            '--relation requires exactly one of --bool, --date, --object-id, '
-            '--status, --tag, or --tag-add/--tag-remove',
+            '--relation requires exactly one of --bool, --date, '
+            '--file-relation, --object-id, --status, --tag, or '
+            '--tag-add/--tag-remove',
           );
         }
       } else if (boolValue != null ||
           dateValue != null ||
+          fileRelationPath != null ||
           objectIdValue != null) {
         throw StateError(
-          '--bool, --date, and --object-id require --relation <key>',
+          '--bool, --date, --file-relation, and --object-id require '
+          '--relation <key>',
         );
       } else if (hasStatus || hasTag || hasTagDelta) {
         throw StateError(
@@ -377,12 +486,41 @@ Future<void> main(List<String> arguments) async {
         }
       }
 
+      final collectionCount = [
+        collectionAddId,
+        collectionRemoveId,
+        collectionMoveId,
+      ].where((v) => v != null).length;
+      if (collectionCount > 1) {
+        throw StateError(
+          '--collection-add, --collection-remove, and --collection-move are mutually exclusive',
+        );
+      }
+      if (collectionMoveId != null && afterArg == null) {
+        throw StateError(
+          '--collection-move requires --after <objectId> (use --after "" to move to front)',
+        );
+      }
+      if (collectionMoveId == null && afterArg != null) {
+        throw StateError('--after requires --collection-move');
+      }
+      if (collectionCount > 0 &&
+          (newText != null ||
+              hasCheckbox ||
+              relationKey != null ||
+              blockId != null)) {
+        throw StateError(
+          '--collection-add / --collection-remove / --collection-move are mutex with --text, --checkbox, --relation, and --block-id',
+        );
+      }
+
       if (newText == null &&
           !hasCheckbox &&
           relationKey == null &&
-          blockId == null) {
+          blockId == null &&
+          collectionCount == 0) {
         throw StateError(
-          'edit requires --text, --checkbox, --relation, or --block-id',
+          'edit requires --text, --checkbox, --relation, --block-id, or a collection operation',
         );
       }
 
@@ -402,6 +540,7 @@ Future<void> main(List<String> arguments) async {
           relationKey: relationKey,
           boolValue: boolValue,
           dateValue: dateValue,
+          fileRelationPath: fileRelationPath,
           objectIdValue: objectIdValue,
           blockId: blockId,
           setText: setTextArg,
@@ -410,7 +549,11 @@ Future<void> main(List<String> arguments) async {
           status: statusArg,
           tagIds: tagIds,
           tagAdds: tagAddList,
-          tagRemoves: tagRemoveList);
+          tagRemoves: tagRemoveList,
+          collectionAddId: collectionAddId,
+          collectionRemoveId: collectionRemoveId,
+          collectionMoveId: collectionMoveId,
+          afterId: afterArg ?? '');
       await db.close();
       break;
 

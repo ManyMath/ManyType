@@ -3,19 +3,26 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:fixnum/fixnum.dart';
+import 'package:libcompress/libcompress.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/events.dart';
 import 'package:manytype_protocol/models.dart';
 import 'package:manytype_protocol/manytype_protocol.dart'
     show RawTreeChange, TreeChange;
+import 'package:path/path.dart' as p;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart';
 
 import '../acl_codec.dart';
+import '../collection_keys.dart';
 import '../config.dart';
 import '../identity.dart';
 import '../store/database.dart';
 import '../sync_service.dart';
+import 'file_transfer.dart';
+
+final _snappy = SnappyCodec();
 
 Future<void> editCommand(
   String objectId,
@@ -28,6 +35,7 @@ Future<void> editCommand(
   String? relationKey,
   String? boolValue,
   String? dateValue,
+  String? fileRelationPath,
   String? objectIdValue,
   String? blockId,
   String? setText,
@@ -37,6 +45,10 @@ Future<void> editCommand(
   List<String>? tagIds,
   List<String> tagAdds = const <String>[],
   List<String> tagRemoves = const <String>[],
+  String? collectionAddId,
+  String? collectionRemoveId,
+  String? collectionMoveId,
+  String afterId = '',
 }) async {
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
@@ -70,13 +82,22 @@ Future<void> editCommand(
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final spaceId = identity.spaceId;
   final allObjects = await db.getObjectsBySpace(spaceId);
-  final aclHeadId = await _findAclRootId(db, allObjects, spaceId);
+  final fallbackAclHeadId = await _findAclRootId(db, allObjects, spaceId);
 
   final accountPrivRaw = Uint8List(64)
     ..setRange(0, 32, identity.accountSeed)
     ..setRange(32, 64, identity.accountKeyPair.publicKey);
   final spaceKey = await deriveSpaceKey(accountPrivRaw);
   final treeKey = await deriveTreeKey(spaceKey, objectId);
+  final treeWriteMetadata = _resolveTreeWriteMetadata(
+    freshChanges,
+    currentHeads,
+    fallbackAclHeadId: fallbackAclHeadId,
+    fallbackSnapshotBaseId: snapshotBaseId,
+  );
+  final aclHeadId = treeWriteMetadata.aclHeadId;
+  snapshotBaseId = treeWriteMetadata.snapshotBaseId;
+  final readKeyId = treeWriteMetadata.readKeyId;
 
   var latestHeads = currentHeads;
   String? nameChangeId;
@@ -97,7 +118,7 @@ Future<void> editCommand(
       snapshotBaseId: snapshotBaseId,
       changesData: await aesGcmEncrypt(treeKey, editChangeData),
       identityPrivateKey: identity.accountSeed,
-      readKeyId: aclHeadId,
+      readKeyId: readKeyId,
     );
 
     await db.insertChange(
@@ -133,7 +154,7 @@ Future<void> editCommand(
       snapshotBaseId: snapshotBaseId,
       changesData: await aesGcmEncrypt(treeKey, blockChangeData),
       identityPrivateKey: identity.accountSeed,
-      readKeyId: aclHeadId,
+      readKeyId: readKeyId,
     );
 
     await db.insertChange(
@@ -148,11 +169,24 @@ Future<void> editCommand(
   }
 
   String? relationChangeId;
+  _FileRelationWriteResult? fileRelationResult;
 
   // If a relation key is provided, build a DetailsSet with the typed Value.
   if (relationKey != null) {
     Value relationValue;
-    if (boolValue != null) {
+    if (fileRelationPath != null) {
+      fileRelationResult = await _createFileObjectForRelation(
+        db: db,
+        config: config,
+        networkConfigPath: networkConfigPath,
+        identity: identity,
+        spaceId: spaceId,
+        spaceKey: spaceKey,
+        aclHeadId: aclHeadId,
+        sourcePath: fileRelationPath,
+      );
+      relationValue = Value(stringValue: fileRelationResult.fileObjectId);
+    } else if (boolValue != null) {
       relationValue = Value(boolValue: boolValue == 'true');
     } else if (dateValue != null) {
       relationValue = Value(numberValue: int.parse(dateValue).toDouble());
@@ -175,9 +209,8 @@ Future<void> editCommand(
       // deltas idempotently (re-add/no-op, remove-missing/no-op), and
       // write the new full list. Uses `freshChanges` which reflects the
       // post-sync state loaded above.
-      final rawBytesList = freshChanges
-          .map((r) => Uint8List.fromList(r.rawBytes))
-          .toList();
+      final rawBytesList =
+          freshChanges.map((r) => Uint8List.fromList(r.rawBytes)).toList();
       final currentDetails = await replayObjectDetails(
         rawTreeChanges: rawBytesList,
         treeKey: treeKey,
@@ -225,7 +258,7 @@ Future<void> editCommand(
       snapshotBaseId: snapshotBaseId,
       changesData: await aesGcmEncrypt(treeKey, relationData),
       identityPrivateKey: identity.accountSeed,
-      readKeyId: aclHeadId,
+      readKeyId: readKeyId,
     );
 
     await db.insertChange(
@@ -241,6 +274,8 @@ Future<void> editCommand(
 
   String? blockUpdateChangeId;
   String? blockUpdateDescription;
+  String? collectionChangeId;
+  String? collectionChangeDescription;
 
   // Branch D: BlockUpdate write path (BLKUPD-01/02/03). Absolute semantics
   // per D-07: we do NOT read current block state before writing. ID stability
@@ -274,7 +309,7 @@ Future<void> editCommand(
       snapshotBaseId: snapshotBaseId,
       changesData: await aesGcmEncrypt(treeKey, updateData),
       identityPrivateKey: identity.accountSeed,
-      readKeyId: aclHeadId,
+      readKeyId: readKeyId,
     );
 
     await db.insertChange(
@@ -286,6 +321,77 @@ Future<void> editCommand(
 
     blockUpdateChangeId = updateTreeChange.id;
     latestHeads = [updateTreeChange.id];
+  }
+
+  if (collectionAddId != null ||
+      collectionRemoveId != null ||
+      collectionMoveId != null) {
+    final collectionState = await _loadCollectionState(
+      freshChanges,
+      treeKey,
+    );
+    if (collectionState == null) {
+      print('Error: object $objectId is not a collection');
+      exit(1);
+    }
+
+    final storeKey = collectionState.storeKey;
+    final memberIds = collectionState.memberIds;
+    final memberId = collectionAddId ?? collectionRemoveId ?? collectionMoveId!;
+
+    changes_proto.Change_Content? collectionOp;
+    if (collectionAddId != null) {
+      if (!memberIds.contains(collectionAddId)) {
+        collectionOp = buildStoreSliceUpdateAdd(
+          key: storeKey,
+          ids: [collectionAddId],
+        );
+      }
+      collectionChangeDescription = 'collection-add=$collectionAddId';
+    } else if (collectionRemoveId != null) {
+      if (memberIds.contains(collectionRemoveId)) {
+        collectionOp = buildStoreSliceUpdateRemove(
+          key: storeKey,
+          ids: [collectionRemoveId],
+        );
+      }
+      collectionChangeDescription = 'collection-remove=$collectionRemoveId';
+    } else {
+      if (!memberIds.contains(memberId)) {
+        print(
+          'Error: collection member $memberId is not present in $objectId',
+        );
+        exit(1);
+      }
+      collectionOp = buildStoreSliceUpdateMove(
+        key: storeKey,
+        ids: [memberId],
+        afterId: afterId,
+      );
+      collectionChangeDescription = 'collection-move=$memberId after=$afterId';
+    }
+
+    if (collectionOp != null) {
+      final collectionData = marshalChangeContent([collectionOp]);
+      final collectionTreeChange = await buildTreeChange(
+        currentHeads: latestHeads,
+        aclHeadId: aclHeadId,
+        snapshotBaseId: snapshotBaseId,
+        changesData: await aesGcmEncrypt(treeKey, collectionData),
+        identityPrivateKey: identity.accountSeed,
+        readKeyId: readKeyId,
+      );
+
+      await db.insertChange(
+        collectionTreeChange.id,
+        objectId,
+        collectionTreeChange.rawChange,
+        jsonEncode(latestHeads),
+      );
+
+      collectionChangeId = collectionTreeChange.id;
+      latestHeads = [collectionTreeChange.id];
+    }
   }
 
   await syncService.sync(db, config, networkConfigPath: networkConfigPath);
@@ -301,12 +407,54 @@ Future<void> editCommand(
       exit(1);
     }
   }
+  if (relationKey != null && fileRelationResult != null) {
+    final verifyChanges = await db.getChangesForObject(objectId);
+    final actualDetails = await replayObjectDetails(
+      rawTreeChanges: verifyChanges
+          .map((row) => Uint8List.fromList(row.rawBytes))
+          .toList(growable: false),
+      treeKey: treeKey,
+    );
+    final actualValue = actualDetails[relationKey];
+    if (actualValue == null ||
+        !actualValue.hasStringValue() ||
+        actualValue.stringValue != fileRelationResult.fileObjectId) {
+      print(
+        'Verification failed: relation $relationKey does not point to '
+        '${fileRelationResult.fileObjectId} after sync',
+      );
+      exit(1);
+    }
+    final fileObjectChanges =
+        await db.getChangesForObject(fileRelationResult.fileObjectId);
+    if (fileObjectChanges.isEmpty) {
+      print(
+        'Verification failed: FileObject ${fileRelationResult.fileObjectId} '
+        'is missing locally after sync',
+      );
+      exit(1);
+    }
+  }
 
   print('Edited object: $objectId');
   if (nameChangeId != null) print('Name change: $nameChangeId');
   if (blockChangeId != null) print('Block change: $blockChangeId');
   if (relationChangeId != null) {
-    if (status != null) {
+    if (fileRelationResult != null) {
+      final mimeSuffix = _hasSpecificMime(fileRelationResult.mime)
+          ? ' (${fileRelationResult.mime})'
+          : '';
+      print(
+        'Relation change: $relationChangeId '
+        '($relationKey = ${fileRelationResult.fileObjectId})',
+      );
+      print(
+        'FileObject: ${fileRelationResult.fileObjectId} '
+        '[${fileRelationResult.fileName}$mimeSuffix, '
+        'cid=${fileRelationResult.cid}, '
+        '${fileRelationResult.uploaded ? "uploaded" : "existing-blob"}]',
+      );
+    } else if (status != null) {
       print('Set status: $relationKey = $status');
     } else if (tagIds != null) {
       print(
@@ -319,7 +467,8 @@ Future<void> editCommand(
       );
     } else {
       final displayValue = boolValue ?? dateValue ?? objectIdValue ?? '';
-      print('Relation change: $relationChangeId ($relationKey = $displayValue)');
+      print(
+          'Relation change: $relationChangeId ($relationKey = $displayValue)');
     }
   }
   if (blockUpdateChangeId != null) {
@@ -327,6 +476,167 @@ Future<void> editCommand(
       'Block update: $blockUpdateChangeId (block-id=$blockId, $blockUpdateDescription)',
     );
   }
+  if (collectionChangeDescription != null) {
+    if (collectionChangeId != null) {
+      print(
+        'Collection change: $collectionChangeId ($collectionChangeDescription)',
+      );
+    } else {
+      print('Collection change: no-op ($collectionChangeDescription)');
+    }
+  }
+}
+
+Future<({String storeKey, List<String> memberIds})?> _loadCollectionState(
+  List<Change> changes,
+  Uint8List treeKey,
+) async {
+  final blocks = <String, Block>{};
+  final collections = <String, List<String>>{};
+
+  for (final stored in changes) {
+    try {
+      final rawTreeChange = RawTreeChange.fromBuffer(stored.rawBytes);
+      if (rawTreeChange.payload.isEmpty) continue;
+
+      final TreeChange treeChange;
+      try {
+        treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+      } catch (_) {
+        continue;
+      }
+      if (treeChange.changesData.isEmpty) continue;
+
+      final decoded = await _decodeTreeChangeData(
+        treeChange,
+        treeKey,
+      );
+      final change = changes_proto.Change.fromBuffer(decoded);
+
+      if (change.hasSnapshot()) {
+        blocks
+          ..clear()
+          ..addEntries(
+            change.snapshot.data.blocks.map(
+              (block) => MapEntry(block.id, block.deepCopy()),
+            ),
+          );
+        collections
+          ..clear()
+          ..addAll(_collectionsFromSnapshot(change.snapshot.data.collections));
+        continue;
+      }
+
+      for (final content in change.content) {
+        if (content.hasBlockCreate()) {
+          for (final block in content.blockCreate.blocks) {
+            blocks[block.id] = block.deepCopy();
+          }
+        }
+        if (content.hasStoreSliceUpdate()) {
+          final key = content.storeSliceUpdate.key;
+          final current =
+              List<String>.from(collections[key] ?? const <String>[]);
+          switch (content.storeSliceUpdate.whichOperation()) {
+            case changes_proto.Change_StoreSliceUpdate_Operation.add:
+              _insertAfterId(
+                current,
+                content.storeSliceUpdate.add.afterId,
+                content.storeSliceUpdate.add.ids,
+              );
+              collections[key] = current;
+              break;
+            case changes_proto.Change_StoreSliceUpdate_Operation.remove:
+              current.removeWhere(content.storeSliceUpdate.remove.ids.contains);
+              collections[key] = current;
+              break;
+            case changes_proto.Change_StoreSliceUpdate_Operation.move:
+              current.removeWhere(content.storeSliceUpdate.move.ids.contains);
+              _insertAfterId(
+                current,
+                content.storeSliceUpdate.move.afterId,
+                content.storeSliceUpdate.move.ids,
+              );
+              collections[key] = current;
+              break;
+            case changes_proto.Change_StoreSliceUpdate_Operation.notSet:
+              break;
+          }
+        }
+      }
+    } catch (_) {
+      continue;
+    }
+  }
+
+  Block? dataviewBlock;
+  for (final block in blocks.values) {
+    if (block.hasDataview() && block.dataview.isCollection) {
+      dataviewBlock = block;
+      break;
+    }
+  }
+  if (dataviewBlock == null || dataviewBlock.dataview.views.isEmpty) {
+    return null;
+  }
+
+  final storeKey = resolveCollectionStoreKeyFromLists(
+    dataviewBlock.dataview,
+    collections,
+  );
+  return (
+    storeKey: storeKey,
+    memberIds: List<String>.from(
+      collections[storeKey] ?? const <String>[],
+    ),
+  );
+}
+
+Future<Uint8List> _decodeTreeChangeData(
+  TreeChange treeChange,
+  Uint8List treeKey,
+) async {
+  var data = Uint8List.fromList(treeChange.changesData);
+  if (treeChange.readKeyId.isNotEmpty) {
+    data = await aesGcmDecrypt(treeKey, data);
+  }
+  if (treeChange.dataType == '1/s') {
+    data = _snappy.decompress(data);
+  }
+  return data;
+}
+
+Map<String, List<String>> _collectionsFromSnapshot(Struct snapshotCollections) {
+  final collections = <String, List<String>>{};
+  for (final entry in snapshotCollections.fields.entries) {
+    if (!entry.value.hasListValue()) continue;
+    collections[entry.key] = entry.value.listValue.values
+        .where((value) => value.hasStringValue())
+        .map((value) => value.stringValue)
+        .toList();
+  }
+  return collections;
+}
+
+void _insertAfterId(
+  List<String> current,
+  String afterId,
+  Iterable<String> ids,
+) {
+  final values = ids.toList();
+  if (values.isEmpty) return;
+
+  if (afterId.isEmpty) {
+    current.insertAll(0, values);
+    return;
+  }
+
+  final index = current.indexOf(afterId);
+  if (index < 0) {
+    current.addAll(values);
+    return;
+  }
+  current.insertAll(index + 1, values);
 }
 
 Future<String> _extractTextPreviewWithTreeKey(
@@ -387,6 +697,69 @@ Future<String> _extractTextPreviewWithTreeKey(
   return '';
 }
 
+class _TreeWriteMetadata {
+  const _TreeWriteMetadata({
+    required this.aclHeadId,
+    required this.snapshotBaseId,
+    required this.readKeyId,
+  });
+
+  final String aclHeadId;
+  final String snapshotBaseId;
+  final String readKeyId;
+}
+
+_TreeWriteMetadata _resolveTreeWriteMetadata(
+  List<Change> changes,
+  List<String> currentHeads, {
+  required String fallbackAclHeadId,
+  required String fallbackSnapshotBaseId,
+}) {
+  final currentHeadSet = currentHeads.toSet();
+
+  for (final stored in changes.reversed) {
+    if (!currentHeadSet.contains(stored.id)) {
+      continue;
+    }
+    final decoded = _decodeStoredTreeChange(stored);
+    if (decoded == null) {
+      continue;
+    }
+    final aclHeadId =
+        decoded.aclHeadId.isNotEmpty ? decoded.aclHeadId : fallbackAclHeadId;
+    final snapshotBaseId = decoded.isSnapshot
+        ? stored.id
+        : decoded.snapshotBaseId.isNotEmpty
+            ? decoded.snapshotBaseId
+            : fallbackSnapshotBaseId;
+    final readKeyId =
+        decoded.readKeyId.isNotEmpty ? decoded.readKeyId : aclHeadId;
+    return _TreeWriteMetadata(
+      aclHeadId: aclHeadId,
+      snapshotBaseId: snapshotBaseId,
+      readKeyId: readKeyId,
+    );
+  }
+
+  return _TreeWriteMetadata(
+    aclHeadId: fallbackAclHeadId,
+    snapshotBaseId: fallbackSnapshotBaseId,
+    readKeyId: fallbackAclHeadId,
+  );
+}
+
+TreeChange? _decodeStoredTreeChange(Change stored) {
+  try {
+    final rawTreeChange = RawTreeChange.fromBuffer(stored.rawBytes);
+    if (rawTreeChange.payload.isEmpty) {
+      return null;
+    }
+    return TreeChange.fromBuffer(rawTreeChange.payload);
+  } catch (_) {
+    return null;
+  }
+}
+
 Future<String> _findAclRootId(
   ManytypeDatabase db,
   List<StoredObject> objects,
@@ -395,15 +768,241 @@ Future<String> _findAclRootId(
   for (final object in objects) {
     final changes = await db.getChangesForObject(object.id);
     if (changes.isEmpty) continue;
-    try {
-      final aclRoot =
-          tryDecodeAclRootFromRawRecordBytes(Uint8List.fromList(changes.first.rawBytes));
-      if (aclRoot != null && aclRoot.spaceId == spaceId) {
-        return object.id;
+    for (final change in changes) {
+      try {
+        final aclRoot = tryDecodeAclRootFromRawRecordBytes(
+          Uint8List.fromList(change.rawBytes),
+        );
+        if (aclRoot != null && aclRoot.spaceId == spaceId) {
+          return object.id;
+        }
+      } catch (_) {
+        continue;
       }
-    } catch (_) {
-      continue;
     }
   }
   throw StateError('Space bootstrap is missing an ACL root');
+}
+
+class _FileRelationWriteResult {
+  const _FileRelationWriteResult({
+    required this.fileObjectId,
+    required this.cid,
+    required this.fileName,
+    required this.mime,
+    required this.uploaded,
+  });
+
+  final String fileObjectId;
+  final String cid;
+  final String fileName;
+  final String mime;
+  final bool uploaded;
+}
+
+Future<_FileRelationWriteResult> _createFileObjectForRelation({
+  required ManytypeDatabase db,
+  required CliConfig config,
+  required String networkConfigPath,
+  required Identity identity,
+  required String spaceId,
+  required Uint8List spaceKey,
+  required String aclHeadId,
+  required String sourcePath,
+}) async {
+  final sourceFile = File(sourcePath);
+  if (!await sourceFile.exists()) {
+    throw StateError('Source file not found: $sourcePath');
+  }
+
+  final bytes = await sourceFile.readAsBytes();
+  final rawName = p.basename(sourceFile.path).trim();
+  final fileName = rawName.isEmpty ? 'attachment' : rawName;
+  final mime = _inferMimeType(fileName);
+  final layout = _layoutForMime(mime);
+  final fileType = _fileBlockTypeForMime(mime);
+  final addedAt = Int64(DateTime.now().millisecondsSinceEpoch ~/ 1000);
+
+  final rootChange = await buildRootChange(
+    spaceId: spaceId,
+    aclHeadId: aclHeadId,
+    identityPrivateKey: identity.accountSeed,
+    changePayload: _encodeObjectChangePayloadSmartblockType(
+      SmartBlockType.FileObject.value,
+    ),
+  );
+  final fileObjectId = rootChange.id;
+
+  final uploadResult = await uploadBlobWithNetworkConfig(
+    db,
+    config,
+    networkConfigPath: networkConfigPath,
+    identity: identity,
+    fileId: fileObjectId,
+    bytes: bytes,
+  );
+
+  final snapshotBase = createMinimalPageSnapshotBase(
+    objectId: fileObjectId,
+    title: fileName,
+  );
+  snapshotBase.details = Struct()
+    ..fields['name'] = Value(stringValue: fileName)
+    ..fields['layout'] = Value(numberValue: layout.toDouble())
+    ..fields['mime'] = Value(stringValue: mime)
+    ..fields['sizeInBytes'] = Value(numberValue: bytes.length.toDouble())
+    ..fields['tag'] = Value(listValue: ListValue())
+    ..fields['internalFlags'] = Value(listValue: ListValue());
+  snapshotBase.fileInfo = FileInfo(fileId: fileObjectId);
+
+  final headerBlock =
+      snapshotBase.blocks.firstWhere((block) => block.id == 'header');
+  headerBlock.childrenIds.add('file');
+  snapshotBase.blocks.add(
+    Block(
+      id: 'file',
+      file: Block_Content_File(
+        hash: uploadResult.cid,
+        name: fileName,
+        type: fileType,
+        mime: mime,
+        size: Int64(bytes.length),
+        addedAt: addedAt,
+        state: Block_Content_File_State.Done,
+        style: Block_Content_File_Style.Auto,
+        targetObjectId: fileObjectId,
+      ),
+    ),
+  );
+
+  final snapshotChangeBytes = Uint8List.fromList(
+    changes_proto.Change(
+      snapshot: changes_proto.Change_Snapshot(
+        data: snapshotBase,
+        fileKeys: [
+          changes_proto.Change_FileKeys(hash: uploadResult.cid),
+        ],
+      ),
+    ).writeToBuffer(),
+  );
+  final fileTreeKey = await deriveTreeKey(spaceKey, fileObjectId);
+  final snapshotChange = await buildTreeChange(
+    currentHeads: [rootChange.id],
+    aclHeadId: aclHeadId,
+    snapshotBaseId: rootChange.id,
+    changesData: await aesGcmEncrypt(fileTreeKey, snapshotChangeBytes),
+    identityPrivateKey: identity.accountSeed,
+    isSnapshot: true,
+    readKeyId: aclHeadId,
+  );
+
+  await db.insertObject(fileObjectId, spaceId);
+  await db.insertChange(
+    rootChange.id,
+    fileObjectId,
+    rootChange.rawChange,
+    jsonEncode([]),
+  );
+  await db.insertChange(
+    snapshotChange.id,
+    fileObjectId,
+    snapshotChange.rawChange,
+    jsonEncode([rootChange.id]),
+  );
+  await db.upsertAttachmentRef(
+    spaceId: spaceId,
+    objectId: fileObjectId,
+    fileId: fileObjectId,
+    cid: uploadResult.cid,
+  );
+
+  return _FileRelationWriteResult(
+    fileObjectId: fileObjectId,
+    cid: uploadResult.cid,
+    fileName: fileName,
+    mime: mime,
+    uploaded: uploadResult.uploaded,
+  );
+}
+
+String _inferMimeType(String fileName) {
+  final extension = p.extension(fileName).toLowerCase();
+  return switch (extension) {
+    '.pdf' => 'application/pdf',
+    '.png' => 'image/png',
+    '.jpg' || '.jpeg' => 'image/jpeg',
+    '.gif' => 'image/gif',
+    '.webp' => 'image/webp',
+    '.bmp' => 'image/bmp',
+    '.svg' => 'image/svg+xml',
+    '.tif' || '.tiff' => 'image/tiff',
+    '.heic' => 'image/heic',
+    '.heif' => 'image/heif',
+    '.mp3' => 'audio/mpeg',
+    '.wav' => 'audio/wav',
+    '.ogg' => 'audio/ogg',
+    '.m4a' => 'audio/mp4',
+    '.aac' => 'audio/aac',
+    '.flac' => 'audio/flac',
+    '.mp4' => 'video/mp4',
+    '.mov' => 'video/quicktime',
+    '.m4v' => 'video/x-m4v',
+    '.webm' => 'video/webm',
+    '.mkv' => 'video/x-matroska',
+    '.avi' => 'video/x-msvideo',
+    _ => 'application/octet-stream',
+  };
+}
+
+int _layoutForMime(String mime) {
+  if (mime == 'application/pdf') {
+    return 20;
+  }
+  if (mime.startsWith('image/')) {
+    return 8;
+  }
+  if (mime.startsWith('audio/')) {
+    return 15;
+  }
+  if (mime.startsWith('video/')) {
+    return 16;
+  }
+  return 6;
+}
+
+Block_Content_File_Type _fileBlockTypeForMime(String mime) {
+  if (mime == 'application/pdf') {
+    return Block_Content_File_Type.PDF;
+  }
+  if (mime.startsWith('image/')) {
+    return Block_Content_File_Type.Image;
+  }
+  if (mime.startsWith('audio/')) {
+    return Block_Content_File_Type.Audio;
+  }
+  if (mime.startsWith('video/')) {
+    return Block_Content_File_Type.Video;
+  }
+  return Block_Content_File_Type.File;
+}
+
+bool _hasSpecificMime(String mime) =>
+    mime.isNotEmpty && mime != 'application/octet-stream';
+
+Uint8List _encodeVarint(int value) {
+  var v = value;
+  final out = <int>[];
+  while (v >= 0x80) {
+    out.add((v & 0x7f) | 0x80);
+    v >>= 7;
+  }
+  out.add(v & 0x7f);
+  return Uint8List.fromList(out);
+}
+
+Uint8List _encodeObjectChangePayloadSmartblockType(int smartBlockType) {
+  final bytes = BytesBuilder()
+    ..addByte(0x08)
+    ..add(_encodeVarint(smartBlockType));
+  return bytes.toBytes();
 }

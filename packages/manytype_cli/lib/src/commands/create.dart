@@ -8,10 +8,11 @@ import 'package:manytype_protocol/changes.dart';
 import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/models.dart';
 import 'package:manytype_protocol/manytype_protocol.dart'
-    show AclRoot, Key, KeyType, RawTreeChangeWithId;
+    show AclRoot, Key, KeyType, RawTreeChange, RawTreeChangeWithId, TreeChange;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart';
 
 import '../acl_codec.dart';
+import '../collection_keys.dart';
 import '../config.dart';
 import '../identity.dart';
 import '../store/database.dart' hide Change;
@@ -34,7 +35,9 @@ Uint8List _encodeVarint(int value) {
 /// marshaling behavior (empty strings are not serialized).
 Uint8List _encodeObjectChangePayloadSmartblockType(int smartBlockType) {
   // field 1 (varint): smartBlockType => tag = 0x08
-  final bytes = BytesBuilder()..addByte(0x08)..add(_encodeVarint(smartBlockType));
+  final bytes = BytesBuilder()
+    ..addByte(0x08)
+    ..add(_encodeVarint(smartBlockType));
   return bytes.toBytes();
 }
 
@@ -59,6 +62,7 @@ RelationFormat _parseRelationFormat(String? format) {
     'shorttext' => RelationFormat.shorttext,
     'number' => RelationFormat.number,
     'date' => RelationFormat.date,
+    'file' => RelationFormat.file,
     'checkbox' => RelationFormat.checkbox,
     'url' => RelationFormat.url,
     'email' => RelationFormat.email,
@@ -89,12 +93,17 @@ Future<void> createCommand(
   bool asType = false,
   bool asRelation = false,
   bool asSet = false,
+  bool asCollection = false,
+  bool asTemplate = false,
   bool asRelationOption = false,
   String? name,
   String? format,
   String? sourceType,
   String? forRelation,
+  String? targetObjectType,
+  String? templateId,
   String? color,
+  bool textProvided = true,
 }) async {
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final spaceId = identity.spaceId;
@@ -213,12 +222,14 @@ Future<void> createCommand(
     aclHeadId = await _findAclRootId(db, existingObjects, spaceId);
   }
 
-  // Determine SmartBlockType based on --as-type/--as-relation/--as-set/--as-relation-option flags
+  // Determine SmartBlockType based on the requested creation mode.
   final int smartBlockTypeValue;
   if (asType) {
     smartBlockTypeValue = SmartBlockType.STType.value;
   } else if (asRelation) {
     smartBlockTypeValue = SmartBlockType.STRelation.value;
+  } else if (asTemplate) {
+    smartBlockTypeValue = SmartBlockType.Template.value;
   } else if (asRelationOption) {
     // Phase 38: STRelationOption SmartBlock (529 / 0x211)
     smartBlockTypeValue = smartBlockTypeRelationOption;
@@ -238,19 +249,35 @@ Future<void> createCommand(
   );
 
   final objectId = rootChange.id;
-  final displayName = name ?? text;
+  var displayName = name ?? text;
 
   // Build a minimal snapshot for official client compatibility.
   //
   // Official clients can treat some incremental BlockCreate-only histories as
   // "empty trees" during bootstrap. Creating a snapshot TreeChange ensures the
   // object materializes with a valid smartblock root + layout + content blocks.
-  final snapshotBase = createMinimalPageSnapshotBase(
-    objectId: objectId,
-    title: displayName,
-  );
+  final SmartBlockSnapshotBase snapshotBase;
+  if (templateId != null) {
+    final prepared = await _buildSnapshotFromTemplate(
+      db,
+      spaceKey: spaceKey,
+      templateId: templateId,
+      objectId: objectId,
+      requestedText: text,
+      textProvided: textProvided,
+    );
+    snapshotBase = prepared.snapshot;
+    displayName = prepared.displayName;
+  } else {
+    snapshotBase = createMinimalPageSnapshotBase(
+      objectId: objectId,
+      title: displayName,
+    );
+  }
 
   final rng = Random.secure();
+  String _blockId(String prefix) =>
+      '$prefix${rng.nextInt(0xFFFFFF).toRadixString(16)}';
 
   if (asType) {
     snapshotBase.objectTypes.add('ot-objectType');
@@ -279,14 +306,31 @@ Future<void> createCommand(
       ..fields['internalFlags'] = Value(listValue: ListValue());
 
     // Add Dataview block for set objects
-    final dvBlockId =
-        'dv-${rng.nextInt(0xFFFFFF).toRadixString(16)}';
-    final dvBlock =
-        createDataviewBlock(dvBlockId, [sourceType ?? 'ot-page']);
+    final dvBlockId = 'dv-${rng.nextInt(0xFFFFFF).toRadixString(16)}';
+    final dvBlock = createDataviewBlock(dvBlockId, [sourceType ?? 'ot-page']);
     snapshotBase.blocks.add(dvBlock);
     // Insert Dataview block ID into header's childrenIds
-    final headerBlock =
-        snapshotBase.blocks.firstWhere((b) => b.id == 'header');
+    final headerBlock = snapshotBase.blocks.firstWhere((b) => b.id == 'header');
+    headerBlock.childrenIds.add(dvBlockId);
+  } else if (asCollection) {
+    snapshotBase.objectTypes.add('ot-page');
+    snapshotBase.details = Struct()
+      ..fields['name'] = Value(stringValue: displayName)
+      ..fields['layout'] = Value(numberValue: 14.0)
+      ..fields['tag'] = Value(listValue: ListValue())
+      ..fields['internalFlags'] = Value(listValue: ListValue());
+    snapshotBase.collections = Struct()
+      ..fields[officialCollectionStoreKey] = Value(listValue: ListValue());
+
+    final dvBlockId = 'dv-${rng.nextInt(0xFFFFFF).toRadixString(16)}';
+    final dvBlock = createDataviewBlock(
+      dvBlockId,
+      const <String>[],
+      isCollection: true,
+      viewId: officialCollectionViewId,
+    );
+    snapshotBase.blocks.add(dvBlock);
+    final headerBlock = snapshotBase.blocks.firstWhere((b) => b.id == 'header');
     headerBlock.childrenIds.add(dvBlockId);
   } else if (asRelationOption) {
     // Phase 38: STRelationOption snapshot. bin/manytype.dart guarantees
@@ -299,13 +343,66 @@ Future<void> createCommand(
       color: color!,
       relationKey: forRelation!,
     );
-  } else {
-    snapshotBase.objectTypes.add('ot-page');
+  } else if (asTemplate) {
+    assert(
+      targetObjectType != null,
+      'bin/manytype.dart validation guarantees this',
+    );
+    final targetType = await _resolveTargetObjectType(
+      db,
+      spaceKey: spaceKey,
+      objectId: targetObjectType!,
+    );
+    snapshotBase.objectTypes
+      ..clear()
+      ..addAll(['ot-template', targetType.uniqueKey]);
     snapshotBase.details = Struct()
-      ..fields['name'] = Value(stringValue: text)
+      ..fields['name'] = Value(stringValue: displayName)
+      ..fields['targetObjectType'] = Value(
+        stringValue: targetType.objectId,
+      )
+      ..fields['templateNamePrefillType'] = Value(
+        numberValue: TemplateNamePrefillType.FromTemplateName.value.toDouble(),
+      )
+      ..fields['layout'] = Value(numberValue: 0.0)
       ..fields['tag'] = Value(listValue: ListValue())
       ..fields['internalFlags'] = Value(listValue: ListValue());
+  } else {
+    if (templateId == null) {
+      snapshotBase.objectTypes.add('ot-page');
+      snapshotBase.details = Struct()
+        ..fields['name'] = Value(stringValue: text)
+        ..fields['tag'] = Value(listValue: ListValue())
+        ..fields['internalFlags'] = Value(listValue: ListValue());
+    }
   }
+
+  final initialContentBlocks = <Block>[];
+  if (checkbox) {
+    initialContentBlocks
+        .add(createListBlock(_blockId('cb-'), text, checkbox: true));
+  }
+  if (numberedList) {
+    initialContentBlocks
+        .add(createListBlock(_blockId('num-'), text, numbered: true));
+  }
+  if (toggle) {
+    initialContentBlocks.add(createToggleBlock(_blockId('tog-'), text));
+  }
+  if (quote) {
+    initialContentBlocks.add(createQuoteBlock(_blockId('qt-'), text));
+  }
+  if (callout) {
+    initialContentBlocks.add(createCalloutBlock(_blockId('co-'), text));
+  }
+  if (initialContentBlocks.isNotEmpty) {
+    final headerBlock = snapshotBase.blocks.firstWhere((b) => b.id == 'header');
+    headerBlock.childrenIds.addAll(
+      initialContentBlocks.map((block) => block.id),
+    );
+    snapshotBase.blocks.addAll(initialContentBlocks);
+  }
+
   final snapshotChangeBytes = Uint8List.fromList(
     Change(snapshot: Change_Snapshot(data: snapshotBase)).writeToBuffer(),
   );
@@ -336,76 +433,7 @@ Future<void> createCommand(
     jsonEncode([rootChange.id]), // parent is root
   );
 
-  // Append block type changes if any block flag is set.
-  final blockOps = <Change_Content>[];
-  String _blockId(String prefix) =>
-      '$prefix${rng.nextInt(0xFFFFFF).toRadixString(16)}';
-
-  if (checkbox) {
-    blockOps.add(Change_Content(
-      blockCreate: Change_BlockCreate(
-        targetId: 'header',
-        position: Block_Position.Inner,
-        blocks: [createListBlock(_blockId('cb-'), text, checkbox: true)],
-      ),
-    ));
-  }
-  if (numberedList) {
-    blockOps.add(Change_Content(
-      blockCreate: Change_BlockCreate(
-        targetId: 'header',
-        position: Block_Position.Inner,
-        blocks: [createListBlock(_blockId('num-'), text, numbered: true)],
-      ),
-    ));
-  }
-  if (toggle) {
-    blockOps.add(Change_Content(
-      blockCreate: Change_BlockCreate(
-        targetId: 'header',
-        position: Block_Position.Inner,
-        blocks: [createToggleBlock(_blockId('tog-'), text)],
-      ),
-    ));
-  }
-  if (quote) {
-    blockOps.add(Change_Content(
-      blockCreate: Change_BlockCreate(
-        targetId: 'header',
-        position: Block_Position.Inner,
-        blocks: [createQuoteBlock(_blockId('qt-'), text)],
-      ),
-    ));
-  }
-  if (callout) {
-    blockOps.add(Change_Content(
-      blockCreate: Change_BlockCreate(
-        targetId: 'header',
-        position: Block_Position.Inner,
-        blocks: [createCalloutBlock(_blockId('co-'), text)],
-      ),
-    ));
-  }
-
   int changeCount = 2;
-  if (blockOps.isNotEmpty) {
-    final blockChangeData = marshalChangeContent(blockOps);
-    final blockTreeChange = await buildTreeChange(
-      currentHeads: [treeChange.id],
-      aclHeadId: aclHeadId,
-      snapshotBaseId: rootChange.id,
-      changesData: await aesGcmEncrypt(treeKey, blockChangeData),
-      identityPrivateKey: identity.accountSeed,
-      readKeyId: aclHeadId,
-    );
-    await db.insertChange(
-      blockTreeChange.id,
-      objectId,
-      blockTreeChange.rawChange,
-      jsonEncode([treeChange.id]),
-    );
-    changeCount++;
-  }
 
   // Phase 38: atomic parent STRelation selectDict update (D-04). Executed
   // only for --as-relation-option. Finds the parent STRelation locally by
@@ -424,9 +452,8 @@ Future<void> createCommand(
       if (obj.id == objectId) continue;
       final parentRawChanges = await db.getChangesForObject(obj.id);
       if (parentRawChanges.isEmpty) continue;
-      final rawBytesList = parentRawChanges
-          .map((r) => Uint8List.fromList(r.rawBytes))
-          .toList();
+      final rawBytesList =
+          parentRawChanges.map((r) => Uint8List.fromList(r.rawBytes)).toList();
       // Filter by smart_block_type == STRelation (527) via the root-change
       // varint helper shipped by Plan 01. This matches the list.dart pattern.
       final sbType = extractRootSmartBlockType(rawBytesList);
@@ -447,10 +474,8 @@ Future<void> createCommand(
       // relationKey as a defensive fallback. Accept exact match or a
       // `rel-<key>` prefixed form in case official clients stored it that
       // way.
-      final storedUnique =
-          candidateDetails['uniqueKey']?.stringValue ?? '';
-      final storedRelKey =
-          candidateDetails['relationKey']?.stringValue ?? '';
+      final storedUnique = candidateDetails['uniqueKey']?.stringValue ?? '';
+      final storedRelKey = candidateDetails['relationKey']?.stringValue ?? '';
       final matches = storedUnique == forRelation ||
           storedUnique == 'rel-$forRelation' ||
           storedRelKey == forRelation ||
@@ -506,6 +531,39 @@ Future<void> createCommand(
       );
     }
 
+    var parentWriteAclHeadId = aclHeadId;
+    var parentWriteSnapshotBaseId = parentSnapshotBaseId;
+    var parentWriteReadKeyId = aclHeadId;
+    final parentHeadSet = parentLatestHeads.toSet();
+    for (final stored in parentChanges.reversed) {
+      if (!parentHeadSet.contains(stored.id)) {
+        continue;
+      }
+      try {
+        final rawTreeChange = RawTreeChange.fromBuffer(stored.rawBytes);
+        if (rawTreeChange.payload.isEmpty) {
+          continue;
+        }
+        final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+        if (treeChange.aclHeadId.isNotEmpty) {
+          parentWriteAclHeadId = treeChange.aclHeadId;
+        }
+        if (treeChange.isSnapshot) {
+          parentWriteSnapshotBaseId = stored.id;
+        } else if (treeChange.snapshotBaseId.isNotEmpty) {
+          parentWriteSnapshotBaseId = treeChange.snapshotBaseId;
+        }
+        if (treeChange.readKeyId.isNotEmpty) {
+          parentWriteReadKeyId = treeChange.readKeyId;
+        } else {
+          parentWriteReadKeyId = parentWriteAclHeadId;
+        }
+        break;
+      } catch (_) {
+        continue;
+      }
+    }
+
     final detailsContent = Change_Content(
       detailsSet: Change_DetailsSet(
         key: 'selectDict',
@@ -516,11 +574,11 @@ Future<void> createCommand(
 
     final parentTreeChange = await buildTreeChange(
       currentHeads: parentLatestHeads,
-      aclHeadId: aclHeadId,
-      snapshotBaseId: parentSnapshotBaseId,
+      aclHeadId: parentWriteAclHeadId,
+      snapshotBaseId: parentWriteSnapshotBaseId,
       changesData: await aesGcmEncrypt(parentTreeKey!, detailsData),
       identityPrivateKey: identity.accountSeed,
-      readKeyId: aclHeadId,
+      readKeyId: parentWriteReadKeyId,
     );
 
     await db.insertChange(
@@ -542,12 +600,175 @@ Future<void> createCommand(
           ? 'relation'
           : asSet
               ? 'set'
-              : asRelationOption
-                  ? 'relation-option'
-                  : 'object';
+              : asCollection
+                  ? 'collection'
+                  : asTemplate
+                      ? 'template'
+                      : templateId != null
+                          ? 'object'
+                          : asRelationOption
+                              ? 'relation-option'
+                              : 'object';
   print('Created $objectKind: $objectId');
   print('Text: $displayName');
-  print('Changes: $changeCount (root + snapshot${blockOps.isNotEmpty ? ' + blocks' : ''})');
+  print('Changes: $changeCount (root + snapshot)');
+}
+
+class _ResolvedTargetObjectType {
+  final String objectId;
+  final String uniqueKey;
+
+  const _ResolvedTargetObjectType({
+    required this.objectId,
+    required this.uniqueKey,
+  });
+}
+
+class _PreparedSnapshot {
+  final SmartBlockSnapshotBase snapshot;
+  final String displayName;
+
+  const _PreparedSnapshot({
+    required this.snapshot,
+    required this.displayName,
+  });
+}
+
+Future<_ResolvedTargetObjectType> _resolveTargetObjectType(
+  ManytypeDatabase db, {
+  required Uint8List spaceKey,
+  required String objectId,
+}) async {
+  final changes = await db.getChangesForObject(objectId);
+  if (changes.isEmpty) {
+    throw StateError('Target object type not found: $objectId');
+  }
+
+  final rawTreeChanges =
+      changes.map((change) => Uint8List.fromList(change.rawBytes)).toList();
+  final smartBlockType = extractRootSmartBlockType(rawTreeChanges);
+  if (smartBlockType != SmartBlockType.STType.value) {
+    throw StateError(
+      'Target object $objectId is not an STType (smart block type '
+      '$smartBlockType)',
+    );
+  }
+
+  final treeKey = await deriveTreeKey(spaceKey, objectId);
+  final details = await replayObjectDetails(
+    rawTreeChanges: rawTreeChanges,
+    treeKey: treeKey,
+  );
+  final uniqueKey = details['uniqueKey']?.stringValue.trim() ?? '';
+  if (uniqueKey.isEmpty) {
+    throw StateError(
+      'Target object type $objectId does not expose a uniqueKey detail',
+    );
+  }
+
+  return _ResolvedTargetObjectType(
+    objectId: objectId,
+    uniqueKey: uniqueKey,
+  );
+}
+
+Future<_PreparedSnapshot> _buildSnapshotFromTemplate(
+  ManytypeDatabase db, {
+  required Uint8List spaceKey,
+  required String templateId,
+  required String objectId,
+  required String requestedText,
+  required bool textProvided,
+}) async {
+  final changes = await db.getChangesForObject(templateId);
+  if (changes.isEmpty) {
+    throw StateError('Template not found: $templateId');
+  }
+
+  final rawTreeChanges =
+      changes.map((change) => Uint8List.fromList(change.rawBytes)).toList();
+  final templateTreeKey = await deriveTreeKey(spaceKey, templateId);
+  final replayed = await replayObjectState(
+    rawTreeChanges: rawTreeChanges,
+    treeKey: templateTreeKey,
+  );
+  if (replayed.smartBlockType != SmartBlockType.Template.value) {
+    throw StateError(
+      'Object $templateId is not a template (smart block type '
+      '${replayed.smartBlockType})',
+    );
+  }
+
+  final targetObjectTypeId =
+      _stringDetail(replayed.snapshot.details, 'targetObjectType');
+  if (targetObjectTypeId.isEmpty) {
+    throw StateError('Template $templateId is missing targetObjectType');
+  }
+  final targetType = await _resolveTargetObjectType(
+    db,
+    spaceKey: spaceKey,
+    objectId: targetObjectTypeId,
+  );
+
+  final templateName = _stringDetail(replayed.snapshot.details, 'name');
+  final prefillType = replayed
+          .snapshot.details.fields['templateNamePrefillType']?.numberValue
+          .toInt() ??
+      TemplateNamePrefillType.Empty.value;
+  final displayName = textProvided
+      ? requestedText
+      : (prefillType == TemplateNamePrefillType.FromTemplateName.value &&
+              templateName.isNotEmpty
+          ? templateName
+          : 'Untitled');
+
+  final snapshot = replayed.snapshot.deepCopy();
+  snapshot.objectTypes
+    ..clear()
+    ..add(targetType.uniqueKey);
+  for (final block in snapshot.blocks) {
+    if (block.id == templateId) {
+      block.id = objectId;
+    }
+    for (var i = 0; i < block.childrenIds.length; i++) {
+      if (block.childrenIds[i] == templateId) {
+        block.childrenIds[i] = objectId;
+      }
+    }
+  }
+
+  final details = snapshot.details.deepCopy()
+    ..fields.remove('targetObjectType')
+    ..fields.remove('templateIsBundled')
+    ..fields.remove('templateNamePrefillType')
+    ..fields.remove('templatePlaceholders')
+    ..fields['sourceObject'] = Value(stringValue: templateId)
+    ..fields['type'] = Value(stringValue: targetObjectTypeId)
+    ..fields['name'] = Value(stringValue: displayName);
+  snapshot.details = details;
+  _rewriteTitleBlock(snapshot, displayName);
+
+  return _PreparedSnapshot(
+    snapshot: snapshot,
+    displayName: displayName,
+  );
+}
+
+String _stringDetail(Struct details, String key) {
+  final value = details.fields[key];
+  if (value == null || !value.hasStringValue()) {
+    return '';
+  }
+  return value.stringValue.trim();
+}
+
+void _rewriteTitleBlock(SmartBlockSnapshotBase snapshot, String title) {
+  for (final block in snapshot.blocks) {
+    if (block.id == 'title' && block.hasText()) {
+      block.text.text = title;
+      return;
+    }
+  }
 }
 
 Future<RawRecordWithId> _buildDerivedAclRoot({

@@ -8,9 +8,10 @@ import 'package:manytype_protocol/events.dart';
 import 'package:manytype_protocol/models.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart'
-    show Value;
+    show ListValue, Value;
 
 import '../config.dart';
+import '../collection_keys.dart';
 import '../identity.dart';
 import '../store/database.dart';
 
@@ -29,7 +30,7 @@ Future<void> readCommand(
   final spaceId = identity.spaceId;
 
   if (objectId != null) {
-    await _showObject(db, objectId);
+    await _showObject(db, config, objectId);
   } else {
     await _listObjects(db, spaceId);
   }
@@ -64,7 +65,11 @@ Future<void> _listObjects(ManytypeDatabase db, String spaceId) async {
 }
 
 /// Show detailed content for a specific object.
-Future<void> _showObject(ManytypeDatabase db, String objectId) async {
+Future<void> _showObject(
+  ManytypeDatabase db,
+  CliConfig config,
+  String objectId,
+) async {
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
     print('Object not found: $objectId');
@@ -80,19 +85,18 @@ Future<void> _showObject(ManytypeDatabase db, String objectId) async {
   // derived from the space read key and object ID, and may additionally snappy
   // compress the plaintext when `dataType == "1/s"`.
   Uint8List? treeKey;
-  Uint8List? spaceKeyForIndex;
-  String? spaceIdForIndex;
+  Uint8List? spaceKey;
+  String? spaceId;
+  final cachedChangesByObject = <String, List<Change>>{};
   try {
-    final config = await CliConfig.load();
     final identity = await Identity.fromMnemonic(config.mnemonic);
     final accountKeyPair = await ed25519KeyPairFromSeed(identity.accountSeed);
     final accountPrivRaw = Uint8List(64)
       ..setRange(0, 32, identity.accountSeed)
       ..setRange(32, 64, accountKeyPair.publicKey);
-    final spaceKey = await deriveSpaceKey(accountPrivRaw);
+    spaceKey = await deriveSpaceKey(accountPrivRaw);
     treeKey = await deriveTreeKey(spaceKey, objectId);
-    spaceKeyForIndex = spaceKey;
-    spaceIdForIndex = identity.spaceId;
+    spaceId = identity.spaceId;
   } catch (_) {
     treeKey = null;
   }
@@ -104,14 +108,14 @@ Future<void> _showObject(ManytypeDatabase db, String objectId) async {
   // sentinel). Used by _formatOptionRelationValue below to resolve status
   // and tag relation values on this object's snapshot details.
   var optIndex = const <String, ResolvedOption>{};
-  if (spaceKeyForIndex != null && spaceIdForIndex != null) {
+  if (spaceKey != null && spaceId != null) {
     try {
-      final spaceObjects =
-          await db.getNonDeletedObjectsBySpace(spaceIdForIndex);
+      final spaceObjects = await db.getNonDeletedObjectsBySpace(spaceId);
       final optionInputs = <OptionIndexInput>[];
       for (final obj in spaceObjects) {
         final rawRows = await db.getChangesForObject(obj.id);
-        final objTreeKey = await deriveTreeKey(spaceKeyForIndex, obj.id);
+        cachedChangesByObject[obj.id] = rawRows;
+        final objTreeKey = await deriveTreeKey(spaceKey, obj.id);
         optionInputs.add(OptionIndexInput(
           objectId: obj.id,
           rawTreeChanges:
@@ -139,6 +143,8 @@ Future<void> _showObject(ManytypeDatabase db, String objectId) async {
         print('  Kind: [Type]');
       case 521: // SmartBlockType.STRelation
         print('  Kind: [Relation]');
+      case 288: // SmartBlockType.Template
+        print('  Kind: [Template]');
       case 16: // SmartBlockType.Page
         print('  Kind: [Page]');
       default:
@@ -149,6 +155,9 @@ Future<void> _showObject(ManytypeDatabase db, String objectId) async {
   // Extract snapshot metadata (objectTypes, relationLinks, details, Dataview blocks).
   await _printSnapshotMetadata(
     changes,
+    db: db,
+    spaceKey: spaceKey,
+    cachedChangesByObject: cachedChangesByObject,
     treeKey: treeKey,
     smartBlockType: smartBlockType,
     optIndex: optIndex,
@@ -278,6 +287,9 @@ String _extractTextFromDecodedChangeBytes(Uint8List decoded) {
 /// BlockUpdate mutations must be visible on re-read).
 Future<void> _printSnapshotMetadata(
   List<Change> changes, {
+  required ManytypeDatabase db,
+  required Uint8List? spaceKey,
+  Map<String, List<Change>> cachedChangesByObject = const {},
   required Uint8List? treeKey,
   int? smartBlockType,
   Map<String, ResolvedOption> optIndex = const <String, ResolvedOption>{},
@@ -322,7 +334,8 @@ Future<void> _printSnapshotMetadata(
 
   // relationLinks
   if (snapData.relationLinks.isNotEmpty) {
-    print('  Relations: ${snapData.relationLinks.map((l) => l.key).join(', ')}');
+    print(
+        '  Relations: ${snapData.relationLinks.map((l) => l.key).join(', ')}');
   }
 
   // Type/Relation-specific details from snapshot.
@@ -333,6 +346,23 @@ Future<void> _printSnapshotMetadata(
     }
     if (smartBlockType == 521 && fields.containsKey('relationFormat')) {
       print('  Format: ${_formatName(fields['relationFormat']!.numberValue)}');
+    }
+    if (fields.containsKey('targetObjectType')) {
+      final targetTypeId = fields['targetObjectType']!.stringValue;
+      final targetTypeName = await _resolveMemberName(
+        db,
+        targetTypeId,
+        spaceKey: spaceKey,
+        cachedChanges: cachedChangesByObject[targetTypeId],
+      );
+      if (targetTypeName == null) {
+        print('  Target Type: $targetTypeId');
+      } else {
+        print('  Target Type: $targetTypeName ($targetTypeId)');
+      }
+    }
+    if (fields.containsKey('sourceObject')) {
+      print('  Source Template: ${fields['sourceObject']!.stringValue}');
     }
   }
 
@@ -364,6 +394,10 @@ Future<void> _printSnapshotMetadata(
       mergedDetails[entry.key] = entry.value;
     }
   }
+  final mergedCollections = <String, Value>{};
+  for (final entry in snapData.collections.fields.entries) {
+    mergedCollections[entry.key] = entry.value.deepCopy();
+  }
 
   for (var i = snapshotIndex + 1; i < changes.length; i++) {
     try {
@@ -391,6 +425,24 @@ Future<void> _printSnapshotMetadata(
           final key = content.detailsSet.key;
           final val = content.detailsSet.value;
           mergedDetails[key] = val;
+        }
+        if (content.hasStoreKeySet()) {
+          final key = _topLevelCollectionKey(content.storeKeySet.path);
+          if (key != null) {
+            mergedCollections[key] = content.storeKeySet.value.deepCopy();
+          }
+        }
+        if (content.hasStoreKeyUnset()) {
+          final key = _topLevelCollectionKey(content.storeKeyUnset.path);
+          if (key != null) {
+            mergedCollections.remove(key);
+          }
+        }
+        if (content.hasStoreSliceUpdate()) {
+          _applyCollectionStoreSliceUpdate(
+            mergedCollections,
+            content.storeSliceUpdate,
+          );
         }
         if (content.hasBlockCreate()) {
           for (final newBlock in content.blockCreate.blocks) {
@@ -484,7 +536,48 @@ Future<void> _printSnapshotMetadata(
     }
   }
 
+  for (final link in snapData.relationLinks) {
+    if (renderedRelationKeys.contains(link.key) ||
+        link.format != RelationFormat.file) {
+      continue;
+    }
+    final val = mergedDetails[link.key];
+    if (val == null) continue;
+    final rendered = await _formatFileRelationValue(
+      val,
+      db,
+      spaceKey: spaceKey,
+      cachedChangesByObject: cachedChangesByObject,
+      assumeFileRelation: true,
+    );
+    if (rendered == null) continue;
+    print('  [${link.key}] $rendered');
+    renderedRelationKeys.add(link.key);
+  }
+  if (spaceKey != null) {
+    for (final entry in mergedDetails.entries) {
+      if (renderedRelationKeys.contains(entry.key)) continue;
+      final rendered = await _formatFileRelationValue(
+        entry.value,
+        db,
+        spaceKey: spaceKey,
+        cachedChangesByObject: cachedChangesByObject,
+        assumeFileRelation: false,
+      );
+      if (rendered == null) continue;
+      print('  [${entry.key}] $rendered');
+      renderedRelationKeys.add(entry.key);
+    }
+  }
+
   _printSnapshotBlocks(blockOrder, blockState);
+  await _printCollectionMembers(
+    db,
+    spaceKey: spaceKey,
+    blocks: blockState.values.toList(growable: false),
+    collections: mergedCollections,
+    cachedChangesByObject: cachedChangesByObject,
+  );
 }
 
 /// Walk the replayed block map in insertion order and render user-visible
@@ -547,6 +640,156 @@ void _printSnapshotBlocks(
   }
 }
 
+Future<void> _printCollectionMembers(
+  ManytypeDatabase db, {
+  required Uint8List? spaceKey,
+  required List<Block> blocks,
+  required Map<String, Value> collections,
+  Map<String, List<Change>> cachedChangesByObject = const {},
+}) async {
+  final dataview = _findCollectionDataview(blocks);
+  if (dataview == null) {
+    return;
+  }
+
+  final viewId = dataview.views.isNotEmpty ? dataview.views.first.id : null;
+  final storeKey = viewId == null
+      ? null
+      : resolveCollectionStoreKeyFromValues(dataview, collections);
+  final memberIds = storeKey == null
+      ? const <String>[]
+      : _readCollectionStringList(collections[storeKey]);
+
+  print('');
+  print('## Members');
+  if (memberIds.isEmpty) {
+    print('(empty)');
+    return;
+  }
+
+  for (final memberId in memberIds) {
+    final memberName = await _resolveMemberName(
+      db,
+      memberId,
+      spaceKey: spaceKey,
+      cachedChanges: cachedChangesByObject[memberId],
+    );
+    print('- ${memberName ?? '<unknown>'} ($memberId)');
+  }
+}
+
+Future<String?> _resolveMemberName(
+  ManytypeDatabase db,
+  String objectId, {
+  required Uint8List? spaceKey,
+  List<Change>? cachedChanges,
+}) async {
+  if (spaceKey == null) {
+    return null;
+  }
+
+  try {
+    final changes = cachedChanges ?? await db.getChangesForObject(objectId);
+    if (changes.isEmpty) {
+      return null;
+    }
+
+    final treeKey = await deriveTreeKey(spaceKey, objectId);
+    final details = await replayObjectDetails(
+      rawTreeChanges:
+          changes.map((change) => Uint8List.fromList(change.rawBytes)).toList(),
+      treeKey: treeKey,
+    );
+    final name = details['name'];
+    if (name != null && name.hasStringValue()) {
+      final value = name.stringValue.trim();
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+  } catch (_) {
+    return null;
+  }
+
+  return null;
+}
+
+Block_Content_Dataview? _findCollectionDataview(List<Block> blocks) {
+  for (final block in blocks) {
+    if (block.hasDataview() && block.dataview.isCollection) {
+      return block.dataview;
+    }
+  }
+  return null;
+}
+
+String? _topLevelCollectionKey(List<String> path) {
+  if (path.length != 1) {
+    return null;
+  }
+  return path.first;
+}
+
+void _applyCollectionStoreSliceUpdate(
+  Map<String, Value> collections,
+  changes_proto.Change_StoreSliceUpdate update,
+) {
+  final current = _readCollectionStringList(collections[update.key]);
+  switch (update.whichOperation()) {
+    case changes_proto.Change_StoreSliceUpdate_Operation.add:
+      _insertCollectionIds(current, update.add.afterId, update.add.ids);
+      break;
+    case changes_proto.Change_StoreSliceUpdate_Operation.remove:
+      current.removeWhere(update.remove.ids.contains);
+      break;
+    case changes_proto.Change_StoreSliceUpdate_Operation.move:
+      current.removeWhere(update.move.ids.contains);
+      _insertCollectionIds(current, update.move.afterId, update.move.ids);
+      break;
+    case changes_proto.Change_StoreSliceUpdate_Operation.notSet:
+      break;
+  }
+  collections[update.key] = Value(
+    listValue: ListValue(
+      values: current.map((value) => Value(stringValue: value)).toList(),
+    ),
+  );
+}
+
+List<String> _readCollectionStringList(Value? value) {
+  if (value == null || !value.hasListValue()) {
+    return <String>[];
+  }
+  return value.listValue.values
+      .where((item) => item.hasStringValue())
+      .map((item) => item.stringValue)
+      .toList();
+}
+
+void _insertCollectionIds(
+  List<String> current,
+  String afterId,
+  Iterable<String> ids,
+) {
+  final values = ids.toList();
+  if (values.isEmpty) {
+    return;
+  }
+
+  if (afterId.isEmpty) {
+    current.insertAll(0, values);
+    return;
+  }
+
+  final index = current.indexOf(afterId);
+  if (index < 0) {
+    current.addAll(values);
+    return;
+  }
+
+  current.insertAll(index + 1, values);
+}
+
 /// Print block content from changesData bytes.
 Future<void> _printBlockChanges(
   TreeChange treeChange, {
@@ -599,7 +842,8 @@ Future<void> _printBlockChanges(
           }
           if (block.hasDataview()) {
             final dv = block.dataview;
-            print('    [${block.id}] [Dataview] source: ${dv.source.join(', ')}, views: ${dv.views.length}');
+            print(
+                '    [${block.id}] [Dataview] source: ${dv.source.join(', ')}, views: ${dv.views.length}');
           }
         }
       }
@@ -711,6 +955,128 @@ String _formatOptionRelationValue(
     }).join(', ');
   }
   return val.toString();
+}
+
+Future<String?> _formatFileRelationValue(
+  Value val,
+  ManytypeDatabase db, {
+  required Uint8List? spaceKey,
+  Map<String, List<Change>> cachedChangesByObject = const {},
+  required bool assumeFileRelation,
+}) async {
+  if (val.hasStringValue()) {
+    return _formatSingleFileRelationId(
+      val.stringValue,
+      db,
+      spaceKey: spaceKey,
+      cachedChangesByObject: cachedChangesByObject,
+      assumeFileRelation: assumeFileRelation,
+    );
+  }
+  if (!val.hasListValue()) {
+    return assumeFileRelation ? _unknownFileLabel('') : null;
+  }
+
+  final rendered = <String>[];
+  for (final item in val.listValue.values) {
+    if (!item.hasStringValue()) {
+      if (!assumeFileRelation) {
+        return null;
+      }
+      rendered.add(_unknownFileLabel(''));
+      continue;
+    }
+    final resolved = await _formatSingleFileRelationId(
+      item.stringValue,
+      db,
+      spaceKey: spaceKey,
+      cachedChangesByObject: cachedChangesByObject,
+      assumeFileRelation: assumeFileRelation,
+    );
+    if (resolved == null) {
+      if (!assumeFileRelation) {
+        return null;
+      }
+      rendered.add(_unknownFileLabel(item.stringValue));
+      continue;
+    }
+    rendered.add(resolved);
+  }
+  if (rendered.isEmpty) {
+    return assumeFileRelation ? _unknownFileLabel('') : null;
+  }
+  return rendered.join(', ');
+}
+
+Future<String?> _formatSingleFileRelationId(
+  String objectId,
+  ManytypeDatabase db, {
+  required Uint8List? spaceKey,
+  Map<String, List<Change>> cachedChangesByObject = const {},
+  required bool assumeFileRelation,
+}) async {
+  final trimmedId = objectId.trim();
+  if (trimmedId.isEmpty) {
+    return assumeFileRelation ? _unknownFileLabel(trimmedId) : null;
+  }
+  if (spaceKey == null) {
+    return assumeFileRelation ? _unknownFileLabel(trimmedId) : null;
+  }
+
+  final changes = cachedChangesByObject[trimmedId] ??
+      await db.getChangesForObject(trimmedId);
+  if (changes.isEmpty) {
+    return assumeFileRelation ? _unknownFileLabel(trimmedId) : null;
+  }
+
+  final smartBlockType = _extractSmartBlockType(changes);
+  if (smartBlockType != null &&
+      smartBlockType != SmartBlockType.FileObject.value) {
+    return assumeFileRelation ? _unknownFileLabel(trimmedId) : null;
+  }
+  if (smartBlockType == null && !assumeFileRelation) {
+    return null;
+  }
+
+  try {
+    final treeKey = await deriveTreeKey(spaceKey, trimmedId);
+    final details = await replayObjectDetails(
+      rawTreeChanges:
+          changes.map((change) => Uint8List.fromList(change.rawBytes)).toList(),
+      treeKey: treeKey,
+    );
+    final name = _stringDetail(details, 'name');
+    final mime = _stringDetail(details, 'mime');
+    if (name.isNotEmpty) {
+      return _hasSpecificMime(mime) ? '$name ($mime)' : name;
+    }
+    if (_hasSpecificMime(mime)) {
+      return mime;
+    }
+  } catch (_) {
+    return assumeFileRelation ? _unknownFileLabel(trimmedId) : null;
+  }
+
+  return _unknownFileLabel(trimmedId);
+}
+
+String _stringDetail(Map<String, Value> details, String key) {
+  final value = details[key];
+  if (value == null || !value.hasStringValue()) {
+    return '';
+  }
+  return value.stringValue.trim();
+}
+
+bool _hasSpecificMime(String mime) =>
+    mime.isNotEmpty && mime != 'application/octet-stream';
+
+String _unknownFileLabel(String objectId) {
+  if (objectId.isEmpty) {
+    return '<unknown-file>';
+  }
+  final shortId = objectId.length <= 8 ? objectId : objectId.substring(0, 8);
+  return '<unknown-file:$shortId>';
 }
 
 /// Map a RelationFormat enum value to a human-readable name.

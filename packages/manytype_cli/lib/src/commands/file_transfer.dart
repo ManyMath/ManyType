@@ -39,22 +39,16 @@ class OpenedBlobResult {
   final bool fromCache;
 }
 
-Future<void> fileUploadCommand(
+Future<UploadedBlobResult> uploadBlobWithNetworkConfig(
   ManytypeDatabase db,
   CliConfig config, {
   required String networkConfigPath,
+  required Identity identity,
   required String fileId,
-  required String sourcePath,
+  required Uint8List bytes,
 }) async {
-  final sourceFile = File(sourcePath);
-  if (!await sourceFile.exists()) {
-    throw StateError('Source file not found: $sourcePath');
-  }
-
-  final identity = await Identity.fromMnemonic(config.mnemonic);
   final capture = _FileTransferCapture.start();
   final bridge = NativeBridge();
-  final bytes = await sourceFile.readAsBytes();
   await seedLiveSpaceForSync(
     db,
     config,
@@ -69,7 +63,7 @@ Future<void> fileUploadCommand(
   );
 
   try {
-    final result = await uploadBlobToFileNode(
+    return await uploadBlobToFileNode(
       fileHandleId: fileHandleId,
       invoke: bridge.invoke,
       spaceId: identity.spaceId,
@@ -77,15 +71,39 @@ Future<void> fileUploadCommand(
       bytes: bytes,
       capture: capture,
     );
-    print(
-      result.uploaded
-          ? 'Uploaded $fileId (cid=${result.cid})'
-          : 'Skipped upload for $fileId (cid=${result.cid}) - blob already present',
-    );
   } finally {
     bridge.freeHandle(fileHandleId);
     await capture.flush();
   }
+}
+
+Future<void> fileUploadCommand(
+  ManytypeDatabase db,
+  CliConfig config, {
+  required String networkConfigPath,
+  required String fileId,
+  required String sourcePath,
+}) async {
+  final sourceFile = File(sourcePath);
+  if (!await sourceFile.exists()) {
+    throw StateError('Source file not found: $sourcePath');
+  }
+
+  final identity = await Identity.fromMnemonic(config.mnemonic);
+  final bytes = await sourceFile.readAsBytes();
+  final result = await uploadBlobWithNetworkConfig(
+    db,
+    config,
+    networkConfigPath: networkConfigPath,
+    identity: identity,
+    fileId: fileId,
+    bytes: bytes,
+  );
+  print(
+    result.uploaded
+        ? 'Uploaded $fileId (cid=${result.cid})'
+        : 'Skipped upload for $fileId (cid=${result.cid}) - blob already present',
+  );
 }
 
 Future<void> fileOpenCommand(
@@ -193,38 +211,70 @@ Future<UploadedBlobResult> uploadBlobToFileNode({
   );
   final checkResponse =
       filesync.BlocksCheckResponse.fromBuffer(checkResponseBytes);
-  final exists = checkResponse.blocksAvailability.any(
-    (entry) =>
-        _byteListsEqual(entry.cid, cidBytes) &&
-        entry.status != filesync.AvailabilityStatus.NotExists,
-  );
+  final availability = checkResponse.blocksAvailability
+      .where((entry) => _byteListsEqual(entry.cid, cidBytes))
+      .map((entry) => entry.status)
+      .firstWhere(
+        (_) => true,
+        orElse: () => filesync.AvailabilityStatus.NotExists,
+      );
 
-  if (!exists) {
-    final pushRequest = filesync.BlockPushRequest(
-      spaceId: spaceId,
-      fileId: fileId,
-      cid: cidBytes,
-      data: bytes,
-    );
-    final pushRequestBytes = Uint8List.fromList(pushRequest.writeToBuffer());
-    final pushResponseBytes = invoke(
-      fileHandleId,
-      '/filesync.File/BlockPush',
-      pushRequestBytes,
-    );
-    capture?.recordUnaryRpc(
-      role: 'file-node',
-      method: '/filesync.File/BlockPush',
-      requestBytes: pushRequestBytes,
-      responseBytes: pushResponseBytes,
-    );
+  var uploaded = false;
+  switch (availability) {
+    case filesync.AvailabilityStatus.NotExists:
+      final pushRequest = filesync.BlockPushRequest(
+        spaceId: spaceId,
+        fileId: fileId,
+        cid: cidBytes,
+        data: bytes,
+      );
+      final pushRequestBytes = Uint8List.fromList(pushRequest.writeToBuffer());
+      final pushResponseBytes = invoke(
+        fileHandleId,
+        '/filesync.File/BlockPush',
+        pushRequestBytes,
+      );
+      capture?.recordUnaryRpc(
+        role: 'file-node',
+        method: '/filesync.File/BlockPush',
+        requestBytes: pushRequestBytes,
+        responseBytes: pushResponseBytes,
+      );
+      uploaded = true;
+      break;
+    case filesync.AvailabilityStatus.Exists:
+      final bindRequest = filesync.BlocksBindRequest(
+        spaceId: spaceId,
+        fileId: fileId,
+        cids: [cidBytes],
+      );
+      final bindRequestBytes = Uint8List.fromList(bindRequest.writeToBuffer());
+      final bindResponseBytes = invoke(
+        fileHandleId,
+        '/filesync.File/BlocksBind',
+        bindRequestBytes,
+      );
+      capture?.recordUnaryRpc(
+        role: 'file-node',
+        method: '/filesync.File/BlocksBind',
+        requestBytes: bindRequestBytes,
+        responseBytes: bindResponseBytes,
+      );
+      break;
+    case filesync.AvailabilityStatus.ExistsInSpace:
+      break;
   }
 
   capture?.recordNote(
     'upload_result',
-    {'file_id': fileId, 'cid': cid, 'uploaded': !exists},
+    {
+      'file_id': fileId,
+      'cid': cid,
+      'uploaded': uploaded,
+      'availability': availability.name,
+    },
   );
-  return UploadedBlobResult(cid: cid, uploaded: !exists);
+  return UploadedBlobResult(cid: cid, uploaded: uploaded);
 }
 
 Future<OpenedBlobResult> openBlobFromFileNode({

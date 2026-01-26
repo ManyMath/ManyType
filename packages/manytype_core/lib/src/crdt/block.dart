@@ -179,14 +179,20 @@ SmartBlockSnapshotBase createMinimalPageSnapshotBase({
 ///
 /// Sets in Anytype are pages with a Dataview block that references one or more
 /// [source] type keys (e.g. 'ot-page') and provides a default table view.
-Block createDataviewBlock(String id, List<String> source) {
+Block createDataviewBlock(
+  String id,
+  List<String> source, {
+  bool isCollection = false,
+  String viewId = 'view-default',
+}) {
   return Block(
     id: id,
     dataview: Block_Content_Dataview(
+      isCollection: isCollection,
       source: source,
       views: [
         Block_Content_Dataview_View(
-          id: 'view-default',
+          id: viewId,
           type: Block_Content_Dataview_View_Type.Table,
           name: 'All',
         ),

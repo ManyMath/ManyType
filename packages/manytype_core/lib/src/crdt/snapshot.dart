@@ -13,11 +13,19 @@ import 'tree_builder.dart';
 
 /// Collect current block state by replaying all tree changes in topological
 /// order.
-Map<String, Block> collectBlockState(ObjectTree tree) => _replayTree(tree).blocks;
+Map<String, Block> collectBlockState(ObjectTree tree) =>
+    _replayTree(tree).blocks;
 
 /// Create a [SmartBlockSnapshotBase] from the current tree state.
 SmartBlockSnapshotBase createSnapshot(ObjectTree tree, String rootId) {
   final replayed = _replayTree(tree);
+  return _buildSnapshotBaseFromReplay(replayed, rootId);
+}
+
+SmartBlockSnapshotBase _buildSnapshotBaseFromReplay(
+  _ReplayState replayed,
+  String rootId,
+) {
   final contentBlocks = replayed.blocks.values.toList()
     ..sort((left, right) => left.id.compareTo(right.id));
 
@@ -57,9 +65,16 @@ Future<RawTreeChangeWithId> compactTree({
   required Uint8List identityPrivateKey,
   String readKeyId = '',
 }) async {
-  final snapshotBase = createSnapshot(tree, rootId);
+  final replayed = _replayTree(tree);
+  final snapshotBase = _buildSnapshotBaseFromReplay(replayed, rootId);
+  final fileKeyHashes = replayed.fileKeys.keys.toList()..sort();
   final change = Change(
-    snapshot: Change_Snapshot(data: snapshotBase),
+    snapshot: Change_Snapshot(
+      data: snapshotBase,
+      fileKeys: [
+        for (final hash in fileKeyHashes) replayed.fileKeys[hash]!.deepCopy(),
+      ],
+    ),
   );
   final changeBytes = Uint8List.fromList(change.writeToBuffer());
 
@@ -92,12 +107,15 @@ _ReplayState _replayTree(ObjectTree tree) {
     if (treeChange.isSnapshot) {
       final change = Change.fromBuffer(treeChange.changesData);
       if (change.hasSnapshot()) {
-        state.loadSnapshot(change.snapshot.data);
+        state.loadSnapshot(change.snapshot);
       }
       continue;
     }
 
     final change = Change.fromBuffer(treeChange.changesData);
+    if (change.fileKeys.isNotEmpty) {
+      state.upsertFileKeys(change.fileKeys);
+    }
     for (final content in change.content) {
       _applyContent(state, content);
     }
@@ -311,8 +329,7 @@ void _applyBlockUpdateEvent(_ReplayState state, List<int> eventBytes) {
     case Event_Message_Value.blockSetLatex:
       final block = state.blocks[event.blockSetLatex.id];
       if (block != null) {
-        block.latex =
-            block.hasLatex() ? block.latex : Block_Content_Latex();
+        block.latex = block.hasLatex() ? block.latex : Block_Content_Latex();
         if (event.blockSetLatex.hasText()) {
           block.latex.text = event.blockSetLatex.text.value;
         }
@@ -467,7 +484,8 @@ void _removeStructPath(Struct root, List<String> path) {
   current.fields.remove(path.last);
 }
 
-void _applyStoreSliceUpdate(Struct collections, Change_StoreSliceUpdate update) {
+void _applyStoreSliceUpdate(
+    Struct collections, Change_StoreSliceUpdate update) {
   final current = _readStringList(collections.fields[update.key]);
   switch (update.whichOperation()) {
     case Change_StoreSliceUpdate_Operation.add:
@@ -500,7 +518,8 @@ List<String> _readStringList(Value? value) {
       .toList();
 }
 
-void _insertAfterId(List<String> current, String afterId, Iterable<String> ids) {
+void _insertAfterId(
+    List<String> current, String afterId, Iterable<String> ids) {
   final values = ids.toList();
   if (values.isEmpty) return;
 
@@ -524,6 +543,7 @@ class _ReplayState {
   final collections = Struct();
   final objectTypes = <String>[];
   final removedCollectionKeys = <String>{};
+  final fileKeys = <String, Change_FileKeys>{};
 
   FileInfo? fileInfo;
   Int64? originalCreatedTimestamp;
@@ -537,28 +557,43 @@ class _ReplayState {
     objectTypes.remove(value);
   }
 
-  void loadSnapshot(SmartBlockSnapshotBase snapshot) {
+  void upsertFileKeys(Iterable<Change_FileKeys> keys) {
+    for (final key in keys) {
+      final hash = key.hash.trim();
+      if (hash.isEmpty) {
+        continue;
+      }
+      fileKeys[hash] = key.deepCopy();
+    }
+  }
+
+  void loadSnapshot(Change_Snapshot snapshot) {
+    final data = snapshot.data;
     blocks
       ..clear()
-      ..addEntries(snapshot.blocks.map((block) => MapEntry(block.id, block.deepCopy())));
+      ..addEntries(
+          data.blocks.map((block) => MapEntry(block.id, block.deepCopy())));
     relationLinks
       ..clear()
-      ..addEntries(snapshot.relationLinks.map((link) => MapEntry(link.key, link.deepCopy())));
+      ..addEntries(data.relationLinks
+          .map((link) => MapEntry(link.key, link.deepCopy())));
     details.fields
       ..clear()
-      ..addAll(snapshot.details.deepCopy().fields);
+      ..addAll(data.details.deepCopy().fields);
     collections.fields
       ..clear()
-      ..addAll(snapshot.collections.deepCopy().fields);
+      ..addAll(data.collections.deepCopy().fields);
     objectTypes
       ..clear()
-      ..addAll(snapshot.objectTypes);
+      ..addAll(data.objectTypes);
     removedCollectionKeys
       ..clear()
-      ..addAll(snapshot.removedCollectionKeys);
-    fileInfo = snapshot.hasFileInfo() ? snapshot.fileInfo.deepCopy() : null;
-    originalCreatedTimestamp = snapshot.hasOriginalCreatedTimestamp()
-        ? snapshot.originalCreatedTimestamp
+      ..addAll(data.removedCollectionKeys);
+    fileKeys.clear();
+    upsertFileKeys(snapshot.fileKeys);
+    fileInfo = data.hasFileInfo() ? data.fileInfo.deepCopy() : null;
+    originalCreatedTimestamp = data.hasOriginalCreatedTimestamp()
+        ? data.originalCreatedTimestamp
         : null;
   }
 }

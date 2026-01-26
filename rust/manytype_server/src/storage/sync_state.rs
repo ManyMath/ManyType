@@ -5,8 +5,10 @@ use std::sync::{Arc, LockResult, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuar
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
+use manytype_core::crdt::cid::compute_cid;
 use manytype_proto::consensus::RawRecordWithId;
 use manytype_proto::spacesync::StoreKeyValue;
+use manytype_proto::treechange::{RawTreeChange, RootChange};
 use prost::Message;
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 
@@ -429,25 +431,32 @@ impl SharedSyncState {
         )
     }
 
-    pub fn peer_owns_space(&self, space_id: &str, peer_id_hex: &str) -> bool {
+    pub fn peer_owns_space(&self, space_id: &str, peer_id: &str) -> bool {
         let state = self.inner.read().unwrap();
         let Some(space) = state.get(space_id) else {
             return false;
         };
-        space.owner_peer_id.is_empty() || space.owner_peer_id == peer_id_hex
+        space.owner_peer_id.is_empty() || space.owner_peer_id == peer_id
     }
 
-    pub fn owned_space_ids(&self, peer_id_hex: &str) -> Vec<String> {
+    pub fn owned_space_ids(&self, peer_id: &str) -> Vec<String> {
         let state = self.inner.read().unwrap();
         let mut owned: Vec<_> = state
             .iter()
             .filter(|(_, space)| {
-                space.owner_peer_id.is_empty() || space.owner_peer_id == peer_id_hex
+                space.owner_peer_id.is_empty() || space.owner_peer_id == peer_id
             })
             .map(|(space_id, _)| space_id.clone())
             .collect();
         owned.sort();
         owned
+    }
+
+    pub fn space_ids(&self) -> Vec<String> {
+        let state = self.inner.read().unwrap();
+        let mut ids: Vec<_> = state.keys().cloned().collect();
+        ids.sort();
+        ids
     }
 
     pub fn append_acl_record(
@@ -473,19 +482,38 @@ impl SharedSyncState {
         let Some(space) = state.get(space_id) else {
             return Vec::new();
         };
+
+        let mut records = Vec::with_capacity(space.acl_records.len() + 1);
+        if let Some(root_payload) = &space.acl_root {
+            let root_id = if !space.acl_root_id.is_empty() {
+                Some(space.acl_root_id.clone())
+            } else {
+                Some(compute_cid(root_payload))
+            };
+            if let Some(root_id) = root_id {
+                records.push(
+                    RawRecordWithId {
+                        payload: root_payload.clone(),
+                        id: root_id,
+                    }
+                    .encode_to_vec(),
+                );
+            }
+        }
+        records.extend(space.acl_records.clone());
+
         if acl_head.is_empty() {
-            return space.acl_records.clone();
+            return records;
         }
 
-        let Some(cursor_idx) = space
-            .acl_records
+        let Some(cursor_idx) = records
             .iter()
             .position(|raw| decode_acl_record_id(raw).as_deref() == Some(acl_head))
         else {
             return Vec::new();
         };
 
-        space.acl_records[cursor_idx + 1..].to_vec()
+        records[cursor_idx + 1..].to_vec()
     }
 
     pub fn record_object_change(
@@ -496,6 +524,11 @@ impl SharedSyncState {
         raw_change: Vec<u8>,
         parent_heads: &[String],
     ) -> Result<()> {
+        let is_root_change = RawTreeChange::decode(raw_change.as_slice())
+            .ok()
+            .and_then(|raw_tree| RootChange::decode(raw_tree.payload.as_slice()).ok())
+            .is_some_and(|root| !root.space_id.is_empty() && !root.change_type.is_empty());
+
         let (heads, object_changes) = {
             let mut state = self.inner.write().unwrap();
             let space = state.entry(space_id.to_string()).or_default();
@@ -515,7 +548,7 @@ impl SharedSyncState {
 
             let heads = space.object_heads.entry(object_id.to_string()).or_default();
             heads.retain(|head| !parent_heads.iter().any(|parent| parent == head));
-            if !heads.iter().any(|existing| existing == change_id) {
+            if !is_root_change && !heads.iter().any(|existing| existing == change_id) {
                 heads.push(change_id.to_string());
             }
             (heads.clone(), object_changes.clone())
@@ -794,6 +827,52 @@ mod tests {
             .unwrap();
 
         assert!(state.list_acl_records("space-1", "missing").is_empty());
+    }
+
+    #[test]
+    fn list_acl_records_includes_root_when_present() {
+        let state = new_shared_sync_state();
+        state
+            .upsert_space_metadata(
+                "space-1",
+                None,
+                Some(b"acl-root-raw".to_vec()),
+                Some("acl-root-id".to_string()),
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        state
+            .append_acl_record(
+                "space-1",
+                RawRecordWithId {
+                    payload: b"record-1".to_vec(),
+                    id: "cid-1".to_string(),
+                }
+                .encode_to_vec(),
+                "cid-1",
+            )
+            .unwrap();
+
+        let records = state.list_acl_records("space-1", "");
+        assert_eq!(records.len(), 2);
+        assert_eq!(
+            RawRecordWithId::decode(records[0].as_slice()).unwrap().id,
+            "acl-root-id"
+        );
+        assert_eq!(
+            RawRecordWithId::decode(records[1].as_slice()).unwrap().id,
+            "cid-1"
+        );
+
+        let after_root = state.list_acl_records("space-1", "acl-root-id");
+        assert_eq!(after_root.len(), 1);
+        assert_eq!(
+            RawRecordWithId::decode(after_root[0].as_slice()).unwrap().id,
+            "cid-1"
+        );
     }
 
     #[test]
