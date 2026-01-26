@@ -42,7 +42,7 @@ Future<void> main(List<String> arguments) async {
     ..addOption('color',
         help: 'Option color — one of: default, grey, yellow, orange, red, pink, purple, blue, ice, teal, lime')
     ..addOption('name', help: 'Name for type/relation/set objects')
-    ..addOption('format', help: 'Relation format: text, number, date, checkbox, url, email, phone, object')
+    ..addOption('format', help: 'Relation format: text, number, date, checkbox, url, email, phone, object, status, tag')
     ..addOption('source-type', help: 'Source type key for set (e.g. ot-page)');
   final readParser = ArgParser()
     ..addFlag('sync', negatable: false, help: 'Sync before reading the object');

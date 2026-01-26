@@ -1,0 +1,22 @@
+{
+  "captured_at": "2026-04-12T03:50:55.128406Z",
+  "scenario": "phase38 scenario B - tag relation 3-option full replace + two-home read resolution",
+  "relation_key": "taglist",
+  "target_object_id": "bafyreicw2hzn5nhk22dad4skj3xasijmll5orzzvmrlpajfk7odzkjnxea",
+  "expected_tag_count": 3,
+  "expected_tag_ids": [
+    "bafyreiepx3sytnlw3rgpmhg73jrs5vqno4bxcey2s5em3xi7wd2odhb47q",
+    "bafyreigq4rrpcyo6l4s5qriv7nen2abjoqmsizx22jv3reqjhajiiahviy",
+    "bafyreicswp233q7mclfldjasgydwoeaasn5kgp4bd5nootuej5nxghqqre"
+  ],
+  "expected_tag_names_ordered": [
+    "Alpha",
+    "Beta",
+    "Gamma"
+  ],
+  "expected_render": "[taglist] Alpha, Beta, Gamma",
+  "post_replay_resolved": true,
+  "roundtrip_observed": true,
+  "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase38/tag-multi-sync.json",
+  "success": true
+}

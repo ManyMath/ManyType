@@ -1,3 +1,9 @@
 tags:
   round_trip:
     # Integration test requiring running server + FFI library
+  slow:
+    # Integration harness requiring cargo build + live manytype_server
+    timeout: 10x
+  harness:
+    # Shell-out harness tests (phase38 relation-option + future phases)
+    timeout: 10x

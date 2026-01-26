@@ -46,6 +46,13 @@ String _toUniqueKey(String name) => name
     .replaceAll(RegExp(r'^-|-$'), '');
 
 /// Map a CLI format string to a [RelationFormat] enum value.
+///
+/// Phase 38: `status` and `tag` are recognized as valid formats so that
+/// `create --as-relation --format status` / `--format tag` produces a
+/// parent STRelation whose RelationFormat enum matches what read.dart's
+/// `_formatOptionRelationValue` intercepts. Without this, `--as-relation`
+/// defaults to `longtext` and status/tag option resolution never activates
+/// on reads (the generic relation path runs instead).
 RelationFormat _parseRelationFormat(String? format) {
   return switch (format?.toLowerCase()) {
     'text' || null => RelationFormat.longtext,
@@ -57,6 +64,8 @@ RelationFormat _parseRelationFormat(String? format) {
     'email' => RelationFormat.email,
     'phone' => RelationFormat.phone,
     'object' => RelationFormat.object,
+    'status' => RelationFormat.status,
+    'tag' => RelationFormat.tag,
     _ => RelationFormat.longtext,
   };
 }

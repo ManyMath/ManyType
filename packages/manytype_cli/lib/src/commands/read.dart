@@ -336,32 +336,6 @@ Future<void> _printSnapshotMetadata(
     }
   }
 
-  // Phase 38 — render status and tag relation VALUES using the local
-  // STRelationOption index. For each relation link whose format is
-  // RelationFormat.status (single option ID) or RelationFormat.tag
-  // (list_value of option IDs), resolve the value against optIndex and
-  // print a `[<relationKey>] <rendered>` line per D-10 / D-11 / D-13.
-  //
-  // Status: `[<relationKey>] <OptionName> (<color>)`
-  //   Tag:  `[<relationKey>] <name1>, <name2>, <name3>`
-  // Orphan: `<unknown:xxxxxxxx>` (first 8 chars of the unresolved ID)
-  //
-  // Intercepts BEFORE any generic relation rendering path. Non-option
-  // relations (bool, date, object-id, longtext, etc.) are unaffected.
-  if (snapData.hasDetails() && snapData.relationLinks.isNotEmpty) {
-    final fields = snapData.details.fields;
-    for (final link in snapData.relationLinks) {
-      if (link.format != RelationFormat.status &&
-          link.format != RelationFormat.tag) {
-        continue;
-      }
-      final val = fields[link.key];
-      if (val == null) continue;
-      final rendered = _formatOptionRelationValue(val, optIndex);
-      print('  [${link.key}] $rendered');
-    }
-  }
-
   // Dataview blocks in snapshot.
   for (final block in snapData.blocks) {
     if (block.hasDataview()) {
@@ -374,11 +348,21 @@ Future<void> _printSnapshotMetadata(
 
   // Build mutable block state from snapshot, then replay subsequent
   // non-snapshot changes' BlockCreate and BlockUpdate(blockSetText) deltas.
+  // Also replay DetailsSet into a merged details map so Phase 38 status/tag
+  // option rendering reflects post-snapshot edit values.
   final blockState = <String, Block>{};
   final blockOrder = <String>[];
   for (final block in snapData.blocks) {
     blockState[block.id] = block.deepCopy();
     blockOrder.add(block.id);
+  }
+  // Start merged details from the snapshot's details, replay DetailsSet
+  // deltas on top.
+  final mergedDetails = <String, Value>{};
+  if (snapData.hasDetails()) {
+    for (final entry in snapData.details.fields.entries) {
+      mergedDetails[entry.key] = entry.value;
+    }
   }
 
   for (var i = snapshotIndex + 1; i < changes.length; i++) {
@@ -403,6 +387,11 @@ Future<void> _printSnapshotMetadata(
       if (changeProto.hasSnapshot()) continue;
 
       for (final content in changeProto.content) {
+        if (content.hasDetailsSet()) {
+          final key = content.detailsSet.key;
+          final val = content.detailsSet.value;
+          mergedDetails[key] = val;
+        }
         if (content.hasBlockCreate()) {
           for (final newBlock in content.blockCreate.blocks) {
             if (!blockState.containsKey(newBlock.id)) {
@@ -436,6 +425,62 @@ Future<void> _printSnapshotMetadata(
       }
     } catch (_) {
       continue;
+    }
+  }
+
+  // Phase 38: render status and tag relation VALUES using the local
+  // STRelationOption index. Two detection paths:
+  //
+  // 1. Snapshot relationLinks path (Plan 03 original): for each link whose
+  //    format is RelationFormat.status/tag, render the value from
+  //    mergedDetails via _formatOptionRelationValue.
+  // 2. Value-based detection (Phase 38 verification harness fix): Plan 02
+  //    does not write a RelationAdd alongside DetailsSet, and
+  //    `create --as-relation` only records the relation in the parent
+  //    STRelation tree, not in the target object's relationLinks. So for
+  //    any merged-details key whose stringValue or listValue-of-strings
+  //    matches an ID in the local STRelationOption index, render via
+  //    _formatOptionRelationValue too. This is safe because optIndex
+  //    only contains STRelationOption object IDs (varint-filtered by
+  //    smart_block_type == 529).
+  //
+  // Format strings (D-10 / D-11 / D-13):
+  //   Status: `[<relationKey>] <OptionName> (<color>)`
+  //      Tag: `[<relationKey>] <name1>, <name2>, <name3>`
+  //   Orphan: `<unknown:xxxxxxxx>`
+  final renderedRelationKeys = <String>{};
+  for (final link in snapData.relationLinks) {
+    if (link.format != RelationFormat.status &&
+        link.format != RelationFormat.tag) {
+      continue;
+    }
+    final val = mergedDetails[link.key];
+    if (val == null) continue;
+    final rendered = _formatOptionRelationValue(val, optIndex);
+    print('  [${link.key}] $rendered');
+    renderedRelationKeys.add(link.key);
+  }
+  // Value-based fallback: detect option-relation details whose values
+  // point at known option IDs in optIndex.
+  if (optIndex.isNotEmpty) {
+    for (final entry in mergedDetails.entries) {
+      if (renderedRelationKeys.contains(entry.key)) continue;
+      final val = entry.value;
+      bool looksLikeOptionRef = false;
+      if (val.hasStringValue() && optIndex.containsKey(val.stringValue)) {
+        looksLikeOptionRef = true;
+      } else if (val.hasListValue()) {
+        for (final v in val.listValue.values) {
+          if (v.hasStringValue() && optIndex.containsKey(v.stringValue)) {
+            looksLikeOptionRef = true;
+            break;
+          }
+        }
+      }
+      if (!looksLikeOptionRef) continue;
+      final rendered = _formatOptionRelationValue(val, optIndex);
+      print('  [${entry.key}] $rendered');
+      renderedRelationKeys.add(entry.key);
     }
   }
 
