@@ -1,15 +1,20 @@
 {
-  "captured_at": "2026-04-09T05:27:10.927612Z",
+  "captured_at": "2026-04-13T04:19:00Z",
   "scenario": "manytype-authored -> official-observed (manytype_server infra)",
-  "space_id": "bafyreibv24sm5mlm6btiqo346ykye32fwyq6654fxeybw4vkhekyjl6n7i.1nd6acx7k67fl",
-  "object_id": "bafyreidfyk6vaimem7v3infzvh7hpx5wv36xobos2mfwv532uc3es55use",
-  "updated_text": "phase31-manytype-server-updated-1775712393104109229",
-  "official_observed_text": "phase31-manytype-server-updated-1775712393104109229",
-  "invite_url": "anytype://invite/?cid=bafybeiewm7t2dzftrirga4kjmagavxihkmshjrhev22x7qs5qlrlkj7zhy&key=fWJdZuzDAfQZVUd2hX9L1eGz3wEYGDerh4kx5JhkYs5",
+  "space_id": "bafyreiazvtvtnq5243ypm4l34y4gtwjt3ovsyiyoudyinarp3juk6qvuf4.3prceb0beroj4",
+  "object_id": "bafyreig7ubmwoe2baazjft6fkzkmj2cyyrjvam5wf3qzhjsym4b7axwreu",
+  "expected_change": "official client observes the latest Manytype-authored title update after the edit sync",
+  "official_observed_text": "phase31-manytype-server-create",
+  "invite_url": "redacted; see phase31-cross-authored-manytype-server-official-join.json for the concrete join artifact",
   "manytype_seed_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase31-cross-authored-manytype-server-manytype-seed-sync.json",
   "manytype_edit_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase31-cross-authored-manytype-server-manytype-edit-sync.json",
   "official_probe": {
+    "join_result_path": "/home/user/src/manytype/manytype/test_vectors/phase31-cross-authored-manytype-server-official-join.json",
     "show_result_path": "/home/user/src/manytype/manytype/test_vectors/phase31-cross-authored-manytype-server-official-show.json"
   },
-  "success": true
+  "failure": {
+    "reason": "official client did not observe the Manytype-authored update within 60 polling attempts",
+    "notes": "This broader reproducer remains outside the shipped v2.5 official-stack acceptance contract, but it is still active tech debt against manytype_server."
+  },
+  "success": false
 }
