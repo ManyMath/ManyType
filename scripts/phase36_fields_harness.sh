@@ -218,7 +218,7 @@ sleep 5
 
 printf 'Official joins space...\n'
 OFFICIAL_JOIN="$TMPDIR/official-join.json"
-run_probe space-join --invite-url "$INVITE_URL" --network-id "manytype-phase36-fields" >"$OFFICIAL_JOIN"
+run_probe space-join --invite-url "$INVITE_URL" --network-id "manytype-phase36-fields" --space-id "$SPACE_ID" >"$OFFICIAL_JOIN"
 
 sleep 5
 

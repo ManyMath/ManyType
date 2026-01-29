@@ -1,0 +1,18 @@
+{
+  "captured_at": "2026-04-12T22:02:16.796319Z",
+  "scenario": "phase39 scenario C - move Member 3 after Member 1",
+  "collection_id": "bafyreifgcjcwir4moab4a5stb7f6r2xmt6wjjuamabibk5pyf3dtwdwdsm",
+  "moved_member_id": "bafyreiekwdaebkuv3apld224fpi4anvpmc3s54kvcegukw7arwe7ovbrw4",
+  "after_member_id": "bafyreiav2hbvcw5kljuedveg3mnplzblwxohme5m5bhflgscxnja6ykkfu",
+  "expected_members_ordered": [
+    "bafyreiav2hbvcw5kljuedveg3mnplzblwxohme5m5bhflgscxnja6ykkfu",
+    "bafyreiekwdaebkuv3apld224fpi4anvpmc3s54kvcegukw7arwe7ovbrw4"
+  ],
+  "expected_member_lines": [
+    "- Member 1 (bafyreiav2hbvcw5kljuedveg3mnplzblwxohme5m5bhflgscxnja6ykkfu)",
+    "- Member 3 (bafyreiekwdaebkuv3apld224fpi4anvpmc3s54kvcegukw7arwe7ovbrw4)"
+  ],
+  "observed_on_home2": true,
+  "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_c_move-sync.json",
+  "success": true
+}

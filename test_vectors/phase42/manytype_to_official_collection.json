@@ -1,0 +1,16 @@
+{
+  "captured_at": "2026-04-12T22:10:10.186149Z",
+  "scenario": "manytype-authored collection observed by official",
+  "collection_id": "bafyreiffrpmsqdzzik7ucx7ap4hs3mkcxpqwqncd5o57uxbq7hlrevwvum",
+  "member_ids_created": [
+    "bafyreibtlhld7jpzemiyq3gkxakmcejh2bzm2ixciuqguxohqozvi4reqi",
+    "bafyreiggwvnot3yggh7apd4odgaf4s66h6cxdzfbossnle4oqmeuy2prv4",
+    "bafyreifohzwjuefn3tgvf45fhh37fgcuufihfzgu5m2wlqc4hwaz7dzpjm"
+  ],
+  "expected_member_ids": [
+    "bafyreifohzwjuefn3tgvf45fhh37fgcuufihfzgu5m2wlqc4hwaz7dzpjm",
+    "bafyreiggwvnot3yggh7apd4odgaf4s66h6cxdzfbossnle4oqmeuy2prv4"
+  ],
+  "show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_collection-show.json",
+  "success": true
+}

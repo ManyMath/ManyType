@@ -1,0 +1,13 @@
+{
+  "captured_at": "2026-04-12T22:11:37.640944Z",
+  "scenario": "manytype-authored template observed by official and list-filtered locally",
+  "type_id": "bafyreicie2egirlecjvgmr6ug45stmlv6oy23wbt775piai2sofrhj7e6u",
+  "type_key": "phase42-1776031458645671303-manytype-template-type",
+  "template_id": "bafyreie2olsd3hoar4pqyzfse2x62usgjwpbveou3h5jnqqteebq7ryvgi",
+  "applied_id": "bafyreiay5xvbsqsjr2zmd3o6qhqxzlwop3unotuni3dkm3jzvvyalq6pwi",
+  "template_name": "phase42-1776031458645671303 manytype template",
+  "template_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_template_template-show.json",
+  "applied_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_template_applied-show.json",
+  "list_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_template_list.txt",
+  "success": true
+}

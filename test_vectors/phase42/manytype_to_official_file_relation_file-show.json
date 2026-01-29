@@ -1,0 +1,123 @@
+{
+  "action": "object-show",
+  "block_count": 8,
+  "block_kinds": [
+    {
+      "id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa",
+      "kind": "smartblock"
+    },
+    {
+      "id": "header",
+      "kind": "layout"
+    },
+    {
+      "id": "file",
+      "kind": "file"
+    },
+    {
+      "id": "info",
+      "kind": "text"
+    },
+    {
+      "id": "description",
+      "kind": "unknown"
+    },
+    {
+      "id": "fileExt",
+      "kind": "unknown"
+    },
+    {
+      "id": "title",
+      "kind": "text"
+    },
+    {
+      "id": "featuredRelations",
+      "kind": "featured-relations"
+    }
+  ],
+  "dataviews": [],
+  "detail_sets": {
+    "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa": {
+      "id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa"
+    },
+    "bafyreibwlx7xcqk53bpv6v445f74d46t7zteyconn67jsxhg5q6j4c2mli": {
+      "apiObjectKey": "id",
+      "backlinks": [],
+      "createdDate": 1776031494,
+      "creator": "_anytype_profile",
+      "description": "Link to itself. Used in databases",
+      "id": "bafyreibwlx7xcqk53bpv6v445f74d46t7zteyconn67jsxhg5q6j4c2mli",
+      "internalFlags": [],
+      "isHidden": true,
+      "isReadonly": true,
+      "layout": 5,
+      "links": [],
+      "mentions": [],
+      "name": "Anytype ID",
+      "origin": 7,
+      "relationDefaultValue": null,
+      "relationFormat": 100,
+      "relationFormatIncludeTime": false,
+      "relationFormatObjectTypes": [],
+      "relationKey": "id",
+      "relationMaxCount": 1,
+      "relationReadonlyValue": false,
+      "resolvedLayout": 5,
+      "restrictions": [
+        3,
+        2,
+        4,
+        5,
+        10,
+        1,
+        6,
+        7
+      ],
+      "revision": 0,
+      "snippet": "",
+      "sourceObject": "_brid",
+      "spaceId": "bafyreihd3itjlzevtvufzi6gvwfztegrwgoxrrnc5odmlgyqtsd2bdanim.2568jyjd9lnqv",
+      "syncDate": 1776031494,
+      "syncError": 0,
+      "syncStatus": 0,
+      "type": "bafyreicayh7b4dph3qjchalyxyh3sgllsftsjxyxqlemo5ed4237w6tene",
+      "uniqueKey": "rel-id"
+    }
+  },
+  "file_blocks": [
+    {
+      "id": "file",
+      "mime": "",
+      "name": "",
+      "size": 0,
+      "state": "Done",
+      "style": "Auto",
+      "target_object_id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa",
+      "type": "File"
+    }
+  ],
+  "object_id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa",
+  "relation_links": [],
+  "relations": [],
+  "resolved_relations": {},
+  "root_details": {
+    "id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa"
+  },
+  "root_id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa",
+  "smart_block_type": "FileObject",
+  "smart_block_type_number": 533,
+  "text_blocks": [
+    {
+      "checked": false,
+      "id": "info",
+      "style": "Paragraph",
+      "text": "File Information"
+    },
+    {
+      "checked": false,
+      "id": "title",
+      "style": "Title",
+      "text": ""
+    }
+  ]
+}

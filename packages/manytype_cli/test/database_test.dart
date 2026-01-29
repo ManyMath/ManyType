@@ -40,6 +40,20 @@ void main() {
       expect(changes[1].parentHeads, '["change-1"]');
     });
 
+    test('orders replay changes causally even when IDs are lexically shuffled',
+        () async {
+      await db.insertObject('obj-1', 'space-abc');
+      await db.insertChange('change-z', 'obj-1', [3], '["change-m"]');
+      await db.insertChange('change-a', 'obj-1', [1], '[]');
+      await db.insertChange('change-m', 'obj-1', [2], '["change-a"]');
+
+      final changes = await db.getChangesForObject('obj-1');
+      expect(
+        changes.map((change) => change.id).toList(),
+        ['change-a', 'change-m', 'change-z'],
+      );
+    });
+
     test('getObjectsBySpace filters correctly', () async {
       await db.insertObject('obj-1', 'space-a');
       await db.insertObject('obj-2', 'space-b');
@@ -122,7 +136,8 @@ void main() {
       );
 
       final entries = await db.getStoreEntriesBySpace('space-a');
-      expect(entries.map((entry) => entry.keyPeerId).toList(), ['peer-a', 'peer-b']);
+      expect(entries.map((entry) => entry.keyPeerId).toList(),
+          ['peer-a', 'peer-b']);
       expect(entries.first.value, [3]);
       expect(entries.first.identitySignature, [30]);
       expect(entries.first.peerSignature, [31]);
@@ -163,10 +178,12 @@ void main() {
 
       final fileRefs = await db.getAttachmentRefsByFileId('space-a', 'file-1');
       expect(fileRefs.length, 3);
-      expect(fileRefs.map((entry) => entry.objectId).toList(), ['obj-1', 'obj-1', 'obj-2']);
+      expect(fileRefs.map((entry) => entry.objectId).toList(),
+          ['obj-1', 'obj-1', 'obj-2']);
     });
 
-    test('stores cached blobs independently from attachment metadata', () async {
+    test('stores cached blobs independently from attachment metadata',
+        () async {
       await db.insertObject('obj-1', 'space-a');
       await db.upsertAttachmentRef(
         spaceId: 'space-a',

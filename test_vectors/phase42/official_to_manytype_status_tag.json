@@ -1,0 +1,16 @@
+{
+  "captured_at": "2026-04-12T22:11:59.326672Z",
+  "scenario": "official-authored status/tag observed by Manytype",
+  "status_relation_id": "bafyreidayd66si5w4i5aqzrlnxvupyy5l4stgcjqk7ggsxsm2nldya2vsq",
+  "status_key": "69dc18a44f41580001935bb4",
+  "status_option_id": "bafyreifvmvmoyztysyghyshszzl3ul66nkc2ez3i3yslt3c6kin36bom5a",
+  "tag_relation_id": "bafyreiapvb2mqt6pwar3tsonkfa6es7avpqiztrmsgy7drrc2pp2fxmsxu",
+  "tag_key": "69dc18a44f41580001935bb5",
+  "tag_option_ids": [
+    "bafyreiawczibia52t35ckwflcy5abtuapvbvuded5vzeeuuuhogk3g5mz4",
+    "bafyreibqx5nu2pkwrcx6p3svpkjzoreundmukxsaljwx5xthcfg67pbagi"
+  ],
+  "object_id": "bafyreidsxay4nxnhfbnanclqtn754g2fd2bkmeosjbekassrpbgqnjoajq",
+  "read_path": "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_status_tag_read.txt",
+  "success": true
+}

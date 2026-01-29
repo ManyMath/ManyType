@@ -1,0 +1,12 @@
+{
+  "captured_at": "2026-04-12T22:10:48.741183Z",
+  "scenario": "manytype-authored file relation observed by official",
+  "relation_id": "bafyreiccds7s23l4ijndduxfg4blwxhofwtbklreq5fqgc56ynhsxexsoa",
+  "relation_key": "phase42-1776031458645671303-manytype-attachment",
+  "target_id": "bafyreibxprusefdeihytkojvuu5iqkii7mmwarny7evp4ngtpdtrl3rzme",
+  "file_object_id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa",
+  "payload_name": "phase42-1776031458645671303-manytype.pdf",
+  "target_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_file_relation_target-show.json",
+  "file_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_file_relation_file-show.json",
+  "success": true
+}

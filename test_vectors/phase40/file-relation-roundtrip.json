@@ -1,0 +1,18 @@
+{
+  "captured_at": "2026-04-12T22:02:50.574682Z",
+  "scenario": "phase40 file relation round-trip through docker any-sync",
+  "relation_key": "attachment",
+  "relation_object_id": "bafyreibpixc6vo2bzqbavrpqh7tt3gaqiwh46f2gj7r7vdvp7swgq6w6de",
+  "target_object_id": "bafyreiay7jwhqum7fum24cbgkzlt3ncgpfglitt3yc77x4pb26nu2exxei",
+  "file_object_id": "bafyreieafokkxxhfmewnj46mrlmc4phoh3yxeqchpkbogiepff5gdkfxyi",
+  "cid": "bafyreidtg3zqbx7mf2pfjueukq24vhlxleoa3dg42zsz6y5dfnprdrzmxy",
+  "source_name": "phase40-1776031338234845263.pdf",
+  "source_mime": "application/pdf",
+  "expected_render": "[attachment] phase40-1776031338234845263.pdf (application/pdf)",
+  "observed_on_home2": true,
+  "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase40/file-relation-roundtrip-sync.json",
+  "file_transfer_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase40/file-relation-roundtrip-transfer.json",
+  "read_home1_path": "/home/user/src/manytype/manytype/test_vectors/phase40/read-home1.txt",
+  "read_home2_path": "/home/user/src/manytype/manytype/test_vectors/phase40/read-home2.txt",
+  "success": true
+}

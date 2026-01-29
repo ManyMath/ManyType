@@ -61,11 +61,11 @@ void main() {
 
       final operations = [
         Change_Content(
-            blockCreate: Change_BlockCreate(
-                targetId: 'sb-root', blocks: [block1])),
+            blockCreate:
+                Change_BlockCreate(targetId: 'sb-root', blocks: [block1])),
         Change_Content(
-            blockCreate: Change_BlockCreate(
-                targetId: 'sb-root', blocks: [block2])),
+            blockCreate:
+                Change_BlockCreate(targetId: 'sb-root', blocks: [block2])),
       ];
 
       final (tree, _, _) =
@@ -92,8 +92,8 @@ void main() {
       // Add BlockCreate
       final createData = marshalChangeContent([
         Change_Content(
-            blockCreate: Change_BlockCreate(
-                targetId: 'sb-root', blocks: [block1])),
+            blockCreate:
+                Change_BlockCreate(targetId: 'sb-root', blocks: [block1])),
       ]);
       final change1 = await buildTreeChange(
         currentHeads: tree.heads,
@@ -199,8 +199,8 @@ void main() {
       // Add BlockCreate
       final createData = marshalChangeContent([
         Change_Content(
-            blockCreate: Change_BlockCreate(
-                targetId: 'sb-root', blocks: [block1])),
+            blockCreate:
+                Change_BlockCreate(targetId: 'sb-root', blocks: [block1])),
       ]);
       final change1 = await buildTreeChange(
         currentHeads: tree.heads,
@@ -213,8 +213,7 @@ void main() {
 
       // Add BlockRemove
       final removeData = marshalChangeContent([
-        Change_Content(
-            blockRemove: Change_BlockRemove(ids: ['block-1'])),
+        Change_Content(blockRemove: Change_BlockRemove(ids: ['block-1'])),
       ]);
       final change2 = await buildTreeChange(
         currentHeads: tree.heads,
@@ -231,8 +230,7 @@ void main() {
   });
 
   group('createSnapshot', () {
-    test(
-        'produces SmartBlockSnapshotBase with root + layout + content blocks',
+    test('produces SmartBlockSnapshotBase with root + layout + content blocks',
         () async {
       final block1 = createTextBlock('block-1', 'Hello');
       final block2 = createHeaderBlock('block-2', 'Title', 1);
@@ -242,11 +240,11 @@ void main() {
         aclHeadId,
         [
           Change_Content(
-              blockCreate: Change_BlockCreate(
-                  targetId: 'sb-root', blocks: [block1])),
+              blockCreate:
+                  Change_BlockCreate(targetId: 'sb-root', blocks: [block1])),
           Change_Content(
-              blockCreate: Change_BlockCreate(
-                  targetId: 'sb-root', blocks: [block2])),
+              blockCreate:
+                  Change_BlockCreate(targetId: 'sb-root', blocks: [block2])),
         ],
       );
 
@@ -256,8 +254,7 @@ void main() {
       // Root block
       expect(snapshot.blocks.any((b) => b.id == 'sb-root'), isTrue);
       // Layout block
-      expect(
-          snapshot.blocks.any((b) => b.id == 'layout-sb-root'), isTrue);
+      expect(snapshot.blocks.any((b) => b.id == 'layout-sb-root'), isTrue);
       // Content blocks
       expect(snapshot.blocks.any((b) => b.id == 'block-1'), isTrue);
       expect(snapshot.blocks.any((b) => b.id == 'block-2'), isTrue);
@@ -398,8 +395,8 @@ void main() {
         aclHeadId,
         [
           Change_Content(
-              blockCreate: Change_BlockCreate(
-                  targetId: 'sb-root', blocks: [block1])),
+              blockCreate:
+                  Change_BlockCreate(targetId: 'sb-root', blocks: [block1])),
         ],
       );
 
@@ -418,10 +415,57 @@ void main() {
       expect(tree.heads.first, equals(snapshotChange.id));
 
       // Verify isSnapshot flag on the TreeChange
-      final rawTreeChange =
-          RawTreeChange.fromBuffer(snapshotChange.rawChange);
+      final rawTreeChange = RawTreeChange.fromBuffer(snapshotChange.rawChange);
       final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
       expect(treeChange.isSnapshot, isTrue);
+    });
+
+    test('preserves replayed fileInfo and fileKeys in snapshot changes',
+        () async {
+      final root = await buildRootChange(
+        spaceId: 'space-1',
+        aclHeadId: aclHeadId,
+        identityPrivateKey: identitySeed,
+      );
+      final tree = ObjectTree.fromRoot(root);
+
+      final authoredChange = Change(
+        content: [
+          Change_Content(
+            setFileInfo: Change_SetFileInfo(
+              fileInfo: FileInfo(fileId: 'file-1'),
+            ),
+          ),
+        ],
+        fileKeys: [
+          Change_FileKeys(hash: 'bafy-file-key-1'),
+        ],
+      );
+      final treeChange = await buildTreeChange(
+        currentHeads: tree.heads,
+        aclHeadId: aclHeadId,
+        snapshotBaseId: root.id,
+        changesData: Uint8List.fromList(authoredChange.writeToBuffer()),
+        identityPrivateKey: identitySeed,
+      );
+      await tree.addChange(treeChange);
+
+      final snapshotChange = await compactTree(
+        tree: tree,
+        rootId: 'sb-root',
+        aclHeadId: aclHeadId,
+        identityPrivateKey: identitySeed,
+      );
+
+      final rawTreeChange = RawTreeChange.fromBuffer(snapshotChange.rawChange);
+      final compactedTreeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+      final compacted = Change.fromBuffer(compactedTreeChange.changesData);
+
+      expect(compacted.snapshot.data.fileInfo.fileId, equals('file-1'));
+      expect(
+        compacted.snapshot.fileKeys.map((key) => key.hash),
+        ['bafy-file-key-1'],
+      );
     });
 
     test(
@@ -435,11 +479,11 @@ void main() {
         aclHeadId,
         [
           Change_Content(
-              blockCreate: Change_BlockCreate(
-                  targetId: 'sb-root', blocks: [block1])),
+              blockCreate:
+                  Change_BlockCreate(targetId: 'sb-root', blocks: [block1])),
           Change_Content(
-              blockCreate: Change_BlockCreate(
-                  targetId: 'sb-root', blocks: [block2])),
+              blockCreate:
+                  Change_BlockCreate(targetId: 'sb-root', blocks: [block2])),
         ],
       );
 
@@ -451,8 +495,7 @@ void main() {
       );
 
       // Decode the changesData from the snapshot change
-      final rawTreeChange =
-          RawTreeChange.fromBuffer(snapshotChange.rawChange);
+      final rawTreeChange = RawTreeChange.fromBuffer(snapshotChange.rawChange);
       final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
       final change = Change.fromBuffer(treeChange.changesData);
 
@@ -484,8 +527,8 @@ void main() {
       for (final block in blocks) {
         final data = marshalChangeContent([
           Change_Content(
-              blockCreate: Change_BlockCreate(
-                  targetId: 'sb-root', blocks: [block])),
+              blockCreate:
+                  Change_BlockCreate(targetId: 'sb-root', blocks: [block])),
         ]);
         final change = await buildTreeChange(
           currentHeads: tree.heads,
@@ -509,8 +552,7 @@ void main() {
       );
 
       // Decode and verify all 3 blocks are present
-      final rawTreeChange =
-          RawTreeChange.fromBuffer(snapshotChange.rawChange);
+      final rawTreeChange = RawTreeChange.fromBuffer(snapshotChange.rawChange);
       final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
       expect(treeChange.isSnapshot, isTrue);
 
@@ -522,9 +564,7 @@ void main() {
       expect(snapshotData.blocks, hasLength(5));
 
       // Verify each block's content is preserved
-      final blockMap = {
-        for (final b in snapshotData.blocks) b.id: b
-      };
+      final blockMap = {for (final b in snapshotData.blocks) b.id: b};
       expect(blockMap['block-1']!.text.text, equals('First paragraph'));
       expect(blockMap['block-2']!.text.text, equals('My Title'));
       expect(blockMap['block-2']!.text.style,

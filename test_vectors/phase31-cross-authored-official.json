@@ -1,0 +1,16 @@
+{
+  "captured_at": "2026-04-12T22:04:08.389242Z",
+  "scenario": "official-authored -> manytype-observed (official infra)",
+  "space_id": "bafyreibhxf4jsgadtriw2bxmfvwc64jknibkqx2y3gur67rj42flfgm5sy.2b50mjn28cqsr",
+  "object_id": "bafyreighxqgyljth7oml32bje6x3b4bkhqbt74ukll77qjdbyx67htrl6a",
+  "updated_text": "phase31-official-updated-1776031388681525615",
+  "manytype_observed_text": "phase31-official-updated-1776031388681525615",
+  "invite_url": "anytype://invite/?cid=bafybeibvgxb4esgadzwmzsfrt6q2dl6hlylgbcmpso5s4yhe7k3y4n7vve&key=3BdqSnksXrvSWJRivBgE5KpiEmwHXvU5odbXzrBckiC3",
+  "official_probe": {
+    "join_result_path": "/home/user/src/manytype/manytype/test_vectors/phase31-cross-authored-official-official-join.json",
+    "create_result_path": "/home/user/src/manytype/manytype/test_vectors/phase31-cross-authored-official-official-create.json",
+    "edit_result_path": "/home/user/src/manytype/manytype/test_vectors/phase31-cross-authored-official-official-edit.json"
+  },
+  "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase31-cross-authored-official-manytype-pull-sync.json",
+  "success": true
+}

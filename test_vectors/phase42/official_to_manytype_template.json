@@ -1,0 +1,11 @@
+{
+  "captured_at": "2026-04-12T22:12:46.019996Z",
+  "scenario": "official-authored template observed by Manytype",
+  "type_id": "bafyreib6fgpyhfgffyr76tufmwsujy6ej25jwwbmtgnxuvvpplh4nopuzu",
+  "type_key": "ot-69dc18c64f41580001935bbd",
+  "template_id": "bafyreianerl7obo3hgz4dqxlux6gcxosxceuokbhim6etp7pfxpc6vih3a",
+  "applied_id": "bafyreifrsmra2sjfcynl3erhge3tcxkxzyeu652gy7l4tfggd3houiz6x4",
+  "template_read_path": "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_template_template-read.txt",
+  "applied_read_path": "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_template_applied-read.txt",
+  "success": true
+}

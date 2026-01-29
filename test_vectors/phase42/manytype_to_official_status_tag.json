@@ -1,0 +1,19 @@
+{
+  "captured_at": "2026-04-12T22:08:03.920385Z",
+  "scenario": "manytype-authored status/tag observed by official",
+  "status_relation_id": "bafyreigr5ljoncamlablscz4vt33qbz5viwt35lors3lswn62cb2y32yla",
+  "status_key": "phase42-1776031458645671303-manytype-status",
+  "status_option_id": "bafyreidjgkcf6cebhtvld2ta7von3oxvzk2eqi3psgzk6ptjyhmanjyl6i",
+  "tag_relation_id": "bafyreibbckcjmd3sdniild5pskygr6rurq27mmghlkhqhphfyddc3iya5a",
+  "tag_key": "phase42-1776031458645671303-manytype-tag",
+  "tag_option_ids": [
+    "bafyreih5sywytri54jphh6zx2x4475jri7dbqe3z2ghp4ixgdeqffuhhtm",
+    "bafyreihwr7al54y5ygx6jrbjqjkst743umtdrcf4v2uzr4amptm6gef4ne"
+  ],
+  "object_id": "bafyreihxy2a7osxas5kxtjrij6x5llunt3zvuin3wi3lwngeintxygrz2a",
+  "target_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_status_tag_target-show.json",
+  "status_option_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_status_tag_status-option-show.json",
+  "tag_option_a_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_status_tag_tag-option-a-show.json",
+  "tag_option_b_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_status_tag_tag-option-b-show.json",
+  "success": true
+}

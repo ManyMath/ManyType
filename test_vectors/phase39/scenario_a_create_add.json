@@ -1,0 +1,23 @@
+{
+  "captured_at": "2026-04-12T22:01:34.768043Z",
+  "scenario": "phase39 scenario A - create collection + add 3 members",
+  "collection_id": "bafyreifgcjcwir4moab4a5stb7f6r2xmt6wjjuamabibk5pyf3dtwdwdsm",
+  "member_ids_created": [
+    "bafyreiav2hbvcw5kljuedveg3mnplzblwxohme5m5bhflgscxnja6ykkfu",
+    "bafyreihjqjmozqmlpal3quqzrfpwllymtgdq7m3lfjqdveoqaefg3u5uq4",
+    "bafyreiekwdaebkuv3apld224fpi4anvpmc3s54kvcegukw7arwe7ovbrw4"
+  ],
+  "expected_members_ordered": [
+    "bafyreiekwdaebkuv3apld224fpi4anvpmc3s54kvcegukw7arwe7ovbrw4",
+    "bafyreihjqjmozqmlpal3quqzrfpwllymtgdq7m3lfjqdveoqaefg3u5uq4",
+    "bafyreiav2hbvcw5kljuedveg3mnplzblwxohme5m5bhflgscxnja6ykkfu"
+  ],
+  "expected_member_lines": [
+    "- Member 3 (bafyreiekwdaebkuv3apld224fpi4anvpmc3s54kvcegukw7arwe7ovbrw4)",
+    "- Member 2 (bafyreihjqjmozqmlpal3quqzrfpwllymtgdq7m3lfjqdveoqaefg3u5uq4)",
+    "- Member 1 (bafyreiav2hbvcw5kljuedveg3mnplzblwxohme5m5bhflgscxnja6ykkfu)"
+  ],
+  "observed_on_home2": true,
+  "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_a_create_add-sync.json",
+  "success": true
+}

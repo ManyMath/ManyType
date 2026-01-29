@@ -224,7 +224,7 @@ sleep 5
 
 printf 'Joining Manytype space via invite (direction A)...\n'
 OFFICIAL_JOIN_A="$TMPDIR/official-join-a.json"
-run_probe space-join --invite-url "$INVITE_URL" --network-id "manytype-phase36-type" >"$OFFICIAL_JOIN_A"
+run_probe space-join --invite-url "$INVITE_URL" --network-id "manytype-phase36-type" --space-id "$SPACE_ID" >"$OFFICIAL_JOIN_A"
 OFFICIAL_SPACE_JOINED="false"
 JOIN_ERR="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("error_code",""))' "$OFFICIAL_JOIN_A" 2>/dev/null || true)"
 if [[ -z "$JOIN_ERR" ]]; then
@@ -386,7 +386,7 @@ sleep 5
 
 printf 'Official joins space (direction B)...\n'
 OFFICIAL_JOIN_B="$TMPDIR/official-join-b.json"
-run_probe_b space-join --invite-url "$INVITE_URL_B" --network-id "$NETWORK_ID_B" >"$OFFICIAL_JOIN_B"
+run_probe_b space-join --invite-url "$INVITE_URL_B" --network-id "$NETWORK_ID_B" --space-id "$SPACE_ID_B" >"$OFFICIAL_JOIN_B"
 OFFICIAL_SPACE_ID_B="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("space_id",""))' "$OFFICIAL_JOIN_B" 2>/dev/null || echo "$SPACE_ID_B")"
 
 sleep 5

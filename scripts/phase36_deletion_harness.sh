@@ -229,7 +229,7 @@ sleep 5
 
 printf 'Joining Manytype space via invite (direction A)...\n'
 OFFICIAL_JOIN_A="$TMPDIR/official-join-a.json"
-run_probe space-join --invite-url "$INVITE_URL" --network-id "manytype-phase36-del" >"$OFFICIAL_JOIN_A"
+run_probe space-join --invite-url "$INVITE_URL" --network-id "manytype-phase36-del" --space-id "$SPACE_ID" >"$OFFICIAL_JOIN_A"
 
 sleep 5
 

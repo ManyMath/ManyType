@@ -1,0 +1,17 @@
+{
+  "captured_at": "2026-04-12T22:01:55.590009Z",
+  "scenario": "phase39 scenario B - remove 1 member",
+  "collection_id": "bafyreifgcjcwir4moab4a5stb7f6r2xmt6wjjuamabibk5pyf3dtwdwdsm",
+  "removed_member_id": "bafyreihjqjmozqmlpal3quqzrfpwllymtgdq7m3lfjqdveoqaefg3u5uq4",
+  "expected_members_ordered": [
+    "bafyreiekwdaebkuv3apld224fpi4anvpmc3s54kvcegukw7arwe7ovbrw4",
+    "bafyreiav2hbvcw5kljuedveg3mnplzblwxohme5m5bhflgscxnja6ykkfu"
+  ],
+  "expected_member_lines": [
+    "- Member 3 (bafyreiekwdaebkuv3apld224fpi4anvpmc3s54kvcegukw7arwe7ovbrw4)",
+    "- Member 1 (bafyreiav2hbvcw5kljuedveg3mnplzblwxohme5m5bhflgscxnja6ykkfu)"
+  ],
+  "observed_on_home2": true,
+  "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_b_remove-sync.json",
+  "success": true
+}
