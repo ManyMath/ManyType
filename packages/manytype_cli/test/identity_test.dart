@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:fixnum/fixnum.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_cli/src/identity.dart';
+import 'package:manytype_cli/src/peer_id.dart';
 import 'package:manytype_protocol/manytype_protocol.dart' show Key, KeyType;
 import 'package:manytype_protocol/spacesync.dart';
 import 'package:test/test.dart';
@@ -24,6 +25,13 @@ void main() {
     test('derives 32-byte peerId from mnemonic', () async {
       final identity = await Identity.fromMnemonic(testMnemonic);
       expect(identity.peerId.length, 32);
+    });
+
+    test('derives libp2p peer ID string from mnemonic', () async {
+      final identity = await Identity.fromMnemonic(testMnemonic);
+      final peerId = encodeLibp2pPeerId(identity.keyPair.publicKey);
+      expect(peerId, matches(RegExp(r'^[1-9A-HJ-NP-Za-km-z]+$')));
+      expect(peerId.length, greaterThan(40));
     });
 
     test('derivation is deterministic', () async {

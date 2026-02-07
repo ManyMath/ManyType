@@ -39,6 +39,29 @@ void main() {
       expect(result.aclRecords.single.id, 'cid-1');
       expect(result.aclRecords.single.payload, [1, 2, 3]);
     });
+
+    test('falls back to the outer acl record id for raw-record payloads', () {
+      final rawRecord = RawRecord(payload: [1, 2, 3], signature: [4, 5, 6]);
+      final bootstrap = SpacePullBootstrap(
+        invoker: (handleId, method, payload) => SpacePullResponse(
+          payload: SpacePayload(aclPayloadId: 'root-cid'),
+          aclRecords: [
+            AclRecord(
+              id: 'cid-outer',
+              aclPayload: rawRecord.writeToBuffer(),
+            ),
+          ],
+        ).writeToBuffer(),
+      );
+
+      final result = bootstrap.fetch(handleId: 3, spaceId: 'space-1');
+
+      expect(result.aclRecords.single.id, 'cid-outer');
+      expect(
+        result.aclRecords.single.payload,
+        rawRecord.writeToBuffer(),
+      );
+    });
   });
 
   group('SpacePullBootstrap round trip', () {

@@ -8,9 +8,13 @@ set -euo pipefail
 # - Manytype syncs and re-reads the official-authored edit
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ANYTYPE_IMAGE="${ANYTYPE_IMAGE:-ghcr.io/anyproto/anytype-cli:latest}"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/self_hosted_oracle.sh"
+
+ANYTYPE_IMAGE="$ORACLE_ANYTYPE_IMAGE"
 NETWORK_CONFIG_SRC="$ROOT_DIR/docker/any-sync/etc/client.yml"
 ARTIFACT_PATH="${PHASE31_CROSS_AUTHORED_OFFICIAL_ARTIFACT_PATH:-$ROOT_DIR/test_vectors/phase31-cross-authored-official.json}"
+METADATA_PATH="${ARTIFACT_PATH%.json}-metadata.json"
 MANYTYPE_SEED_SYNC_CAPTURE="$ROOT_DIR/test_vectors/phase31-cross-authored-official-manytype-seed-sync.json"
 MANYTYPE_PULL_SYNC_CAPTURE="$ROOT_DIR/test_vectors/phase31-cross-authored-official-manytype-pull-sync.json"
 OFFICIAL_JOIN_JSON="$ROOT_DIR/test_vectors/phase31-cross-authored-official-official-join.json"
@@ -23,7 +27,7 @@ OFFICIAL_ROOT="$TMPDIR/anytype-root"
 NETWORK_YML="$TMPDIR/network.yml"
 INVITE_JSON="$TMPDIR/invite.json"
 PUBLISH_JSON="$TMPDIR/publish.json"
-PROBE_DIR="$ROOT_DIR/scripts/official_client_grpc_probe"
+PROBE_BIN="$TMPDIR/official_client_grpc_probe"
 CLI_NAME="phase31-anytype-cli-official-$$"
 CLI_LOG_FILE="$TMPDIR/anytype-cli.log"
 
@@ -44,120 +48,59 @@ mkdir -p "$ROOT_DIR/test_vectors"
 mkdir -p "$MANYTYPE_HOME" "$OFFICIAL_ROOT"
 cp "$NETWORK_CONFIG_SRC" "$NETWORK_YML"
 
-export LD_LIBRARY_PATH="$ROOT_DIR/rust/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+oracle_run_preflight
+oracle_export_runtime_env
 
 printf 'Starting official any-sync stack...\n'
-(cd "$ROOT_DIR/docker/any-sync" && docker compose up -d >/dev/null)
-
-compose_ip() {
-  (cd "$ROOT_DIR/docker/any-sync" && docker compose ps -q "$1" | xargs docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
-}
+oracle_compose_up
+oracle_build_probe_binary "$PROBE_BIN"
 
 # anytype-cli runs in `--network host` so it can expose the local gRPC API on
 # 127.0.0.1:31010. The any-sync docker compose services are reachable via their
 # bridge-network IPs; map those hostnames explicitly so the official client can
 # resolve `any-sync-*` addresses from `client.yml`.
-ADD_HOST_ARGS=(
-  --add-host "any-sync-node-1:$(compose_ip any-sync-node-1)"
-  --add-host "any-sync-node-2:$(compose_ip any-sync-node-2)"
-  --add-host "any-sync-node-3:$(compose_ip any-sync-node-3)"
-  --add-host "any-sync-coordinator:$(compose_ip any-sync-coordinator)"
-  --add-host "any-sync-filenode:$(compose_ip any-sync-filenode)"
-  --add-host "any-sync-consensusnode:$(compose_ip any-sync-consensusnode)"
-)
+ADD_HOST_ARGS=()
+oracle_populate_add_host_args ADD_HOST_ARGS
 
 ORIGINAL_TEXT="phase31-official-seed-$(date +%s%N)"
 UPDATED_TEXT="phase31-official-updated-$(date +%s%N)"
 
 printf 'Preparing Manytype CLI temp home...\n'
 mkdir -p "$MANYTYPE_HOME"
-HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" init >/dev/null
-HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" create "$ORIGINAL_TEXT" >/dev/null
+oracle_run_cli "$MANYTYPE_HOME" init >/dev/null
+oracle_run_cli "$MANYTYPE_HOME" create "$ORIGINAL_TEXT" >/dev/null
 
 printf 'Seeding Manytype space to official stack...\n'
-HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/tool/phase31_seed_live_space.dart" \
-  --network-config "$NETWORK_CONFIG_SRC" \
-  --wait-seconds 10 >/dev/null
+oracle_seed_live_space "$MANYTYPE_HOME" "$NETWORK_CONFIG_SRC" 10
 
 printf 'Syncing Manytype space to official stack...\n'
-HOME="$MANYTYPE_HOME" MANYTYPE_SYNC_CAPTURE_PATH="$MANYTYPE_SEED_SYNC_CAPTURE" \
+MANYTYPE_SYNC_CAPTURE_PATH="$MANYTYPE_SEED_SYNC_CAPTURE" HOME="$MANYTYPE_HOME" \
   dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" --network-config "$NETWORK_CONFIG_SRC" sync >/dev/null
 
 printf 'Computing Manytype identity + generating invite material...\n'
-SPACE_INFO_JSON="$(HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/tool/phase31_identity_dump.dart")"
-SPACE_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["space_id"])' <<<"$SPACE_INFO_JSON")"
-ACCOUNT_SEED_HEX="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["account_seed_hex"])' <<<"$SPACE_INFO_JSON")"
-
-(cd "$ROOT_DIR/scripts/phase31_invite_gen" && go run . --account-seed-hex "$ACCOUNT_SEED_HEX" --space-id "$SPACE_ID" --space-name "phase31-cross-authored-official" --creator-name "manytype") >"$INVITE_JSON"
+SPACE_INFO_JSON="$(oracle_identity_json "$MANYTYPE_HOME")"
+SPACE_ID="$(printf '%s' "$SPACE_INFO_JSON" | oracle_json_stdin_field space_id)"
+oracle_generate_invite_from_home "$MANYTYPE_HOME" "phase31-cross-authored-official" "manytype" "$INVITE_JSON"
 
 printf 'Publishing invite (ACL record + file-node blob)...\n'
-HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/tool/phase31_space_invite_publish.dart" \
-  --network-config "$NETWORK_YML" \
-  --invite-json "$INVITE_JSON" \
-  --permissions writer >"$PUBLISH_JSON"
+oracle_publish_invite "$MANYTYPE_HOME" "$NETWORK_YML" "$INVITE_JSON" "$PUBLISH_JSON" writer
 
-INVITE_URL="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["invite_url"])' "$PUBLISH_JSON")"
-
-wait_for_grpc() {
-  for _ in $(seq 1 30); do
-    if (echo >/dev/tcp/127.0.0.1/31010) >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 1
-  done
-  return 1
-}
-
-wait_for_cli_session() {
-  for _ in $(seq 1 30); do
-    if docker run --rm --network host "${ADD_HOST_ARGS[@]}" \
-      -v "$OFFICIAL_ROOT:/root/.anytype" \
-      "$ANYTYPE_IMAGE" space list >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 1
-  done
-  return 1
-}
-
-printf 'Creating bot account...\n'
-start_cli_service() {
-  docker rm -f "$CLI_NAME" >/dev/null 2>&1 || true
-  docker run -d --name "$CLI_NAME" --network host "${ADD_HOST_ARGS[@]}" \
-    -v "$OFFICIAL_ROOT:/root/.anytype" \
-    -v "$NETWORK_YML:/etc/anytype/network.yml:ro" \
-    "$ANYTYPE_IMAGE" serve --verbose --listen-address 0.0.0.0:31010 >/dev/null
-}
+INVITE_URL="$(oracle_invite_url_from_json "$PUBLISH_JSON")"
 
 printf 'Starting anytype-cli service container...\n'
-start_cli_service
+oracle_start_cli_service "$CLI_NAME" "$OFFICIAL_ROOT" "$NETWORK_YML" ADD_HOST_ARGS
 
-if ! wait_for_grpc; then
+if ! oracle_wait_for_grpc; then
   printf 'FAIL: anytype-cli gRPC did not become ready on 127.0.0.1:31010\n' >&2
   docker logs "$CLI_NAME" | tail -200 >&2 || true
   exit 1
 fi
 
-ACCOUNT_CREATE_OUTPUT="$(docker run --rm --network host "${ADD_HOST_ARGS[@]}" \
-  -v "$OFFICIAL_ROOT:/root/.anytype" \
-  -v "$NETWORK_YML:/etc/anytype/network.yml:ro" \
-  "$ANYTYPE_IMAGE" auth create phase31-bot \
-  --network-config /etc/anytype/network.yml \
-  --root-path /root/.anytype)"
-
-ACCOUNT_KEY="$(printf '%s\n' "$ACCOUNT_CREATE_OUTPUT" | grep -oE '[A-Za-z0-9+/]{20,}={0,2}' | head -1)"
-if [[ -z "$ACCOUNT_KEY" ]]; then
-  printf 'FAIL: could not parse account key from auth create output\n' >&2
-  printf '%s\n' "$ACCOUNT_CREATE_OUTPUT" >&2
-  exit 1
-fi
-
-docker run --rm --entrypoint sh \
-  -v "$OFFICIAL_ROOT:/root/.anytype" \
-  "$ANYTYPE_IMAGE" -lc 'chmod 644 /root/.anytype/config.json' >/dev/null
+ACCOUNT_KEY="$(oracle_create_official_account "$OFFICIAL_ROOT" "$NETWORK_YML" ADD_HOST_ARGS phase31-bot)"
+[[ -n "$ACCOUNT_KEY" ]] || oracle_fail 'official account key is empty after auth create'
 
 printf 'Waiting for authenticated anytype-cli session...\n'
-if ! wait_for_cli_session; then
+if ! oracle_wait_for_cli_session "$OFFICIAL_ROOT" "$NETWORK_YML" ADD_HOST_ARGS; then
   printf 'FAIL: anytype-cli session did not become ready\n' >&2
   docker logs "$CLI_NAME" | tail -200 >&2 || true
   exit 1
@@ -166,8 +109,7 @@ fi
 run_probe() {
   local action="$1"
   shift
-  local timeout_arg="${PROBE_TIMEOUT:-60s}"
-  (cd "$PROBE_DIR" && go run . --config "$OFFICIAL_ROOT/config.json" --grpc-addr 127.0.0.1:31010 --timeout "$timeout_arg" --action "$action" "$@")
+  oracle_run_probe_binary "$PROBE_BIN" "$OFFICIAL_ROOT" "$action" "$@"
 }
 
 NETWORK_ID="$(sed -n 's/^networkId: //p' "$NETWORK_YML" | head -1)"
@@ -234,7 +176,7 @@ MANYTYPE_READ_OUT="$TMPDIR/manytype-read.txt"
 HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" read "$OBJECT_ID" >"$MANYTYPE_READ_OUT"
 
 mkdir -p "$(dirname "$ARTIFACT_PATH")"
-python3 - "$ARTIFACT_PATH" "$SPACE_ID" "$OBJECT_ID" "$UPDATED_TEXT" "$MANYTYPE_READ_OUT" "$INVITE_URL" "$MANYTYPE_PULL_SYNC_CAPTURE" "$OFFICIAL_JOIN_JSON" "$OFFICIAL_CREATE_JSON" "$OFFICIAL_EDIT_JSON" <<'PY'
+python3 - "$ARTIFACT_PATH" "$METADATA_PATH" "$SPACE_ID" "$OBJECT_ID" "$UPDATED_TEXT" "$MANYTYPE_READ_OUT" "$INVITE_URL" "$MANYTYPE_PULL_SYNC_CAPTURE" "$OFFICIAL_JOIN_JSON" "$OFFICIAL_CREATE_JSON" "$OFFICIAL_EDIT_JSON" <<'PY'
 import datetime as dt
 import json
 import pathlib
@@ -242,15 +184,16 @@ import re
 import sys
 
 artifact_path = pathlib.Path(sys.argv[1])
-space_id = sys.argv[2]
-object_id = sys.argv[3]
-updated_text = sys.argv[4]
-manytype_read_out = sys.argv[5]
-invite_url = sys.argv[6]
-manytype_capture = sys.argv[7]
-join_result_path = sys.argv[8]
-create_result_path = sys.argv[9]
-edit_result_path = sys.argv[10]
+metadata_path = sys.argv[2]
+space_id = sys.argv[3]
+object_id = sys.argv[4]
+updated_text = sys.argv[5]
+manytype_read_out = sys.argv[6]
+invite_url = sys.argv[7]
+manytype_capture = sys.argv[8]
+join_result_path = sys.argv[9]
+create_result_path = sys.argv[10]
+edit_result_path = sys.argv[11]
 
 observed_text = ""
 try:
@@ -286,11 +229,24 @@ artifact = {
     "edit_result_path": edit_result_path,
   },
   "manytype_sync_capture_path": manytype_capture,
+  "metadata_path": metadata_path,
   "success": success,
 }
 
 artifact_path.write_text(json.dumps(artifact, indent=2) + "\n")
 PY
+
+oracle_write_metadata \
+  "$METADATA_PATH" \
+  "official-authored note observed by Manytype on the self-hosted official stack" \
+  "$NETWORK_CONFIG_SRC" \
+  "$PROBE_BIN" \
+  "$ARTIFACT_PATH" \
+  "$MANYTYPE_SEED_SYNC_CAPTURE" \
+  "$MANYTYPE_PULL_SYNC_CAPTURE" \
+  "$OFFICIAL_JOIN_JSON" \
+  "$OFFICIAL_CREATE_JSON" \
+  "$OFFICIAL_EDIT_JSON"
 
 python3 - "$ARTIFACT_PATH" <<'PY'
 import json,sys
@@ -301,4 +257,5 @@ print(f"OK: phase31 cross-authored official ({data['object_id']})")
 PY
 
 printf 'Artifact written: %s\n' "$ARTIFACT_PATH"
+printf 'Metadata written: %s\n' "$METADATA_PATH"
 printf 'phase31_cross_authored_official.sh: PASSED\n'

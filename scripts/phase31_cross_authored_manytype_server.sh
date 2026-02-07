@@ -8,7 +8,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUST_DIR="$ROOT_DIR/rust"
-ANYTYPE_IMAGE="${ANYTYPE_IMAGE:-ghcr.io/anyproto/anytype-cli:latest}"
+LOCK_FILE="$ROOT_DIR/docker/any-sync/oracle.lock.env"
+if [[ -f "$LOCK_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$LOCK_FILE"
+fi
+ANYTYPE_IMAGE="${ANYTYPE_IMAGE:-${ANYTYPE_CLI_IMAGE:-ghcr.io/anyproto/anytype-cli:latest}}"
 PORT="${PORT:-33141}"
 ARTIFACT_PATH="${PHASE31_CROSS_AUTHORED_MANYTYPE_SERVER_ARTIFACT_PATH:-$ROOT_DIR/test_vectors/phase31-cross-authored-manytype-server.json}"
 MANYTYPE_SEED_SYNC_CAPTURE="$ROOT_DIR/test_vectors/phase31-cross-authored-manytype-server-manytype-seed-sync.json"

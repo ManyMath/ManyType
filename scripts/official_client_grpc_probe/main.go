@@ -62,6 +62,8 @@ func run() error {
 	detailKind := flag.String("detail-kind", "string", "detail kind: string, string-list, bool, number")
 	detailValue := flag.String("detail-value", "", "detail value for object-set-detail")
 	detailValuesCSV := flag.String("detail-values", "", "comma-separated detail values for string-list")
+	searchQuery := flag.String("query", "", "full-text search query for object-search")
+	isArchived := flag.Bool("archived", true, "archive state for object-set-is-archived")
 	templateID := flag.String("template-id", "", "template id")
 	objectTypeKey := flag.String("object-type-key", "", "object type unique key")
 	afterID := flag.String("after-id", "", "collection insertion anchor id")
@@ -77,11 +79,14 @@ func run() error {
 		"object-show":                   true,
 		"object-show-text":              true,
 		"object-edit-text":              true,
+		"object-search":                 true,
 		"object-create-type":            true,
 		"object-create-relation":        true,
 		"object-create-relation-option": true,
 		"object-add-relation":           true,
 		"object-set-detail":             true,
+		"object-set-is-archived":        true,
+		"object-delete":                 true,
 		"object-set-object-type":        true,
 		"object-apply-template":         true,
 		"object-to-collection":          true,
@@ -128,6 +133,8 @@ func run() error {
 		return runObjectShowText(client, token, *objectID, *spaceID, *timeout)
 	case "object-edit-text":
 		return runObjectEditText(client, token, *objectID, *spaceID, *text, *timeout)
+	case "object-search":
+		return runObjectSearch(client, token, *spaceID, *searchQuery, *timeout)
 	case "object-create-type":
 		return runObjectCreateType(client, token, *spaceID, *name, *timeout)
 	case "object-create-relation":
@@ -148,6 +155,10 @@ func run() error {
 			splitCSV(*detailValuesCSV),
 			*timeout,
 		)
+	case "object-set-is-archived":
+		return runObjectSetIsArchived(client, token, *objectID, *spaceID, *isArchived, *timeout)
+	case "object-delete":
+		return runObjectDelete(client, token, *objectID, *spaceID, *timeout)
 	case "object-set-object-type":
 		return runObjectSetObjectType(client, token, *objectID, *spaceID, *objectTypeKey, *timeout)
 	case "object-apply-template":
@@ -470,7 +481,15 @@ func runObjectSetDetail(
 		return err
 	}
 
-	openResponse, err := openObjectContext(client, token, objectID, spaceID, timeout)
+	openResponse, response, err := objectSetDetail(
+		client,
+		token,
+		objectID,
+		spaceID,
+		detailKey,
+		value,
+		timeout,
+	)
 	if err != nil {
 		return err
 	}
@@ -483,6 +502,34 @@ func runObjectSetDetail(
 			"error_code":        openResponse.Error.Code.String(),
 			"error_description": openResponse.Error.Description,
 		})
+	}
+
+	output := map[string]any{
+		"action":       "object-set-detail",
+		"object_id":    objectID,
+		"detail_key":   detailKey,
+		"detail_kind":  detailKind,
+		"detail_value": outputValue,
+	}
+	if response.Error != nil && response.Error.Code.String() != "NULL" {
+		output["error_code"] = response.Error.Code.String()
+		output["error_description"] = response.Error.Description
+	}
+	return writeJSON(output)
+}
+
+func objectSetDetail(
+	client servicepb.ClientCommandsClient,
+	token string,
+	objectID string,
+	spaceID string,
+	detailKey string,
+	value *types.Value,
+	timeout time.Duration,
+) (*pb.RpcObjectOpenResponse, *pb.RpcObjectSetDetailsResponse, error) {
+	openResponse, err := openObjectContext(client, token, objectID, spaceID, timeout)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	ctx, cancel := authContext(token, timeout)
@@ -498,16 +545,231 @@ func runObjectSetDetail(
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("ObjectSetDetails RPC failed: %w", err)
+		return openResponse, nil, fmt.Errorf("ObjectSetDetails RPC failed: %w", err)
+	}
+	return openResponse, response, nil
+}
+
+func runObjectSetIsArchived(
+	client servicepb.ClientCommandsClient,
+	token string,
+	objectID string,
+	spaceID string,
+	archived bool,
+	timeout time.Duration,
+) error {
+	if objectID == "" {
+		return errors.New("--object-id is required for object-set-is-archived")
+	}
+
+	openResponse, response, err := objectSetIsArchived(
+		client,
+		token,
+		objectID,
+		spaceID,
+		archived,
+		timeout,
+	)
+	if err != nil {
+		return err
+	}
+	if openResponse.Error != nil && openResponse.Error.Code.String() != "NULL" {
+		return writeJSON(map[string]any{
+			"action":            "object-set-is-archived",
+			"object_id":         objectID,
+			"is_archived":       archived,
+			"error_code":        openResponse.Error.Code.String(),
+			"error_description": openResponse.Error.Description,
+		})
 	}
 
 	output := map[string]any{
-		"action":       "object-set-detail",
-		"object_id":    objectID,
-		"detail_key":   detailKey,
-		"detail_kind":  detailKind,
-		"detail_value": outputValue,
+		"action":      "object-set-is-archived",
+		"object_id":   objectID,
+		"is_archived": archived,
 	}
+	if response.Error != nil && response.Error.Code.String() != "NULL" {
+		output["error_code"] = response.Error.Code.String()
+		output["error_description"] = response.Error.Description
+	}
+	return writeJSON(output)
+}
+
+func objectSetIsArchived(
+	client servicepb.ClientCommandsClient,
+	token string,
+	objectID string,
+	spaceID string,
+	archived bool,
+	timeout time.Duration,
+) (*pb.RpcObjectOpenResponse, *pb.RpcObjectSetIsArchivedResponse, error) {
+	openResponse, err := openObjectContext(client, token, objectID, spaceID, timeout)
+	if err != nil {
+		return nil, nil, err
+	}
+	if openResponse.Error == nil || openResponse.Error.Code.String() == "NULL" {
+		if err := ensureArchiveCollectionLoaded(client, token, spaceID, timeout); err != nil {
+			return openResponse, nil, err
+		}
+	}
+
+	ctx, cancel := authContext(token, timeout)
+	defer cancel()
+
+	response, err := client.ObjectSetIsArchived(ctx, &pb.RpcObjectSetIsArchivedRequest{
+		ContextId:  objectID,
+		IsArchived: archived,
+	})
+	if err != nil {
+		return openResponse, nil, fmt.Errorf("ObjectSetIsArchived RPC failed: %w", err)
+	}
+	return openResponse, response, nil
+}
+
+func ensureArchiveCollectionLoaded(
+	client servicepb.ClientCommandsClient,
+	token string,
+	spaceID string,
+	timeout time.Duration,
+) error {
+	if strings.TrimSpace(spaceID) == "" {
+		return nil
+	}
+
+	workspaceResponse, err := openWorkspace(client, token, spaceID, timeout)
+	if err != nil {
+		return err
+	}
+	if workspaceResponse.Error != nil && workspaceResponse.Error.Code.String() != "NULL" {
+		return fmt.Errorf(
+			"WorkspaceOpen returned %s: %s",
+			workspaceResponse.Error.Code.String(),
+			workspaceResponse.Error.Description,
+		)
+	}
+	if workspaceResponse.Info == nil || workspaceResponse.Info.ArchiveObjectId == "" {
+		return nil
+	}
+
+	archiveShowResponse, err := showObjectResponse(
+		client,
+		token,
+		workspaceResponse.Info.ArchiveObjectId,
+		spaceID,
+		timeout,
+		false,
+	)
+	if err != nil {
+		return err
+	}
+	if archiveShowResponse.Error != nil && archiveShowResponse.Error.Code.String() != "NULL" {
+		return fmt.Errorf(
+			"archive ObjectShow returned %s: %s",
+			archiveShowResponse.Error.Code.String(),
+			archiveShowResponse.Error.Description,
+		)
+	}
+	return nil
+}
+
+func runObjectDelete(
+	client servicepb.ClientCommandsClient,
+	token string,
+	objectID string,
+	spaceID string,
+	timeout time.Duration,
+) error {
+	if objectID == "" {
+		return errors.New("--object-id is required for object-delete")
+	}
+
+	openResponse, archiveResponse, err := objectSetIsArchived(
+		client,
+		token,
+		objectID,
+		spaceID,
+		true,
+		timeout,
+	)
+	if err != nil {
+		return err
+	}
+	if openResponse.Error != nil && openResponse.Error.Code.String() != "NULL" {
+		return writeJSON(map[string]any{
+			"action":            "object-delete",
+			"object_id":         objectID,
+			"archive_attempted": true,
+			"archived_first":    false,
+			"delete_attempted":  false,
+			"error_code":        openResponse.Error.Code.String(),
+			"error_description": openResponse.Error.Description,
+		})
+	}
+
+	archiveSucceeded := archiveResponse.Error == nil || archiveResponse.Error.Code.String() == "NULL"
+	output := map[string]any{
+		"action":            "object-delete",
+		"object_id":         objectID,
+		"archive_attempted": true,
+	}
+	if archiveSucceeded {
+		output["archive_succeeded"] = true
+	} else {
+		output["archive_succeeded"] = false
+		output["archive_error_code"] = archiveResponse.Error.Code.String()
+		output["archive_error_description"] = archiveResponse.Error.Description
+		if archiveResponse.Error.Code.String() != "UNKNOWN_ERROR" ||
+			!strings.Contains(strings.ToLower(archiveResponse.Error.Description), "root block not found") {
+			output["archived_first"] = false
+			output["delete_attempted"] = false
+			return writeJSON(output)
+		}
+		output["archive_fallback"] = true
+
+		detailOpenResponse, detailResponse, err := objectSetDetail(
+			client,
+			token,
+			objectID,
+			spaceID,
+			"isArchived",
+			&types.Value{
+				Kind: &types.Value_BoolValue{BoolValue: true},
+			},
+			timeout,
+		)
+		if err != nil {
+			return err
+		}
+		output["archive_detail_fallback"] = true
+		if detailOpenResponse.Error != nil && detailOpenResponse.Error.Code.String() != "NULL" {
+			output["archived_first"] = false
+			output["delete_attempted"] = false
+			output["archive_detail_error_code"] = detailOpenResponse.Error.Code.String()
+			output["archive_detail_error_description"] = detailOpenResponse.Error.Description
+			return writeJSON(output)
+		}
+		if detailResponse.Error != nil && detailResponse.Error.Code.String() != "NULL" {
+			output["archived_first"] = false
+			output["delete_attempted"] = false
+			output["archive_detail_error_code"] = detailResponse.Error.Code.String()
+			output["archive_detail_error_description"] = detailResponse.Error.Description
+			return writeJSON(output)
+		}
+		output["archive_detail_succeeded"] = true
+	}
+
+	ctx, cancel := authContext(token, timeout)
+	defer cancel()
+
+	response, err := client.ObjectListDelete(ctx, &pb.RpcObjectListDeleteRequest{
+		ObjectIds: []string{objectID},
+	})
+	if err != nil {
+		return fmt.Errorf("ObjectListDelete RPC failed: %w", err)
+	}
+
+	output["archived_first"] = archiveSucceeded
+	output["delete_attempted"] = true
 	if response.Error != nil && response.Error.Code.String() != "NULL" {
 		output["error_code"] = response.Error.Code.String()
 		output["error_description"] = response.Error.Description
@@ -944,6 +1206,65 @@ func runObjectShowText(
 	return writeJSON(output)
 }
 
+func runObjectSearch(
+	client servicepb.ClientCommandsClient,
+	token string,
+	spaceID string,
+	query string,
+	timeout time.Duration,
+) error {
+	if spaceID == "" {
+		return errors.New("--space-id is required for object-search")
+	}
+
+	ctx, cancel := authContext(token, timeout)
+	defer cancel()
+
+	response, err := client.ObjectSearch(ctx, &pb.RpcObjectSearchRequest{
+		SpaceId:  spaceID,
+		FullText: query,
+		Limit:    200,
+		Keys:     []string{"id", "name", "isArchived"},
+	})
+	if err != nil {
+		return fmt.Errorf("ObjectSearch RPC failed: %w", err)
+	}
+
+	objectIDs := make([]string, 0, len(response.Records))
+	names := make([]string, 0, len(response.Records))
+	records := make([]map[string]any, 0, len(response.Records))
+	for _, record := range response.Records {
+		if record == nil {
+			continue
+		}
+		objectID := structStringField(record, "id")
+		name := structStringField(record, "name")
+		archived := structBoolField(record, "isArchived")
+		objectIDs = append(objectIDs, objectID)
+		names = append(names, name)
+		records = append(records, map[string]any{
+			"id":          objectID,
+			"name":        name,
+			"is_archived": archived,
+		})
+	}
+
+	output := map[string]any{
+		"action":       "object-search",
+		"space_id":     spaceID,
+		"query":        query,
+		"record_count": len(records),
+		"object_ids":   objectIDs,
+		"names":        names,
+		"records":      records,
+	}
+	if response.Error != nil && response.Error.Code.String() != "NULL" {
+		output["error_code"] = response.Error.Code.String()
+		output["error_description"] = response.Error.Description
+	}
+	return writeJSON(output)
+}
+
 func runObjectEditText(
 	client servicepb.ClientCommandsClient,
 	token string,
@@ -1111,6 +1432,10 @@ func showObjectResponse(
 	timeout time.Duration,
 	includeRelations bool,
 ) (*pb.RpcObjectShowResponse, error) {
+	if err := ensureWorkspaceLoaded(client, token, spaceID, timeout); err != nil {
+		return nil, err
+	}
+
 	// Official object content is only populated reliably after the object
 	// context has been opened at least once in the current session.
 	openResponse, err := openObjectContext(client, token, objectID, spaceID, timeout)
@@ -1147,6 +1472,30 @@ func showObjectResponse(
 	return response, nil
 }
 
+func ensureWorkspaceLoaded(
+	client servicepb.ClientCommandsClient,
+	token string,
+	spaceID string,
+	timeout time.Duration,
+) error {
+	if strings.TrimSpace(spaceID) == "" {
+		return nil
+	}
+
+	workspaceResponse, err := openWorkspace(client, token, spaceID, timeout)
+	if err != nil {
+		return err
+	}
+	if workspaceResponse.Error != nil && workspaceResponse.Error.Code.String() != "NULL" {
+		return fmt.Errorf(
+			"WorkspaceOpen returned %s: %s",
+			workspaceResponse.Error.Code.String(),
+			workspaceResponse.Error.Description,
+		)
+	}
+	return nil
+}
+
 func openObjectContext(
 	client servicepb.ClientCommandsClient,
 	token string,
@@ -1164,6 +1513,24 @@ func openObjectContext(
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ObjectOpen RPC failed: %w", err)
+	}
+	return response, nil
+}
+
+func openWorkspace(
+	client servicepb.ClientCommandsClient,
+	token string,
+	spaceID string,
+	timeout time.Duration,
+) (*pb.RpcWorkspaceOpenResponse, error) {
+	ctx, cancel := authContext(token, timeout)
+	defer cancel()
+
+	response, err := client.WorkspaceOpen(ctx, &pb.RpcWorkspaceOpenRequest{
+		SpaceId: spaceID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("WorkspaceOpen RPC failed: %w", err)
 	}
 	return response, nil
 }
@@ -1621,6 +1988,29 @@ func splitCSV(raw string) []string {
 		}
 	}
 	return out
+}
+
+func structStringField(record *types.Struct, key string) string {
+	value, ok := getStringField(record, key)
+	if !ok {
+		return ""
+	}
+	return value
+}
+
+func structBoolField(record *types.Struct, key string) bool {
+	if record == nil {
+		return false
+	}
+	value, ok := record.Fields[key]
+	if !ok || value == nil {
+		return false
+	}
+	boolValue, ok := value.Kind.(*types.Value_BoolValue)
+	if !ok {
+		return false
+	}
+	return boolValue.BoolValue
 }
 
 func toUniqueKey(name string) string {

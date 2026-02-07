@@ -9,6 +9,7 @@ import 'package:manytype_cli/src/commands/sync.dart';
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/store/database.dart';
 import 'package:manytype_core/manytype_core.dart';
+import 'package:manytype_protocol/manytype_protocol.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -79,8 +80,10 @@ void main() {
       workingDirectory: repoRoot,
     );
 
-    final stdoutFuture = process.stdout.transform(utf8.decoder).listen(print).asFuture();
-    final stderrFuture = process.stderr.transform(utf8.decoder).listen(print).asFuture();
+    final stdoutFuture =
+        process.stdout.transform(utf8.decoder).listen(print).asFuture();
+    final stderrFuture =
+        process.stderr.transform(utf8.decoder).listen(print).asFuture();
 
     final exitCode = await process.exitCode;
     await stdoutFuture;
@@ -106,5 +109,62 @@ void main() {
     expect(objectSyncMethods, isNotEmpty,
         reason: 'No ObjectSync RPCs found in capture');
     print('Found ObjectSync RPCs: $objectSyncMethods');
+
+    final objectSyncStreamMessages = events
+        .where((event) =>
+            event['type'] == 'stream_rpc' &&
+            event['method'] == '/spacesync.SpaceSync/ObjectSyncStream')
+        .expand(
+          (event) => (event['request_messages'] as List<dynamic>)
+              .cast<Map<String, dynamic>>(),
+        )
+        .map<TreeSyncMessage>(
+          (message) => TreeSyncMessage.fromBuffer(
+              base64Decode(message['base64'] as String)),
+        )
+        .where(
+          (TreeSyncMessage message) =>
+              message.hasContent() && message.content.hasHeadUpdate(),
+        )
+        .toList(growable: false);
+
+    expect(
+      objectSyncStreamMessages,
+      isNotEmpty,
+      reason: 'No ObjectSyncStream head updates found in capture',
+    );
+
+    final snapshotBackedHeadUpdates =
+        objectSyncStreamMessages.where((TreeSyncMessage message) {
+      if (!message.hasRootChange()) {
+        return false;
+      }
+      final headUpdate = message.content.headUpdate;
+      return headUpdate.snapshotPath.length >= 2;
+    }).toList(growable: false);
+
+    expect(
+      snapshotBackedHeadUpdates,
+      isNotEmpty,
+      reason:
+          'Expected at least one snapshot-backed ObjectSyncStream head update',
+    );
+
+    for (final message in snapshotBackedHeadUpdates) {
+      final headUpdate = message.content.headUpdate;
+      final changeIds =
+          headUpdate.changes.map((change) => change.id).toList(growable: false);
+
+      expect(
+        changeIds,
+        contains(message.rootChange.id),
+        reason: 'Root change must be replayable from headUpdate.changes',
+      );
+      expect(
+        headUpdate.snapshotPath.last,
+        equals(message.rootChange.id),
+        reason: 'Snapshot path must terminate at the tree root',
+      );
+    }
   }, timeout: const Timeout(Duration(minutes: 3)));
 }

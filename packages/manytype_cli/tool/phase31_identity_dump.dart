@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/identity.dart';
+import 'package:manytype_cli/src/peer_id.dart';
 
 String _toHex(List<int> bytes) =>
     bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
@@ -14,8 +15,9 @@ Future<void> main(List<String> argv) async {
   stdout.writeln(
     const JsonEncoder.withIndent('  ').convert({
       'space_id': identity.spaceId,
+      'peer_id': encodeLibp2pPeerId(identity.keyPair.publicKey),
       'account_seed_hex': _toHex(identity.accountSeed),
+      'identity_seed_hex': _toHex(identity.seed),
     }),
   );
 }
-
