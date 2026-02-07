@@ -1,13 +1,14 @@
 //! Rust FFI crate wrapping QUIC client, credential handshake, and DRPC framing.
 //!
 //! Provides C FFI exports for Dart to call: connect, invoke, sync_object,
-//! sync_store, free.
+//! request_object, sync_store, free.
 //! All network protocol complexity stays in Rust; Dart gets simple
 //! connect/invoke/sync_object/sync_store calls through the C ABI.
 
 pub mod client;
 pub mod drpc;
 pub mod handshake;
+pub mod incoming;
 pub mod runtime;
 
 use std::collections::HashMap;
@@ -16,8 +17,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 
 use client::ConnHandle;
+use incoming::cache_tree_payload;
 use manytype_core::crypto::ed25519;
-use manytype_proto::spacesync::ObjectSyncMessage;
+use manytype_proto::spacesync::{ObjectSyncMessage, ObjectType};
 use prost::Message;
 use runtime::RUNTIME;
 
@@ -230,8 +232,6 @@ pub unsafe extern "C" fn ffi_sync_object(
         &[]
     };
 
-    use manytype_proto::spacesync::ObjectType;
-
     let main_msg = ObjectSyncMessage {
         space_id: space_id.clone(),
         object_id: object_id.clone(),
@@ -243,24 +243,36 @@ pub unsafe extern "C" fn ffi_sync_object(
 
     let messages: Vec<Vec<u8>> = vec![main_msg.encode_to_vec()];
 
-    let connection = {
+    let (connection, served_trees) = {
         let handles = HANDLES.lock().unwrap();
         match handles.get(&handle_id) {
-            Some(h) => h.connection.clone(),
+            Some(h) => (h.connection.clone(), h.served_trees.clone()),
             None => return FfiResult::error(format!("unknown handle ID: {handle_id}")),
         }
     };
 
+    if payload_len > 0 {
+        cache_tree_payload(
+            &served_trees,
+            &space_id,
+            &object_id,
+            payload_slice,
+            ObjectType::Tree as i32,
+        );
+    }
+
     match RUNTIME.block_on(async {
         let mut drpc_stream = client::open_drpc_stream(&connection).await?;
-        drpc::sync_object(
-            &mut drpc_stream,
-            &messages,
-        )
-        .await
+        drpc::sync_object(&mut drpc_stream, &messages).await
     }) {
         Ok(responses) => {
-            trace(|| format!("ffi_sync_object success handle_id={} responses={}", handle_id, responses.len()));
+            trace(|| {
+                format!(
+                    "ffi_sync_object success handle_id={} responses={}",
+                    handle_id,
+                    responses.len()
+                )
+            });
             let mut out = Vec::new();
             for resp in responses {
                 out.extend_from_slice(&(resp.len() as u32).to_le_bytes());
@@ -271,6 +283,89 @@ pub unsafe extern "C" fn ffi_sync_object(
         Err(e) => {
             trace(|| format!("ffi_sync_object error handle_id={} err={:#}", handle_id, e));
             FfiResult::error(format!("sync_object failed: {e:#}"))
+        }
+    }
+}
+
+/// Request an object by sending a single TreeSyncMessage via
+/// ObjectSyncRequestStream.
+///
+/// `payload`: serialized TreeSyncMessage full-sync request bytes.
+///
+/// Returns raw response bytes (serialized ObjectSyncMessage(s)).
+///
+/// # Safety
+///
+/// - `space_id` and `object_id` must be valid, NUL-terminated C strings.
+/// - `payload` must point to at least `payload_len` readable bytes (or be null when `payload_len` is 0).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ffi_request_object(
+    handle_id: u64,
+    space_id: *const c_char,
+    object_id: *const c_char,
+    payload: *const u8,
+    payload_len: u32,
+) -> *mut FfiResult {
+    let space_id = unsafe { CStr::from_ptr(space_id) }
+        .to_str()
+        .unwrap_or("")
+        .to_string();
+    let object_id = unsafe { CStr::from_ptr(object_id) }
+        .to_str()
+        .unwrap_or("")
+        .to_string();
+
+    let payload_slice = if payload_len > 0 {
+        unsafe { std::slice::from_raw_parts(payload, payload_len as usize) }
+    } else {
+        &[]
+    };
+
+    let request = ObjectSyncMessage {
+        space_id,
+        object_id,
+        request_id: "req-0".to_string(),
+        payload: payload_slice.to_vec(),
+        object_type: ObjectType::Tree as i32,
+        ..Default::default()
+    }
+    .encode_to_vec();
+
+    let connection = {
+        let handles = HANDLES.lock().unwrap();
+        match handles.get(&handle_id) {
+            Some(h) => h.connection.clone(),
+            None => return FfiResult::error(format!("unknown handle ID: {handle_id}")),
+        }
+    };
+
+    match RUNTIME.block_on(async {
+        let mut drpc_stream = client::open_drpc_stream(&connection).await?;
+        drpc::request_object(&mut drpc_stream, &request).await
+    }) {
+        Ok(responses) => {
+            trace(|| {
+                format!(
+                    "ffi_request_object success handle_id={} responses={}",
+                    handle_id,
+                    responses.len()
+                )
+            });
+            let mut out = Vec::new();
+            for resp in responses {
+                out.extend_from_slice(&(resp.len() as u32).to_le_bytes());
+                out.extend_from_slice(&resp);
+            }
+            FfiResult::success(out)
+        }
+        Err(e) => {
+            trace(|| {
+                format!(
+                    "ffi_request_object error handle_id={} err={:#}",
+                    handle_id, e
+                )
+            });
+            FfiResult::error(format!("request_object failed: {e:#}"))
         }
     }
 }
@@ -350,7 +445,9 @@ pub unsafe extern "C" fn ffi_sync_store(
 /// Free a connection handle, closing the QUIC connection.
 #[unsafe(no_mangle)]
 pub extern "C" fn ffi_free_handle(handle_id: u64) {
-    HANDLES.lock().unwrap().remove(&handle_id);
+    if let Some(handle) = HANDLES.lock().unwrap().remove(&handle_id) {
+        handle.connection.close(0u32.into(), b"ffi_free_handle");
+    }
 }
 
 /// Free an FfiResult and its associated memory.

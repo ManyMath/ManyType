@@ -3,10 +3,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:manytype_core/manytype_core.dart';
+import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/manytype_protocol.dart'
-    show RawTreeChange, RootChange;
+    show RawTreeChange, RootChange, TreeChange;
 import 'package:manytype_protocol/spacesync.dart'
     show SettingsData, SpaceSettingsContent, ObjectDelete;
+import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart'
+    show Value;
 
 import '../acl_codec.dart';
 import '../config.dart';
@@ -19,7 +22,10 @@ Future<void> deleteCommand(
   ManytypeDatabase db,
   CliConfig config, {
   required String networkConfigPath,
+  SyncService? syncService,
 }) async {
+  final syncServiceRef = syncService ?? SyncService();
+
   // 1. Verify the object exists locally
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
@@ -34,8 +40,7 @@ Future<void> deleteCommand(
   }
 
   // 2. Sync to get latest state
-  final syncService = SyncService();
-  await syncService.sync(db, config, networkConfigPath: networkConfigPath);
+  await syncServiceRef.sync(db, config, networkConfigPath: networkConfigPath);
 
   // 3. Load identity and derive keys
   final identity = await Identity.fromMnemonic(config.mnemonic);
@@ -89,7 +94,59 @@ Future<void> deleteCommand(
     exit(1);
   }
 
-  // 6. Build SettingsData with ObjectDelete
+  final objectHeads = await db.getObjectHeads(objectId);
+  if (objectHeads.isEmpty) {
+    print('No heads found for target object');
+    exit(1);
+  }
+
+  final objectChanges = await db.getChangesForObject(objectId);
+  final objectRootId = _findRootChangeId(objectChanges);
+  if (objectRootId == null) {
+    print('Could not find root change for target object');
+    exit(1);
+  }
+
+  // 6. Archive the target object so official discovery surfaces treat the
+  // object as deleted in the same way the official stack does.
+  final accountPrivRaw = Uint8List(64)
+    ..setRange(0, 32, identity.accountSeed)
+    ..setRange(32, 64, identity.accountKeyPair.publicKey);
+  final spaceKey = await deriveSpaceKey(accountPrivRaw);
+  final objectTreeKey = await deriveTreeKey(spaceKey, objectId);
+  final settingsTreeKey = await deriveTreeKey(spaceKey, settingsPayloadId);
+
+  final objectWriteMetadata = _resolveTreeWriteMetadata(
+    objectChanges,
+    objectHeads,
+    fallbackAclHeadId: aclHeadId,
+    fallbackSnapshotBaseId: objectRootId,
+  );
+  final archiveChangeData = marshalChangeContent([
+    changes_proto.Change_Content(
+      detailsSet: changes_proto.Change_DetailsSet(
+        key: 'isArchived',
+        value: Value(boolValue: true),
+      ),
+    ),
+  ]);
+  final archiveTreeChange = await buildTreeChange(
+    currentHeads: objectHeads,
+    aclHeadId: objectWriteMetadata.aclHeadId,
+    snapshotBaseId: objectWriteMetadata.snapshotBaseId,
+    changesData: await aesGcmEncrypt(objectTreeKey, archiveChangeData),
+    identityPrivateKey: identity.accountSeed,
+    readKeyId: objectWriteMetadata.readKeyId,
+  );
+  await db.insertChange(
+    archiveTreeChange.id,
+    objectId,
+    archiveTreeChange.rawChange,
+    jsonEncode(objectHeads),
+  );
+
+  // 7. Build SettingsData with ObjectDelete to preserve local delete
+  // semantics and the existing settings-tree contract.
   final settingsData = SettingsData(
     content: [
       SpaceSettingsContent(
@@ -98,13 +155,6 @@ Future<void> deleteCommand(
     ],
   );
   final settingsDataBytes = Uint8List.fromList(settingsData.writeToBuffer());
-
-  // 7. Derive tree key for the SETTINGS TREE (not the target object!)
-  final accountPrivRaw = Uint8List(64)
-    ..setRange(0, 32, identity.accountSeed)
-    ..setRange(32, 64, identity.accountKeyPair.publicKey);
-  final spaceKey = await deriveSpaceKey(accountPrivRaw);
-  final settingsTreeKey = await deriveTreeKey(spaceKey, settingsPayloadId);
 
   // 8. Build encrypted TreeChange for the settings tree
   final treeChange = await buildTreeChange(
@@ -128,9 +178,82 @@ Future<void> deleteCommand(
   await db.markObjectDeleted(objectId);
 
   // 11. Sync to push the settings tree change
-  await syncService.sync(db, config, networkConfigPath: networkConfigPath);
+  await syncServiceRef.sync(db, config, networkConfigPath: networkConfigPath);
 
   print('Deleted $objectId');
+}
+
+String? _findRootChangeId(List<Change> changes) {
+  for (final change in changes) {
+    final parents = jsonDecode(change.parentHeads) as List;
+    if (parents.isEmpty) {
+      return change.id;
+    }
+  }
+  return null;
+}
+
+class _TreeWriteMetadata {
+  const _TreeWriteMetadata({
+    required this.aclHeadId,
+    required this.snapshotBaseId,
+    required this.readKeyId,
+  });
+
+  final String aclHeadId;
+  final String snapshotBaseId;
+  final String readKeyId;
+}
+
+_TreeWriteMetadata _resolveTreeWriteMetadata(
+  List<Change> changes,
+  List<String> currentHeads, {
+  required String fallbackAclHeadId,
+  required String fallbackSnapshotBaseId,
+}) {
+  final currentHeadSet = currentHeads.toSet();
+
+  for (final stored in changes.reversed) {
+    if (!currentHeadSet.contains(stored.id)) {
+      continue;
+    }
+    final decoded = _decodeStoredTreeChange(stored);
+    if (decoded == null) {
+      continue;
+    }
+    final aclHeadId =
+        decoded.aclHeadId.isNotEmpty ? decoded.aclHeadId : fallbackAclHeadId;
+    final snapshotBaseId = decoded.isSnapshot
+        ? stored.id
+        : decoded.snapshotBaseId.isNotEmpty
+            ? decoded.snapshotBaseId
+            : fallbackSnapshotBaseId;
+    final readKeyId =
+        decoded.readKeyId.isNotEmpty ? decoded.readKeyId : aclHeadId;
+    return _TreeWriteMetadata(
+      aclHeadId: aclHeadId,
+      snapshotBaseId: snapshotBaseId,
+      readKeyId: readKeyId,
+    );
+  }
+
+  return _TreeWriteMetadata(
+    aclHeadId: fallbackAclHeadId,
+    snapshotBaseId: fallbackSnapshotBaseId,
+    readKeyId: fallbackAclHeadId,
+  );
+}
+
+TreeChange? _decodeStoredTreeChange(Change stored) {
+  try {
+    final rawTreeChange = RawTreeChange.fromBuffer(stored.rawBytes);
+    if (rawTreeChange.payload.isEmpty) {
+      return null;
+    }
+    return TreeChange.fromBuffer(rawTreeChange.payload);
+  } catch (_) {
+    return null;
+  }
 }
 
 Future<String> _findAclRootId(

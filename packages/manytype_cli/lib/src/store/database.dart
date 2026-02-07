@@ -94,7 +94,9 @@ class ManytypeDatabase extends _$ManytypeDatabase {
   Future<void> insertObject(String id, String spaceId) async {
     await into(objects).insert(
       ObjectsCompanion.insert(id: id, spaceId: spaceId),
-      mode: InsertMode.insertOrReplace,
+      // Sync frequently re-sees existing object rows. Do not replace them, or
+      // we clear soft-delete state that was already applied locally.
+      mode: InsertMode.insertOrIgnore,
     );
   }
 
@@ -263,7 +265,7 @@ class ManytypeDatabase extends _$ManytypeDatabase {
 
   /// Mark an object as deleted (soft-delete via isDeleted flag).
   Future<void> markObjectDeleted(String objectId) async {
-    (update(objects)..where((o) => o.id.equals(objectId)))
+    await (update(objects)..where((o) => o.id.equals(objectId)))
         .write(const ObjectsCompanion(isDeleted: Value(true)));
   }
 

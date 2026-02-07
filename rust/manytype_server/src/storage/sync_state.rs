@@ -443,9 +443,7 @@ impl SharedSyncState {
         let state = self.inner.read().unwrap();
         let mut owned: Vec<_> = state
             .iter()
-            .filter(|(_, space)| {
-                space.owner_peer_id.is_empty() || space.owner_peer_id == peer_id
-            })
+            .filter(|(_, space)| space.owner_peer_id.is_empty() || space.owner_peer_id == peer_id)
             .map(|(space_id, _)| space_id.clone())
             .collect();
         owned.sort();
@@ -870,7 +868,9 @@ mod tests {
         let after_root = state.list_acl_records("space-1", "acl-root-id");
         assert_eq!(after_root.len(), 1);
         assert_eq!(
-            RawRecordWithId::decode(after_root[0].as_slice()).unwrap().id,
+            RawRecordWithId::decode(after_root[0].as_slice())
+                .unwrap()
+                .id,
             "cid-1"
         );
     }

@@ -12,6 +12,7 @@ use crate::file_node;
 use crate::sync_node::{self, SharedSyncState};
 use manytype_proto::spacesync::ObjectSyncMessage;
 use manytype_proto::spacesync::StoreKeyValue;
+use manytype_proto::treechange::{self, TreeSyncMessage};
 
 /// Shared server state passed to all RPC handlers.
 ///
@@ -217,6 +218,26 @@ where
         Ok(())
     }
 
+    fn object_sync_error_message(response_bytes: &[u8]) -> Option<String> {
+        let msg = ObjectSyncMessage::decode(response_bytes).ok()?;
+        if msg.payload.is_empty() {
+            return None;
+        }
+
+        let tree_msg = TreeSyncMessage::decode(msg.payload.as_slice()).ok()?;
+        let content = tree_msg.content?;
+        let value = content.value?;
+        let treechange::tree_sync_content_value::Value::ErrorResponse(err) = value else {
+            return None;
+        };
+
+        if err.error.is_empty() {
+            Some(format!("tree sync error code {}", err.err_code))
+        } else {
+            Some(err.error)
+        }
+    }
+
     match method {
         "/coordinator.Coordinator/NetworkConfiguration" => {
             let request_bytes = stream.read_message().await?;
@@ -367,8 +388,9 @@ where
                 }
 
                 if msg.value.is_empty() {
-                    if let Some(entry) =
-                        state.sync_state.get_store_entry(&msg.space_id, &msg.key_peer_id)
+                    if let Some(entry) = state
+                        .sync_state
+                        .get_store_entry(&msg.space_id, &msg.key_peer_id)
                     {
                         tracing::info!(
                             "store: serve space_id={} key_peer_id={} value_len={}",
@@ -489,6 +511,11 @@ where
             let request_bytes = stream.read_message().await?;
             let response_bytes =
                 sync_node::handle_object_sync_message(&request_bytes, &state.sync_state)?;
+            if let Some(error_message) = object_sync_error_message(&response_bytes) {
+                write_error_response(stream, stream_id, &mut next_message_id, &error_message)
+                    .await?;
+                bail!("{error_message}");
+            }
             write_response(stream, stream_id, &mut next_message_id, &response_bytes).await?;
             write_close_send(stream, stream_id, &mut next_message_id).await?;
             write_close(stream, stream_id, &mut next_message_id).await
@@ -526,13 +553,30 @@ where
         }
         "/consensusProto.Consensus/LogAdd" => {
             let request_bytes = stream.read_message().await?;
+            let request =
+                manytype_proto::consensus::LogAddRequest::decode(request_bytes.as_slice())?;
+            if consensus::has_persisted_space_linked_log(&request.log_id, &state.sync_state) {
+                anyhow::bail!("consensus log already exists");
+            }
             let response_bytes = consensus::handle_log_add(&request_bytes)?;
+            consensus::persist_space_linked_log_add(&request, &state.sync_state)?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/consensusProto.Consensus/RecordAdd" => {
             let request_bytes = stream.read_message().await?;
+            let request =
+                manytype_proto::consensus::RecordAddRequest::decode(request_bytes.as_slice())?;
+            consensus::ensure_log_exists_from_sync_state(&request.log_id, &state.sync_state);
             let response_bytes =
                 consensus::handle_record_add(&request_bytes, &state.local_signing_key)?;
+            let raw_with_id =
+                manytype_proto::consensus::RawRecordWithId::decode(response_bytes.as_slice())?;
+            consensus::persist_space_linked_record_add(
+                &request.log_id,
+                response_bytes.as_slice(),
+                &raw_with_id.id,
+                &state.sync_state,
+            )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/filesync.File/BlocksCheck" => {
@@ -987,6 +1031,62 @@ mod tests {
         assert_eq!(frame.kind, KIND_MESSAGE);
         let response = ObjectSyncMessage::decode(frame.data.as_ref()).unwrap();
         assert_eq!(response.reply_id, "req-1");
+
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_object_sync_request_stream_returns_error_for_missing_tree() {
+        use manytype_proto::spacesync::ObjectSyncMessage;
+        use manytype_proto::treechange::{
+            self, TreeFullSyncRequest, TreeSyncContentValue, TreeSyncMessage,
+        };
+
+        let (client, server) = duplex(4096);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+        let state = test_state();
+
+        let handle = tokio::spawn(async move {
+            let result = dispatch(
+                1,
+                "/spacesync.SpaceSync/ObjectSyncRequestStream",
+                &mut server_stream,
+                &state,
+                "peer",
+            )
+            .await;
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("tree not found"));
+        });
+
+        let request = ObjectSyncMessage {
+            space_id: "space-1".to_string(),
+            object_id: "missing-obj".to_string(),
+            request_id: "req-404".to_string(),
+            payload: TreeSyncMessage {
+                content: Some(TreeSyncContentValue {
+                    value: Some(treechange::tree_sync_content_value::Value::FullSyncRequest(
+                        TreeFullSyncRequest {
+                            heads: vec!["head-1".to_string()],
+                            ..Default::default()
+                        },
+                    )),
+                }),
+                ..Default::default()
+            }
+            .encode_to_vec(),
+            ..Default::default()
+        };
+        client_stream
+            .write_message(1, 1, &request.encode_to_vec())
+            .await
+            .unwrap();
+
+        let frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(frame.kind, KIND_ERROR);
+        let error_text = String::from_utf8(frame.data.to_vec()).unwrap();
+        assert!(error_text.contains("tree not found"));
 
         handle.await.unwrap();
     }

@@ -23,6 +23,7 @@ class ObjectMeta {
   final List<String> types;
   final String? name;
   final Map<String, String> details;
+  final bool isArchived;
   final bool isCollection;
   final int collectionMemberCount;
 
@@ -31,6 +32,7 @@ class ObjectMeta {
     this.types = const [],
     this.name,
     this.details = const {},
+    this.isArchived = false,
     this.isCollection = false,
     this.collectionMemberCount = 0,
   });
@@ -50,9 +52,10 @@ class ObjectMeta {
 Future<void> listCommand(
   ManytypeDatabase db,
   CliConfig config, {
-  required String networkConfigPath,
+  String? networkConfigPath,
   String? typeFilter,
   String? whereFilter,
+  SyncService? syncService,
 }) async {
   // Derive identity and space key once.
   final identity = await Identity.fromMnemonic(config.mnemonic);
@@ -62,9 +65,11 @@ Future<void> listCommand(
     ..setRange(32, 64, accountKeyPair.publicKey);
   final spaceKey = await deriveSpaceKey(accountPrivRaw);
 
-  // Sync before listing.
-  final syncService = SyncService();
-  await syncService.sync(db, config, networkConfigPath: networkConfigPath);
+  // Sync before listing when network access is explicitly requested.
+  if (networkConfigPath != null) {
+    final syncServiceRef = syncService ?? SyncService();
+    await syncServiceRef.sync(db, config, networkConfigPath: networkConfigPath);
+  }
 
   // Query all non-deleted objects.
   final objects = await db.getNonDeletedObjectsBySpace(identity.spaceId);
@@ -99,7 +104,7 @@ Future<void> listCommand(
       optIndex: optIndex,
       cachedChanges: rawChangesByObject[obj.id],
     );
-    if (meta != null) {
+    if (meta != null && !meta.isArchived) {
       metas.add(meta);
     }
   }
@@ -276,7 +281,7 @@ Future<ObjectMeta?> _extractObjectMeta(
             }
             isCollection = true;
             collectionDataview ??= block.dataview.deepCopy();
-            if (collectionDataview!.views.isEmpty &&
+            if (collectionDataview.views.isEmpty &&
                 block.dataview.views.isNotEmpty) {
               collectionDataview = block.dataview.deepCopy();
             }
@@ -310,6 +315,7 @@ Future<ObjectMeta?> _extractObjectMeta(
     types: List<String>.from(objectTypes),
     name: name,
     details: details,
+    isArchived: details['isArchived'] == 'true',
     isCollection: isCollection,
     collectionMemberCount:
         _collectionMemberCount(collections, collectionDataview),

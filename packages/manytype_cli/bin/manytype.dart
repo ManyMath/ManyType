@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:args/args.dart';
 
 import 'package:manytype_core/manytype_core.dart';
@@ -6,11 +8,15 @@ import 'package:manytype_protocol/models.dart';
 import 'package:manytype_cli/src/commands/create.dart';
 import 'package:manytype_cli/src/commands/delete.dart';
 import 'package:manytype_cli/src/commands/edit.dart';
+import 'package:manytype_cli/src/commands/acl_lifecycle.dart';
+import 'package:manytype_cli/src/commands/consensus_flow.dart';
 import 'package:manytype_cli/src/commands/list.dart';
 import 'package:manytype_cli/src/commands/file_transfer.dart';
 import 'package:manytype_cli/src/commands/probe_file_node.dart';
 import 'package:manytype_cli/src/commands/probe_network.dart';
 import 'package:manytype_cli/src/commands/read.dart';
+import 'package:manytype_cli/src/commands/space_delete.dart';
+import 'package:manytype_cli/src/commands/space_pull_flow.dart';
 import 'package:manytype_cli/src/commands/sync.dart';
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/store/database.dart';
@@ -70,6 +76,8 @@ Future<void> main(List<String> arguments) async {
     ..addOption('text', help: 'New text content for the object')
     ..addFlag('checkbox', negatable: false, help: 'Add a checkbox block')
     ..addOption('relation', help: 'Relation key to set')
+    ..addOption('string', help: 'String detail value')
+    ..addOption('string-list', help: 'Comma-separated string-list detail value')
     ..addOption('bool', help: 'Bool relation value: true or false')
     ..addOption('date', help: 'Unix timestamp for date relation')
     ..addOption('file-relation',
@@ -122,14 +130,52 @@ Future<void> main(List<String> arguments) async {
     ..addOption('id',
         help: 'Object ID to delete (from manytype read output)',
         mandatory: true);
+  final spaceDeleteParser = ArgParser()
+    ..addOption('space-id',
+        help:
+            'Space ID to delete; defaults to the current owner space and must match it for the bounded flow')
+    ..addOption('wait-seconds',
+        defaultsTo: '6',
+        help:
+            'Seconds to wait before the reconnect-backed status reread (default: 6)')
+    ..addOption('deletion-duration-minutes',
+        defaultsTo: '0',
+        help: 'Deletion duration sent to the coordinator request (default: 0)')
+    ..addFlag('json',
+        negatable: false,
+        help: 'Emit the structured space-delete report as JSON');
   final listParser = ArgParser()
     ..addOption('type', help: 'Filter by object type key (e.g. ot-page)')
     ..addOption('where', help: 'Filter by relation key=value (e.g. done=true)');
+  final aclLifecycleParser = ArgParser()
+    ..addFlag('json', negatable: false, help: 'Emit JSON output');
+  final consensusBootstrapParser = ArgParser()
+    ..addOption('state-out',
+        help: 'Optional path to write continuation state JSON')
+    ..addFlag('json', negatable: false, help: 'Emit JSON output');
+  final consensusContinueParser = ArgParser()
+    ..addOption('state-in',
+        help: 'Path to the continuation state JSON', mandatory: true)
+    ..addFlag('json', negatable: false, help: 'Emit JSON output');
+  final spacePullBootstrapParser = ArgParser()
+    ..addOption('state-out',
+        help: 'Optional path to write continuation state JSON')
+    ..addFlag('json', negatable: false, help: 'Emit JSON output');
+  final spacePullRefetchParser = ArgParser()
+    ..addOption('state-in',
+        help: 'Path to the continuation state JSON', mandatory: true)
+    ..addFlag('json', negatable: false, help: 'Emit JSON output');
   parser.addCommand('create', createParser);
   parser.addCommand('sync');
   parser.addCommand('read', readParser);
   parser.addCommand('edit', editParser);
   parser.addCommand('delete', deleteParser);
+  parser.addCommand('space-delete', spaceDeleteParser);
+  parser.addCommand('acl-lifecycle', aclLifecycleParser);
+  parser.addCommand('consensus-bootstrap', consensusBootstrapParser);
+  parser.addCommand('consensus-continue', consensusContinueParser);
+  parser.addCommand('space-pull-bootstrap', spacePullBootstrapParser);
+  parser.addCommand('space-pull-refetch', spacePullRefetchParser);
   parser.addCommand('list', listParser);
   parser.addCommand('init');
   parser.addCommand('file-upload', fileUploadParser);
@@ -143,7 +189,9 @@ Future<void> main(List<String> arguments) async {
     print('Usage: manytype <command> [options]');
     print(
       'Commands: init, create, sync, read, edit, delete, list, file-upload, '
-      'file-open, probe-network, probe-file-node',
+      'file-open, probe-network, probe-file-node, space-delete, '
+      'acl-lifecycle, consensus-bootstrap, consensus-continue, '
+      'space-pull-bootstrap, space-pull-refetch',
     );
     print(parser.usage);
     return;
@@ -344,6 +392,8 @@ Future<void> main(List<String> arguments) async {
       final hasCheckbox = command['checkbox'] == true;
       final newText = command['text'] as String?;
       final relationKey = command['relation'] as String?;
+      final stringValue = command['string'] as String?;
+      final stringListArg = command['string-list'] as String?;
       final boolValue = command['bool'] as String?;
       final dateValue = command['date'] as String?;
       final fileRelationPath = command['file-relation'] as String?;
@@ -364,6 +414,16 @@ Future<void> main(List<String> arguments) async {
       final hasStatus = statusArg != null;
       final hasTag = tagArg != null;
       final hasTagDelta = tagAddList.isNotEmpty || tagRemoveList.isNotEmpty;
+      final List<String>? stringListValue;
+      if (stringListArg != null) {
+        stringListValue = stringListArg
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+      } else {
+        stringListValue = null;
+      }
 
       // Parse tag full-replace list.
       final List<String>? tagIds;
@@ -383,12 +443,15 @@ Future<void> main(List<String> arguments) async {
         // specific error messages surface when multiple value types collide.
         // --status is mutex with --bool / --date / --object-id.
         if (hasStatus &&
-            (boolValue != null ||
+            (stringValue != null ||
+                stringListValue != null ||
+                boolValue != null ||
                 dateValue != null ||
                 fileRelationPath != null ||
                 objectIdValue != null)) {
           throw StateError(
-            '--status is mutex with --bool, --date, --file-relation, and --object-id',
+            '--status is mutex with --string, --string-list, --bool, --date, '
+            '--file-relation, and --object-id',
           );
         }
         // --tag is mutex with --tag-add / --tag-remove.
@@ -405,17 +468,21 @@ Future<void> main(List<String> arguments) async {
         }
         // --tag/--tag* is mutex with --bool / --date / --object-id.
         if ((hasTag || hasTagDelta) &&
-            (boolValue != null ||
+            (stringValue != null ||
+                stringListValue != null ||
+                boolValue != null ||
                 dateValue != null ||
                 fileRelationPath != null ||
                 objectIdValue != null)) {
           throw StateError(
-            '--tag / --tag-add / --tag-remove are mutex with --bool, '
-            '--date, --file-relation, and --object-id',
+            '--tag / --tag-add / --tag-remove are mutex with --string, '
+            '--string-list, --bool, --date, --file-relation, and --object-id',
           );
         }
 
         final typedCount = [
+          stringValue,
+          stringListValue != null ? '__string_list__' : null,
           boolValue,
           dateValue,
           fileRelationPath,
@@ -426,18 +493,20 @@ Future<void> main(List<String> arguments) async {
         ].where((v) => v != null).length;
         if (typedCount != 1) {
           throw StateError(
-            '--relation requires exactly one of --bool, --date, '
-            '--file-relation, --object-id, --status, --tag, or '
+            '--relation requires exactly one of --string, --string-list, '
+            '--bool, --date, --file-relation, --object-id, --status, --tag, or '
             '--tag-add/--tag-remove',
           );
         }
-      } else if (boolValue != null ||
+      } else if (stringValue != null ||
+          stringListValue != null ||
+          boolValue != null ||
           dateValue != null ||
           fileRelationPath != null ||
           objectIdValue != null) {
         throw StateError(
-          '--bool, --date, --file-relation, and --object-id require '
-          '--relation <key>',
+          '--string, --string-list, --bool, --date, --file-relation, and '
+          '--object-id require --relation <key>',
         );
       } else if (hasStatus || hasTag || hasTagDelta) {
         throw StateError(
@@ -538,6 +607,8 @@ Future<void> main(List<String> arguments) async {
               ? (command.rest.isNotEmpty ? command.rest.join(' ') : 'Todo')
               : null,
           relationKey: relationKey,
+          stringValue: stringValue,
+          stringListValue: stringListValue,
           boolValue: boolValue,
           dateValue: dateValue,
           fileRelationPath: fileRelationPath,
@@ -575,11 +646,6 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'list':
-      if (networkConfigPath == null) {
-        throw StateError(
-          'list requires --network-config <path>',
-        );
-      }
       final config = await CliConfig.load(serverOverride: serverOverride);
       final db = ManytypeDatabase(CliConfig.dbPath);
       await listCommand(
@@ -590,6 +656,87 @@ Future<void> main(List<String> arguments) async {
         whereFilter: command['where'] as String?,
       );
       await db.close();
+      break;
+
+    case 'space-delete':
+      if (networkConfigPath == null) {
+        throw StateError(
+          'space-delete requires --network-config <path>',
+        );
+      }
+      final waitSecondsRaw = command['wait-seconds'] as String;
+      final deletionDurationRaw =
+          command['deletion-duration-minutes'] as String;
+      final waitSeconds = int.tryParse(waitSecondsRaw);
+      final deletionDurationMinutes = int.tryParse(deletionDurationRaw);
+      if (waitSeconds == null) {
+        throw StateError('--wait-seconds must be an integer');
+      }
+      if (deletionDurationMinutes == null) {
+        throw StateError('--deletion-duration-minutes must be an integer');
+      }
+      final config = await CliConfig.load(serverOverride: serverOverride);
+      final exitCode = await spaceDeleteCommand(
+        config: config,
+        networkConfigPath: networkConfigPath,
+        requestedSpaceId: command['space-id'] as String?,
+        waitSeconds: waitSeconds,
+        deletionDurationMinutes: deletionDurationMinutes,
+        jsonOutput: command['json'] == true,
+      );
+      if (exitCode != 0) {
+        exit(exitCode);
+      }
+      break;
+
+    case 'acl-lifecycle':
+      if (networkConfigPath == null) {
+        throw StateError(
+          'acl-lifecycle requires --network-config <path>',
+        );
+      }
+      await aclLifecycleCommand(
+        networkConfigPath: networkConfigPath,
+        jsonOutput: command['json'] == true,
+      );
+      break;
+
+    case 'consensus-bootstrap':
+      await consensusBootstrapCommand(
+        serverAddress: serverOverride ?? '127.0.0.1:33020',
+        stateOut: command['state-out'] as String?,
+        jsonOutput: command['json'] == true,
+      );
+      break;
+
+    case 'consensus-continue':
+      await consensusContinueCommand(
+        serverOverride: serverOverride,
+        stateIn: command['state-in'] as String,
+        jsonOutput: command['json'] == true,
+      );
+      break;
+
+    case 'space-pull-bootstrap':
+      if (networkConfigPath == null) {
+        throw StateError(
+          'space-pull-bootstrap requires --network-config <path>',
+        );
+      }
+      await spacePullBootstrapCommand(
+        networkConfigPath: networkConfigPath,
+        serverAddress: serverOverride ?? '127.0.0.1:33020',
+        stateOut: command['state-out'] as String?,
+        jsonOutput: command['json'] == true,
+      );
+      break;
+
+    case 'space-pull-refetch':
+      await spacePullRefetchCommand(
+        serverOverride: serverOverride,
+        stateIn: command['state-in'] as String,
+        jsonOutput: command['json'] == true,
+      );
       break;
 
     case 'file-upload':

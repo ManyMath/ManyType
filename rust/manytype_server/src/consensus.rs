@@ -14,9 +14,12 @@ use ed25519_dalek::Signer;
 use prost::Message;
 
 use manytype_core::crdt::cid::compute_cid;
+use manytype_proto::aclrecord::AclRoot;
 use manytype_proto::consensus::{
-    LogAddRequest, Ok as ConsensusOk, RawRecordWithId, Record, RecordAddRequest,
+    LogAddRequest, Ok as ConsensusOk, RawRecord, RawRecordWithId, Record, RecordAddRequest,
 };
+
+use crate::storage::sync_state::SharedSyncState;
 
 #[derive(Clone)]
 struct StoredRecord {
@@ -101,6 +104,94 @@ pub fn ensure_log_exists(log_id: &str, head_id: &str) {
     });
 }
 
+/// Re-seed an in-memory log from persisted ACL state when available.
+///
+/// Returns the persisted head used for seeding, or `None` when the requested
+/// log does not map to a persisted space-linked ACL log.
+pub fn ensure_log_exists_from_sync_state(
+    log_id: &str,
+    sync_state: &SharedSyncState,
+) -> Option<String> {
+    let head_id = {
+        let state = sync_state.read().unwrap();
+        let space = state.get(log_id)?;
+        if !space.acl_head.is_empty() {
+            Some(space.acl_head.clone())
+        } else if !space.acl_root_id.is_empty() {
+            Some(space.acl_root_id.clone())
+        } else {
+            None
+        }
+    }?;
+
+    ensure_log_exists(log_id, &head_id);
+    Some(head_id)
+}
+
+/// True when the persisted sync state already contains a space-linked ACL log.
+pub fn has_persisted_space_linked_log(log_id: &str, sync_state: &SharedSyncState) -> bool {
+    let state = sync_state.read().unwrap();
+    let Some(space) = state.get(log_id) else {
+        return false;
+    };
+    !space.acl_root_id.is_empty() || !space.acl_head.is_empty() || !space.acl_records.is_empty()
+}
+
+/// Persist a direct `LogAdd` root when it is a space-linked ACL root.
+///
+/// Direct consensus RPCs remain generic, so non-ACL logs are ignored here.
+pub fn persist_space_linked_log_add(
+    request: &LogAddRequest,
+    sync_state: &SharedSyncState,
+) -> Result<bool> {
+    let Some(raw_with_id) = request.record.as_ref() else {
+        return Ok(false);
+    };
+
+    let Ok(raw_record) = RawRecord::decode(raw_with_id.payload.as_slice()) else {
+        return Ok(false);
+    };
+    let Ok(record) = Record::decode(raw_record.payload.as_slice()) else {
+        return Ok(false);
+    };
+    if !record.prev_id.is_empty() {
+        return Ok(false);
+    }
+
+    let Ok(acl_root) = AclRoot::decode(record.data.as_slice()) else {
+        return Ok(false);
+    };
+    if acl_root.space_id != request.log_id {
+        return Ok(false);
+    }
+
+    sync_state.upsert_space_metadata(
+        &request.log_id,
+        None,
+        Some(raw_with_id.payload.clone()),
+        Some(raw_with_id.id.clone()),
+        None,
+        None,
+        None,
+        None,
+    )?;
+    Ok(true)
+}
+
+/// Persist a direct `RecordAdd` result when it belongs to a persisted space log.
+pub fn persist_space_linked_record_add(
+    log_id: &str,
+    raw_with_id_bytes: &[u8],
+    record_id: &str,
+    sync_state: &SharedSyncState,
+) -> Result<bool> {
+    if ensure_log_exists_from_sync_state(log_id, sync_state).is_none() {
+        return Ok(false);
+    }
+    sync_state.append_acl_record(log_id, raw_with_id_bytes.to_vec(), record_id)?;
+    Ok(true)
+}
+
 #[cfg(test)]
 pub fn reset_logs_for_tests() {
     CONSENSUS_LOGS.lock().unwrap().clear();
@@ -117,7 +208,13 @@ fn unix_now_secs() -> u64 {
 mod tests {
     use super::*;
     use manytype_core::crypto::ed25519;
+    use manytype_proto::aclrecord::{
+        AclAccountInvite, AclContentValue, AclData, AclUserPermissions, acl_content_value::Value,
+    };
     use manytype_proto::consensus::RawRecord;
+    use tempfile::TempDir;
+
+    use crate::storage::sync_state::new_shared_sync_state_at;
 
     fn test_signing_key() -> ed25519_dalek::SigningKey {
         ed25519::signing_key_from_seed(&[5u8; 32])
@@ -131,6 +228,70 @@ mod tests {
         RawRecordWithId {
             payload: payload.to_vec(),
             id: compute_cid(payload),
+        }
+    }
+
+    fn build_test_acl_root(seed: &[u8; 32], space_id: &str) -> RawRecordWithId {
+        let sk = ed25519::signing_key_from_seed(seed);
+        let public_key = sk.verifying_key().to_bytes().to_vec();
+
+        let acl_root = AclRoot {
+            identity: public_key.clone(),
+            master_key: public_key.clone(),
+            space_id: space_id.to_string(),
+            encrypted_read_key: vec![1, 2, 3, 4],
+            timestamp: 1000,
+            identity_signature: ed25519::sign(&sk, &public_key).to_bytes().to_vec(),
+            ..Default::default()
+        };
+        let record = Record {
+            prev_id: String::new(),
+            identity: public_key,
+            data: acl_root.encode_to_vec(),
+            timestamp: 1000,
+        };
+        let record_bytes = record.encode_to_vec();
+        let signature = ed25519::sign(&sk, &record_bytes);
+        let raw_record = RawRecord {
+            payload: record_bytes,
+            signature: signature.to_bytes().to_vec(),
+            ..Default::default()
+        };
+        let raw_bytes = raw_record.encode_to_vec();
+        RawRecordWithId {
+            payload: raw_bytes.clone(),
+            id: compute_cid(&raw_bytes),
+        }
+    }
+
+    fn build_test_acl_record(seed: &[u8; 32], prev_id: &str) -> RawRecordWithId {
+        let sk = ed25519::signing_key_from_seed(seed);
+        let record = Record {
+            prev_id: prev_id.to_string(),
+            identity: sk.verifying_key().to_bytes().to_vec(),
+            data: AclData {
+                acl_content: vec![AclContentValue {
+                    value: Some(Value::Invite(AclAccountInvite {
+                        invite_key: vec![42; 32],
+                        permissions: AclUserPermissions::Writer as i32,
+                        ..Default::default()
+                    })),
+                }],
+            }
+            .encode_to_vec(),
+            timestamp: 2000,
+        };
+        let record_bytes = record.encode_to_vec();
+        let signature = ed25519::sign(&sk, &record_bytes);
+        let raw_record = RawRecord {
+            payload: record_bytes,
+            signature: signature.to_bytes().to_vec(),
+            ..Default::default()
+        };
+        let raw_bytes = raw_record.encode_to_vec();
+        RawRecordWithId {
+            payload: raw_bytes.clone(),
+            id: compute_cid(&raw_bytes),
         }
     }
 
@@ -313,5 +474,94 @@ mod tests {
 
         let response = RawRecordWithId::decode(response_bytes.as_slice()).unwrap();
         assert_eq!(response.id, compute_cid(&response.payload));
+    }
+
+    #[test]
+    fn persist_space_linked_log_add_exposes_root_via_acl_reads() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+        reset_logs();
+        let sync_state = crate::sync_node::new_shared_sync_state();
+        let root = build_test_acl_root(&[1u8; 32], "space-1");
+        let request = LogAddRequest {
+            log_id: "space-1".to_string(),
+            record: Some(root.clone()),
+        };
+
+        handle_log_add(&request.encode_to_vec()).unwrap();
+        let persisted = persist_space_linked_log_add(&request, &sync_state).unwrap();
+
+        assert!(persisted);
+        let records = sync_state.list_acl_records("space-1", "");
+        assert_eq!(records.len(), 1);
+        let stored = RawRecordWithId::decode(records[0].as_slice()).unwrap();
+        assert_eq!(stored.id, root.id);
+    }
+
+    #[test]
+    fn persisted_space_linked_record_add_reseeds_after_restart() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+        reset_logs();
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("sync.redb");
+        let root = build_test_acl_root(&[1u8; 32], "space-1");
+        let first = build_test_acl_record(&[1u8; 32], &root.id);
+        let second_seed = [2u8; 32];
+
+        {
+            let sync_state = new_shared_sync_state_at(&path).unwrap();
+            let log_add = LogAddRequest {
+                log_id: "space-1".to_string(),
+                record: Some(root.clone()),
+            };
+            handle_log_add(&log_add.encode_to_vec()).unwrap();
+            persist_space_linked_log_add(&log_add, &sync_state).unwrap();
+
+            let first_bytes = handle_record_add(
+                &RecordAddRequest {
+                    log_id: "space-1".to_string(),
+                    record: Some(RawRecord::decode(first.payload.as_slice()).unwrap()),
+                }
+                .encode_to_vec(),
+                &test_signing_key(),
+            )
+            .unwrap();
+            let first_response = RawRecordWithId::decode(first_bytes.as_slice()).unwrap();
+            persist_space_linked_record_add(
+                "space-1",
+                first_bytes.as_slice(),
+                &first_response.id,
+                &sync_state,
+            )
+            .unwrap();
+        }
+
+        reset_logs_for_tests();
+        let reopened = new_shared_sync_state_at(&path).unwrap();
+        let seeded_head = ensure_log_exists_from_sync_state("space-1", &reopened);
+        assert!(seeded_head.is_some());
+
+        let second = build_test_acl_record(&second_seed, &seeded_head.clone().unwrap());
+        let second_bytes = handle_record_add(
+            &RecordAddRequest {
+                log_id: "space-1".to_string(),
+                record: Some(RawRecord::decode(second.payload.as_slice()).unwrap()),
+            }
+            .encode_to_vec(),
+            &test_signing_key(),
+        )
+        .unwrap();
+        let second_response = RawRecordWithId::decode(second_bytes.as_slice()).unwrap();
+        persist_space_linked_record_add(
+            "space-1",
+            second_bytes.as_slice(),
+            &second_response.id,
+            &reopened,
+        )
+        .unwrap();
+
+        let records = reopened.list_acl_records("space-1", "");
+        assert_eq!(records.len(), 3);
+        let last = RawRecordWithId::decode(records.last().unwrap().as_slice()).unwrap();
+        assert_eq!(last.id, second_response.id);
     }
 }

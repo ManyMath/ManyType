@@ -50,7 +50,9 @@ class SpacePullBootstrap {
   RawRecordWithId _normalizeAclRecord(AclRecord record) {
     try {
       final decoded = RawRecordWithId.fromBuffer(record.aclPayload);
-      if (decoded.id.isNotEmpty) {
+      // SpacePull may carry either a full RawRecordWithId payload or only the
+      // raw record bytes with the authoritative id split into `AclRecord.id`.
+      if (decoded.id.isNotEmpty && decoded.id == record.id) {
         return decoded;
       }
     } catch (_) {

@@ -194,12 +194,7 @@ pub fn handle_blocks_bind(
         };
         state
             .blob_index
-            .bind_blob(
-                &request.space_id,
-                &request.file_id,
-                &cid,
-                data.len() as u64,
-            )
+            .bind_blob(&request.space_id, &request.file_id, &cid, data.len() as u64)
             .map_err(FileNodeError::unexpected)?;
     }
 
@@ -976,7 +971,10 @@ mod tests {
         assert_eq!(account_info.spaces.len(), 1);
         assert_eq!(account_info.spaces[0].space_id, "space-1");
         assert_eq!(account_info.limit_bytes, DEFAULT_STORAGE_LIMIT_BYTES);
-        assert_eq!(account_info.account_limit_bytes, DEFAULT_STORAGE_LIMIT_BYTES);
+        assert_eq!(
+            account_info.account_limit_bytes,
+            DEFAULT_STORAGE_LIMIT_BYTES
+        );
         assert_eq!(
             account_info.spaces[0].limit_bytes,
             DEFAULT_STORAGE_LIMIT_BYTES
@@ -985,7 +983,7 @@ mod tests {
 
     #[test]
     fn blocks_check_is_allowed_for_unbound_peers() {
-        use manytype_proto::filesync::{BlocksCheckResponse, AvailabilityStatus};
+        use manytype_proto::filesync::{AvailabilityStatus, BlocksCheckResponse};
 
         let temp_dir = TempDir::new().unwrap();
         let sync_state = seeded_sync_state(&temp_dir);
@@ -993,17 +991,17 @@ mod tests {
 
         let response = BlocksCheckResponse::decode(
             handle_blocks_check(
-            &BlocksCheckRequest {
-                space_id: "space-1".to_string(),
-                cids: vec![cid_string_to_bytes(&compute_cid(b"missing")).unwrap()],
-            }
-            .encode_to_vec(),
-            &state,
-            &sync_state,
-            OTHER_PEER_ID,
-        )
-        .unwrap()
-        .as_slice(),
+                &BlocksCheckRequest {
+                    space_id: "space-1".to_string(),
+                    cids: vec![cid_string_to_bytes(&compute_cid(b"missing")).unwrap()],
+                }
+                .encode_to_vec(),
+                &state,
+                &sync_state,
+                OTHER_PEER_ID,
+            )
+            .unwrap()
+            .as_slice(),
         )
         .unwrap();
 

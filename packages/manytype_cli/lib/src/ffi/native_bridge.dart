@@ -61,6 +61,21 @@ typedef FfiSyncObjectDart = Pointer<FfiResult> Function(
   int changesLen,
 );
 
+typedef FfiRequestObjectNative = Pointer<FfiResult> Function(
+  Uint64 handleId,
+  Pointer<Utf8> spaceId,
+  Pointer<Utf8> objectId,
+  Pointer<Uint8> requestData,
+  Uint32 requestLen,
+);
+typedef FfiRequestObjectDart = Pointer<FfiResult> Function(
+  int handleId,
+  Pointer<Utf8> spaceId,
+  Pointer<Utf8> objectId,
+  Pointer<Uint8> requestData,
+  int requestLen,
+);
+
 typedef FfiFreeHandleNative = Void Function(Uint64 handleId);
 typedef FfiFreeHandleDart = void Function(int handleId);
 
@@ -69,10 +84,11 @@ typedef FfiFreeResultDart = void Function(Pointer<FfiResult> result);
 
 /// Dart FFI bindings to the manytype_quic_ffi Rust cdylib.
 ///
-/// Provides high-level Dart methods that map to the 5 C FFI exports:
+/// Provides high-level Dart methods that map to the 6 C FFI exports:
 /// - [connect] -> ffi_connect
 /// - [invoke] -> ffi_invoke
 /// - [syncObject] -> ffi_sync_object
+/// - [requestObject] -> ffi_request_object
 /// - [syncStore] -> ffi_sync_store
 /// - [freeHandle] -> ffi_free_handle
 /// - (internal) ffi_free_result
@@ -92,6 +108,7 @@ class NativeBridge {
   late final FfiConnectDart _connect;
   late final FfiInvokeDart _invoke;
   late final FfiSyncObjectDart _syncObject;
+  late final FfiRequestObjectDart _requestObject;
   late final FfiSyncStoreDart _syncStore;
   late final FfiFreeHandleDart _freeHandle;
   late final FfiFreeResultDart _freeResult;
@@ -103,6 +120,9 @@ class NativeBridge {
     _invoke = _lib.lookupFunction<FfiInvokeNative, FfiInvokeDart>('ffi_invoke');
     _syncObject = _lib.lookupFunction<FfiSyncObjectNative, FfiSyncObjectDart>(
         'ffi_sync_object');
+    _requestObject =
+        _lib.lookupFunction<FfiRequestObjectNative, FfiRequestObjectDart>(
+            'ffi_request_object');
     _syncStore = _lib
         .lookupFunction<FfiSyncStoreNative, FfiSyncStoreDart>('ffi_sync_store');
     _freeHandle = _lib.lookupFunction<FfiFreeHandleNative, FfiFreeHandleDart>(
@@ -220,6 +240,31 @@ class NativeBridge {
 
     final result =
         _syncObject(handleId, spacePtr, objPtr, dataPtr, payload.length);
+
+    calloc.free(spacePtr);
+    calloc.free(objPtr);
+    calloc.free(dataPtr);
+
+    return _processDataResult(result);
+  }
+
+  /// Request one object's full sync state via ObjectSyncRequestStream.
+  ///
+  /// [payload] is the serialized TreeSyncMessage full-sync request.
+  /// Returns raw response bytes (length-prefixed ObjectSyncMessages).
+  Uint8List requestObject(
+    int handleId,
+    String spaceId,
+    String objectId,
+    Uint8List payload,
+  ) {
+    final spacePtr = spaceId.toNativeUtf8();
+    final objPtr = objectId.toNativeUtf8();
+    final dataPtr = calloc<Uint8>(payload.length);
+    dataPtr.asTypedList(payload.length).setAll(0, payload);
+
+    final result =
+        _requestObject(handleId, spacePtr, objPtr, dataPtr, payload.length);
 
     calloc.free(spacePtr);
     calloc.free(objPtr);

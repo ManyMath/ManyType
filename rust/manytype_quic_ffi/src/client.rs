@@ -9,6 +9,7 @@ use libp2p_identity::Keypair;
 use manytype_server::drpc::stream::DrpcStream;
 
 use super::handshake::{client_handshake, client_proto_handshake};
+use crate::incoming::{ServedTreeCache, new_served_tree_cache, spawn_incoming_stream_server};
 
 fn trace(message: impl FnOnce() -> String) {
     if std::env::var_os("MANYTYPE_QUIC_TRACE").is_some() {
@@ -37,6 +38,7 @@ pub struct ConnHandle {
     #[allow(dead_code)]
     pub endpoint: quinn::Endpoint,
     pub connection: quinn::Connection,
+    pub served_trees: ServedTreeCache,
 }
 
 /// Connect to a QUIC server, perform credential handshake, return a ConnHandle.
@@ -88,9 +90,13 @@ pub async fn connect(
     .context("credential handshake failed")?;
     trace(|| format!("connect credential-handshake-complete addr={addr}"));
 
+    let served_trees = new_served_tree_cache();
+    spawn_incoming_stream_server(connection.clone(), Arc::clone(&served_trees));
+
     Ok(ConnHandle {
         endpoint,
         connection,
+        served_trees,
     })
 }
 

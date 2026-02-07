@@ -7,6 +7,7 @@
 
 use anyhow::Result;
 use prost::Message;
+use std::collections::{HashMap, HashSet};
 
 use manytype_core::crdt::cid::compute_cid;
 use manytype_core::ldiff::{Diff, Element, Hasher, Range};
@@ -363,7 +364,9 @@ pub fn handle_object_sync_message(
         raw_change: &[u8],
         change_id: Option<&str>,
     ) -> Result<()> {
-        let resolved_id = change_id.map(ToString::to_string).unwrap_or_else(|| compute_cid(raw_change));
+        let resolved_id = change_id
+            .map(ToString::to_string)
+            .unwrap_or_else(|| compute_cid(raw_change));
         let parent_heads = extract_parent_heads(raw_change);
         if let Ok(raw_tree_change) = RawTreeChange::decode(raw_change) {
             if let Ok(root) = treechange::RootChange::decode(raw_tree_change.payload.as_slice()) {
@@ -378,11 +381,11 @@ pub fn handle_object_sync_message(
                     );
                 } else if let Ok(tree) = TreeChange::decode(raw_tree_change.payload.as_slice()) {
                     tracing::info!(
-                        "sync: store_change tree id={} space_id={} object_id={} heads={} snapshot={} read_key_id={} snapshot_base_id={} changes_data_len={}",
+                        "sync: store_change tree id={} space_id={} object_id={} tree_head_ids={:?} snapshot={} read_key_id={} snapshot_base_id={} changes_data_len={}",
                         resolved_id,
                         space_id,
                         object_id,
-                        tree.tree_head_ids.len(),
+                        tree.tree_head_ids,
                         tree.is_snapshot,
                         tree.read_key_id,
                         tree.snapshot_base_id,
@@ -391,11 +394,11 @@ pub fn handle_object_sync_message(
                 }
             } else if let Ok(tree) = TreeChange::decode(raw_tree_change.payload.as_slice()) {
                 tracing::info!(
-                    "sync: store_change tree id={} space_id={} object_id={} heads={} snapshot={} read_key_id={} snapshot_base_id={} changes_data_len={}",
+                    "sync: store_change tree id={} space_id={} object_id={} tree_head_ids={:?} snapshot={} read_key_id={} snapshot_base_id={} changes_data_len={}",
                     resolved_id,
                     space_id,
                     object_id,
-                    tree.tree_head_ids.len(),
+                    tree.tree_head_ids,
                     tree.is_snapshot,
                     tree.read_key_id,
                     tree.snapshot_base_id,
@@ -403,13 +406,21 @@ pub fn handle_object_sync_message(
                 );
             }
         }
-        sync_state.record_object_change(space_id, object_id, &resolved_id, raw_change.to_vec(), &parent_heads)
+        sync_state.record_object_change(
+            space_id,
+            object_id,
+            &resolved_id,
+            raw_change.to_vec(),
+            &parent_heads,
+        )
     }
 
     fn build_full_sync_response(
         sync_state: &SharedSyncState,
         space_id: &str,
         object_id: &str,
+        request_heads: &[String],
+        request_snapshot_path: &[String],
     ) -> Vec<u8> {
         let heads = {
             let state = sync_state.read().unwrap();
@@ -418,15 +429,15 @@ pub fn handle_object_sync_message(
                 .and_then(|space| space.object_heads.get(object_id).cloned())
                 .unwrap_or_default()
         };
-        let mut heads = heads;
-        heads.sort();
 
         let all_raw_changes = sync_state.list_object_changes(space_id, object_id);
         tracing::info!(
-            "sync: full sync response build {}/{} stored_changes={}",
+            "sync: full sync response build {}/{} stored_changes={} request_heads={:?} request_snapshot_path={:?}",
             space_id,
             object_id,
-            all_raw_changes.len()
+            all_raw_changes.len(),
+            request_heads,
+            request_snapshot_path
         );
         if all_raw_changes.is_empty() {
             tracing::warn!(
@@ -462,15 +473,70 @@ pub fn handle_object_sync_message(
         struct Candidate {
             change: RawTreeChangeWithId,
             is_root_payload: bool,
-            parent_heads_empty: bool,
+            parent_heads: Vec<String>,
+            is_snapshot: bool,
+            snapshot_base_id: String,
             timestamp: i64,
+        }
+
+        fn collect_snapshot_path(
+            change_id: &str,
+            root_id: Option<&str>,
+            candidates_by_id: &HashMap<String, Candidate>,
+            visiting: &mut HashSet<String>,
+            seen: &mut HashSet<String>,
+            output: &mut Vec<String>,
+        ) {
+            if root_id.is_some_and(|root| root == change_id) {
+                if seen.insert(change_id.to_string()) {
+                    output.push(change_id.to_string());
+                }
+                return;
+            }
+
+            if !visiting.insert(change_id.to_string()) {
+                return;
+            }
+
+            if let Some(candidate) = candidates_by_id.get(change_id) {
+                for parent in &candidate.parent_heads {
+                    collect_snapshot_path(
+                        parent,
+                        root_id,
+                        candidates_by_id,
+                        visiting,
+                        seen,
+                        output,
+                    );
+                }
+                if !candidate.snapshot_base_id.is_empty()
+                    && !candidate
+                        .parent_heads
+                        .iter()
+                        .any(|parent| parent == &candidate.snapshot_base_id)
+                {
+                    collect_snapshot_path(
+                        &candidate.snapshot_base_id,
+                        root_id,
+                        candidates_by_id,
+                        visiting,
+                        seen,
+                        output,
+                    );
+                }
+                if candidate.is_snapshot && seen.insert(change_id.to_string()) {
+                    output.push(change_id.to_string());
+                }
+            }
+
+            visiting.remove(change_id);
         }
 
         let mut candidates: Vec<Candidate> = all_raw_changes
             .into_iter()
             .map(|raw_change| {
                 let id = compute_cid(&raw_change);
-                let (is_root_payload, parent_heads_empty) =
+                let (is_root_payload, parent_heads, is_snapshot, snapshot_base_id) =
                     match RawTreeChange::decode(raw_change.as_slice()) {
                         Ok(raw_tree_change) => {
                             if let Ok(root_change) =
@@ -480,19 +546,29 @@ pub fn handle_object_sync_message(
                                 // full sync response (official clients decode those as TreeChange).
                                 let is_root = !root_change.space_id.is_empty()
                                     && !root_change.change_type.is_empty();
-                                (is_root, true)
+                                (is_root, Vec::new(), false, String::new())
+                            } else if let Ok(tree_change) =
+                                TreeChange::decode(raw_tree_change.payload.as_slice())
+                            {
+                                (
+                                    false,
+                                    tree_change.tree_head_ids,
+                                    tree_change.is_snapshot,
+                                    tree_change.snapshot_base_id,
+                                )
                             } else {
-                                // Non-root TreeChange payloads carry parent heads in tree_head_ids.
-                                (false, extract_parent_heads(&raw_change).is_empty())
+                                (false, Vec::new(), false, String::new())
                             }
                         }
-                        Err(_) => (false, true),
+                        Err(_) => (false, Vec::new(), false, String::new()),
                     };
                 let timestamp = extract_timestamp(&raw_change).unwrap_or(i64::MAX);
                 Candidate {
                     change: RawTreeChangeWithId { id, raw_change },
                     is_root_payload,
-                    parent_heads_empty,
+                    parent_heads,
+                    is_snapshot,
+                    snapshot_base_id,
                     timestamp,
                 }
             })
@@ -508,7 +584,7 @@ pub fn handle_object_sync_message(
                 candidates
                     .iter()
                     .enumerate()
-                    .filter(|(_, candidate)| candidate.parent_heads_empty)
+                    .filter(|(_, candidate)| candidate.parent_heads.is_empty())
                     .min_by_key(|(_, candidate)| candidate.timestamp)
                     .map(|(idx, _)| idx)
             })
@@ -521,28 +597,142 @@ pub fn handle_object_sync_message(
             })
             .unwrap_or(0);
 
-        let root_change = Some(candidates.remove(root_idx).change);
-        let changes: Vec<RawTreeChangeWithId> = candidates
+        let root_candidate = candidates.remove(root_idx);
+        let root_id = root_candidate.change.id.clone();
+        let root_change = Some(root_candidate.change.clone());
+        let change_candidates: Vec<Candidate> = candidates
             .into_iter()
             .filter(|candidate| !candidate.is_root_payload)
-            .map(|candidate| candidate.change)
             .collect();
+        let mut candidates_by_id: HashMap<String, Candidate> = change_candidates
+            .iter()
+            .cloned()
+            .map(|candidate| (candidate.change.id.clone(), candidate))
+            .collect();
+        candidates_by_id.insert(root_id.clone(), root_candidate.clone());
+
+        fn collect_missing_changes(
+            change_id: &str,
+            candidates_by_id: &HashMap<String, Candidate>,
+            known_ids: &HashSet<String>,
+            visiting: &mut HashSet<String>,
+            emitted: &mut HashSet<String>,
+            output: &mut Vec<String>,
+        ) {
+            if known_ids.contains(change_id) {
+                return;
+            }
+            if !visiting.insert(change_id.to_string()) {
+                return;
+            }
+
+            if let Some(candidate) = candidates_by_id.get(change_id) {
+                for parent in &candidate.parent_heads {
+                    collect_missing_changes(
+                        parent,
+                        candidates_by_id,
+                        known_ids,
+                        visiting,
+                        emitted,
+                        output,
+                    );
+                }
+                if !candidate.snapshot_base_id.is_empty()
+                    && !candidate
+                        .parent_heads
+                        .iter()
+                        .any(|parent| parent == &candidate.snapshot_base_id)
+                {
+                    collect_missing_changes(
+                        &candidate.snapshot_base_id,
+                        candidates_by_id,
+                        known_ids,
+                        visiting,
+                        emitted,
+                        output,
+                    );
+                }
+                if emitted.insert(change_id.to_string()) {
+                    output.push(change_id.to_string());
+                }
+            }
+
+            visiting.remove(change_id);
+        }
+
+        let mut snapshot_path = Vec::new();
+        let mut seen_snapshot_ids = HashSet::new();
+        let mut visiting_snapshot_ids = HashSet::new();
+        for head in &heads {
+            collect_snapshot_path(
+                head,
+                Some(root_id.as_str()),
+                &candidates_by_id,
+                &mut visiting_snapshot_ids,
+                &mut seen_snapshot_ids,
+                &mut snapshot_path,
+            );
+        }
+        if snapshot_path.is_empty() {
+            snapshot_path.push(root_id.clone());
+        } else {
+            snapshot_path.reverse();
+        }
+
+        let mut known_ids: HashSet<String> = request_heads.iter().cloned().collect();
+        known_ids.extend(request_snapshot_path.iter().cloned());
+        let mut change_ids = Vec::new();
+        let mut emitted_change_ids = HashSet::new();
+        let mut visiting_change_ids = HashSet::new();
+        for head in &heads {
+            collect_missing_changes(
+                head,
+                &candidates_by_id,
+                &known_ids,
+                &mut visiting_change_ids,
+                &mut emitted_change_ids,
+                &mut change_ids,
+            );
+        }
+
+        let is_snapshot_tree = snapshot_path.len() > 1;
+        let changes: Vec<RawTreeChangeWithId> = change_ids
+            .into_iter()
+            .filter_map(|change_id| {
+                if !is_snapshot_tree && change_id == root_id {
+                    return None;
+                }
+                candidates_by_id
+                    .get(&change_id)
+                    .cloned()
+                    .map(|candidate| candidate.change)
+            })
+            .collect();
+
+        let response_change_ids: Vec<_> = changes.iter().map(|change| change.id.clone()).collect();
+        tracing::info!(
+            "sync: full sync response {}/{} root_id={} heads={:?} change_ids={:?} snapshot_path={:?}",
+            space_id,
+            object_id,
+            root_id,
+            heads,
+            response_change_ids,
+            snapshot_path
+        );
 
         TreeSyncMessage {
             content: Some(TreeSyncContentValue {
-                value: Some(treechange::tree_sync_content_value::Value::FullSyncResponse(
-                    TreeFullSyncResponse {
-                        heads,
-                        changes,
-                        // Official any-sync nodes include the snapshot/root id
-                        // in `snapshotPath`. Some official clients rely on this
-                        // to resolve snapshotBaseId when reconstructing trees.
-                        snapshot_path: root_change
-                            .as_ref()
-                            .map(|root| vec![root.id.clone()])
-                            .unwrap_or_default(),
-                    },
-                )),
+                value: Some(
+                    treechange::tree_sync_content_value::Value::FullSyncResponse(
+                        TreeFullSyncResponse {
+                            heads,
+                            changes,
+                            // Official clients reconstruct snapshot-based trees
+                            // using the root + snapshot ancestry exposed here.
+                            snapshot_path,
+                        },
+                    ),
+                ),
             }),
             root_change,
         }
@@ -550,12 +740,22 @@ pub fn handle_object_sync_message(
     }
 
     let response_payload = if msg.payload.is_empty() {
-        tracing::info!("sync: full sync request (empty payload) for {}/{}", space_id, object_id);
-        build_full_sync_response(sync_state, space_id, object_id)
+        tracing::info!(
+            "sync: full sync request (empty payload) for {}/{}",
+            space_id,
+            object_id
+        );
+        build_full_sync_response(sync_state, space_id, object_id, &[], &[])
     } else if let Ok(tree_msg) = TreeSyncMessage::decode(msg.payload.as_slice()) {
         if let Some(root) = &tree_msg.root_change {
             if RawTreeChange::decode(root.raw_change.as_slice()).is_ok() {
-                store_change(sync_state, space_id, object_id, &root.raw_change, Some(&root.id))?;
+                store_change(
+                    sync_state,
+                    space_id,
+                    object_id,
+                    &root.raw_change,
+                    Some(&root.id),
+                )?;
             } else {
                 tracing::warn!(
                     "sync: ignoring invalid root_change bytes for {}/{} (id={})",
@@ -569,12 +769,37 @@ pub fn handle_object_sync_message(
         if let Some(content) = &tree_msg.content {
             match &content.value {
                 Some(treechange::tree_sync_content_value::Value::FullSyncRequest(_)) => {
+                    let request = tree_msg.content.as_ref().and_then(|content| {
+                        content.value.as_ref().and_then(|value| match value {
+                            treechange::tree_sync_content_value::Value::FullSyncRequest(req) => {
+                                Some(req)
+                            }
+                            _ => None,
+                        })
+                    });
+                    let request_change_ids: Vec<_> = request
+                        .map(|req| req.changes.iter().map(|change| change.id.clone()).collect())
+                        .unwrap_or_else(Vec::new);
+                    let request_heads = request.map(|req| req.heads.as_slice()).unwrap_or(&[]);
+                    let request_snapshot_path = request
+                        .map(|req| req.snapshot_path.as_slice())
+                        .unwrap_or(&[]);
                     tracing::info!(
-                        "sync: full sync request (TreeSyncMessage) for {}/{}",
+                        "sync: full sync request (TreeSyncMessage) for {}/{} heads={:?} snapshot_path={:?} change_ids={:?} has_root_change={}",
                         space_id,
-                        object_id
+                        object_id,
+                        request_heads,
+                        request_snapshot_path,
+                        request_change_ids,
+                        tree_msg.root_change.is_some()
                     );
-                    build_full_sync_response(sync_state, space_id, object_id)
+                    build_full_sync_response(
+                        sync_state,
+                        space_id,
+                        object_id,
+                        request_heads,
+                        request_snapshot_path,
+                    )
                 }
                 Some(treechange::tree_sync_content_value::Value::HeadUpdate(update)) => {
                     for change in &update.changes {
@@ -630,12 +855,32 @@ pub fn handle_object_sync_message(
     } else if let Ok(content) = TreeSyncContentValue::decode(msg.payload.as_slice()) {
         match &content.value {
             Some(treechange::tree_sync_content_value::Value::FullSyncRequest(_)) => {
+                let request = content.value.as_ref().and_then(|value| match value {
+                    treechange::tree_sync_content_value::Value::FullSyncRequest(req) => Some(req),
+                    _ => None,
+                });
+                let request_change_ids: Vec<_> = request
+                    .map(|req| req.changes.iter().map(|change| change.id.clone()).collect())
+                    .unwrap_or_else(Vec::new);
+                let request_heads = request.map(|req| req.heads.as_slice()).unwrap_or(&[]);
+                let request_snapshot_path = request
+                    .map(|req| req.snapshot_path.as_slice())
+                    .unwrap_or(&[]);
                 tracing::info!(
-                    "sync: full sync request (TreeSyncContentValue) for {}/{}",
+                    "sync: full sync request (TreeSyncContentValue) for {}/{} heads={:?} snapshot_path={:?} change_ids={:?}",
                     space_id,
-                    object_id
+                    object_id,
+                    request_heads,
+                    request_snapshot_path,
+                    request_change_ids
                 );
-                build_full_sync_response(sync_state, space_id, object_id)
+                build_full_sync_response(
+                    sync_state,
+                    space_id,
+                    object_id,
+                    request_heads,
+                    request_snapshot_path,
+                )
             }
             Some(treechange::tree_sync_content_value::Value::HeadUpdate(update)) => {
                 for change in &update.changes {
@@ -886,10 +1131,15 @@ mod tests {
         }
     }
 
+    fn test_remote_peer_id(seed: u8) -> String {
+        let signing_key = ed25519::signing_key_from_seed(&[seed; 32]);
+        ed25519::ed25519_pubkey_to_libp2p_peer_id(&signing_key.verifying_key().to_bytes())
+    }
+
     fn make_space_header_with_receipt(
         space_id: &str,
         account_identity: &[u8],
-        remote_peer_id: &[u8],
+        remote_peer_id: &str,
     ) -> (RawSpaceHeaderWithId, Vec<u8>) {
         let signing_key = test_signing_key();
         let config = test_coordinator_config();
@@ -905,7 +1155,7 @@ mod tests {
         .encode_to_vec();
         let signed_receipt = coordinator::build_signed_space_receipt(
             space_id,
-            &hex::encode(remote_peer_id),
+            remote_peer_id,
             account_identity,
             &config,
             &signing_key,
@@ -936,8 +1186,9 @@ mod tests {
     fn space_push_stores_header_and_returns_empty_response() {
         let sync_state = new_shared_sync_state();
         let account_identity = vec![4; 32];
+        let remote_peer_id = test_remote_peer_id(1);
         let (space_header, credential) =
-            make_space_header_with_receipt("space-1", &account_identity, b"peer-1");
+            make_space_header_with_receipt("space-1", &account_identity, &remote_peer_id);
         let request = SpacePushRequest {
             payload: Some(SpacePayload {
                 space_header: Some(space_header),
@@ -955,7 +1206,7 @@ mod tests {
             &sync_state,
             &test_coordinator_config(),
             &test_signing_key(),
-            "peer-1",
+            &remote_peer_id,
         )
         .unwrap();
         let _response = SpacePushResponse::decode(response_bytes.as_slice()).unwrap();
@@ -976,8 +1227,9 @@ mod tests {
     fn head_sync_after_space_push_returns_non_empty() {
         let sync_state = new_shared_sync_state();
         let account_identity = vec![5; 32];
+        let remote_peer_id = test_remote_peer_id(2);
         let (space_header, credential) =
-            make_space_header_with_receipt("space-2", &account_identity, b"peer-2");
+            make_space_header_with_receipt("space-2", &account_identity, &remote_peer_id);
         let push_request = SpacePushRequest {
             payload: Some(SpacePayload {
                 space_header: Some(space_header),
@@ -991,7 +1243,7 @@ mod tests {
             &sync_state,
             &test_coordinator_config(),
             &test_signing_key(),
-            "peer-2",
+            &remote_peer_id,
         )
         .unwrap();
 
@@ -1011,8 +1263,9 @@ mod tests {
     fn space_pull_returns_acl_root_and_empty_records() {
         let sync_state = new_shared_sync_state();
         let account_identity = vec![4; 32];
+        let remote_peer_id = test_remote_peer_id(3);
         let (space_header, credential) =
-            make_space_header_with_receipt("space-1", &account_identity, b"peer-1");
+            make_space_header_with_receipt("space-1", &account_identity, &remote_peer_id);
         handle_space_push(
             &SpacePushRequest {
                 payload: Some(SpacePayload {
@@ -1030,7 +1283,7 @@ mod tests {
             &sync_state,
             &test_coordinator_config(),
             &test_signing_key(),
-            "peer-1",
+            &remote_peer_id,
         )
         .unwrap();
 
@@ -1059,8 +1312,9 @@ mod tests {
         let _guard = crate::consensus::TEST_MUTEX.lock().unwrap();
         let sync_state = new_shared_sync_state();
         let account_identity = vec![4; 32];
+        let remote_peer_id = test_remote_peer_id(4);
         let (space_header, credential) =
-            make_space_header_with_receipt("space-1", &account_identity, b"peer-1");
+            make_space_header_with_receipt("space-1", &account_identity, &remote_peer_id);
         handle_space_push(
             &SpacePushRequest {
                 payload: Some(SpacePayload {
@@ -1076,7 +1330,7 @@ mod tests {
             &sync_state,
             &test_coordinator_config(),
             &test_signing_key(),
-            "peer-1",
+            &remote_peer_id,
         )
         .unwrap();
 
@@ -1141,8 +1395,9 @@ mod tests {
     fn space_pull_includes_space_header() {
         let sync_state = new_shared_sync_state();
         let account_identity = vec![4; 32];
+        let remote_peer_id = test_remote_peer_id(5);
         let (space_header, credential) =
-            make_space_header_with_receipt("space-2", &account_identity, b"peer-2");
+            make_space_header_with_receipt("space-2", &account_identity, &remote_peer_id);
         let expected_header = space_header.raw_header.clone();
         handle_space_push(
             &SpacePushRequest {
@@ -1157,7 +1412,7 @@ mod tests {
             &sync_state,
             &test_coordinator_config(),
             &test_signing_key(),
-            "peer-2",
+            &remote_peer_id,
         )
         .unwrap();
 
@@ -1255,7 +1510,8 @@ mod tests {
         let Some(content) = tree_msg.content else {
             panic!("expected TreeSyncMessage.content");
         };
-        let Some(treechange::tree_sync_content_value::Value::FullSyncResponse(resp)) = content.value
+        let Some(treechange::tree_sync_content_value::Value::FullSyncResponse(resp)) =
+            content.value
         else {
             panic!("expected full sync response");
         };
@@ -1329,7 +1585,8 @@ mod tests {
             .encode_to_vec(),
             ..Default::default()
         };
-        let response_bytes = handle_object_sync_message(&pull.encode_to_vec(), &sync_state).unwrap();
+        let response_bytes =
+            handle_object_sync_message(&pull.encode_to_vec(), &sync_state).unwrap();
         let response = ObjectSyncMessage::decode(response_bytes.as_slice()).unwrap();
 
         let tree_msg = TreeSyncMessage::decode(response.payload.as_slice()).unwrap();
@@ -1340,7 +1597,8 @@ mod tests {
         let Some(content) = tree_msg.content else {
             panic!("expected TreeSyncMessage.content");
         };
-        let Some(treechange::tree_sync_content_value::Value::FullSyncResponse(resp)) = content.value
+        let Some(treechange::tree_sync_content_value::Value::FullSyncResponse(resp)) =
+            content.value
         else {
             panic!("expected full sync response");
         };
@@ -1351,8 +1609,335 @@ mod tests {
                 RootChange::decode(raw.payload.as_slice()).is_err(),
                 "root change payload leaked into changes list"
             );
-            TreeChange::decode(raw.payload.as_slice()).expect("changes must be TreeChange payloads");
+            TreeChange::decode(raw.payload.as_slice())
+                .expect("changes must be TreeChange payloads");
         }
+    }
+
+    #[test]
+    fn full_sync_response_for_snapshot_trees_matches_official_shape_for_empty_request() {
+        let sync_state = new_shared_sync_state();
+
+        let space_id = "space-1";
+        let object_id = "obj-snapshot";
+
+        let root_raw = make_root_change_bytes(space_id, "anytype.object", true);
+        let root_id = compute_cid(&root_raw);
+        let snapshot_raw = make_tree_change_bytes_with(
+            vec![root_id.clone()],
+            root_id.clone(),
+            true,
+            1,
+            b"snapshot-data",
+        );
+        let snapshot_id = compute_cid(&snapshot_raw);
+        let edit_raw = make_tree_change_bytes_with(
+            vec![snapshot_id.clone()],
+            snapshot_id.clone(),
+            false,
+            2,
+            b"edit-data",
+        );
+        let edit_id = compute_cid(&edit_raw);
+
+        let update = TreeSyncMessage {
+            content: Some(TreeSyncContentValue {
+                value: Some(treechange::tree_sync_content_value::Value::HeadUpdate(
+                    TreeHeadUpdate {
+                        heads: vec![edit_id.clone()],
+                        changes: vec![
+                            RawTreeChangeWithId {
+                                id: root_id.clone(),
+                                raw_change: root_raw.clone(),
+                            },
+                            RawTreeChangeWithId {
+                                id: snapshot_id.clone(),
+                                raw_change: snapshot_raw.clone(),
+                            },
+                            RawTreeChangeWithId {
+                                id: edit_id.clone(),
+                                raw_change: edit_raw.clone(),
+                            },
+                        ],
+                        snapshot_path: Vec::new(),
+                    },
+                )),
+            }),
+            root_change: None,
+        };
+
+        let push = ObjectSyncMessage {
+            space_id: space_id.to_string(),
+            object_id: object_id.to_string(),
+            request_id: "push-1".to_string(),
+            payload: update.encode_to_vec(),
+            ..Default::default()
+        };
+        handle_object_sync_message(&push.encode_to_vec(), &sync_state).unwrap();
+
+        let pull = ObjectSyncMessage {
+            space_id: space_id.to_string(),
+            object_id: object_id.to_string(),
+            request_id: "pull-1".to_string(),
+            payload: TreeSyncMessage {
+                content: Some(TreeSyncContentValue {
+                    value: Some(treechange::tree_sync_content_value::Value::FullSyncRequest(
+                        TreeFullSyncRequest {
+                            heads: Vec::new(),
+                            changes: Vec::new(),
+                            snapshot_path: Vec::new(),
+                        },
+                    )),
+                }),
+                root_change: None,
+            }
+            .encode_to_vec(),
+            ..Default::default()
+        };
+
+        let response_bytes =
+            handle_object_sync_message(&pull.encode_to_vec(), &sync_state).unwrap();
+        let response = ObjectSyncMessage::decode(response_bytes.as_slice()).unwrap();
+        let tree_msg = TreeSyncMessage::decode(response.payload.as_slice()).unwrap();
+        let root = tree_msg.root_change.expect("root change required");
+        assert_eq!(root.id, root_id);
+
+        let Some(content) = tree_msg.content else {
+            panic!("expected TreeSyncMessage.content");
+        };
+        let Some(treechange::tree_sync_content_value::Value::FullSyncResponse(resp)) =
+            content.value
+        else {
+            panic!("expected full sync response");
+        };
+
+        assert_eq!(resp.heads, vec![edit_id]);
+        assert_eq!(resp.snapshot_path, vec![snapshot_id, root_id]);
+        assert_eq!(resp.changes.len(), 3);
+        assert_eq!(resp.changes[0].raw_change, root_raw);
+        assert_eq!(resp.changes[1].raw_change, snapshot_raw);
+        assert_eq!(resp.changes[2].raw_change, edit_raw);
+    }
+
+    #[test]
+    fn full_sync_response_for_snapshot_trees_only_returns_missing_edit_when_snapshot_known() {
+        let sync_state = new_shared_sync_state();
+
+        let space_id = "space-1";
+        let object_id = "obj-snapshot-delta";
+
+        let root_raw = make_root_change_bytes(space_id, "anytype.object", true);
+        let root_id = compute_cid(&root_raw);
+        let snapshot_raw = make_tree_change_bytes_with(
+            vec![root_id.clone()],
+            root_id.clone(),
+            true,
+            1,
+            b"snapshot-data",
+        );
+        let snapshot_id = compute_cid(&snapshot_raw);
+        let edit_raw = make_tree_change_bytes_with(
+            vec![snapshot_id.clone()],
+            snapshot_id.clone(),
+            false,
+            2,
+            b"edit-data",
+        );
+        let edit_id = compute_cid(&edit_raw);
+
+        let update = TreeSyncMessage {
+            content: Some(TreeSyncContentValue {
+                value: Some(treechange::tree_sync_content_value::Value::HeadUpdate(
+                    TreeHeadUpdate {
+                        heads: vec![edit_id.clone()],
+                        changes: vec![
+                            RawTreeChangeWithId {
+                                id: root_id.clone(),
+                                raw_change: root_raw.clone(),
+                            },
+                            RawTreeChangeWithId {
+                                id: snapshot_id.clone(),
+                                raw_change: snapshot_raw.clone(),
+                            },
+                            RawTreeChangeWithId {
+                                id: edit_id.clone(),
+                                raw_change: edit_raw.clone(),
+                            },
+                        ],
+                        snapshot_path: Vec::new(),
+                    },
+                )),
+            }),
+            root_change: None,
+        };
+
+        let push = ObjectSyncMessage {
+            space_id: space_id.to_string(),
+            object_id: object_id.to_string(),
+            request_id: "push-1".to_string(),
+            payload: update.encode_to_vec(),
+            ..Default::default()
+        };
+        handle_object_sync_message(&push.encode_to_vec(), &sync_state).unwrap();
+
+        let pull = ObjectSyncMessage {
+            space_id: space_id.to_string(),
+            object_id: object_id.to_string(),
+            request_id: "pull-1".to_string(),
+            payload: TreeSyncMessage {
+                content: Some(TreeSyncContentValue {
+                    value: Some(treechange::tree_sync_content_value::Value::FullSyncRequest(
+                        TreeFullSyncRequest {
+                            heads: vec![snapshot_id.clone()],
+                            changes: Vec::new(),
+                            snapshot_path: Vec::new(),
+                        },
+                    )),
+                }),
+                root_change: None,
+            }
+            .encode_to_vec(),
+            ..Default::default()
+        };
+
+        let response_bytes =
+            handle_object_sync_message(&pull.encode_to_vec(), &sync_state).unwrap();
+        let response = ObjectSyncMessage::decode(response_bytes.as_slice()).unwrap();
+        let tree_msg = TreeSyncMessage::decode(response.payload.as_slice()).unwrap();
+        let root = tree_msg.root_change.expect("root change required");
+        assert_eq!(root.id, root_id);
+
+        let Some(content) = tree_msg.content else {
+            panic!("expected TreeSyncMessage.content");
+        };
+        let Some(treechange::tree_sync_content_value::Value::FullSyncResponse(resp)) =
+            content.value
+        else {
+            panic!("expected full sync response");
+        };
+
+        assert_eq!(resp.heads, vec![edit_id.clone()]);
+        assert_eq!(resp.snapshot_path, vec![snapshot_id, root_id]);
+        assert_eq!(resp.changes.len(), 1);
+        assert_eq!(resp.changes[0].id, edit_id);
+        assert_eq!(resp.changes[0].raw_change, edit_raw);
+    }
+
+    #[test]
+    fn full_sync_response_preserves_stored_multi_head_order_for_snapshot_trees() {
+        let sync_state = new_shared_sync_state();
+
+        let space_id = "space-1";
+        let object_id = "obj-snapshot-fork";
+
+        let root_raw = make_root_change_bytes(space_id, "anytype.object", true);
+        let root_id = compute_cid(&root_raw);
+        let snapshot_raw = make_tree_change_bytes_with(
+            vec![root_id.clone()],
+            root_id.clone(),
+            true,
+            1,
+            b"snapshot-data",
+        );
+        let snapshot_id = compute_cid(&snapshot_raw);
+        let manytype_edit_raw = make_tree_change_bytes_with(
+            vec![snapshot_id.clone()],
+            snapshot_id.clone(),
+            false,
+            2,
+            b"manytype-edit",
+        );
+        let manytype_edit_id = compute_cid(&manytype_edit_raw);
+        let official_sibling_raw = make_tree_change_bytes_with(
+            vec![snapshot_id.clone()],
+            snapshot_id.clone(),
+            false,
+            3,
+            b"official-sibling",
+        );
+        let official_sibling_id = compute_cid(&official_sibling_raw);
+
+        let update = TreeSyncMessage {
+            content: Some(TreeSyncContentValue {
+                value: Some(treechange::tree_sync_content_value::Value::HeadUpdate(
+                    TreeHeadUpdate {
+                        heads: vec![manytype_edit_id.clone(), official_sibling_id.clone()],
+                        changes: vec![
+                            RawTreeChangeWithId {
+                                id: root_id.clone(),
+                                raw_change: root_raw.clone(),
+                            },
+                            RawTreeChangeWithId {
+                                id: snapshot_id.clone(),
+                                raw_change: snapshot_raw.clone(),
+                            },
+                            RawTreeChangeWithId {
+                                id: manytype_edit_id.clone(),
+                                raw_change: manytype_edit_raw.clone(),
+                            },
+                            RawTreeChangeWithId {
+                                id: official_sibling_id.clone(),
+                                raw_change: official_sibling_raw.clone(),
+                            },
+                        ],
+                        snapshot_path: Vec::new(),
+                    },
+                )),
+            }),
+            root_change: None,
+        };
+
+        let push = ObjectSyncMessage {
+            space_id: space_id.to_string(),
+            object_id: object_id.to_string(),
+            request_id: "push-1".to_string(),
+            payload: update.encode_to_vec(),
+            ..Default::default()
+        };
+        handle_object_sync_message(&push.encode_to_vec(), &sync_state).unwrap();
+
+        let pull = ObjectSyncMessage {
+            space_id: space_id.to_string(),
+            object_id: object_id.to_string(),
+            request_id: "pull-1".to_string(),
+            payload: TreeSyncMessage {
+                content: Some(TreeSyncContentValue {
+                    value: Some(treechange::tree_sync_content_value::Value::FullSyncRequest(
+                        TreeFullSyncRequest {
+                            heads: vec![official_sibling_id.clone()],
+                            changes: Vec::new(),
+                            snapshot_path: vec![snapshot_id.clone(), root_id.clone()],
+                        },
+                    )),
+                }),
+                root_change: None,
+            }
+            .encode_to_vec(),
+            ..Default::default()
+        };
+
+        let response_bytes =
+            handle_object_sync_message(&pull.encode_to_vec(), &sync_state).unwrap();
+        let response = ObjectSyncMessage::decode(response_bytes.as_slice()).unwrap();
+        let tree_msg = TreeSyncMessage::decode(response.payload.as_slice()).unwrap();
+
+        let Some(content) = tree_msg.content else {
+            panic!("expected TreeSyncMessage.content");
+        };
+        let Some(treechange::tree_sync_content_value::Value::FullSyncResponse(resp)) =
+            content.value
+        else {
+            panic!("expected full sync response");
+        };
+
+        assert_eq!(
+            resp.heads,
+            vec![manytype_edit_id.clone(), official_sibling_id.clone()]
+        );
+        assert_eq!(resp.snapshot_path, vec![snapshot_id, root_id]);
+        assert_eq!(resp.changes.len(), 1);
+        assert_eq!(resp.changes[0].id, manytype_edit_id);
+        assert_eq!(resp.changes[0].raw_change, manytype_edit_raw);
     }
 
     #[test]
@@ -1525,15 +2110,31 @@ mod tests {
     }
 
     fn make_tree_change_bytes(parent_heads: Vec<String>) -> Vec<u8> {
+        make_tree_change_bytes_with(
+            parent_heads,
+            "snapshot".to_string(),
+            false,
+            1,
+            b"change-data",
+        )
+    }
+
+    fn make_tree_change_bytes_with(
+        parent_heads: Vec<String>,
+        snapshot_base_id: String,
+        is_snapshot: bool,
+        timestamp: i64,
+        changes_data: &[u8],
+    ) -> Vec<u8> {
         let tree_change = TreeChange {
             tree_head_ids: parent_heads,
             acl_head_id: "acl-head".to_string(),
-            snapshot_base_id: "snapshot".to_string(),
-            changes_data: b"change-data".to_vec(),
+            snapshot_base_id,
+            changes_data: changes_data.to_vec(),
             read_key_id: String::new(),
-            timestamp: 1,
+            timestamp,
             identity: vec![7; 32],
-            is_snapshot: false,
+            is_snapshot,
             data_type: String::new(),
         };
         RawTreeChange {

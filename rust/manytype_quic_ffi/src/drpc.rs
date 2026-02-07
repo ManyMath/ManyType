@@ -1,4 +1,4 @@
-//! Client-side DRPC operations: invoke and sync_object.
+//! Client-side DRPC operations: invoke, sync_object, and request_object.
 //!
 //! Uses `DrpcStream` and codec types from `manytype_server::drpc`.
 
@@ -169,9 +169,10 @@ where
 
 /// Sync an object by sending changes via ObjectSyncStream bidirectional RPC.
 ///
-/// Each change is sent as a MESSAGE frame. The server responds with a
-/// confirmation for each. After all changes, send KIND_CLOSE_SEND and
-/// read the server's KIND_CLOSE_SEND.
+/// Official Any-Sync/ObjectSyncStream handlers process the request stream only
+/// after the client half-closes with KIND_CLOSE_SEND. Waiting for responses
+/// before sending CLOSE_SEND can leave the stream in a limbo state where the
+/// server never commits the pushed object changes.
 ///
 /// Returns the collected response payloads.
 pub async fn sync_object<T>(
@@ -181,61 +182,33 @@ pub async fn sync_object<T>(
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    drpc_stream
-        .write_frame(DrpcFrame {
-            kind: KIND_INVOKE,
-            done: true,
-            control: false,
-            stream_id: STREAM_ID,
-            message_id: 1,
-            data: Bytes::from_static(b"/spacesync.SpaceSync/ObjectSyncStream"),
-        })
-        .await
-        .context("failed to write invoke frame for ObjectSyncStream")?;
+    exchange_stream(
+        drpc_stream,
+        "/spacesync.SpaceSync/ObjectSyncStream",
+        changes,
+    )
+    .await
+}
 
-    for (i, change) in changes.iter().enumerate() {
-        drpc_stream
-            .write_message(STREAM_ID, (i as u64) + 2, change)
-            .await
-            .context("failed to write change message")?;
-    }
-
-    let mut responses = Vec::new();
-    
-    // We sent `changes.len()` messages. Some may not elicit a response.
-    // So we just read with a timeout.
-    loop {
-        match timeout(Duration::from_millis(500), drpc_stream.read_frame()).await {
-            Ok(Ok(Some(frame))) => {
-                if frame.kind == KIND_MESSAGE {
-                    responses.push(frame.data.to_vec());
-                } else if frame.kind == KIND_CLOSE_SEND || frame.kind == KIND_CLOSE {
-                    break;
-                }
-            }
-            Ok(Ok(None)) => break,
-            Ok(Err(e)) => anyhow::bail!("error reading frame: {}", e),
-            Err(_) => {
-                // Timeout reached, assume no more responses are coming.
-                break;
-            }
-        }
-    }
-
-    // Now send CLOSE_SEND
-    drpc_stream
-        .write_frame(DrpcFrame {
-            kind: KIND_CLOSE_SEND,
-            done: true,
-            control: false,
-            stream_id: STREAM_ID,
-            message_id: (changes.len() as u64) + 2,
-            data: Bytes::new(),
-        })
-        .await
-        .context("failed to write close-send")?;
-
-    Ok(responses)
+/// Request an object via ObjectSyncRequestStream and collect streamed replies.
+///
+/// Official Any-Sync nodes use ObjectSyncRequestStream for authoritative
+/// full-tree responses after a single request message. We still half-close the
+/// client send side after that request so the exchange follows the same DRPC
+/// lifecycle as the bidirectional helper.
+pub async fn request_object<T>(
+    drpc_stream: &mut DrpcStream<T>,
+    request: &[u8],
+) -> Result<Vec<Vec<u8>>>
+where
+    T: AsyncRead + AsyncWrite + Unpin,
+{
+    exchange_stream(
+        drpc_stream,
+        "/spacesync.SpaceSync/ObjectSyncRequestStream",
+        &[request.to_vec()],
+    )
+    .await
 }
 
 /// Exchange protobuf messages over an arbitrary bidirectional DRPC stream.
@@ -486,6 +459,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_sync_object_waits_until_after_close_send_for_server_frames() {
+        let (client_io, server_io) = duplex(8192);
+        let mut client_stream = DrpcStream::new(client_io);
+        let mut server_stream = DrpcStream::new(server_io);
+
+        let changes = vec![b"change-1".to_vec()];
+
+        let server_handle = tokio::spawn(async move {
+            let (_, method) = server_stream.read_invoke().await.unwrap();
+            assert_eq!(method, "/spacesync.SpaceSync/ObjectSyncStream");
+
+            let frame = server_stream.read_frame().await.unwrap().unwrap();
+            assert_eq!(frame.kind, KIND_MESSAGE);
+            assert_eq!(frame.data.as_ref(), b"change-1");
+
+            let close_frame = server_stream.read_frame().await.unwrap().unwrap();
+            assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+
+            server_stream
+                .write_frame(DrpcFrame {
+                    kind: KIND_MESSAGE,
+                    done: true,
+                    control: false,
+                    stream_id: 0,
+                    message_id: 0,
+                    data: Bytes::copy_from_slice(b"ack-after-close-send"),
+                })
+                .await
+                .unwrap();
+            server_stream
+                .write_frame(DrpcFrame {
+                    kind: KIND_CLOSE_SEND,
+                    done: true,
+                    control: false,
+                    stream_id: 0,
+                    message_id: 0,
+                    data: Bytes::new(),
+                })
+                .await
+                .unwrap();
+        });
+
+        let responses = sync_object(&mut client_stream, &changes).await.unwrap();
+        assert_eq!(responses, vec![b"ack-after-close-send".to_vec()]);
+
+        server_handle.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn test_sync_object_empty_changes() {
         let (client_io, server_io) = duplex(8192);
         let mut client_stream = DrpcStream::new(client_io);
@@ -516,6 +538,54 @@ mod tests {
 
         let responses = sync_object(&mut client_stream, &[]).await.unwrap();
         assert!(responses.is_empty());
+
+        server_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_request_object_round_trip() {
+        let (client_io, server_io) = duplex(8192);
+        let mut client_stream = DrpcStream::new(client_io);
+        let mut server_stream = DrpcStream::new(server_io);
+
+        let server_handle = tokio::spawn(async move {
+            let (_, method) = server_stream.read_invoke().await.unwrap();
+            assert_eq!(method, "/spacesync.SpaceSync/ObjectSyncRequestStream");
+
+            let request = server_stream.read_message().await.unwrap();
+            assert_eq!(request, b"pull-request");
+
+            let close_frame = server_stream.read_frame().await.unwrap().unwrap();
+            assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+
+            server_stream
+                .write_frame(DrpcFrame {
+                    kind: KIND_MESSAGE,
+                    done: true,
+                    control: false,
+                    stream_id: 0,
+                    message_id: 0,
+                    data: Bytes::copy_from_slice(b"pull-response"),
+                })
+                .await
+                .unwrap();
+            server_stream
+                .write_frame(DrpcFrame {
+                    kind: KIND_CLOSE_SEND,
+                    done: true,
+                    control: false,
+                    stream_id: 0,
+                    message_id: 0,
+                    data: Bytes::new(),
+                })
+                .await
+                .unwrap();
+        });
+
+        let responses = request_object(&mut client_stream, b"pull-request")
+            .await
+            .unwrap();
+        assert_eq!(responses, vec![b"pull-response".to_vec()]);
 
         server_handle.await.unwrap();
     }

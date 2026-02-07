@@ -32,21 +32,29 @@ Future<void> readCommand(
   if (objectId != null) {
     await _showObject(db, config, objectId);
   } else {
-    await _listObjects(db, spaceId);
+    await _listObjects(db, spaceId, config);
   }
 }
 
 /// List all objects in the space with text previews.
-Future<void> _listObjects(ManytypeDatabase db, String spaceId) async {
+Future<void> _listObjects(
+  ManytypeDatabase db,
+  String spaceId,
+  CliConfig config,
+) async {
   final objects = await db.getNonDeletedObjectsBySpace(spaceId);
   if (objects.isEmpty) {
     print('No objects found. Create one with: manytype create "your text"');
     return;
   }
 
+  final spaceKey = await _tryDeriveSpaceKey(config);
   print('Objects in space ($spaceId):');
   print('');
   for (final obj in objects) {
+    if (await _isObjectArchived(db, obj.id, spaceKey)) {
+      continue;
+    }
     final changes = await db.getChangesForObject(obj.id);
     final heads = await db.getObjectHeads(obj.id);
     final attachments = await db.getAttachmentRefsByObject(obj.id);
@@ -76,11 +84,6 @@ Future<void> _showObject(
     return;
   }
 
-  if (await db.isObjectDeleted(objectId)) {
-    print('Object $objectId has been deleted');
-    exit(1);
-  }
-
   // Official Anytype trees encrypt `TreeChange.changesData` using a tree key
   // derived from the space read key and object ID, and may additionally snappy
   // compress the plaintext when `dataType == "1/s"`.
@@ -99,6 +102,12 @@ Future<void> _showObject(
     spaceId = identity.spaceId;
   } catch (_) {
     treeKey = null;
+  }
+
+  if (await db.isObjectDeleted(objectId) ||
+      await _isObjectArchived(db, objectId, spaceKey)) {
+    print('Object $objectId has been deleted or archived');
+    exit(1);
   }
 
   // Phase 38: Build the STRelationOption index ONCE per read invocation.
@@ -192,6 +201,47 @@ Future<void> _showObject(
     } catch (e) {
       print('  Change ${change.id}: (binary, ${change.rawBytes.length} bytes)');
     }
+  }
+}
+
+Future<Uint8List?> _tryDeriveSpaceKey(CliConfig config) async {
+  try {
+    final identity = await Identity.fromMnemonic(config.mnemonic);
+    final accountPrivRaw = Uint8List(64)
+      ..setRange(0, 32, identity.accountSeed)
+      ..setRange(32, 64, identity.accountKeyPair.publicKey);
+    return deriveSpaceKey(accountPrivRaw);
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<bool> _isObjectArchived(
+  ManytypeDatabase db,
+  String objectId,
+  Uint8List? spaceKey,
+) async {
+  if (spaceKey == null) {
+    return false;
+  }
+
+  try {
+    final changes = await db.getChangesForObject(objectId);
+    if (changes.isEmpty) {
+      return false;
+    }
+    final treeKey = await deriveTreeKey(spaceKey, objectId);
+    final details = await replayObjectDetails(
+      rawTreeChanges:
+          changes.map((change) => Uint8List.fromList(change.rawBytes)).toList(),
+      treeKey: treeKey,
+    );
+    final isArchived = details['isArchived'];
+    return isArchived != null &&
+        isArchived.hasBoolValue() &&
+        isArchived.boolValue;
+  } catch (_) {
+    return false;
   }
 }
 
@@ -569,6 +619,16 @@ Future<void> _printSnapshotMetadata(
       renderedRelationKeys.add(entry.key);
     }
   }
+  for (final entry in mergedDetails.entries) {
+    if (renderedRelationKeys.contains(entry.key) ||
+        _hiddenGenericDetailKeys.contains(entry.key)) {
+      continue;
+    }
+    final rendered = _formatGenericDetailValue(entry.value);
+    if (rendered == null) continue;
+    print('  [${entry.key}] $rendered');
+    renderedRelationKeys.add(entry.key);
+  }
 
   _printSnapshotBlocks(blockOrder, blockState);
   await _printCollectionMembers(
@@ -807,6 +867,8 @@ Future<void> _printBlockChanges(
         final val = content.detailsSet.value;
         if (key == 'name' && val.hasStringValue()) {
           print('    Text (updated): "${val.stringValue}"');
+        } else if (val.hasStringValue()) {
+          print('    $key: ${val.stringValue}');
         } else if (val.hasBoolValue()) {
           print('    $key (bool): ${val.boolValue}');
         } else if (val.hasNumberValue()) {
@@ -815,8 +877,8 @@ Future<void> _printBlockChanges(
             isUtc: true,
           );
           print('    $key (date): ${dt.toIso8601String().substring(0, 10)}');
-        } else if (val.hasStringValue()) {
-          print('    $key (object): ${val.stringValue}');
+        } else if (val.hasListValue()) {
+          print('    $key: ${_formatGenericStringList(val.listValue)}');
         }
       }
       if (content.hasBlockCreate()) {
@@ -864,6 +926,57 @@ Future<void> _printBlockChanges(
   } catch (e) {
     print('    (could not decode block changes)');
   }
+}
+
+const _hiddenGenericDetailKeys = <String>{
+  'name',
+  'id',
+  'spaceId',
+  'type',
+  'tag',
+  'internalFlags',
+  'createdDate',
+  'creator',
+  'lastModifiedDate',
+  'lastModifiedBy',
+  'lastOpenedDate',
+  'isFavorite',
+  'isArchived',
+  'restrictions',
+  'syncDate',
+  'syncStatus',
+  'syncError',
+  'coverId',
+  'coverScale',
+  'coverType',
+  'coverX',
+  'coverY',
+  'snippet',
+  'links',
+  'backlinks',
+  'mentions',
+  'resolvedLayout',
+};
+
+String? _formatGenericDetailValue(Value val) {
+  if (val.hasStringValue()) {
+    return val.stringValue;
+  }
+  if (val.hasListValue()) {
+    return _formatGenericStringList(val.listValue);
+  }
+  return null;
+}
+
+String _formatGenericStringList(ListValue list) {
+  final values = list.values
+      .where((value) => value.hasStringValue())
+      .map((value) => value.stringValue)
+      .toList(growable: false);
+  if (values.isEmpty) {
+    return '(empty)';
+  }
+  return values.join(', ');
 }
 
 Future<Uint8List> _decodeTreeChangeChangesData(

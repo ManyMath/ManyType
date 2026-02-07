@@ -7,7 +7,6 @@ import 'package:fixnum/fixnum.dart';
 import 'package:libcompress/libcompress.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
-import 'package:manytype_protocol/events.dart';
 import 'package:manytype_protocol/models.dart';
 import 'package:manytype_protocol/manytype_protocol.dart'
     show RawTreeChange, TreeChange;
@@ -30,9 +29,12 @@ Future<void> editCommand(
   ManytypeDatabase db,
   CliConfig config, {
   required String networkConfigPath,
+  SyncService? syncService,
   bool checkbox = false,
   String? checkboxText,
   String? relationKey,
+  String? stringValue,
+  List<String>? stringListValue,
   String? boolValue,
   String? dateValue,
   String? fileRelationPath,
@@ -56,7 +58,7 @@ Future<void> editCommand(
     exit(1);
   }
 
-  final syncService = SyncService();
+  syncService ??= SyncService();
   await syncService.sync(db, config, networkConfigPath: networkConfigPath);
 
   final freshChanges = await db.getChangesForObject(objectId);
@@ -100,17 +102,27 @@ Future<void> editCommand(
   final readKeyId = treeWriteMetadata.readKeyId;
 
   var latestHeads = currentHeads;
-  String? nameChangeId;
+  String? textChangeId;
 
-  // If newText is provided, update the page title via DetailsSet.
+  // If newText is provided, update both the canonical object name and the
+  // primary rendered text block so official clients observe the same value.
   if (newText != null) {
-    final changeContent = changes_proto.Change_Content(
-      detailsSet: changes_proto.Change_DetailsSet(
-        key: 'name',
-        value: Value(stringValue: newText),
+    final textBlockId =
+        await _resolvePrimaryTextBlockId(freshChanges, treeKey) ?? 'title';
+    final changeContents = <changes_proto.Change_Content>[
+      changes_proto.Change_Content(
+        detailsSet: changes_proto.Change_DetailsSet(
+          key: 'name',
+          value: Value(stringValue: newText),
+        ),
       ),
-    );
-    final editChangeData = marshalChangeContent([changeContent]);
+      changes_proto.Change_Content(
+        blockUpdate: changes_proto.Change_BlockUpdate(
+          events: [buildBlockSetTextEvent(textBlockId, newText)],
+        ),
+      ),
+    ];
+    final editChangeData = marshalChangeContent(changeContents);
 
     final treeChange = await buildTreeChange(
       currentHeads: latestHeads,
@@ -128,7 +140,7 @@ Future<void> editCommand(
       jsonEncode(latestHeads),
     );
 
-    nameChangeId = treeChange.id;
+    textChangeId = treeChange.id;
     latestHeads = [treeChange.id];
   }
 
@@ -170,6 +182,7 @@ Future<void> editCommand(
 
   String? relationChangeId;
   _FileRelationWriteResult? fileRelationResult;
+  Value? expectedRelationValue;
 
   // If a relation key is provided, build a DetailsSet with the typed Value.
   if (relationKey != null) {
@@ -186,6 +199,16 @@ Future<void> editCommand(
         sourcePath: fileRelationPath,
       );
       relationValue = Value(stringValue: fileRelationResult.fileObjectId);
+    } else if (stringValue != null) {
+      relationValue = Value(stringValue: stringValue);
+    } else if (stringListValue != null) {
+      relationValue = Value(
+        listValue: ListValue(
+          values: stringListValue
+              .map((value) => Value(stringValue: value))
+              .toList(),
+        ),
+      );
     } else if (boolValue != null) {
       relationValue = Value(boolValue: boolValue == 'true');
     } else if (dateValue != null) {
@@ -243,6 +266,7 @@ Future<void> editCommand(
     } else {
       throw StateError('relation requires a typed value');
     }
+    expectedRelationValue = relationValue.deepCopy();
 
     final relationContent = changes_proto.Change_Content(
       detailsSet: changes_proto.Change_DetailsSet(
@@ -396,13 +420,22 @@ Future<void> editCommand(
 
   await syncService.sync(db, config, networkConfigPath: networkConfigPath);
 
-  // Verify text change if a name update was made.
+  // Verify text change updates both the object name and the rendered text.
   if (newText != null) {
     final verifyChanges = await db.getChangesForObject(objectId);
-    final actual = await _extractTextPreviewWithTreeKey(verifyChanges, treeKey);
-    if (actual != newText) {
+    final replayed = await replayObjectState(
+      rawTreeChanges: verifyChanges
+          .map((row) => Uint8List.fromList(row.rawBytes))
+          .toList(growable: false),
+      treeKey: treeKey,
+    );
+    final actualName =
+        replayed.snapshot.details.fields['name']?.stringValue.trim() ?? '';
+    final actualText = _extractPrimaryTextBlockText(replayed.snapshot) ?? '';
+    if (actualName != newText || actualText != newText) {
       print(
-        'Verification failed: server text "$actual" does not match expected "$newText"',
+        'Verification failed: name="$actualName" text="$actualText" '
+        'does not match expected "$newText"',
       );
       exit(1);
     }
@@ -416,12 +449,10 @@ Future<void> editCommand(
       treeKey: treeKey,
     );
     final actualValue = actualDetails[relationKey];
-    if (actualValue == null ||
-        !actualValue.hasStringValue() ||
-        actualValue.stringValue != fileRelationResult.fileObjectId) {
+    if (!_detailValuesEqual(actualValue, expectedRelationValue)) {
       print(
-        'Verification failed: relation $relationKey does not point to '
-        '${fileRelationResult.fileObjectId} after sync',
+        'Verification failed: relation $relationKey does not match the '
+        'expected value after sync',
       );
       exit(1);
     }
@@ -434,10 +465,26 @@ Future<void> editCommand(
       );
       exit(1);
     }
+  } else if (relationKey != null && expectedRelationValue != null) {
+    final verifyChanges = await db.getChangesForObject(objectId);
+    final actualDetails = await replayObjectDetails(
+      rawTreeChanges: verifyChanges
+          .map((row) => Uint8List.fromList(row.rawBytes))
+          .toList(growable: false),
+      treeKey: treeKey,
+    );
+    final actualValue = actualDetails[relationKey];
+    if (!_detailValuesEqual(actualValue, expectedRelationValue)) {
+      print(
+        'Verification failed: relation $relationKey does not match the '
+        'expected value after sync',
+      );
+      exit(1);
+    }
   }
 
   print('Edited object: $objectId');
-  if (nameChangeId != null) print('Name change: $nameChangeId');
+  if (textChangeId != null) print('Text change: $textChangeId');
   if (blockChangeId != null) print('Block change: $blockChangeId');
   if (relationChangeId != null) {
     if (fileRelationResult != null) {
@@ -454,6 +501,10 @@ Future<void> editCommand(
         'cid=${fileRelationResult.cid}, '
         '${fileRelationResult.uploaded ? "uploaded" : "existing-blob"}]',
       );
+    } else if (stringValue != null) {
+      print('Set detail: $relationKey = $stringValue');
+    } else if (stringListValue != null) {
+      print('Set detail list: $relationKey = [${stringListValue.join(", ")}]');
     } else if (status != null) {
       print('Set status: $relationKey = $status');
     } else if (tagIds != null) {
@@ -592,6 +643,45 @@ Future<({String storeKey, List<String> memberIds})?> _loadCollectionState(
   );
 }
 
+bool _detailValuesEqual(Value? actual, Value? expected) {
+  if (actual == null || expected == null) {
+    return actual == expected;
+  }
+  if (actual.hasStringValue() && expected.hasStringValue()) {
+    return actual.stringValue == expected.stringValue;
+  }
+  if (actual.hasBoolValue() && expected.hasBoolValue()) {
+    return actual.boolValue == expected.boolValue;
+  }
+  if (actual.hasNumberValue() && expected.hasNumberValue()) {
+    return actual.numberValue == expected.numberValue;
+  }
+  if (actual.hasListValue() && expected.hasListValue()) {
+    final actualValues = actual.listValue.values
+        .where((value) => value.hasStringValue())
+        .map((value) => value.stringValue)
+        .toList(growable: false);
+    final expectedValues = expected.listValue.values
+        .where((value) => value.hasStringValue())
+        .map((value) => value.stringValue)
+        .toList(growable: false);
+    return _stringListsEqual(actualValues, expectedValues);
+  }
+  return false;
+}
+
+bool _stringListsEqual(List<String> a, List<String> b) {
+  if (a.length != b.length) {
+    return false;
+  }
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 Future<Uint8List> _decodeTreeChangeData(
   TreeChange treeChange,
   Uint8List treeKey,
@@ -639,62 +729,44 @@ void _insertAfterId(
   current.insertAll(index + 1, values);
 }
 
-Future<String> _extractTextPreviewWithTreeKey(
+Future<String?> _resolvePrimaryTextBlockId(
   List<Change> changes,
   Uint8List treeKey,
 ) async {
-  for (final stored in changes.reversed) {
-    try {
-      final rawTreeChange = RawTreeChange.fromBuffer(stored.rawBytes);
-      if (rawTreeChange.payload.isEmpty) continue;
+  final replayed = await replayObjectState(
+    rawTreeChanges: changes
+        .map((change) => Uint8List.fromList(change.rawBytes))
+        .toList(growable: false),
+    treeKey: treeKey,
+  );
+  return _primaryTextBlockId(replayed.snapshot);
+}
 
-      final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
-      if (treeChange.changesData.isEmpty) continue;
-
-      var data = Uint8List.fromList(treeChange.changesData);
-      if (treeChange.readKeyId.isNotEmpty) {
-        data = await aesGcmDecrypt(treeKey, data);
-      }
-
-      final decoded = changes_proto.Change.fromBuffer(data);
-
-      if (decoded.hasSnapshot()) {
-        final snapshot = decoded.snapshot.data;
-        for (final block in snapshot.blocks) {
-          if (block.hasText()) {
-            final text = block.text.text.trim();
-            if (text.isNotEmpty) return text;
-          }
-        }
-      }
-
-      for (final content in decoded.content) {
-        if (content.hasDetailsSet() &&
-            content.detailsSet.key == 'name' &&
-            content.detailsSet.value.hasStringValue()) {
-          final title = content.detailsSet.value.stringValue.trim();
-          if (title.isNotEmpty) return title;
-        }
-        if (content.hasBlockUpdate()) {
-          for (final eventBytes in content.blockUpdate.events) {
-            try {
-              final eventMsg = Event_Message.fromBuffer(eventBytes);
-              if (eventMsg.hasBlockSetText()) {
-                final text = eventMsg.blockSetText.text.value.trim();
-                if (text.isNotEmpty) return text;
-              }
-            } catch (_) {
-              continue;
-            }
-          }
-        }
-      }
-    } catch (_) {
-      continue;
+String? _primaryTextBlockId(SmartBlockSnapshotBase snapshot) {
+  for (final block in snapshot.blocks) {
+    if (block.id == 'title' && block.hasText()) {
+      return block.id;
     }
   }
+  for (final block in snapshot.blocks) {
+    if (block.hasText()) {
+      return block.id;
+    }
+  }
+  return null;
+}
 
-  return '';
+String? _extractPrimaryTextBlockText(SmartBlockSnapshotBase snapshot) {
+  final blockId = _primaryTextBlockId(snapshot);
+  if (blockId == null) {
+    return null;
+  }
+  for (final block in snapshot.blocks) {
+    if (block.id == blockId && block.hasText()) {
+      return block.text.text.trim();
+    }
+  }
+  return null;
 }
 
 class _TreeWriteMetadata {

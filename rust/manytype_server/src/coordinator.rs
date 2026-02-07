@@ -152,25 +152,12 @@ pub fn handle_acl_add_record(
     let request = AclAddRecordRequest::decode(request_bytes)?;
     let raw_record = RawRecord::decode(request.payload.as_slice())?;
 
-    let seed_head = {
-        let state = sync_state.read().unwrap();
-        let space = state
-            .get(&request.space_id)
-            .ok_or_else(|| anyhow::anyhow!("space not found: {}", request.space_id))?;
-
-        if !space.acl_head.is_empty() {
-            space.acl_head.clone()
-        } else if !space.acl_root_id.is_empty() {
-            space.acl_root_id.clone()
-        } else {
-            return Err(anyhow::anyhow!(
-                "space ACL root not initialized: {}",
-                request.space_id
-            ));
-        }
-    };
-
-    consensus::ensure_log_exists(&request.space_id, &seed_head);
+    if consensus::ensure_log_exists_from_sync_state(&request.space_id, sync_state).is_none() {
+        return Err(anyhow::anyhow!(
+            "space ACL root not initialized: {}",
+            request.space_id
+        ));
+    }
     let record_add_request = RecordAddRequest {
         log_id: request.space_id.clone(),
         record: Some(raw_record),
@@ -181,7 +168,12 @@ pub fn handle_acl_add_record(
     let record_id = raw_with_id.id.clone();
     let payload = raw_with_id.payload.clone();
 
-    sync_state.append_acl_record(&request.space_id, raw_with_id_bytes, &record_id)?;
+    consensus::persist_space_linked_record_add(
+        &request.space_id,
+        raw_with_id_bytes.as_slice(),
+        &record_id,
+        sync_state,
+    )?;
 
     Ok(AclAddRecordResponse { record_id, payload }.encode_to_vec())
 }
@@ -422,7 +414,12 @@ mod tests {
             assert_eq!(node.addresses[0], "127.0.0.1:4830");
         }
 
-        let has_type = |want: NodeType| response.nodes.iter().any(|node| node.types.contains(&(want as i32)));
+        let has_type = |want: NodeType| {
+            response
+                .nodes
+                .iter()
+                .any(|node| node.types.contains(&(want as i32)))
+        };
 
         assert!(has_type(NodeType::TreeApi), "should have TreeApi");
         assert!(

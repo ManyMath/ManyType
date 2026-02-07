@@ -3,10 +3,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:fixnum/fixnum.dart';
+import 'package:libcompress/libcompress.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/coordinator.dart';
-import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 import 'package:manytype_protocol/spacesync.dart';
 
@@ -17,6 +17,8 @@ import 'network_config.dart';
 import 'store/database.dart';
 import 'ffi/native_bridge.dart';
 import 'head_sync_client.dart';
+
+final _snappy = SnappyCodec();
 
 typedef SyncUnaryInvoker = Uint8List Function(
   int handleId,
@@ -64,6 +66,10 @@ class SyncService {
     final officialInteropMode = networkConfigPath != null;
     final identity = await Identity.fromMnemonic(config.mnemonic);
     final spaceId = identity.spaceId;
+    final accountPrivRaw = Uint8List(64)
+      ..setRange(0, 32, identity.accountSeed)
+      ..setRange(32, 64, identity.accountKeyPair.publicKey);
+    final spaceKey = await deriveSpaceKey(accountPrivRaw);
     final capture = _SessionCapture.start(
       officialInteropMode: officialInteropMode,
       spaceId: spaceId,
@@ -222,6 +228,7 @@ class SyncService {
 
       int pushed = 0;
       int pulled = 0;
+      final pushedObjectIds = <String>[];
       if (officialInteropMode) {
         final localOnlyObjectCount = localHeads.entries.where((entry) {
           final serverHeadSet = serverHeads[entry.key] ?? <String>{};
@@ -337,6 +344,7 @@ class SyncService {
             );
           }
           pushed++;
+          pushedObjectIds.add(objectId);
           print('  Pushed: $objectId (${changes.length} changes)');
         }
       }
@@ -368,6 +376,22 @@ class SyncService {
             'still_missing_count': missingAfterPush,
           },
         );
+
+        for (final objectId in pushedObjectIds) {
+          final refreshed = await _pullObjectFromSyncNodes(
+            db,
+            bridge,
+            syncHandleIds,
+            spaceId,
+            objectId,
+            capture: capture,
+            spaceKey: spaceKey,
+          );
+          if (refreshed) {
+            pulled++;
+            print('  Reconciled pushed object: $objectId');
+          }
+        }
       }
 
       // Pull: objects server has that local lacks or has different heads.
@@ -387,28 +411,35 @@ class SyncService {
           );
           final pullPayload = Uint8List.fromList(requestMsg.writeToBuffer());
 
-          Uint8List responseData = Uint8List(0);
+          final responseChunks = <Uint8List>[];
           for (final handleId in syncHandleIds) {
             try {
-              final resp =
-                  bridge.syncObject(handleId, spaceId, objectId, pullPayload);
+              final resp = bridge.requestObject(
+                  handleId, spaceId, objectId, pullPayload);
               if (resp.isNotEmpty) {
-                responseData = resp;
+                responseChunks.add(resp);
                 capture.recordStreamRpc(
                   role: 'sync-node',
-                  method: '/spacesync.SpaceSync/ObjectSyncStream',
+                  method: '/spacesync.SpaceSync/ObjectSyncRequestStream',
                   requestMessages: [pullPayload],
                   responseMessages: _decodeMessagesFromFfi(resp),
                 );
-                break;
               }
             } catch (_) {
               continue;
             }
           }
 
+          final responseData = _mergeFfiResponseChunks(responseChunks);
+
           if (responseData.isNotEmpty) {
-            await storePulledChanges(db, spaceId, objectId, responseData);
+            await storePulledChanges(
+              db,
+              spaceId,
+              objectId,
+              responseData,
+              spaceKey: spaceKey,
+            );
             pulled++;
             print('  Pulled: $objectId');
           }
@@ -460,9 +491,7 @@ class SyncService {
         }
         bridge.freeHandle(handleId);
       }
-      if (coordinatorHandleId != null) {
-        bridge.freeHandle(coordinatorHandleId);
-      }
+      bridge.freeHandle(coordinatorHandleId);
       await capture.flush();
     }
   }
@@ -546,6 +575,89 @@ class SyncService {
       }
     }
   }
+}
+
+Future<bool> _pullObjectFromSyncNodes(
+  ManytypeDatabase db,
+  NativeBridge bridge,
+  List<int> syncHandleIds,
+  String spaceId,
+  String objectId, {
+  required _SessionCapture capture,
+  Uint8List? spaceKey,
+}) async {
+  final localHeadSet = (await db.getObjectHeads(objectId)).toSet();
+  final localChanges = await db.getChangesForObject(objectId);
+  Change? rootChange;
+  for (final change in localChanges) {
+    final parentHeads = _decodeParentHeads(change);
+    if (parentHeads.isEmpty && rootChange == null) {
+      rootChange = change;
+    }
+  }
+
+  final requestMsg = TreeSyncMessage(
+    content: TreeSyncContentValue(
+      fullSyncRequest: TreeFullSyncRequest(
+        heads: localHeadSet.toList(),
+        changes: const [],
+        snapshotPath: _buildOfficialSnapshotPath(
+          localChanges,
+          rootChange,
+          localHeadSet.toList(),
+        ),
+      ),
+    ),
+  );
+  final pullPayload = Uint8List.fromList(requestMsg.writeToBuffer());
+
+  final responseChunks = <Uint8List>[];
+  for (final handleId in syncHandleIds) {
+    try {
+      final resp =
+          bridge.requestObject(handleId, spaceId, objectId, pullPayload);
+      if (resp.isNotEmpty) {
+        responseChunks.add(resp);
+        capture.recordStreamRpc(
+          role: 'sync-node',
+          method: '/spacesync.SpaceSync/ObjectSyncRequestStream',
+          requestMessages: [pullPayload],
+          responseMessages: _decodeMessagesFromFfi(resp),
+        );
+      }
+    } catch (_) {
+      continue;
+    }
+  }
+
+  final responseData = _mergeFfiResponseChunks(responseChunks);
+
+  if (responseData.isEmpty) {
+    return false;
+  }
+
+  await storePulledChanges(
+    db,
+    spaceId,
+    objectId,
+    responseData,
+    spaceKey: spaceKey,
+  );
+  return true;
+}
+
+Uint8List _mergeFfiResponseChunks(List<Uint8List> chunks) {
+  if (chunks.isEmpty) {
+    return Uint8List(0);
+  }
+  if (chunks.length == 1) {
+    return chunks.single;
+  }
+  final builder = BytesBuilder(copy: false);
+  for (final chunk in chunks) {
+    builder.add(chunk);
+  }
+  return builder.takeBytes();
 }
 
 SyncDiscoveryResult discoverSyncTargetsForSync({
@@ -693,8 +805,9 @@ Future<void> storePulledChanges(
   ManytypeDatabase db,
   String spaceId,
   String objectId,
-  Uint8List data,
-) async {
+  Uint8List data, {
+  Uint8List? spaceKey,
+}) async {
   // Ensure object exists in local store
   await db.insertObject(objectId, spaceId);
 
@@ -714,6 +827,7 @@ Future<void> storePulledChanges(
         spaceId,
         objectId,
         msgBytes,
+        spaceKey: spaceKey,
       );
       if (stored) {
         continue;
@@ -724,8 +838,13 @@ Future<void> storePulledChanges(
         spaceId,
         objectId,
         msgBytes,
+        spaceKey: spaceKey,
       );
     }
+  }
+
+  if (spaceKey != null && await _isSpaceSettingsObject(db, objectId, spaceId)) {
+    await _applyPulledSettingsDeletes(db, objectId, spaceKey);
   }
 }
 
@@ -733,8 +852,9 @@ Future<bool> _storePulledMessageBytes(
   ManytypeDatabase db,
   String spaceId,
   String objectId,
-  Uint8List msgBytes,
-) async {
+  Uint8List msgBytes, {
+  Uint8List? spaceKey,
+}) async {
   try {
     final msg = ObjectSyncMessage.fromBuffer(msgBytes);
     final looksLikeObjectSyncMessage = msg.hasPayload() ||
@@ -769,6 +889,7 @@ Future<bool> _storePulledMessageBytes(
         objectId,
         changeBytes,
         changeId: raw.id,
+        spaceKey: spaceKey,
       );
     }
     return true;
@@ -783,6 +904,7 @@ Future<void> _storeRawPulledChange(
   String objectId,
   Uint8List changeBytes, {
   String? changeId,
+  Uint8List? spaceKey,
 }) async {
   final resolvedChangeId = changeId ?? await computeCid(changeBytes);
   await db.insertChange(
@@ -799,6 +921,81 @@ Future<void> _storeRawPulledChange(
       fileId: ref.fileId,
       cid: ref.cid,
     );
+  }
+}
+
+Future<bool> _isSpaceSettingsObject(
+  ManytypeDatabase db,
+  String objectId,
+  String spaceId,
+) async {
+  final changes = await db.getChangesForObject(objectId);
+  for (final change in changes) {
+    try {
+      final rawTreeChange = RawTreeChange.fromBuffer(change.rawBytes);
+      if (rawTreeChange.payload.isEmpty) {
+        continue;
+      }
+      final rootChange = RootChange.fromBuffer(rawTreeChange.payload);
+      if (rootChange.spaceId == spaceId &&
+          (rootChange.changeType == 'anytype.space' ||
+              rootChange.changeType == 'any-sync.space')) {
+        return true;
+      }
+    } catch (_) {
+      continue;
+    }
+  }
+  return false;
+}
+
+Future<void> _applyPulledSettingsDeletes(
+  ManytypeDatabase db,
+  String settingsObjectId,
+  Uint8List spaceKey,
+) async {
+  final treeKey = await deriveTreeKey(spaceKey, settingsObjectId);
+  final changes = await db.getChangesForObject(settingsObjectId);
+  for (final change in changes) {
+    final deletedIds = await _extractDeletedObjectIdsFromSettingsChange(
+        change.rawBytes, treeKey);
+    for (final deletedId in deletedIds) {
+      await db.markObjectDeleted(deletedId);
+    }
+  }
+}
+
+Future<List<String>> _extractDeletedObjectIdsFromSettingsChange(
+  List<int> rawChangeBytes,
+  Uint8List treeKey,
+) async {
+  try {
+    final rawTreeChange = RawTreeChange.fromBuffer(rawChangeBytes);
+    if (rawTreeChange.payload.isEmpty) {
+      return const [];
+    }
+
+    final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+    if (treeChange.changesData.isEmpty) {
+      return const [];
+    }
+
+    var payload = Uint8List.fromList(treeChange.changesData);
+    if (treeChange.readKeyId.isNotEmpty) {
+      payload = await aesGcmDecrypt(treeKey, payload);
+    }
+    if (treeChange.dataType == '1/s') {
+      payload = _snappy.decompress(payload);
+    }
+
+    final settingsData = SettingsData.fromBuffer(payload);
+    return settingsData.content
+        .where((content) => content.hasObjectDelete())
+        .map((content) => content.objectDelete.id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+  } catch (_) {
+    return const [];
   }
 }
 
@@ -1300,17 +1497,18 @@ TreeSyncMessage _buildOfficialTreeHeadUpdateMessage(
   }
 
   Change? rootChange;
-  final nonRootChanges = <Change>[];
   for (final change in changes) {
     final parentHeads = _decodeParentHeads(change);
     if (parentHeads.isEmpty && rootChange == null) {
       rootChange = change;
-      continue;
     }
-    nonRootChanges.add(change);
   }
 
-  final headChanges = nonRootChanges
+  // Upstream any-sync's HeadUpdate apply path consumes the streamed
+  // `changes` plus `snapshotPath`; it does not rebuild ancestry from
+  // `rootChange` alone. Include the root in-band so new trees can materialize
+  // on official nodes.
+  final headChanges = changes
       .map(
         (change) => RawTreeChangeWithId(
           id: change.id,
@@ -1322,6 +1520,7 @@ TreeSyncMessage _buildOfficialTreeHeadUpdateMessage(
   final headUpdate = TreeHeadUpdate(
     heads: heads,
     changes: headChanges,
+    snapshotPath: _buildOfficialSnapshotPath(changes, rootChange, heads),
   );
 
   return TreeSyncMessage(
@@ -1337,6 +1536,99 @@ TreeSyncMessage _buildOfficialTreeHeadUpdateMessage(
 
 List<String> _decodeParentHeads(Change change) =>
     (jsonDecode(change.parentHeads) as List).cast<String>();
+
+List<String> _buildOfficialSnapshotPath(
+  List<Change> changes,
+  Change? rootChange,
+  List<String> heads,
+) {
+  if (rootChange == null) {
+    return const [];
+  }
+
+  final rootId = rootChange.id;
+  final treeInfoById = <String, _TreeChangeInfo>{};
+  for (final change in changes) {
+    final info = _decodeTreeChangeInfo(change);
+    if (info != null) {
+      treeInfoById[change.id] = info;
+    }
+  }
+
+  String? snapshotId;
+  for (final head in heads) {
+    final info = treeInfoById[head];
+    if (info == null) {
+      continue;
+    }
+    if (info.isSnapshot) {
+      snapshotId = head;
+      break;
+    }
+    if (info.snapshotBaseId.isNotEmpty && info.snapshotBaseId != rootId) {
+      snapshotId = info.snapshotBaseId;
+      break;
+    }
+  }
+
+  snapshotId ??= changes.reversed
+      .map((change) => (id: change.id, info: _decodeTreeChangeInfo(change)))
+      .firstWhere(
+        (entry) => entry.info?.isSnapshot == true,
+        orElse: () => (id: rootId, info: null),
+      )
+      .id;
+
+  if (snapshotId.isEmpty || snapshotId == rootId) {
+    return [rootId];
+  }
+
+  final path = <String>[];
+  final seen = <String>{};
+  var currentId = snapshotId;
+  while (currentId.isNotEmpty && seen.add(currentId)) {
+    path.add(currentId);
+    if (currentId == rootId) {
+      break;
+    }
+    final nextId = treeInfoById[currentId]?.snapshotBaseId ?? '';
+    if (nextId.isEmpty) {
+      break;
+    }
+    currentId = nextId;
+  }
+
+  if (path.isEmpty || path.last != rootId) {
+    path.add(rootId);
+  }
+  return path;
+}
+
+_TreeChangeInfo? _decodeTreeChangeInfo(Change change) {
+  try {
+    final rawTreeChange = RawTreeChange.fromBuffer(change.rawBytes);
+    if (rawTreeChange.payload.isEmpty) {
+      return null;
+    }
+    final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+    return _TreeChangeInfo(
+      isSnapshot: treeChange.isSnapshot,
+      snapshotBaseId: treeChange.snapshotBaseId,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+class _TreeChangeInfo {
+  const _TreeChangeInfo({
+    required this.isSnapshot,
+    required this.snapshotBaseId,
+  });
+
+  final bool isSnapshot;
+  final String snapshotBaseId;
+}
 
 HeadSyncRange _fullHeadSyncRange({required bool elements}) => HeadSyncRange(
       from: Int64.ZERO,
