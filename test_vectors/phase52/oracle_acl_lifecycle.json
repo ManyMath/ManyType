@@ -1,0 +1,30 @@
+{
+  "captured_at": "2026-04-14T21:37:37.135318Z",
+  "command": "acl-lifecycle",
+  "backend_label": "self-hosted-official",
+  "backend_requirements": [
+    "requires a reachable self-hosted official Any-Sync coordinator from --network-config",
+    "creates an ephemeral owner space and seeds it live before ACL writes"
+  ],
+  "network_config_path": "/home/user/src/manytype/manytype/docker/any-sync/etc/client.yml",
+  "coordinator_address": "127.0.0.1:1014",
+  "space_id": "bafyreifzxb7hyarrxry3ukrkqzo5ljqtzyr3fufx6mrlnzo7pe22lywsyu.22hrd8pfn6gyh",
+  "acl_root_id": "bafyreice4ntanlohsmn6zggg5notekpptr2frdtqr4z4hlatdronnbpyu4",
+  "invite_record_id": "bafyreifj4sqkn3jyhnxrlfguexbbeg63zyg42o5ztml5fuehqrehy3uede",
+  "join_record_id": "bafyreiasy6xfazx67irdzbhdij6euzpkz4xit5obxhhfyw24ufsvyk3mfm",
+  "accept_record_id": "bafyreidsxpgdeueymjj7z5bnftcugjqidawxfe2i7myactptby7z7firuy",
+  "record_ids_after_accept": [
+    "bafyreice4ntanlohsmn6zggg5notekpptr2frdtqr4z4hlatdronnbpyu4",
+    "bafyreifj4sqkn3jyhnxrlfguexbbeg63zyg42o5ztml5fuehqrehy3uede",
+    "bafyreiasy6xfazx67irdzbhdij6euzpkz4xit5obxhhfyw24ufsvyk3mfm",
+    "bafyreidsxpgdeueymjj7z5bnftcugjqidawxfe2i7myactptby7z7firuy"
+  ],
+  "tail_after_join_ids": [
+    "bafyreifj4sqkn3jyhnxrlfguexbbeg63zyg42o5ztml5fuehqrehy3uede",
+    "bafyreiasy6xfazx67irdzbhdij6euzpkz4xit5obxhhfyw24ufsvyk3mfm",
+    "bafyreidsxpgdeueymjj7z5bnftcugjqidawxfe2i7myactptby7z7firuy"
+  ],
+  "joiner_identity_hex": "d0514db31bd8ac6cbc30d567c79acd20f7f5fef9a0f7fe1f6f333ca7bf1df382",
+  "joiner_permission": "Writer",
+  "joiner_status": "active"
+}

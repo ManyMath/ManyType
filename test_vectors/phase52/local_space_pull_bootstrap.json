@@ -1,0 +1,21 @@
+{
+  "captured_at": "2026-04-14T21:37:49.002042Z",
+  "command": "space-pull-bootstrap",
+  "backend_label": "manytype_server",
+  "backend_requirements": [
+    "requires a reachable manytype_server tree/coordinator surface",
+    "bootstrap uses --network-config to seed a fresh ephemeral space before the fetch",
+    "refetch requires the state JSON written by space-pull-bootstrap"
+  ],
+  "network_config_path": "/tmp/tmp.WnNeTKSXw9/local-network.yml",
+  "server_address": "127.0.0.1:33170",
+  "space_id": "bafyreiexjw4sdpssx6i5zatwkn4dtrdppbbhcxn4fkleck7jjyp7u4cjka.3t6o3a0vjvxz4",
+  "acl_root_id": "bafyreibdo62jzoxu26eol3duirqkcotlrhfwud6zhb5mwv7pbs6ettbmxi",
+  "invite_record_id": "bafyreialhafksqmftlpkowsjrs6b23lvapmnwim57gnkrisgarhy62yjom",
+  "space_header_id": "bafyreiexjw4sdpssx6i5zatwkn4dtrdppbbhcxn4fkleck7jjyp7u4cjka.3t6o3a0vjvxz4",
+  "acl_payload_id": "bafyreibdo62jzoxu26eol3duirqkcotlrhfwud6zhb5mwv7pbs6ettbmxi",
+  "acl_record_ids": [
+    "bafyreialhafksqmftlpkowsjrs6b23lvapmnwim57gnkrisgarhy62yjom"
+  ],
+  "state_path": "/tmp/tmp.WnNeTKSXw9/local-space-pull-state.json"
+}

@@ -1,0 +1,13 @@
+{
+  "action": "object-delete",
+  "archive_attempted": true,
+  "archive_detail_fallback": true,
+  "archive_detail_succeeded": true,
+  "archive_error_code": "UNKNOWN_ERROR",
+  "archive_error_description": "root block not found",
+  "archive_fallback": true,
+  "archive_succeeded": false,
+  "archived_first": false,
+  "delete_attempted": true,
+  "object_id": "bafyreid4y66vwayevgfxvdg3qcvlwwenfhldcxlsp32dzg2uh4vlkj7a6q"
+}

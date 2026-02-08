@@ -1,0 +1,149 @@
+{
+  "captured_at": "2026-04-14T21:33:58.578657Z",
+  "signoff_started_at": "2026-04-14T21:23:54Z",
+  "scenario": "v2.6 regression lock and milestone sign-off",
+  "requirements_completed": [
+    "V26-01",
+    "V26-02",
+    "V26-03",
+    "V26-04"
+  ],
+  "freshness_window_seconds": 14400,
+  "current_inputs": {
+    "git": {
+      "branch": "main",
+      "commit": "c9e123eab89227eeb8e7cb86b1c9e8a2317d8efc",
+      "dirty": true
+    },
+    "oracle_lock": {
+      "path": "docker/any-sync/oracle.lock.env",
+      "any_sync_versions": {
+        "ANY_SYNC_NODE_VERSION": "v0.10.5",
+        "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+        "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+        "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+      },
+      "anytype_cli_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+      "anytype_cli_tag": "0.1.12",
+      "anytype_cli_revision": "e39d5453dc854ad2afc02cbec20553d970660e23"
+    },
+    "phase45_anytype_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+    "binaries": {
+      "manytype_quic_ffi_release": {
+        "path": "rust/target/release/libmanytype_quic_ffi.so",
+        "exists": true,
+        "sha256": "e08671ff8a11d9c45d64cc71acff658917454157a1ef6923907a4415df55cf38",
+        "mtime": "2026-04-14T21:33:33.103148Z",
+        "size": 4940872
+      },
+      "manytype_server_debug": {
+        "path": "rust/target/debug/manytype_server",
+        "exists": true,
+        "sha256": "2253c2370ed24c6db88e4b0e9ca58b338d4caa9305c0d01c1d56e8055abebc35",
+        "mtime": "2026-04-13T15:53:51.585498Z",
+        "size": 109484792
+      },
+      "manytype_server_release": {
+        "path": "rust/target/release/manytype_server",
+        "exists": true,
+        "sha256": "08e035dd32153edd37259b20c9c65bd530d20d9528760fa905a467d668235ff2",
+        "mtime": "2026-04-14T21:33:34.169180Z",
+        "size": 7766344
+      }
+    }
+  },
+  "official_stack_track": {
+    "status": "passed",
+    "scenarios": [
+      {
+        "phase": 46,
+        "name": "bounded object/detail roundtrip",
+        "proof_mode": "restart-or-reopen",
+        "bundle_path": "test_vectors/phase46/bounded-object-edit-roundtrip.json",
+        "runtime_metadata_path": "test_vectors/phase46/runtime-metadata.json",
+        "verifier": "scripts/verify_phase46_artifacts.py",
+        "requirements": [
+          "EDIT-01",
+          "EDIT-02",
+          "EDIT-03"
+        ]
+      },
+      {
+        "phase": 47,
+        "name": "object deletion roundtrip",
+        "proof_mode": "restart-or-reopen",
+        "bundle_path": "test_vectors/phase47/object-deletion-roundtrip.json",
+        "runtime_metadata_path": "test_vectors/phase47/runtime-metadata.json",
+        "verifier": "scripts/verify_phase47_artifacts.py",
+        "requirements": [
+          "DEL-01",
+          "DEL-02",
+          "DEL-03"
+        ]
+      },
+      {
+        "phase": 48,
+        "name": "oracle acl lifecycle later-read",
+        "proof_mode": "later-read",
+        "bundle_path": "test_vectors/phase48/service-surface-baseline.json",
+        "artifact_path": "test_vectors/phase48/oracle_acl.json",
+        "runtime_metadata_path": "test_vectors/phase48/runtime-metadata.json",
+        "verifier": "scripts/verify_phase48_artifacts.py",
+        "requirements": [
+          "SRV-01",
+          "SRV-04"
+        ]
+      }
+    ]
+  },
+  "manytype_server_track": {
+    "status": "passed",
+    "scenarios": [
+      {
+        "phase": 45,
+        "name": "latest-head observation sentinel",
+        "proof_mode": "reconnect-reread",
+        "bundle_path": "test_vectors/phase31-cross-authored-manytype-server.json",
+        "artifact_path": "test_vectors/phase31-cross-authored-manytype-server-official-show.json",
+        "verifier": "scripts/verify_phase31_manytype_server_artifacts.py",
+        "requirements": [
+          "OBS-01",
+          "OBS-02",
+          "OBS-03"
+        ]
+      },
+      {
+        "phase": 48,
+        "name": "local consensus restart continuation",
+        "proof_mode": "restart",
+        "bundle_path": "test_vectors/phase48/service-surface-baseline.json",
+        "artifact_path": "test_vectors/phase48/local_consensus_continue.json",
+        "verifier": "scripts/verify_phase48_artifacts.py",
+        "requirements": [
+          "SRV-02",
+          "SRV-04"
+        ]
+      },
+      {
+        "phase": 48,
+        "name": "local space pull continuity",
+        "proof_mode": "restart",
+        "bundle_path": "test_vectors/phase48/service-surface-baseline.json",
+        "artifact_path": "test_vectors/phase48/local_space_pull_refetch.json",
+        "verifier": "scripts/verify_phase48_artifacts.py",
+        "requirements": [
+          "SRV-03",
+          "SRV-04"
+        ]
+      }
+    ]
+  },
+  "verifiers": [
+    "scripts/verify_phase31_manytype_server_artifacts.py",
+    "scripts/verify_phase46_artifacts.py",
+    "scripts/verify_phase47_artifacts.py",
+    "scripts/verify_phase48_artifacts.py",
+    "scripts/verify_self_hosted_oracle_metadata.py"
+  ],
+  "success": true
+}

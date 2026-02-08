@@ -1,0 +1,24 @@
+{
+  "action": "oracle-acl",
+  "network_config_path": "/home/user/src/manytype/manytype/docker/any-sync/etc/client.yml",
+  "coordinator_address": "127.0.0.1:1014",
+  "space_id": "bafyreihw2ihmvx5l6cpenwu5dhvwtpzdapqchq7gfs54xd4ucnxllzqi3a.eswi2ewc52up",
+  "acl_root_id": "bafyreiarzsfn6tzjt33y7m6jevvotrgo5ymwq2a6cysmkzbkcjpfple5au",
+  "invite_record_id": "bafyreih6afisncrdmbnbdavdwonlsp7kxcyk4hgyfm232oyzkfujdureqa",
+  "join_record_id": "bafyreieryu5ujvjdadbqojsy7kfid2lepb6m2vw3fgxcvratojatbjqspi",
+  "accept_record_id": "bafyreiazlvgi3e3pqowttf2oeunkjkx7xbxwrevtouzvsl7vlu7nhtoupu",
+  "record_ids_after_accept": [
+    "bafyreiarzsfn6tzjt33y7m6jevvotrgo5ymwq2a6cysmkzbkcjpfple5au",
+    "bafyreih6afisncrdmbnbdavdwonlsp7kxcyk4hgyfm232oyzkfujdureqa",
+    "bafyreieryu5ujvjdadbqojsy7kfid2lepb6m2vw3fgxcvratojatbjqspi",
+    "bafyreiazlvgi3e3pqowttf2oeunkjkx7xbxwrevtouzvsl7vlu7nhtoupu"
+  ],
+  "tail_after_join_ids": [
+    "bafyreih6afisncrdmbnbdavdwonlsp7kxcyk4hgyfm232oyzkfujdureqa",
+    "bafyreieryu5ujvjdadbqojsy7kfid2lepb6m2vw3fgxcvratojatbjqspi",
+    "bafyreiazlvgi3e3pqowttf2oeunkjkx7xbxwrevtouzvsl7vlu7nhtoupu"
+  ],
+  "joiner_identity_hex": "168838bb8cb4c145f9afc02f6e50bd314139bfd0720a451ddff7aab2576ee69a",
+  "joiner_permission": "Writer",
+  "joiner_status": "active"
+}

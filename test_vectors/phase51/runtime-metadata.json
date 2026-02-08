@@ -1,0 +1,87 @@
+{
+  "captured_at": "2026-04-14T21:37:28.855872Z",
+  "scenario": "phase51 bounded space delete",
+  "git": {
+    "branch": "main",
+    "commit": "6bac10d36877619c1fe95b83ad7c4b128e9ca4bd",
+    "dirty": true
+  },
+  "oracle_lock": {
+    "path": "docker/any-sync/oracle.lock.env",
+    "any_sync_versions": {
+      "ANY_SYNC_NODE_VERSION": "v0.10.5",
+      "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+      "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+      "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+    },
+    "anytype_cli_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+    "anytype_cli_tag": "0.1.12",
+    "anytype_cli_revision": "e39d5453dc854ad2afc02cbec20553d970660e23",
+    "resolved_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff"
+  },
+  "official_cli": {
+    "image_id": "sha256:ecda0ec3d9d6badce0fee8add23221ba81fee5182f387e6a785d303bb8cc43a0",
+    "repo_digest": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+    "version": "0.1.12",
+    "revision": "e39d5453dc854ad2afc02cbec20553d970660e23",
+    "source": "https://github.com/anyproto/anytype-cli"
+  },
+  "docker_any_sync_env": {
+    "path": "docker/any-sync/.env",
+    "versions": {
+      "ANY_SYNC_NODE_VERSION": "v0.10.5",
+      "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+      "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+      "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+    }
+  },
+  "network_config": {
+    "path": "docker/any-sync/etc/client.yml",
+    "sha256": "daaae745745dce399c9a12c299202294cb627a33ec7a38e7068810cdbcf33880",
+    "mtime": "2026-04-14T21:36:50.428542Z",
+    "network_id": "N9MGQuoafndHijnEJmWGJesLSepBQLXZWqvjejDY4hP7mFt5"
+  },
+  "binaries": {
+    "manytype_quic_ffi": {
+      "path": "rust/target/release/libmanytype_quic_ffi.so",
+      "exists": true,
+      "sha256": "e08671ff8a11d9c45d64cc71acff658917454157a1ef6923907a4415df55cf38",
+      "mtime": "2026-04-14T21:33:33.103148Z",
+      "size": 4940872
+    },
+    "manytype_server_debug": {
+      "path": "rust/target/debug/manytype_server",
+      "exists": true,
+      "sha256": "2253c2370ed24c6db88e4b0e9ca58b338d4caa9305c0d01c1d56e8055abebc35",
+      "mtime": "2026-04-13T15:53:51.585498Z",
+      "size": 109484792
+    },
+    "official_client_probe": {
+      "path": "/tmp/tmp.XYmFyUO0eP/official_client_grpc_probe",
+      "exists": true,
+      "sha256": "3b3a8331ff606e1dce601b700bd96af6611c020691b2155c7e018f0ad44687a0",
+      "mtime": "2026-04-14T21:36:49.053507Z",
+      "size": 41589810
+    }
+  },
+  "artifacts": [
+    {
+      "path": "test_vectors/phase51/space-delete-parity.json",
+      "sha256": "adccd46ab3d1864cac70303ed9129671230e27ecd80c0e6d60c0f821132b6f12",
+      "mtime": "2026-04-14T21:37:28.817455Z",
+      "size": 921
+    },
+    {
+      "path": "test_vectors/phase51/official_space_delete.json",
+      "sha256": "388894f7b4bafbb6bbfea1c84ea2744611d44eafa63196afa55abd05a01ed27a",
+      "mtime": "2026-04-14T21:37:12.620104Z",
+      "size": 3006
+    },
+    {
+      "path": "test_vectors/phase51/local_space_delete_rejected.json",
+      "sha256": "6b3072fb2e0151960dc2ca777c9eab7dd6eaa5a4f772f6ecc900c8a5c17e339b",
+      "mtime": "2026-04-14T21:37:28.783509Z",
+      "size": 2695
+    }
+  ]
+}

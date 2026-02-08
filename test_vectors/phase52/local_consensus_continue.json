@@ -1,0 +1,28 @@
+{
+  "captured_at": "2026-04-14T21:37:45.211932Z",
+  "command": "consensus-continue",
+  "backend_label": "manytype_server",
+  "backend_requirements": [
+    "requires a reachable manytype_server coordinator and consensus surface via --server",
+    "continuation requires the state JSON written by consensus-bootstrap"
+  ],
+  "server_address": "127.0.0.1:33170",
+  "state_in": "/tmp/tmp.WnNeTKSXw9/local-consensus-state.json",
+  "log_id": "bafyreiehhiwc5g4b5nwxymluarmitfthy4hrpemnjx437frogwfjpofqgi.3p0vwimx9fac",
+  "space_id": "bafyreiehhiwc5g4b5nwxymluarmitfthy4hrpemnjx437frogwfjpofqgi.3p0vwimx9fac",
+  "root_id": "bafyreihidvfgprokyz5ip22elsbct6lyvuml4w6vbunb2rk2ddpawjdqsi",
+  "first_record_id": "bafyreibza27edcqk3va64efel3msglumgxrewkuqxc6gu3fj3t2smiiitq",
+  "second_record_id": "bafyreibrmieceb5yap5jrl4iyku42diiwtwp7am3cniozbjx6gt4ag5doa",
+  "record_ids_before_continue": [
+    "bafyreihidvfgprokyz5ip22elsbct6lyvuml4w6vbunb2rk2ddpawjdqsi",
+    "bafyreibza27edcqk3va64efel3msglumgxrewkuqxc6gu3fj3t2smiiitq"
+  ],
+  "record_ids_after_continue": [
+    "bafyreihidvfgprokyz5ip22elsbct6lyvuml4w6vbunb2rk2ddpawjdqsi",
+    "bafyreibza27edcqk3va64efel3msglumgxrewkuqxc6gu3fj3t2smiiitq",
+    "bafyreibrmieceb5yap5jrl4iyku42diiwtwp7am3cniozbjx6gt4ag5doa"
+  ],
+  "tail_after_first_ids": [
+    "bafyreibrmieceb5yap5jrl4iyku42diiwtwp7am3cniozbjx6gt4ag5doa"
+  ]
+}

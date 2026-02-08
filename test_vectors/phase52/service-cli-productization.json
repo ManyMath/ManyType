@@ -1,0 +1,30 @@
+{
+  "captured_at": "2026-04-14T21:37:52.968307Z",
+  "scenario": "phase52 service-surface cli productization",
+  "oracle_acl": {
+    "space_id": "bafyreifzxb7hyarrxry3ukrkqzo5ljqtzyr3fufx6mrlnzo7pe22lywsyu.22hrd8pfn6gyh",
+    "acl_root_id": "bafyreice4ntanlohsmn6zggg5notekpptr2frdtqr4z4hlatdronnbpyu4",
+    "invite_record_id": "bafyreifj4sqkn3jyhnxrlfguexbbeg63zyg42o5ztml5fuehqrehy3uede",
+    "join_record_id": "bafyreiasy6xfazx67irdzbhdij6euzpkz4xit5obxhhfyw24ufsvyk3mfm",
+    "accept_record_id": "bafyreidsxpgdeueymjj7z5bnftcugjqidawxfe2i7myactptby7z7firuy",
+    "artifact_path": "/home/user/src/manytype/manytype/test_vectors/phase52/oracle_acl_lifecycle.json"
+  },
+  "local_consensus": {
+    "space_id": "bafyreiehhiwc5g4b5nwxymluarmitfthy4hrpemnjx437frogwfjpofqgi.3p0vwimx9fac",
+    "log_id": "bafyreiehhiwc5g4b5nwxymluarmitfthy4hrpemnjx437frogwfjpofqgi.3p0vwimx9fac",
+    "root_id": "bafyreihidvfgprokyz5ip22elsbct6lyvuml4w6vbunb2rk2ddpawjdqsi",
+    "first_record_id": "bafyreibza27edcqk3va64efel3msglumgxrewkuqxc6gu3fj3t2smiiitq",
+    "second_record_id": "bafyreibrmieceb5yap5jrl4iyku42diiwtwp7am3cniozbjx6gt4ag5doa",
+    "bootstrap_path": "/home/user/src/manytype/manytype/test_vectors/phase52/local_consensus_bootstrap.json",
+    "continue_path": "/home/user/src/manytype/manytype/test_vectors/phase52/local_consensus_continue.json"
+  },
+  "local_space_pull": {
+    "space_id": "bafyreiexjw4sdpssx6i5zatwkn4dtrdppbbhcxn4fkleck7jjyp7u4cjka.3t6o3a0vjvxz4",
+    "acl_root_id": "bafyreibdo62jzoxu26eol3duirqkcotlrhfwud6zhb5mwv7pbs6ettbmxi",
+    "invite_record_id": "bafyreialhafksqmftlpkowsjrs6b23lvapmnwim57gnkrisgarhy62yjom",
+    "bootstrap_path": "/home/user/src/manytype/manytype/test_vectors/phase52/local_space_pull_bootstrap.json",
+    "refetch_path": "/home/user/src/manytype/manytype/test_vectors/phase52/local_space_pull_refetch.json"
+  },
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase52/runtime-metadata.json",
+  "success": true
+}

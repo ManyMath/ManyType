@@ -1,0 +1,166 @@
+{
+  "captured_at": "2026-04-14T21:37:53.172366Z",
+  "signoff_started_at": "2026-04-14T21:35:34Z",
+  "scenario": "v2.7 regression lock and milestone sign-off",
+  "requirements_completed": [
+    "V27-01",
+    "V27-02",
+    "V27-03"
+  ],
+  "freshness_window_seconds": 14400,
+  "current_inputs": {
+    "git": {
+      "branch": "main",
+      "commit": "6bac10d36877619c1fe95b83ad7c4b128e9ca4bd",
+      "dirty": true
+    },
+    "oracle_lock": {
+      "path": "docker/any-sync/oracle.lock.env",
+      "any_sync_versions": {
+        "ANY_SYNC_NODE_VERSION": "v0.10.5",
+        "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+        "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+        "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+      },
+      "anytype_cli_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+      "anytype_cli_tag": "0.1.12",
+      "anytype_cli_revision": "e39d5453dc854ad2afc02cbec20553d970660e23"
+    },
+    "binaries": {
+      "manytype_quic_ffi_release": {
+        "path": "rust/target/release/libmanytype_quic_ffi.so",
+        "exists": true,
+        "sha256": "e08671ff8a11d9c45d64cc71acff658917454157a1ef6923907a4415df55cf38",
+        "mtime": "2026-04-14T21:33:33.103148Z",
+        "size": 4940872
+      },
+      "manytype_server_debug": {
+        "path": "rust/target/debug/manytype_server",
+        "exists": true,
+        "sha256": "2253c2370ed24c6db88e4b0e9ca58b338d4caa9305c0d01c1d56e8055abebc35",
+        "mtime": "2026-04-13T15:53:51.585498Z",
+        "size": 109484792
+      },
+      "manytype_server_release": {
+        "path": "rust/target/release/manytype_server",
+        "exists": true,
+        "sha256": "08e035dd32153edd37259b20c9c65bd530d20d9528760fa905a467d668235ff2",
+        "mtime": "2026-04-14T21:33:34.169180Z",
+        "size": 7766344
+      }
+    }
+  },
+  "scope_decisions": {
+    "account_delete": {
+      "decision": "defer",
+      "reason": "Self-hosted official AccountDelete does not provide a bounded replayable acceptance path from the current Manytype truth surface, while manytype_server still reports stub success without observable lifecycle movement.",
+      "official_capture_path": "test_vectors/phase50/oracle_account_delete.json",
+      "local_capture_path": "test_vectors/phase50/local_account_delete.json"
+    }
+  },
+  "official_stack_track": {
+    "status": "passed",
+    "scenarios": [
+      {
+        "phase": 50,
+        "name": "teardown truth capture and scope freeze",
+        "proof_mode": "coordinator-status-reread",
+        "bundle_path": "test_vectors/phase50/teardown-truth-baseline.json",
+        "artifact_path": "test_vectors/phase50/oracle_space_delete.json",
+        "verifier": "scripts/verify_phase50_teardown_truth.py",
+        "requirements": [
+          "TRTH-01",
+          "TRTH-03",
+          "TRTH-04",
+          "TRTH-05"
+        ]
+      },
+      {
+        "phase": 51,
+        "name": "bounded space delete parity",
+        "proof_mode": "coordinator-status-reread",
+        "bundle_path": "test_vectors/phase51/space-delete-parity.json",
+        "artifact_path": "test_vectors/phase51/official_space_delete.json",
+        "verifier": "scripts/verify_phase51_space_delete.py",
+        "requirements": [
+          "SDEL-01",
+          "SDEL-02",
+          "SDEL-03"
+        ]
+      },
+      {
+        "phase": 52,
+        "name": "oracle acl lifecycle cli",
+        "proof_mode": "later-read",
+        "bundle_path": "test_vectors/phase52/service-cli-productization.json",
+        "artifact_path": "test_vectors/phase52/oracle_acl_lifecycle.json",
+        "verifier": "scripts/verify_phase52_service_cli.py",
+        "requirements": [
+          "OPS-01",
+          "OPS-04"
+        ]
+      }
+    ]
+  },
+  "manytype_server_track": {
+    "status": "passed",
+    "scenarios": [
+      {
+        "phase": 50,
+        "name": "local teardown truth capture",
+        "proof_mode": "reconnect-reread",
+        "bundle_path": "test_vectors/phase50/teardown-truth-baseline.json",
+        "artifact_path": "test_vectors/phase50/local_space_delete.json",
+        "verifier": "scripts/verify_phase50_teardown_truth.py",
+        "requirements": [
+          "TRTH-01",
+          "TRTH-02",
+          "TRTH-05"
+        ]
+      },
+      {
+        "phase": 51,
+        "name": "local space-delete rejection",
+        "proof_mode": "reconnect-reread",
+        "bundle_path": "test_vectors/phase51/space-delete-parity.json",
+        "artifact_path": "test_vectors/phase51/local_space_delete_rejected.json",
+        "verifier": "scripts/verify_phase51_space_delete.py",
+        "requirements": [
+          "SDEL-03"
+        ]
+      },
+      {
+        "phase": 52,
+        "name": "local consensus restart continuation",
+        "proof_mode": "restart",
+        "bundle_path": "test_vectors/phase52/service-cli-productization.json",
+        "artifact_path": "test_vectors/phase52/local_consensus_continue.json",
+        "verifier": "scripts/verify_phase52_service_cli.py",
+        "requirements": [
+          "OPS-02",
+          "OPS-04"
+        ]
+      },
+      {
+        "phase": 52,
+        "name": "local space pull continuity",
+        "proof_mode": "restart",
+        "bundle_path": "test_vectors/phase52/service-cli-productization.json",
+        "artifact_path": "test_vectors/phase52/local_space_pull_refetch.json",
+        "verifier": "scripts/verify_phase52_service_cli.py",
+        "requirements": [
+          "OPS-03",
+          "OPS-04"
+        ]
+      }
+    ]
+  },
+  "verifiers": [
+    "scripts/verify_phase50_teardown_truth.py",
+    "scripts/verify_phase51_space_delete.py",
+    "scripts/verify_phase52_service_cli.py",
+    "scripts/verify_self_hosted_oracle_metadata.py",
+    "scripts/verify_phase53_signoff.py"
+  ],
+  "success": true
+}

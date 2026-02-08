@@ -1,0 +1,29 @@
+{
+  "captured_at": "2026-04-14T21:33:58.521567Z",
+  "scenario": "phase48 service-surface baseline",
+  "oracle_acl": {
+    "space_id": "bafyreihw2ihmvx5l6cpenwu5dhvwtpzdapqchq7gfs54xd4ucnxllzqi3a.eswi2ewc52up",
+    "acl_root_id": "bafyreiarzsfn6tzjt33y7m6jevvotrgo5ymwq2a6cysmkzbkcjpfple5au",
+    "invite_record_id": "bafyreih6afisncrdmbnbdavdwonlsp7kxcyk4hgyfm232oyzkfujdureqa",
+    "join_record_id": "bafyreieryu5ujvjdadbqojsy7kfid2lepb6m2vw3fgxcvratojatbjqspi",
+    "accept_record_id": "bafyreiazlvgi3e3pqowttf2oeunkjkx7xbxwrevtouzvsl7vlu7nhtoupu",
+    "artifact_path": "/home/user/src/manytype/manytype/test_vectors/phase48/oracle_acl.json"
+  },
+  "local_consensus": {
+    "space_id": "bafyreif7jvmnh33ilxgwuvv5qz7jrd7w2emwpollqrd5zk4qap2hv7gm44.2kxhebq1whr25",
+    "root_id": "bafyreibbiios2noraoz67e2ck2ua27quciapylfg5lgnbeynpfld7xdnpi",
+    "first_record_id": "bafyreiak7j5ggubyfh2teojia42qxy5n23bfy6ivu7z6s7vjgrx2dtjip4",
+    "second_record_id": "bafyreide3474l7snx6rwceqmcbs3p6kyki25lakif3cpjgs5cr23v7dgge",
+    "bootstrap_path": "/home/user/src/manytype/manytype/test_vectors/phase48/local_consensus_bootstrap.json",
+    "continue_path": "/home/user/src/manytype/manytype/test_vectors/phase48/local_consensus_continue.json"
+  },
+  "local_space_pull": {
+    "space_id": "bafyreifdejgoa27db6eqnkof275ajbigy6lncmnxjtdrxc7kgo2y4lkmku.102btwcba3mj1",
+    "acl_root_id": "bafyreibgmfzzznz3bnpus4tzbls6aqpq24jpkci3ueatehc6qj25v35aya",
+    "invite_record_id": "bafyreic2msfjcqi3vz37kbg7ygpckwsftbite2mp7jatgmlakzv4opd2jm",
+    "bootstrap_path": "/home/user/src/manytype/manytype/test_vectors/phase48/local_space_pull_bootstrap.json",
+    "refetch_path": "/home/user/src/manytype/manytype/test_vectors/phase48/local_space_pull_refetch.json"
+  },
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase48/runtime-metadata.json",
+  "success": true
+}

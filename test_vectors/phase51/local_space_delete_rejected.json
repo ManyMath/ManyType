@@ -1,0 +1,80 @@
+{
+  "captured_at": "2026-04-14T21:37:28.779945Z",
+  "command": "space-delete",
+  "accepted_contract": {
+    "truth_surface": "self-hosted-official",
+    "proof_mode": "coordinator-status-reread",
+    "supported_preconditions": [
+      "bounded owner space already seeded live on the self-hosted official stack",
+      "the requested space must match the current Manytype owner space",
+      "the coordinator status proof is based on status reread, not object-tree disappearance"
+    ],
+    "required_observations": [
+      "SpaceStatusCheck starts at SpaceStatusCreated",
+      "the delete request returns a positive to_be_deleted_timestamp",
+      "SpaceStatusCheck transitions to SpaceStatusPendingDeletion immediately after the request",
+      "a fresh reconnect rereads SpaceStatusDeleted"
+    ]
+  },
+  "assessment": {
+    "outcome": "unsupported-surface-or-scenario",
+    "supported": false,
+    "observed_surface_label": "stub-no-op-surface",
+    "reason": "The delete request returned, but status stayed Created before and after reconnect. This matches the unsupported stub/no-op surface rather than the accepted contract."
+  },
+  "network_config_path": "/tmp/tmp.XYmFyUO0eP/local-network.yml",
+  "coordinator_address": "127.0.0.1:33160",
+  "space_id": "bafyreia3gz37oadlbunmjwlvdp7vaokr5wr63425ucyrkwi2i67kjqifnq.e8pvf1rm6pdf",
+  "wait_seconds": 2,
+  "deletion_duration_minutes": 0,
+  "initial": {
+    "network_id": "manytype-phase51",
+    "network_configuration_id": "manytype-v1",
+    "request": {
+      "peer_id": "12D3KooWR4KPGQJ9WqFBnjcgB9kE7E63WkR6drWB7CcA7EMrhJS2",
+      "payload_id": "bafyreigdzf4erfcialta22ihe46yvzqfnmidvphaheiqokuejke2bu57xa",
+      "payload_size_bytes": 259,
+      "deletion_duration_minutes": 0
+    },
+    "response": {
+      "ok": true,
+      "value": {
+        "to_be_deleted_timestamp": 1776202646
+      }
+    },
+    "pre_status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusCreated",
+        "deletion_timestamp": 0,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": null
+      }
+    },
+    "post_status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusCreated",
+        "deletion_timestamp": 0,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": null
+      }
+    }
+  },
+  "after_reconnect": {
+    "network_id": "manytype-phase51",
+    "network_configuration_id": "manytype-v1",
+    "status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusCreated",
+        "deletion_timestamp": 0,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": null
+      }
+    }
+  }
+}

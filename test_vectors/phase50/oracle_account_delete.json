@@ -1,0 +1,99 @@
+{
+  "captured_at": "2026-04-14T21:36:18.088941Z",
+  "action": "account-delete",
+  "surface": "self-hosted-official",
+  "network_config_path": "/home/user/src/manytype/manytype/docker/any-sync/etc/client.yml",
+  "coordinator_address": "127.0.0.1:1014",
+  "space_id": "bafyreihffppswnhdbda7yntsr2brz4av6jsmukonnc2mrdvh62mpuyyyie.3j0xa1g9gq80x",
+  "wait_seconds": 6,
+  "deletion_duration_minutes": 0,
+  "initial": {
+    "surface": "self-hosted-official",
+    "network_id": "N9MGQuoafndHijnEJmWGJesLSepBQLXZWqvjejDY4hP7mFt5",
+    "network_configuration_id": "69deb0ac98642c9e7a98ccfa",
+    "request": {
+      "peer_id": "12D3KooWMnunbx3XUhZ3KNZpsNrP36DVLMx9iVqG7RbBCp8zvsDQ",
+      "payload_id": "bafyreiezaaoqezrugyuae7muruwk75h3xc7balalnqabykuv6ofk74usoy",
+      "payload_size_bytes": 217
+    },
+    "response": {
+      "ok": false,
+      "error": "Exception: FFI error: invoke failed: remote error: \\0\\0\\0\\0\\0\\0\u00012account is deleted"
+    },
+    "pre_status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusCreated",
+        "deletion_timestamp": 0,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": {
+          "read_members": 1000,
+          "write_members": 1000
+        }
+      }
+    },
+    "pre_deletion_log": {
+      "ok": false,
+      "error": "Exception: FFI error: invoke failed: remote error: \\0\\0\\0\\0\\0\\0\u00013forbidden"
+    },
+    "post_status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusCreated",
+        "deletion_timestamp": 0,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": {
+          "read_members": 1000,
+          "write_members": 1000
+        }
+      }
+    },
+    "post_deletion_log": {
+      "ok": false,
+      "error": "Exception: FFI error: invoke failed: remote error: \\0\\0\\0\\0\\0\\0\u00013forbidden"
+    }
+  },
+  "after_reconnect": {
+    "surface": "self-hosted-official",
+    "network_id": "N9MGQuoafndHijnEJmWGJesLSepBQLXZWqvjejDY4hP7mFt5",
+    "network_configuration_id": "69deb0ac98642c9e7a98ccfa",
+    "request": null,
+    "response": null,
+    "pre_status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusCreated",
+        "deletion_timestamp": 0,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": {
+          "read_members": 1000,
+          "write_members": 1000
+        }
+      }
+    },
+    "pre_deletion_log": {
+      "ok": false,
+      "error": "Exception: FFI error: invoke failed: remote error: \\0\\0\\0\\0\\0\\0\u00013forbidden"
+    },
+    "post_status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusCreated",
+        "deletion_timestamp": 0,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": {
+          "read_members": 1000,
+          "write_members": 1000
+        }
+      }
+    },
+    "post_deletion_log": {
+      "ok": false,
+      "error": "Exception: FFI error: invoke failed: remote error: \\0\\0\\0\\0\\0\\0\u00013forbidden"
+    }
+  }
+}

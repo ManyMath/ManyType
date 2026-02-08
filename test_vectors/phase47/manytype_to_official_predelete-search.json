@@ -1,0 +1,19 @@
+{
+  "action": "object-search",
+  "names": [
+    "phase47-1776202168440162953 manytype deletion target"
+  ],
+  "object_ids": [
+    "bafyreieyqkyfjz6bdvidwqfrxq44zwj35hwjkf736fjyfrn7yx2ufwdh5y"
+  ],
+  "query": "phase47-1776202168440162953 manytype deletion target",
+  "record_count": 1,
+  "records": [
+    {
+      "id": "bafyreieyqkyfjz6bdvidwqfrxq44zwj35hwjkf736fjyfrn7yx2ufwdh5y",
+      "is_archived": false,
+      "name": "phase47-1776202168440162953 manytype deletion target"
+    }
+  ],
+  "space_id": "bafyreie6uqfzqi4cdebzqpzif4vc6ifmbgfxbthiclhjrtkhbijyrevd5e.13wbn55d7nwoh"
+}

@@ -1,0 +1,29 @@
+{
+  "captured_at": "2026-04-14T21:33:28.866330Z",
+  "scenario": "phase47 object deletion roundtrip",
+  "bounded_object_type": "page",
+  "manytype_to_official": {
+    "object_id": "bafyreieyqkyfjz6bdvidwqfrxq44zwj35hwjkf736fjyfrn7yx2ufwdh5y",
+    "object_name": "phase47-1776202168440162953 manytype deletion target",
+    "presence_search_path": "/home/user/src/manytype/manytype/test_vectors/phase47/manytype_to_official_predelete-search.json",
+    "delete_output_path": "/home/user/src/manytype/manytype/test_vectors/phase47/manytype_to_official_delete.txt",
+    "delete_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase47/manytype_to_official_delete-sync.json",
+    "absence_search_path": "/home/user/src/manytype/manytype/test_vectors/phase47/manytype_to_official_postdelete-search.json",
+    "restart_absence_search_path": "/home/user/src/manytype/manytype/test_vectors/phase47/manytype_to_official_restart-search.json"
+  },
+  "official_to_manytype": {
+    "object_id": "bafyreid4y66vwayevgfxvdg3qcvlwwenfhldcxlsp32dzg2uh4vlkj7a6q",
+    "object_name": "phase47-1776202168440162953 official deletion target",
+    "type_preload_path": "/home/user/src/manytype/manytype/test_vectors/phase47/official_to_manytype_preload-type-show.json",
+    "create_output_path": "/home/user/src/manytype/manytype/test_vectors/phase47/official_to_manytype_create.json",
+    "predelete_read_path": "/home/user/src/manytype/manytype/test_vectors/phase47/official_to_manytype_predelete-read.txt",
+    "delete_output_path": "/home/user/src/manytype/manytype/test_vectors/phase47/official_to_manytype_delete.json",
+    "sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase47/official_to_manytype_sync.json",
+    "list_absence_path": "/home/user/src/manytype/manytype/test_vectors/phase47/official_to_manytype_postdelete-list.txt",
+    "read_refusal_path": "/home/user/src/manytype/manytype/test_vectors/phase47/official_to_manytype_postdelete-read.txt",
+    "reopen_list_absence_path": "/home/user/src/manytype/manytype/test_vectors/phase47/official_to_manytype_reopen-list.txt",
+    "reopen_read_refusal_path": "/home/user/src/manytype/manytype/test_vectors/phase47/official_to_manytype_reopen-read.txt"
+  },
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase47/runtime-metadata.json",
+  "success": true
+}

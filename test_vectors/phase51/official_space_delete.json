@@ -1,0 +1,89 @@
+{
+  "captured_at": "2026-04-14T21:37:12.616437Z",
+  "command": "space-delete",
+  "accepted_contract": {
+    "truth_surface": "self-hosted-official",
+    "proof_mode": "coordinator-status-reread",
+    "supported_preconditions": [
+      "bounded owner space already seeded live on the self-hosted official stack",
+      "the requested space must match the current Manytype owner space",
+      "the coordinator status proof is based on status reread, not object-tree disappearance"
+    ],
+    "required_observations": [
+      "SpaceStatusCheck starts at SpaceStatusCreated",
+      "the delete request returns a positive to_be_deleted_timestamp",
+      "SpaceStatusCheck transitions to SpaceStatusPendingDeletion immediately after the request",
+      "a fresh reconnect rereads SpaceStatusDeleted"
+    ]
+  },
+  "assessment": {
+    "outcome": "supported-and-verified",
+    "supported": true,
+    "observed_surface_label": "accepted-space-delete-surface",
+    "reason": "Observed the accepted Created -> PendingDeletion -> Deleted contract through reconnect-backed coordinator status reread."
+  },
+  "network_config_path": "/home/user/src/manytype/manytype/docker/any-sync/etc/client.yml",
+  "coordinator_address": "127.0.0.1:1014",
+  "space_id": "bafyreiglvjbaebjejpina7yb7z2x6q57pdfunfiml4pdcdfpoea2bavut4.273dvil6e7vt4",
+  "wait_seconds": 6,
+  "deletion_duration_minutes": 0,
+  "initial": {
+    "network_id": "N9MGQuoafndHijnEJmWGJesLSepBQLXZWqvjejDY4hP7mFt5",
+    "network_configuration_id": "69deb373188959c020249c23",
+    "request": {
+      "peer_id": "12D3KooWL2FffKxTtt2SsjUz7phKytBaYXiBME8PGp8hBCykM4rH",
+      "payload_id": "bafyreifnohhmydkrcd5tbhvclw7px3l3na4ew6wiabxxy6zfrsq55mitji",
+      "payload_size_bytes": 292,
+      "deletion_duration_minutes": 0
+    },
+    "response": {
+      "ok": true,
+      "value": {
+        "to_be_deleted_timestamp": 1776202626
+      }
+    },
+    "pre_status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusCreated",
+        "deletion_timestamp": 0,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": {
+          "read_members": 1000,
+          "write_members": 1000
+        }
+      }
+    },
+    "post_status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusPendingDeletion",
+        "deletion_timestamp": 1776202626,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": {
+          "read_members": 1000,
+          "write_members": 1000
+        }
+      }
+    }
+  },
+  "after_reconnect": {
+    "network_id": "N9MGQuoafndHijnEJmWGJesLSepBQLXZWqvjejDY4hP7mFt5",
+    "network_configuration_id": "69deb373188959c020249c23",
+    "status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusDeleted",
+        "deletion_timestamp": 1776202626,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": {
+          "read_members": 1000,
+          "write_members": 1000
+        }
+      }
+    }
+  }
+}

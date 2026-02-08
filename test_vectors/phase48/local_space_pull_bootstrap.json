@@ -1,0 +1,14 @@
+{
+  "action": "local-space-pull-bootstrap",
+  "network_config_path": "/tmp/tmp.cs0n83sE52/local-network.yml",
+  "server_address": "127.0.0.1:33120",
+  "space_id": "bafyreifdejgoa27db6eqnkof275ajbigy6lncmnxjtdrxc7kgo2y4lkmku.102btwcba3mj1",
+  "acl_root_id": "bafyreibgmfzzznz3bnpus4tzbls6aqpq24jpkci3ueatehc6qj25v35aya",
+  "invite_record_id": "bafyreic2msfjcqi3vz37kbg7ygpckwsftbite2mp7jatgmlakzv4opd2jm",
+  "space_header_id": "bafyreifdejgoa27db6eqnkof275ajbigy6lncmnxjtdrxc7kgo2y4lkmku.102btwcba3mj1",
+  "acl_payload_id": "bafyreibgmfzzznz3bnpus4tzbls6aqpq24jpkci3ueatehc6qj25v35aya",
+  "acl_record_ids": [
+    "bafyreic2msfjcqi3vz37kbg7ygpckwsftbite2mp7jatgmlakzv4opd2jm"
+  ],
+  "state_path": "/tmp/tmp.cs0n83sE52/local-space-pull-state.json"
+}

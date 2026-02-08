@@ -1,0 +1,10 @@
+{
+  "action": "object-set-detail",
+  "detail_key": "featuredRelations",
+  "detail_kind": "string-list",
+  "detail_value": [
+    "description",
+    "sourceObject"
+  ],
+  "object_id": "bafyreididc3nl3fovjffsfe6qxjnlrwrkx4qhw3vee6b3lgzpuctbo2sqq"
+}

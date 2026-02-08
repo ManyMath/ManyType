@@ -1,0 +1,105 @@
+{
+  "captured_at": "2026-04-13T02:15:03.025704Z",
+  "scenario": "official-authored note observed by Manytype on the self-hosted official stack",
+  "git": {
+    "branch": "main",
+    "commit": "d7570571ca0dcacb63b5454d23d1e0192594822a",
+    "dirty": true
+  },
+  "oracle_lock": {
+    "path": "docker/any-sync/oracle.lock.env",
+    "any_sync_versions": {
+      "ANY_SYNC_NODE_VERSION": "v0.10.5",
+      "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+      "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+      "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+    },
+    "anytype_cli_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+    "anytype_cli_tag": "0.1.12",
+    "anytype_cli_revision": "e39d5453dc854ad2afc02cbec20553d970660e23",
+    "resolved_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff"
+  },
+  "official_cli": {
+    "image_id": "sha256:ecda0ec3d9d6badce0fee8add23221ba81fee5182f387e6a785d303bb8cc43a0",
+    "repo_digest": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+    "version": "0.1.12",
+    "revision": "e39d5453dc854ad2afc02cbec20553d970660e23",
+    "source": "https://github.com/anyproto/anytype-cli"
+  },
+  "docker_any_sync_env": {
+    "path": "docker/any-sync/.env",
+    "versions": {
+      "ANY_SYNC_NODE_VERSION": "v0.10.5",
+      "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+      "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+      "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+    }
+  },
+  "network_config": {
+    "path": "docker/any-sync/etc/client.yml",
+    "sha256": "daaae745745dce399c9a12c299202294cb627a33ec7a38e7068810cdbcf33880",
+    "mtime": "2026-04-13T02:13:57.758327Z",
+    "network_id": "N9MGQuoafndHijnEJmWGJesLSepBQLXZWqvjejDY4hP7mFt5"
+  },
+  "binaries": {
+    "manytype_quic_ffi": {
+      "path": "rust/target/release/libmanytype_quic_ffi.so",
+      "exists": true,
+      "sha256": "978fd645384ec251b2393975b3f8afd704ff11472248e8c1983c6ebe911e28f7",
+      "mtime": "2026-04-09T01:49:59.786552Z",
+      "size": 7089088
+    },
+    "manytype_server_debug": {
+      "path": "rust/target/debug/manytype_server",
+      "exists": true,
+      "sha256": "22ac879d948fea606d9848cdefb5392af0d62046ee57e95c2783aa304feed871",
+      "mtime": "2026-04-12T03:47:29.329039Z",
+      "size": 109081752
+    },
+    "official_client_probe": {
+      "path": "/tmp/tmp.6Xh2B6mbee/official_client_grpc_probe",
+      "exists": true,
+      "sha256": "9878b155a278a2d512ccf9e7e4234b5caa7f953f17eb8e9d207fc80d5235701a",
+      "mtime": "2026-04-13T02:14:00.300384Z",
+      "size": 41558179
+    }
+  },
+  "artifacts": [
+    {
+      "path": "test_vectors/phase31-cross-authored-official.json",
+      "sha256": "c8f6b49e442bd1ef39812ecda9fe4f4adbb4ad085c0788b911a951d360106598",
+      "mtime": "2026-04-13T02:15:02.982685Z",
+      "size": 1256
+    },
+    {
+      "path": "test_vectors/phase31-cross-authored-official-manytype-seed-sync.json",
+      "sha256": "9e9ad619613e3c40daca9a77b5ac2c14db10355c09c1ed5035c2ccbf674dc368",
+      "mtime": "2026-04-13T02:14:23.921907Z",
+      "size": 52294
+    },
+    {
+      "path": "test_vectors/phase31-cross-authored-official-manytype-pull-sync.json",
+      "sha256": "78afff68866a73364bfeec66dde322d28b9b5bf78ab30d1362636c46eacfb291",
+      "mtime": "2026-04-13T02:14:59.803702Z",
+      "size": 696900
+    },
+    {
+      "path": "test_vectors/phase31-cross-authored-official-official-join.json",
+      "sha256": "efab52bded99de1a070452d9b1f1625f406721f2ee0bf85c4d2abc3ace00cf99",
+      "mtime": "2026-04-13T02:14:36.606188Z",
+      "size": 335
+    },
+    {
+      "path": "test_vectors/phase31-cross-authored-official-official-create.json",
+      "sha256": "f474474b06877333acb8d8c649c35ecb230e2969febcc69c4c48f0242f456800",
+      "mtime": "2026-04-13T02:14:41.646186Z",
+      "size": 110
+    },
+    {
+      "path": "test_vectors/phase31-cross-authored-official-official-edit.json",
+      "sha256": "e6a0c76a064fed5914d3c8aa54d6fbd7a9ff37d14759a058ef2293b9d433f9a4",
+      "mtime": "2026-04-13T02:14:41.686301Z",
+      "size": 211
+    }
+  ]
+}

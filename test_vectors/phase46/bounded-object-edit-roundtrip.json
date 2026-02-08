@@ -1,0 +1,28 @@
+{
+  "captured_at": "2026-04-14T21:29:23.154859Z",
+  "scenario": "phase46 bounded object/detail roundtrip",
+  "accepted_edit_set": {
+    "string_detail_key": "description",
+    "string_list_detail_key": "featuredRelations",
+    "string_list_value": [
+      "description",
+      "sourceObject"
+    ]
+  },
+  "manytype_to_official": {
+    "object_id": "bafyreidl5afhcnowdhn5myj3rgwpam5lancqrdpngmkuber6hyc4gdrhby",
+    "description": "phase46-1776201901724783753 manytype description",
+    "show_path": "/home/user/src/manytype/manytype/test_vectors/phase46/manytype_to_official_show.json",
+    "restart_show_path": "/home/user/src/manytype/manytype/test_vectors/phase46/manytype_to_official_restart-show.json",
+    "sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase46/manytype_to_official_sync.json"
+  },
+  "official_to_manytype": {
+    "object_id": "bafyreididc3nl3fovjffsfe6qxjnlrwrkx4qhw3vee6b3lgzpuctbo2sqq",
+    "description": "phase46-1776201901724783753 official description",
+    "read_path": "/home/user/src/manytype/manytype/test_vectors/phase46/official_to_manytype_read.txt",
+    "reopen_read_path": "/home/user/src/manytype/manytype/test_vectors/phase46/official_to_manytype_reopen-read.txt",
+    "sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase46/official_to_manytype_sync.json"
+  },
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase46/runtime-metadata.json",
+  "success": true
+}

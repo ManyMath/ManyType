@@ -1,0 +1,15 @@
+{
+  "action": "local-consensus-bootstrap",
+  "server_address": "127.0.0.1:33120",
+  "space_id": "bafyreif7jvmnh33ilxgwuvv5qz7jrd7w2emwpollqrd5zk4qap2hv7gm44.2kxhebq1whr25",
+  "root_id": "bafyreibbiios2noraoz67e2ck2ua27quciapylfg5lgnbeynpfld7xdnpi",
+  "first_record_id": "bafyreiak7j5ggubyfh2teojia42qxy5n23bfy6ivu7z6s7vjgrx2dtjip4",
+  "record_ids_after_first": [
+    "bafyreibbiios2noraoz67e2ck2ua27quciapylfg5lgnbeynpfld7xdnpi",
+    "bafyreiak7j5ggubyfh2teojia42qxy5n23bfy6ivu7z6s7vjgrx2dtjip4"
+  ],
+  "tail_after_root_ids": [
+    "bafyreiak7j5ggubyfh2teojia42qxy5n23bfy6ivu7z6s7vjgrx2dtjip4"
+  ],
+  "state_path": "/tmp/tmp.cs0n83sE52/local-consensus-state.json"
+}

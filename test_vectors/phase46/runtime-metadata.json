@@ -1,0 +1,129 @@
+{
+  "captured_at": "2026-04-14T21:29:23.029136Z",
+  "scenario": "phase46 bounded object edit roundtrip",
+  "git": {
+    "branch": "main",
+    "commit": "d7570571ca0dcacb63b5454d23d1e0192594822a",
+    "dirty": true
+  },
+  "oracle_lock": {
+    "path": "docker/any-sync/oracle.lock.env",
+    "any_sync_versions": {
+      "ANY_SYNC_NODE_VERSION": "v0.10.5",
+      "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+      "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+      "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+    },
+    "anytype_cli_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+    "anytype_cli_tag": "0.1.12",
+    "anytype_cli_revision": "e39d5453dc854ad2afc02cbec20553d970660e23",
+    "resolved_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff"
+  },
+  "official_cli": {
+    "image_id": "sha256:ecda0ec3d9d6badce0fee8add23221ba81fee5182f387e6a785d303bb8cc43a0",
+    "repo_digest": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+    "version": "0.1.12",
+    "revision": "e39d5453dc854ad2afc02cbec20553d970660e23",
+    "source": "https://github.com/anyproto/anytype-cli"
+  },
+  "docker_any_sync_env": {
+    "path": "docker/any-sync/.env",
+    "versions": {
+      "ANY_SYNC_NODE_VERSION": "v0.10.5",
+      "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+      "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+      "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+    }
+  },
+  "network_config": {
+    "path": "docker/any-sync/etc/client.yml",
+    "sha256": "daaae745745dce399c9a12c299202294cb627a33ec7a38e7068810cdbcf33880",
+    "mtime": "2026-04-14T21:24:59.520947Z",
+    "network_id": "N9MGQuoafndHijnEJmWGJesLSepBQLXZWqvjejDY4hP7mFt5"
+  },
+  "binaries": {
+    "manytype_quic_ffi": {
+      "path": "rust/target/release/libmanytype_quic_ffi.so",
+      "exists": true,
+      "sha256": "e08671ff8a11d9c45d64cc71acff658917454157a1ef6923907a4415df55cf38",
+      "mtime": "2026-04-13T15:45:53.990391Z",
+      "size": 4940872
+    },
+    "manytype_server_debug": {
+      "path": "rust/target/debug/manytype_server",
+      "exists": true,
+      "sha256": "2253c2370ed24c6db88e4b0e9ca58b338d4caa9305c0d01c1d56e8055abebc35",
+      "mtime": "2026-04-13T15:53:51.585498Z",
+      "size": 109484792
+    },
+    "official_client_probe": {
+      "path": "/tmp/tmp.LCXlDsvfEd/official_client_grpc_probe",
+      "exists": true,
+      "sha256": "efb59cc68d3ec899c194a4de806ba35daf53249b2cad8d40e2920a053834fc31",
+      "mtime": "2026-04-14T21:24:57.627926Z",
+      "size": 41589810
+    }
+  },
+  "artifacts": [
+    {
+      "path": "test_vectors/phase46/bounded-object-edit-roundtrip.json",
+      "sha256": "68abc85f37faf21c492e19f6d10a36e01ab8ca5f70db7824cf7e3b275f092f76",
+      "mtime": "2026-04-14T06:36:53.468580Z",
+      "size": 1461
+    },
+    {
+      "path": "test_vectors/phase46/official-join.json",
+      "sha256": "63c9a67cf573abf7b857a30eb5c32f745fa50095819a5d14e6650d762c6f00e0",
+      "mtime": "2026-04-14T21:29:22.985130Z",
+      "size": 335
+    },
+    {
+      "path": "test_vectors/phase46/manytype_to_official_show.json",
+      "sha256": "872168384ca2d5ccaf752fe7581c671b0a13cd1d7c49e0115153ebf223ca9a4b",
+      "mtime": "2026-04-14T21:29:22.985828Z",
+      "size": 45210
+    },
+    {
+      "path": "test_vectors/phase46/manytype_to_official_restart-show.json",
+      "sha256": "95808164ce70f76fc6a7b75e44a111d633ac03deefe22c230afae34ad4675dc1",
+      "mtime": "2026-04-14T21:29:22.993385Z",
+      "size": 50504
+    },
+    {
+      "path": "test_vectors/phase46/official_to_manytype_read.txt",
+      "sha256": "0fb3825da02fd259f712be951f3e0d977a7b526d8be13a7bc0dcdc053fd7e91f",
+      "mtime": "2026-04-14T21:29:22.992411Z",
+      "size": 74857
+    },
+    {
+      "path": "test_vectors/phase46/official_to_manytype_reopen-read.txt",
+      "sha256": "5be4b09c7f70308dd5a53470711bba1e89ae8fe892b5b4a0bd2b309b523f2065",
+      "mtime": "2026-04-14T21:29:22.986730Z",
+      "size": 20601
+    },
+    {
+      "path": "test_vectors/phase46/official_to_manytype_description-set.json",
+      "sha256": "006f2ba585a7589c9bc8c7c54c41eaa84f953e6666f304fae2809c71ac0ac6f7",
+      "mtime": "2026-04-14T21:29:22.991533Z",
+      "size": 242
+    },
+    {
+      "path": "test_vectors/phase46/official_to_manytype_featured-set.json",
+      "sha256": "f28261a5d685ac6df4c80b30ac0e47517b451804d4ab07e797e9cba85e10d6d2",
+      "mtime": "2026-04-14T21:29:22.987751Z",
+      "size": 246
+    },
+    {
+      "path": "test_vectors/phase46/manytype_to_official_sync.json",
+      "sha256": "e4e5d5c2e71040d3fe69e8b6d4da5c99aee4781c88fa620d2ce67edfa83c936f",
+      "mtime": "2026-04-14T21:29:22.990302Z",
+      "size": 2599659
+    },
+    {
+      "path": "test_vectors/phase46/official_to_manytype_sync.json",
+      "sha256": "321fc2b26cdbc4f4c3edda31d24418f1a86d15947e64ac3940383cefdd58061f",
+      "mtime": "2026-04-14T21:29:22.988921Z",
+      "size": 3160382
+    }
+  ]
+}

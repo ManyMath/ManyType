@@ -1,0 +1,20 @@
+{
+  "action": "local-consensus-continue",
+  "server_address": "127.0.0.1:33120",
+  "space_id": "bafyreif7jvmnh33ilxgwuvv5qz7jrd7w2emwpollqrd5zk4qap2hv7gm44.2kxhebq1whr25",
+  "root_id": "bafyreibbiios2noraoz67e2ck2ua27quciapylfg5lgnbeynpfld7xdnpi",
+  "first_record_id": "bafyreiak7j5ggubyfh2teojia42qxy5n23bfy6ivu7z6s7vjgrx2dtjip4",
+  "second_record_id": "bafyreide3474l7snx6rwceqmcbs3p6kyki25lakif3cpjgs5cr23v7dgge",
+  "record_ids_before_continue": [
+    "bafyreibbiios2noraoz67e2ck2ua27quciapylfg5lgnbeynpfld7xdnpi",
+    "bafyreiak7j5ggubyfh2teojia42qxy5n23bfy6ivu7z6s7vjgrx2dtjip4"
+  ],
+  "record_ids_after_continue": [
+    "bafyreibbiios2noraoz67e2ck2ua27quciapylfg5lgnbeynpfld7xdnpi",
+    "bafyreiak7j5ggubyfh2teojia42qxy5n23bfy6ivu7z6s7vjgrx2dtjip4",
+    "bafyreide3474l7snx6rwceqmcbs3p6kyki25lakif3cpjgs5cr23v7dgge"
+  ],
+  "tail_after_first_ids": [
+    "bafyreide3474l7snx6rwceqmcbs3p6kyki25lakif3cpjgs5cr23v7dgge"
+  ]
+}

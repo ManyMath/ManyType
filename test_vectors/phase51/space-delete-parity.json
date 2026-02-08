@@ -1,0 +1,19 @@
+{
+  "captured_at": "2026-04-14T21:37:28.817384Z",
+  "scenario": "phase51 bounded space delete",
+  "accepted_truth_surface": "self-hosted-official",
+  "proof_mode": "coordinator-status-reread",
+  "official_supported_flow": {
+    "outcome": "supported-and-verified",
+    "space_id": "bafyreiglvjbaebjejpina7yb7z2x6q57pdfunfiml4pdcdfpoea2bavut4.273dvil6e7vt4",
+    "artifact_path": "/home/user/src/manytype/manytype/test_vectors/phase51/official_space_delete.json"
+  },
+  "local_rejected_flow": {
+    "outcome": "unsupported-surface-or-scenario",
+    "observed_surface_label": "stub-no-op-surface",
+    "space_id": "bafyreia3gz37oadlbunmjwlvdp7vaokr5wr63425ucyrkwi2i67kjqifnq.e8pvf1rm6pdf",
+    "artifact_path": "/home/user/src/manytype/manytype/test_vectors/phase51/local_space_delete_rejected.json"
+  },
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase51/runtime-metadata.json",
+  "success": true
+}

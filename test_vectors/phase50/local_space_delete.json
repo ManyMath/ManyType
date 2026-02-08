@@ -1,0 +1,102 @@
+{
+  "captured_at": "2026-04-14T21:36:33.629554Z",
+  "action": "space-delete",
+  "surface": "manytype_server",
+  "network_config_path": "/tmp/tmp.ox3Mum72ae/local-network.yml",
+  "coordinator_address": "127.0.0.1:33150",
+  "space_id": "bafyreihkilnlrrddtmyi6sb6wfsxwmkgwnpve72cpjciqpk6y4uz5tq63i.3qqrppetjbzyg",
+  "wait_seconds": 2,
+  "deletion_duration_minutes": 0,
+  "initial": {
+    "surface": "manytype_server",
+    "network_id": "manytype-phase50",
+    "network_configuration_id": "manytype-v1",
+    "request": {
+      "peer_id": "12D3KooWQtgDreFRoypgmrwYe292Pyph2RuaxC4zhwfkVzu4z71S",
+      "payload_id": "bafyreib4iestu4lsddtwzaw5fegsttpoxm4kmwnmjd3in3qo64bchnzw3i",
+      "payload_size_bytes": 260,
+      "deletion_duration_minutes": 0
+    },
+    "response": {
+      "ok": true,
+      "value": {
+        "to_be_deleted_timestamp": 1776202591
+      }
+    },
+    "pre_status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusCreated",
+        "deletion_timestamp": 0,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": null
+      }
+    },
+    "pre_deletion_log": {
+      "ok": true,
+      "value": {
+        "count": 0,
+        "records": []
+      }
+    },
+    "post_status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusCreated",
+        "deletion_timestamp": 0,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": null
+      }
+    },
+    "post_deletion_log": {
+      "ok": true,
+      "value": {
+        "count": 0,
+        "records": []
+      }
+    }
+  },
+  "after_reconnect": {
+    "surface": "manytype_server",
+    "network_id": "manytype-phase50",
+    "network_configuration_id": "manytype-v1",
+    "request": null,
+    "response": null,
+    "pre_status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusCreated",
+        "deletion_timestamp": 0,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": null
+      }
+    },
+    "pre_deletion_log": {
+      "ok": true,
+      "value": {
+        "count": 0,
+        "records": []
+      }
+    },
+    "post_status": {
+      "ok": true,
+      "value": {
+        "status": "SpaceStatusCreated",
+        "deletion_timestamp": 0,
+        "permissions": "SpacePermissionsOwner",
+        "is_shared": false,
+        "limits": null
+      }
+    },
+    "post_deletion_log": {
+      "ok": true,
+      "value": {
+        "count": 0,
+        "records": []
+      }
+    }
+  }
+}
