@@ -1,0 +1,123 @@
+{
+  "captured_at": "2026-04-15T03:45:57.425798Z",
+  "signoff_started_at": "2026-04-15T03:40:55Z",
+  "scenario": "v2.9 wider matrix and split sign-off",
+  "requirements_completed": [
+    "COMP-05",
+    "COMP-06",
+    "COMP-07",
+    "COMP-08"
+  ],
+  "freshness_window_seconds": 14400,
+  "accepted_slice": {
+    "object_family": "page-rooted objects only",
+    "mutation_family": "archive-backed object deletion",
+    "bounded_object_type": "page",
+    "manytype_to_official_truth_surface": {
+      "label": "self-hosted-official",
+      "proof_mode": "official-object-search-absence-and-restart-reread"
+    },
+    "official_to_manytype_truth_surface": {
+      "label": "manytype_server",
+      "proof_mode": "manytype-list-absence-read-refusal-and-fresh-home-reread"
+    },
+    "excluded_variants": [
+      "AccountDelete parity",
+      "SpaceDelete parity changes beyond the shipped bounded command surface",
+      "broader object families",
+      "additional root-detail edits beyond delete/archive semantics",
+      "network.anytype.io milestone gating",
+      "operator CLI expansion beyond the existing stable slice"
+    ]
+  },
+  "current_inputs": {
+    "git": {
+      "branch": "main",
+      "commit": "9fdd994729579f8be6b2b06489b9c14f0adc16ed",
+      "dirty": true
+    },
+    "oracle_lock": {
+      "path": "docker/any-sync/oracle.lock.env",
+      "any_sync_versions": {
+        "ANY_SYNC_NODE_VERSION": "v0.10.5",
+        "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+        "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+        "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+      },
+      "anytype_cli_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+      "anytype_cli_tag": "0.1.12",
+      "anytype_cli_revision": "e39d5453dc854ad2afc02cbec20553d970660e23"
+    },
+    "binaries": {
+      "manytype_quic_ffi_release": {
+        "path": "rust/target/release/libmanytype_quic_ffi.so",
+        "exists": true,
+        "sha256": "e08671ff8a11d9c45d64cc71acff658917454157a1ef6923907a4415df55cf38",
+        "mtime": "2026-04-14T21:33:33.103148Z",
+        "size": 4940872
+      },
+      "manytype_server_debug": {
+        "path": "rust/target/debug/manytype_server",
+        "exists": true,
+        "sha256": "2253c2370ed24c6db88e4b0e9ca58b338d4caa9305c0d01c1d56e8055abebc35",
+        "mtime": "2026-04-15T01:37:37.746257Z",
+        "size": 109484792
+      }
+    }
+  },
+  "scope_and_baseline": {
+    "phase": 58,
+    "artifact_path": "test_vectors/phase58/bounded-delete-baseline.json",
+    "metadata_path": "test_vectors/phase58/runtime-metadata.json",
+    "account_delete": {
+      "decision": "defer",
+      "reason": "Self-hosted official AccountDelete does not provide a bounded replayable acceptance path from the current Manytype truth surface, while manytype_server still reports stub success without observable lifecycle movement.",
+      "official_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase50/oracle_account_delete.json",
+      "local_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase50/local_account_delete.json",
+      "source_phase50_path": "/home/user/src/manytype/manytype/test_vectors/phase50/teardown-truth-baseline.json"
+    }
+  },
+  "official_stack_track": {
+    "status": "passed",
+    "scenarios": [
+      {
+        "phase": 59,
+        "name": "manytype-authored bounded delete slice on the self-hosted official stack",
+        "truth_surface": "self-hosted-official",
+        "artifact_path": "test_vectors/phase59/self-hosted-delete-compatibility.json",
+        "verifier": "scripts/verify_phase59_self_hosted_delete.py",
+        "requirements": [
+          "M2O-04",
+          "M2O-05",
+          "M2O-06"
+        ]
+      }
+    ]
+  },
+  "manytype_server_track": {
+    "status": "passed",
+    "scenarios": [
+      {
+        "phase": 60,
+        "name": "official-authored bounded delete slice on manytype_server",
+        "truth_surface": "manytype_server",
+        "artifact_path": "test_vectors/phase60/manytype-server-delete-compatibility.json",
+        "diagnostics_path": "test_vectors/phase60/official_to_manytype_diagnostics.json",
+        "verifier": "scripts/verify_phase60_manytype_server_delete.py",
+        "requirements": [
+          "O2M-04",
+          "O2M-05",
+          "O2M-06"
+        ]
+      }
+    ]
+  },
+  "verifiers": [
+    "scripts/verify_phase58_scope_freeze.py",
+    "scripts/verify_phase59_self_hosted_delete.py",
+    "scripts/verify_phase60_manytype_server_delete.py",
+    "scripts/verify_self_hosted_oracle_metadata.py",
+    "scripts/verify_phase61_signoff.py"
+  ],
+  "success": true
+}

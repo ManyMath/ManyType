@@ -1,0 +1,32 @@
+{
+  "captured_at": "2026-04-15T03:45:57.004043Z",
+  "scenario": "phase60 official to manytype delete compatibility",
+  "accepted_slice": {
+    "object_family": "page-rooted objects only",
+    "mutation_family": "archive-backed object deletion",
+    "bounded_object_type": "page",
+    "manytype_list_absence_required": true,
+    "manytype_read_refusal_required": true,
+    "fresh_home_reread_required": true
+  },
+  "truth_surface": "manytype_server",
+  "official_to_manytype": {
+    "object_id": "bafyreih5a4yzk3ptlawlrqd6duatfki7ewoikpw3zfgjf2edgcnu43pg2y",
+    "object_name": "phase60 official deletion target",
+    "type_preload_path": "/home/user/src/manytype/manytype/test_vectors/phase60/official_to_manytype_preload-type-show.json",
+    "create_output_path": "/home/user/src/manytype/manytype/test_vectors/phase60/official_to_manytype_create.json",
+    "predelete_read_path": "/home/user/src/manytype/manytype/test_vectors/phase60/official_to_manytype_predelete-read.txt",
+    "delete_output_path": "/home/user/src/manytype/manytype/test_vectors/phase60/official_to_manytype_delete.json",
+    "main_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase60/official_to_manytype_sync.json",
+    "list_absence_path": "/home/user/src/manytype/manytype/test_vectors/phase60/official_to_manytype_postdelete-list.txt",
+    "read_refusal_path": "/home/user/src/manytype/manytype/test_vectors/phase60/official_to_manytype_postdelete-read.txt",
+    "reopen_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase60/official_to_manytype_reopen-sync.json",
+    "reopen_list_absence_path": "/home/user/src/manytype/manytype/test_vectors/phase60/official_to_manytype_reopen-list.txt",
+    "reopen_read_refusal_path": "/home/user/src/manytype/manytype/test_vectors/phase60/official_to_manytype_reopen-read.txt",
+    "diagnostics_path": "/home/user/src/manytype/manytype/test_vectors/phase60/official_to_manytype_diagnostics.json",
+    "main_observed_attempt": 1,
+    "reopen_observed_attempt": 1
+  },
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase60/runtime-metadata.json",
+  "success": true
+}

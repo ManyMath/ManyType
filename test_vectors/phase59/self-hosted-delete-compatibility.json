@@ -1,0 +1,23 @@
+{
+  "captured_at": "2026-04-15T03:43:05.058180Z",
+  "scenario": "phase59 manytype to official self-hosted delete compatibility",
+  "accepted_slice": {
+    "object_family": "page-rooted objects only",
+    "mutation_family": "archive-backed object deletion",
+    "bounded_object_type": "page",
+    "proof_mode": "official-object-search-absence-and-restart-reread"
+  },
+  "truth_surface": "self-hosted-official",
+  "manytype_to_official": {
+    "object_id": "bafyreic22zt3t7gus5yihmaodt5nn6kgiwhsqoef3ytk2tfdup2tyrlm2i",
+    "object_name": "phase59-1776224464695802476 manytype deletion target",
+    "presence_search_path": "/home/user/src/manytype/manytype/test_vectors/phase59/manytype_to_official_predelete-search.json",
+    "delete_output_path": "/home/user/src/manytype/manytype/test_vectors/phase59/manytype_to_official_delete.txt",
+    "delete_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase59/manytype_to_official_delete-sync.json",
+    "absence_search_path": "/home/user/src/manytype/manytype/test_vectors/phase59/manytype_to_official_postdelete-search.json",
+    "restart_absence_search_path": "/home/user/src/manytype/manytype/test_vectors/phase59/manytype_to_official_restart-search.json"
+  },
+  "phase47_bundle_path": "/home/user/src/manytype/manytype/test_vectors/phase47/object-deletion-roundtrip.json",
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase59/runtime-metadata.json",
+  "success": true
+}
