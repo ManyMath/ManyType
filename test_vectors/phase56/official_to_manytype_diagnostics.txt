@@ -1,0 +1,42 @@
+tempdir: /tmp/tmp.CEmrXNkXOT
+object_id: bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru
+artifact: updated_text=phase31-manytype-server-updated-1776201866255313542 official_observed_text=phase31-manytype-server-updated-1776201866255313542 success=True
+official_show: block_id=title text='phase31-manytype-server-updated-1776201866255313542'
+official_index: permission denied reading /tmp/tmp.CEmrXNkXOT/anytype-root/AADB8ZkATGiok4xE9pteREQv6o4Abc5Ni3yQMUMGYYt1TAs2/objectstore: [Errno 13] Permission denied: '/tmp/tmp.CEmrXNkXOT/anytype-root/AADB8ZkATGiok4xE9pteREQv6o4Abc5Ni3yQMUMGYYt1TAs2/objectstore'
+stored_changes:
+  - root bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru payload_len=232 (line 760)
+  - root bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru payload_len=232 (line 1108)
+  - root bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru payload_len=232 (line 1110)
+  - root bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru payload_len=232 (line 1342)
+  - root bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru payload_len=232 (line 1344)
+  - root bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru payload_len=232 (line 1895)
+  - root bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru payload_len=232 (line 1991)
+  - root bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru payload_len=232 (line 1993)
+  - root bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru payload_len=232 (line 2121)
+  - tree bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq parents=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] snapshot=True snapshot_base_id=bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru changes_data_len=745 (line 2124)
+  - root bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru payload_len=232 (line 2126)
+  - tree bafyreicbs47mtbzqt6d3jttldaw6a4w6zphv276up36pu577xgwfzpuhxa parents=['bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq'] snapshot=False snapshot_base_id=bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq changes_data_len=84 (line 2128)
+  - root bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru payload_len=232 (line 2131)
+  - tree bafyreibdgbfsgyrcbw6uaqsqm2hrhiyvxejvmhjrx5ygxmfhnhdehiygd4 parents=['bafyreicbs47mtbzqt6d3jttldaw6a4w6zphv276up36pu577xgwfzpuhxa'] snapshot=False snapshot_base_id=bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq changes_data_len=96 (line 2133)
+full_sync_requests:
+  - heads=['bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq'] snapshot_path=['bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq', 'bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] change_ids=[] has_root_change=True (line 765)
+  - heads=[] snapshot_path=[] change_ids=[] has_root_change=False (line 940)
+  - heads=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] snapshot_path=['anytype.object', 'bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] change_ids=[] has_root_change=False (line 1153)
+  - heads=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] snapshot_path=[] change_ids=[] has_root_change=False (line 1179)
+  - heads=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] snapshot_path=['anytype.object', 'bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] change_ids=[] has_root_change=False (line 1387)
+  - heads=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] snapshot_path=[] change_ids=[] has_root_change=False (line 1545)
+  - heads=['bafyreibdgbfsgyrcbw6uaqsqm2hrhiyvxejvmhjrx5ygxmfhnhdehiygd4'] snapshot_path=['bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq', 'bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] change_ids=[] has_root_change=True (line 1927)
+  - heads=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] snapshot_path=['anytype.object', 'bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] change_ids=[] has_root_change=False (line 2287)
+  - heads=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] snapshot_path=[] change_ids=[] has_root_change=False (line 2751)
+  - heads=[] snapshot_path=[] change_ids=[] has_root_change=False (line 3346)
+full_sync_responses:
+  - root_id=bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru heads=[] change_ids=[] snapshot_path=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] (line 767)
+  - root_id=bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru heads=[] change_ids=[] snapshot_path=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] (line 942)
+  - root_id=bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru heads=[] change_ids=[] snapshot_path=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] (line 1155)
+  - root_id=bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru heads=[] change_ids=[] snapshot_path=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] (line 1181)
+  - root_id=bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru heads=[] change_ids=[] snapshot_path=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] (line 1389)
+  - root_id=bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru heads=[] change_ids=[] snapshot_path=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] (line 1547)
+  - root_id=bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru heads=[] change_ids=[] snapshot_path=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] (line 1929)
+  - root_id=bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru heads=['bafyreibdgbfsgyrcbw6uaqsqm2hrhiyvxejvmhjrx5ygxmfhnhdehiygd4'] change_ids=['bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq', 'bafyreicbs47mtbzqt6d3jttldaw6a4w6zphv276up36pu577xgwfzpuhxa', 'bafyreibdgbfsgyrcbw6uaqsqm2hrhiyvxejvmhjrx5ygxmfhnhdehiygd4'] snapshot_path=['bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq', 'bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] (line 2289)
+  - root_id=bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru heads=['bafyreibdgbfsgyrcbw6uaqsqm2hrhiyvxejvmhjrx5ygxmfhnhdehiygd4'] change_ids=['bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq', 'bafyreicbs47mtbzqt6d3jttldaw6a4w6zphv276up36pu577xgwfzpuhxa', 'bafyreibdgbfsgyrcbw6uaqsqm2hrhiyvxejvmhjrx5ygxmfhnhdehiygd4'] snapshot_path=['bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq', 'bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] (line 2753)
+  - root_id=bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru heads=['bafyreibdgbfsgyrcbw6uaqsqm2hrhiyvxejvmhjrx5ygxmfhnhdehiygd4'] change_ids=['bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru', 'bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq', 'bafyreicbs47mtbzqt6d3jttldaw6a4w6zphv276up36pu577xgwfzpuhxa', 'bafyreibdgbfsgyrcbw6uaqsqm2hrhiyvxejvmhjrx5ygxmfhnhdehiygd4'] snapshot_path=['bafyreibay5mlwempqgfxoxogz4e5qi2xehx6on5qtnnwuvewwjex3zniwq', 'bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru'] (line 3348)

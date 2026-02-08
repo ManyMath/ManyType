@@ -1,0 +1,36 @@
+{
+  "captured_at": "2026-04-15T02:21:32.504847Z",
+  "scenario": "phase56 official to manytype compatibility",
+  "accepted_slice": {
+    "object_family": "page-rooted objects only",
+    "detail_keys": [
+      "description",
+      "featuredRelations"
+    ],
+    "featured_relations_value": [
+      "description",
+      "sourceObject"
+    ],
+    "official_post_edit_reread_required": true,
+    "manytype_observation_retry_required": true
+  },
+  "truth_surface": "manytype_server",
+  "official_to_manytype": {
+    "object_id": "bafyreihdkf5tmqakvfdxxf3znkfkwj3x5rodqo4rjravkile3jryzlokru",
+    "description": "phase56 detail description",
+    "featured_relations": [
+      "description",
+      "sourceObject"
+    ],
+    "official_show_path": "/home/user/src/manytype/manytype/test_vectors/phase56/official_to_manytype_show.json",
+    "read_path": "/home/user/src/manytype/manytype/test_vectors/phase56/official_to_manytype_read.txt",
+    "reopen_read_path": "/home/user/src/manytype/manytype/test_vectors/phase56/official_to_manytype_reopen-read.txt",
+    "main_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase56/official_to_manytype_main-sync.json",
+    "reopen_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase56/official_to_manytype_reopen-sync.json",
+    "diagnostics_path": "/home/user/src/manytype/manytype/test_vectors/phase56/official_to_manytype_diagnostics.json",
+    "main_observed_attempt": 4,
+    "reopen_observed_attempt": 1
+  },
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase56/runtime-metadata.json",
+  "success": true
+}

@@ -1,0 +1,64 @@
+{
+  "captured_at": "2026-04-15T02:14:48.914154Z",
+  "scenario": "phase54 compatibility slice freeze and oracle baseline",
+  "accepted_slice": {
+    "object_family": "page-rooted objects only",
+    "mutation_family": "generic Change_DetailsSet / ObjectSetDetails",
+    "detail_keys": [
+      "description",
+      "featuredRelations"
+    ],
+    "featured_relations_value": [
+      "description",
+      "sourceObject"
+    ],
+    "manytype_to_official_truth_surface": {
+      "label": "self-hosted-official",
+      "proof_mode": "official-object-show-and-restart-reread"
+    },
+    "official_to_manytype_truth_surface": {
+      "label": "manytype_server",
+      "proof_mode": "official-object-show-then-manytype-read-and-fresh-home-reread"
+    },
+    "excluded_variants": [
+      "AccountDelete parity",
+      "broader object families",
+      "additional root-detail keys beyond description and featuredRelations",
+      "network.anytype.io milestone gating",
+      "operator CLI expansion beyond the existing stable slice"
+    ]
+  },
+  "scope_decisions": {
+    "account_delete": {
+      "decision": "defer",
+      "reason": "Self-hosted official AccountDelete does not provide a bounded replayable acceptance path from the current Manytype truth surface, while manytype_server still reports stub success without observable lifecycle movement.",
+      "official_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase50/oracle_account_delete.json",
+      "local_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase50/local_account_delete.json",
+      "source_phase50_path": "/home/user/src/manytype/manytype/test_vectors/phase50/teardown-truth-baseline.json"
+    },
+    "official_to_manytype_server_requirement": {
+      "post_edit_reread_required": true,
+      "retry_expectation": "Manytype reread may require several read --sync attempts before the final detail state is observable.",
+      "diagnostics_requirement": "Trace object, head, and change state through repo-owned diagnostics instead of raw server logs alone."
+    }
+  },
+  "oracle_baseline": {
+    "preflight": "passed",
+    "network_config_path": "/home/user/src/manytype/manytype/docker/any-sync/etc/client.yml",
+    "client_yml_ready": true,
+    "exercised_binaries": [
+      "rust/target/release/libmanytype_quic_ffi.so",
+      "rust/target/debug/manytype_server",
+      "scripts/official_client_grpc_probe"
+    ]
+  },
+  "evidence_references": {
+    "phase46_bundle_path": "/home/user/src/manytype/manytype/test_vectors/phase46/bounded-object-edit-roundtrip.json",
+    "phase46_manytype_to_official_show_path": "/home/user/src/manytype/manytype/test_vectors/phase46/manytype_to_official_show.json",
+    "phase46_manytype_to_official_restart_show_path": "/home/user/src/manytype/manytype/test_vectors/phase46/manytype_to_official_restart-show.json",
+    "phase46_official_to_manytype_read_path": "/home/user/src/manytype/manytype/test_vectors/phase46/official_to_manytype_read.txt",
+    "phase46_official_to_manytype_reopen_read_path": "/home/user/src/manytype/manytype/test_vectors/phase46/official_to_manytype_reopen-read.txt"
+  },
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase54/runtime-metadata.json",
+  "success": true
+}

@@ -1,0 +1,111 @@
+{
+  "captured_at": "2026-04-15T02:21:32.569768Z",
+  "scenario": "phase56 official to manytype compatibility",
+  "git": {
+    "branch": "main",
+    "commit": "9fdd994729579f8be6b2b06489b9c14f0adc16ed",
+    "dirty": true
+  },
+  "oracle_lock": {
+    "path": "docker/any-sync/oracle.lock.env",
+    "any_sync_versions": {
+      "ANY_SYNC_NODE_VERSION": "v0.10.5",
+      "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+      "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+      "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+    },
+    "anytype_cli_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+    "anytype_cli_tag": "0.1.12",
+    "anytype_cli_revision": "e39d5453dc854ad2afc02cbec20553d970660e23",
+    "resolved_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff"
+  },
+  "official_cli": {
+    "image_id": "sha256:ecda0ec3d9d6badce0fee8add23221ba81fee5182f387e6a785d303bb8cc43a0",
+    "repo_digest": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+    "version": "0.1.12",
+    "revision": "e39d5453dc854ad2afc02cbec20553d970660e23",
+    "source": "https://github.com/anyproto/anytype-cli"
+  },
+  "docker_any_sync_env": {
+    "path": "docker/any-sync/.env",
+    "versions": {
+      "ANY_SYNC_NODE_VERSION": "v0.10.5",
+      "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+      "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+      "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+    }
+  },
+  "network_config": {
+    "path": "/tmp/tmp.CEmrXNkXOT/network.yml",
+    "sha256": "df64fc28b990fe02f15577ce856caa5973e65fbc0181f0c74b2d6788debefcc9",
+    "mtime": "2026-04-15T02:19:31.238362Z",
+    "network_id": "manytype-phase56"
+  },
+  "binaries": {
+    "manytype_quic_ffi": {
+      "path": "rust/target/release/libmanytype_quic_ffi.so",
+      "exists": true,
+      "sha256": "e08671ff8a11d9c45d64cc71acff658917454157a1ef6923907a4415df55cf38",
+      "mtime": "2026-04-14T21:33:33.103148Z",
+      "size": 4940872
+    },
+    "manytype_server_debug": {
+      "path": "rust/target/debug/manytype_server",
+      "exists": true,
+      "sha256": "2253c2370ed24c6db88e4b0e9ca58b338d4caa9305c0d01c1d56e8055abebc35",
+      "mtime": "2026-04-15T01:37:37.746257Z",
+      "size": 109484792
+    },
+    "official_client_probe": {
+      "path": "/tmp/tmp.CEmrXNkXOT/official_client_grpc_probe",
+      "exists": true,
+      "sha256": "cf944854df34629f4f777d1aac3e35970fe4283559f39a9c87ef5f069a784153",
+      "mtime": "2026-04-15T02:19:30.204967Z",
+      "size": 41589810
+    }
+  },
+  "artifacts": [
+    {
+      "path": "test_vectors/phase56/manytype-server-compatibility.json",
+      "sha256": "eae696bb4bbb62d21469a17b481fcb498b01e0f4affab6c38b24362a291ef917",
+      "mtime": "2026-04-15T02:21:32.504927Z",
+      "size": 1605
+    },
+    {
+      "path": "test_vectors/phase56/official_to_manytype_show.json",
+      "sha256": "076b0025b13b002ce6038d1c3e5374192c0cb1c95fc6b0a39c5a092022baeb87",
+      "mtime": "2026-04-15T02:20:03.862165Z",
+      "size": 43944
+    },
+    {
+      "path": "test_vectors/phase56/official_to_manytype_read.txt",
+      "sha256": "51587f3b101cee813bb882825e57882e28802730100d8d20c282cff7a52aae0f",
+      "mtime": "2026-04-15T02:21:16.630365Z",
+      "size": 41216
+    },
+    {
+      "path": "test_vectors/phase56/official_to_manytype_reopen-read.txt",
+      "sha256": "7ab6bae02905e54dc8b2e94b1e0ad2d6b5f7c11f1a32b214b9d4fab84687159a",
+      "mtime": "2026-04-15T02:21:32.393533Z",
+      "size": 20069
+    },
+    {
+      "path": "test_vectors/phase56/official_to_manytype_main-sync.json",
+      "sha256": "f994825ab8cf961216175af90454e7b97106b621099b015593065ea91ae5e1f6",
+      "mtime": "2026-04-15T02:21:16.413306Z",
+      "size": 698166
+    },
+    {
+      "path": "test_vectors/phase56/official_to_manytype_reopen-sync.json",
+      "sha256": "3498e825726ba557ab8782dec655cf353610915d1d1ab10761d873ca52072a5e",
+      "mtime": "2026-04-15T02:21:32.206485Z",
+      "size": 574953
+    },
+    {
+      "path": "test_vectors/phase56/official_to_manytype_diagnostics.json",
+      "sha256": "9641b0094de8a2ba3cf91a55e9fede341ffaf9a87e0679a9bf1671f88623bfe0",
+      "mtime": "2026-04-15T02:21:32.463552Z",
+      "size": 30353
+    }
+  ]
+}

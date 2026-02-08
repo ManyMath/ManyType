@@ -1,0 +1,31 @@
+{
+  "captured_at": "2026-04-15T02:19:28.722919Z",
+  "scenario": "phase55 manytype to official self-hosted compatibility",
+  "accepted_slice": {
+    "object_family": "page-rooted objects only",
+    "detail_keys": [
+      "description",
+      "featuredRelations"
+    ],
+    "featured_relations_value": [
+      "description",
+      "sourceObject"
+    ],
+    "proof_mode": "official-object-show-and-restart-reread"
+  },
+  "truth_surface": "self-hosted-official",
+  "manytype_to_official": {
+    "object_id": "bafyreidizyjl2y6kimbglsdleyb2dd3zbhoijbhg6qrkgw6wnxka4gkuri",
+    "description": "phase46-1776219298413062691 manytype description",
+    "featured_relations": [
+      "description",
+      "sourceObject"
+    ],
+    "show_path": "/home/user/src/manytype/manytype/test_vectors/phase55/manytype_to_official_show.json",
+    "restart_show_path": "/home/user/src/manytype/manytype/test_vectors/phase55/manytype_to_official_restart-show.json",
+    "sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase55/manytype_to_official_sync.json"
+  },
+  "phase46_bundle_path": "/home/user/src/manytype/manytype/test_vectors/phase46/bounded-object-edit-roundtrip.json",
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase55/runtime-metadata.json",
+  "success": true
+}

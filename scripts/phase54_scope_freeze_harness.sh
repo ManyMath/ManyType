@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/self_hosted_oracle.sh"
+
+ARTIFACT_DIR="$ROOT_DIR/test_vectors/phase54"
+ARTIFACT_PATH="$ARTIFACT_DIR/compatibility-slice-baseline.json"
+RUNTIME_METADATA_PATH="$ARTIFACT_DIR/runtime-metadata.json"
+NETWORK_CONFIG_SRC="$ROOT_DIR/docker/any-sync/etc/client.yml"
+PHASE50_ARTIFACT="$ROOT_DIR/test_vectors/phase50/teardown-truth-baseline.json"
+PHASE46_ARTIFACT="$ROOT_DIR/test_vectors/phase46/bounded-object-edit-roundtrip.json"
+TMPDIR="$(mktemp -d)"
+PROBE_BIN="$TMPDIR/official_client_grpc_probe"
+
+cleanup() {
+  if [[ "${KEEP_TMPDIR:-0}" != "1" ]]; then
+    rm -rf "$TMPDIR" >/dev/null 2>&1 || true
+  else
+    printf 'Kept tempdir: %s\n' "$TMPDIR"
+  fi
+}
+trap cleanup EXIT
+
+fail() {
+  printf 'FAIL: %s\n' "$1" >&2
+  exit 1
+}
+
+printf '=== Phase 54: compatibility slice freeze and oracle baseline ===\n\n'
+
+mkdir -p "$ARTIFACT_DIR"
+rm -f "$ARTIFACT_DIR"/*.json
+
+[[ -f "$PHASE50_ARTIFACT" ]] || fail "missing Phase 50 artifact: $PHASE50_ARTIFACT"
+[[ -f "$PHASE46_ARTIFACT" ]] || fail "missing Phase 46 artifact: $PHASE46_ARTIFACT"
+
+oracle_run_preflight
+oracle_export_runtime_env
+
+printf 'Building probe binary for runtime metadata...\n'
+oracle_build_probe_binary "$PROBE_BIN"
+
+[[ -f "$NETWORK_CONFIG_SRC" ]] || fail "missing network config: $NETWORK_CONFIG_SRC"
+[[ -s "$NETWORK_CONFIG_SRC" ]] || fail "empty network config: $NETWORK_CONFIG_SRC"
+
+python3 - \
+  "$ARTIFACT_PATH" \
+  "$PHASE50_ARTIFACT" \
+  "$PHASE46_ARTIFACT" \
+  "$NETWORK_CONFIG_SRC" \
+  "$RUNTIME_METADATA_PATH" <<'PY'
+from __future__ import annotations
+
+import datetime as dt
+import json
+import pathlib
+import sys
+
+artifact_path, phase50_path, phase46_path, network_config, metadata_path = sys.argv[1:]
+
+phase50 = json.loads(pathlib.Path(phase50_path).read_text())
+phase46 = json.loads(pathlib.Path(phase46_path).read_text())
+
+artifact = {
+    "captured_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+    "scenario": "phase54 compatibility slice freeze and oracle baseline",
+    "accepted_slice": {
+        "object_family": "page-rooted objects only",
+        "mutation_family": "generic Change_DetailsSet / ObjectSetDetails",
+        "detail_keys": ["description", "featuredRelations"],
+        "featured_relations_value": ["description", "sourceObject"],
+        "manytype_to_official_truth_surface": {
+            "label": "self-hosted-official",
+            "proof_mode": "official-object-show-and-restart-reread",
+        },
+        "official_to_manytype_truth_surface": {
+            "label": "manytype_server",
+            "proof_mode": "official-object-show-then-manytype-read-and-fresh-home-reread",
+        },
+        "excluded_variants": [
+            "AccountDelete parity",
+            "broader object families",
+            "additional root-detail keys beyond description and featuredRelations",
+            "network.anytype.io milestone gating",
+            "operator CLI expansion beyond the existing stable slice",
+        ],
+    },
+    "scope_decisions": {
+        "account_delete": {
+            "decision": phase50["account_delete"]["decision"],
+            "reason": phase50["account_delete"]["reason"],
+            "official_capture_path": phase50["account_delete"]["official_capture_path"],
+            "local_capture_path": phase50["account_delete"]["local_capture_path"],
+            "source_phase50_path": phase50_path,
+        },
+        "official_to_manytype_server_requirement": {
+            "post_edit_reread_required": True,
+            "retry_expectation": "Manytype reread may require several read --sync attempts before the final detail state is observable.",
+            "diagnostics_requirement": "Trace object, head, and change state through repo-owned diagnostics instead of raw server logs alone.",
+        },
+    },
+    "oracle_baseline": {
+        "preflight": "passed",
+        "network_config_path": network_config,
+        "client_yml_ready": True,
+        "exercised_binaries": [
+            "rust/target/release/libmanytype_quic_ffi.so",
+            "rust/target/debug/manytype_server",
+            "scripts/official_client_grpc_probe",
+        ],
+    },
+    "evidence_references": {
+        "phase46_bundle_path": phase46_path,
+        "phase46_manytype_to_official_show_path": phase46["manytype_to_official"]["show_path"],
+        "phase46_manytype_to_official_restart_show_path": phase46["manytype_to_official"]["restart_show_path"],
+        "phase46_official_to_manytype_read_path": phase46["official_to_manytype"]["read_path"],
+        "phase46_official_to_manytype_reopen_read_path": phase46["official_to_manytype"]["reopen_read_path"],
+    },
+    "metadata_path": metadata_path,
+    "success": True,
+}
+
+pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
+PY
+
+oracle_write_metadata \
+  "$RUNTIME_METADATA_PATH" \
+  "phase54 compatibility slice freeze and oracle baseline" \
+  "$NETWORK_CONFIG_SRC" \
+  "$PROBE_BIN" \
+  "$ARTIFACT_PATH" \
+  "$PHASE50_ARTIFACT" \
+  "$PHASE46_ARTIFACT"
+
+printf 'Phase 54 artifact written to %s\n' "$ARTIFACT_PATH"
+printf 'phase54 harness: PASSED\n'
