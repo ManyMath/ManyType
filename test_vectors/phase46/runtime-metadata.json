@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-04-14T21:29:23.029136Z",
+  "captured_at": "2026-04-15T02:19:28.270585Z",
   "scenario": "phase46 bounded object edit roundtrip",
   "git": {
     "branch": "main",
-    "commit": "d7570571ca0dcacb63b5454d23d1e0192594822a",
+    "commit": "9fdd994729579f8be6b2b06489b9c14f0adc16ed",
     "dirty": true
   },
   "oracle_lock": {
@@ -38,7 +38,7 @@
   "network_config": {
     "path": "docker/any-sync/etc/client.yml",
     "sha256": "daaae745745dce399c9a12c299202294cb627a33ec7a38e7068810cdbcf33880",
-    "mtime": "2026-04-14T21:24:59.520947Z",
+    "mtime": "2026-04-15T02:14:55.455999Z",
     "network_id": "N9MGQuoafndHijnEJmWGJesLSepBQLXZWqvjejDY4hP7mFt5"
   },
   "binaries": {
@@ -46,84 +46,84 @@
       "path": "rust/target/release/libmanytype_quic_ffi.so",
       "exists": true,
       "sha256": "e08671ff8a11d9c45d64cc71acff658917454157a1ef6923907a4415df55cf38",
-      "mtime": "2026-04-13T15:45:53.990391Z",
+      "mtime": "2026-04-14T21:33:33.103148Z",
       "size": 4940872
     },
     "manytype_server_debug": {
       "path": "rust/target/debug/manytype_server",
       "exists": true,
       "sha256": "2253c2370ed24c6db88e4b0e9ca58b338d4caa9305c0d01c1d56e8055abebc35",
-      "mtime": "2026-04-13T15:53:51.585498Z",
+      "mtime": "2026-04-15T01:37:37.746257Z",
       "size": 109484792
     },
     "official_client_probe": {
-      "path": "/tmp/tmp.LCXlDsvfEd/official_client_grpc_probe",
+      "path": "/tmp/tmp.zB9n0WWW7f/official_client_grpc_probe",
       "exists": true,
-      "sha256": "efb59cc68d3ec899c194a4de806ba35daf53249b2cad8d40e2920a053834fc31",
-      "mtime": "2026-04-14T21:24:57.627926Z",
+      "sha256": "cf944854df34629f4f777d1aac3e35970fe4283559f39a9c87ef5f069a784153",
+      "mtime": "2026-04-15T02:14:51.214999Z",
       "size": 41589810
     }
   },
   "artifacts": [
     {
       "path": "test_vectors/phase46/bounded-object-edit-roundtrip.json",
-      "sha256": "68abc85f37faf21c492e19f6d10a36e01ab8ca5f70db7824cf7e3b275f092f76",
-      "mtime": "2026-04-14T06:36:53.468580Z",
+      "sha256": "efd56841b07292a7abf2047e6866d5c82828ff7f2749f1d9fd8ebf99b48cd41a",
+      "mtime": "2026-04-15T02:09:57.890152Z",
       "size": 1461
     },
     {
       "path": "test_vectors/phase46/official-join.json",
-      "sha256": "63c9a67cf573abf7b857a30eb5c32f745fa50095819a5d14e6650d762c6f00e0",
-      "mtime": "2026-04-14T21:29:22.985130Z",
-      "size": 335
+      "sha256": "6a756072f26b5edb61bc6439b22345240a1053a7b63054da5c24d46aeb401d2d",
+      "mtime": "2026-04-15T02:19:28.182383Z",
+      "size": 336
     },
     {
       "path": "test_vectors/phase46/manytype_to_official_show.json",
-      "sha256": "872168384ca2d5ccaf752fe7581c671b0a13cd1d7c49e0115153ebf223ca9a4b",
-      "mtime": "2026-04-14T21:29:22.985828Z",
-      "size": 45210
+      "sha256": "1e68ed808661c4ec7a4bae208c8f6b9c1da04c759251be716f354a159a122ec3",
+      "mtime": "2026-04-15T02:19:28.186160Z",
+      "size": 45242
     },
     {
       "path": "test_vectors/phase46/manytype_to_official_restart-show.json",
-      "sha256": "95808164ce70f76fc6a7b75e44a111d633ac03deefe22c230afae34ad4675dc1",
-      "mtime": "2026-04-14T21:29:22.993385Z",
-      "size": 50504
+      "sha256": "503d784ffbe4524181d4a32f113aef237c9418a35c9ac0c4277a75b15ff41e4c",
+      "mtime": "2026-04-15T02:19:28.219038Z",
+      "size": 50793
     },
     {
       "path": "test_vectors/phase46/official_to_manytype_read.txt",
-      "sha256": "0fb3825da02fd259f712be951f3e0d977a7b526d8be13a7bc0dcdc053fd7e91f",
-      "mtime": "2026-04-14T21:29:22.992411Z",
-      "size": 74857
+      "sha256": "b3550351963270b2a3c10548eb49555be6453b750083c2e244c520794bd59e56",
+      "mtime": "2026-04-15T02:19:28.215348Z",
+      "size": 74918
     },
     {
       "path": "test_vectors/phase46/official_to_manytype_reopen-read.txt",
-      "sha256": "5be4b09c7f70308dd5a53470711bba1e89ae8fe892b5b4a0bd2b309b523f2065",
-      "mtime": "2026-04-14T21:29:22.986730Z",
+      "sha256": "756fff3eb85c79f43c0461331924be64b5d6e94bedf9bf3d94f998a1f70f1f47",
+      "mtime": "2026-04-15T02:19:28.190327Z",
       "size": 20601
     },
     {
       "path": "test_vectors/phase46/official_to_manytype_description-set.json",
-      "sha256": "006f2ba585a7589c9bc8c7c54c41eaa84f953e6666f304fae2809c71ac0ac6f7",
-      "mtime": "2026-04-14T21:29:22.991533Z",
+      "sha256": "c8855841ff697d1c685aa370e3dacd3cb3b931b5f0200b06fe4f6040abeee694",
+      "mtime": "2026-04-15T02:19:28.212302Z",
       "size": 242
     },
     {
       "path": "test_vectors/phase46/official_to_manytype_featured-set.json",
-      "sha256": "f28261a5d685ac6df4c80b30ac0e47517b451804d4ab07e797e9cba85e10d6d2",
-      "mtime": "2026-04-14T21:29:22.987751Z",
+      "sha256": "406d2f8aeb204fd3fc0eb027fc25c727813b77b3e5830804f96a86ac2d1d1b5e",
+      "mtime": "2026-04-15T02:19:28.195352Z",
       "size": 246
     },
     {
       "path": "test_vectors/phase46/manytype_to_official_sync.json",
-      "sha256": "e4e5d5c2e71040d3fe69e8b6d4da5c99aee4781c88fa620d2ce67edfa83c936f",
-      "mtime": "2026-04-14T21:29:22.990302Z",
-      "size": 2599659
+      "sha256": "c8114d2dec720a633cd1e23c92d52d11e309a0b8b4e54364e48fbda795e8d966",
+      "mtime": "2026-04-15T02:19:28.207603Z",
+      "size": 2603604
     },
     {
       "path": "test_vectors/phase46/official_to_manytype_sync.json",
-      "sha256": "321fc2b26cdbc4f4c3edda31d24418f1a86d15947e64ac3940383cefdd58061f",
-      "mtime": "2026-04-14T21:29:22.988921Z",
-      "size": 3160382
+      "sha256": "cd20fb31b298ff68bec01aa72c69d6723f28e887bcc3ec85acf480569568a8d2",
+      "mtime": "2026-04-15T02:19:28.203197Z",
+      "size": 3168119
     }
   ]
 }

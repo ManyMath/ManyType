@@ -1,10 +1,10 @@
 {
-  "captured_at": "2026-04-12T22:12:46.019996Z",
+  "captured_at": "2026-04-13T02:13:37.331531Z",
   "scenario": "official-authored template observed by Manytype",
-  "type_id": "bafyreib6fgpyhfgffyr76tufmwsujy6ej25jwwbmtgnxuvvpplh4nopuzu",
-  "type_key": "ot-69dc18c64f41580001935bbd",
-  "template_id": "bafyreianerl7obo3hgz4dqxlux6gcxosxceuokbhim6etp7pfxpc6vih3a",
-  "applied_id": "bafyreifrsmra2sjfcynl3erhge3tcxkxzyeu652gy7l4tfggd3houiz6x4",
+  "type_id": "bafyreidjxod4tlu2cnl4qk22nu5jaoom6h5kgaa7m3a3xn4cj3x462ymh4",
+  "type_key": "ot-69dc513a4f41580001d20c19",
+  "template_id": "bafyreidd42e3blyrtj4uvj3hxepqsufcvpp5t3nu7avfbl5a3eaae3a4jm",
+  "applied_id": "bafyreia2qldqpjbl77sdbu6q2mry4qxs7nfcxxrldwzsu6h7vku3oj7cni",
   "template_read_path": "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_template_template-read.txt",
   "applied_read_path": "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_template_applied-read.txt",
   "success": true

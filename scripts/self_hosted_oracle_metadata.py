@@ -139,7 +139,7 @@ def main() -> None:
             },
         },
         "network_config": {
-            "path": str(network_config.relative_to(ROOT)),
+            "path": display_path(network_config),
             "sha256": sha256(network_config),
             "mtime": dt.datetime.fromtimestamp(
                 network_config.stat().st_mtime, dt.timezone.utc

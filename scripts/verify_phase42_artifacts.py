@@ -32,6 +32,37 @@ def read_text(path: pathlib.Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def validate_runtime_metadata(path: pathlib.Path) -> str:
+    label = "phase42 runtime metadata"
+    data = load_json(path)
+    require_keys(
+        data,
+        {
+            "captured_at",
+            "scenario",
+            "git",
+            "oracle_lock",
+            "official_cli",
+            "docker_any_sync_env",
+            "network_config",
+            "binaries",
+            "artifacts",
+        },
+        label,
+    )
+    if not data["official_cli"].get("repo_digest"):
+        raise SystemExit(f"[{label}] official_cli.repo_digest is empty")
+    if not data["network_config"].get("network_id"):
+        raise SystemExit(f"[{label}] network_config.network_id is empty")
+    if data["binaries"]["manytype_quic_ffi"].get("exists") is not True:
+        raise SystemExit(f"[{label}] manytype_quic_ffi binary is missing")
+    if data["binaries"]["official_client_probe"].get("exists") is not True:
+        raise SystemExit(f"[{label}] official_client_probe binary is missing")
+    if not isinstance(data.get("artifacts"), list) or len(data["artifacts"]) < 5:
+        raise SystemExit(f"[{label}] expected multiple artifact freshness records")
+    return f"[{label}] ok"
+
+
 def extract_markdown_section(text: str, heading: str, label: str) -> str:
     marker = f"## {heading}\n"
     if marker not in text:
@@ -359,6 +390,7 @@ def main() -> None:
 
     artifact_dir = pathlib.Path(args.artifact_dir)
     results = [
+        validate_runtime_metadata(artifact_dir / "runtime-metadata.json"),
         validate_manytype_to_official_blockupdate(
             artifact_dir / "manytype_to_official_blockupdate.json"
         ),

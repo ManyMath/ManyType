@@ -1,8 +1,8 @@
 {
-  "captured_at": "2026-04-12T22:11:48.031149Z",
+  "captured_at": "2026-04-13T02:12:40.073182Z",
   "scenario": "official-authored blockupdate observed by Manytype",
-  "object_id": "bafyreiasvagi5dj7o2gxlf5n6lrm7op56uweagl3ghvfx4pzftqxj5xjse",
-  "updated_text": "phase42-1776031458645671303 official block updated",
+  "object_id": "bafyreiaickxjhanqo547ery5cpjy7i5asib6nwiijar7wbnvkkak2ml2oy",
+  "updated_text": "phase42-1776045916711036514 official block updated",
   "edit_path": "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_blockupdate_edit.json",
   "read_path": "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_blockupdate_read.txt",
   "success": true

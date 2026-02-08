@@ -54,23 +54,11 @@ void main() {
 }
 
 Future<bool> _oraclePrereqsAvailable() async {
-  if (!await File('docker/any-sync/etc/client.yml').exists()) {
-    return false;
-  }
-  if (!await File('rust/target/release/libmanytype_quic_ffi.so').exists()) {
-    return false;
-  }
-  final dockerPs = await Process.run(
-    'docker',
-    ['ps', '--format', '{{.Names}}'],
+  final result = await Process.run(
+    'bash',
+    ['scripts/self_hosted_oracle_preflight.sh', '--quiet'],
   );
-  if (dockerPs.exitCode != 0) {
-    return false;
-  }
-  return dockerPs.stdout
-      .toString()
-      .split('\n')
-      .any((line) => line.trim() == 'any-sync-any-sync-filenode-1');
+  return result.exitCode == 0;
 }
 
 String _findRepoRoot() {

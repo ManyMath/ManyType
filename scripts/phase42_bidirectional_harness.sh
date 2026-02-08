@@ -11,9 +11,13 @@ set -euo pipefail
 #       blockupdate, status/tag, collection, file relation, template
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ANYTYPE_IMAGE="${ANYTYPE_IMAGE:-ghcr.io/anyproto/anytype-cli:latest}"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/self_hosted_oracle.sh"
+
+ANYTYPE_IMAGE="$ORACLE_ANYTYPE_IMAGE"
 NETWORK_CONFIG_SRC="$ROOT_DIR/docker/any-sync/etc/client.yml"
 ARTIFACT_DIR="$ROOT_DIR/test_vectors/phase42"
+RUNTIME_METADATA_PATH="$ARTIFACT_DIR/runtime-metadata.json"
 
 TMPDIR="$(mktemp -d)"
 MANYTYPE_HOME="$TMPDIR/manytype-home"
@@ -48,18 +52,13 @@ fail() {
 run_cli() {
   local home="$1"
   shift
-  HOME="$home" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" "$@"
+  oracle_run_cli "$home" "$@"
 }
 
 run_probe() {
   local action="$1"
   shift
-  "$PROBE_BIN" \
-    --config "$OFFICIAL_ROOT/config.json" \
-    --grpc-addr 127.0.0.1:31010 \
-    --timeout "${PROBE_TIMEOUT:-180s}" \
-    --action "$action" \
-    "$@"
+  oracle_run_probe_binary "$PROBE_BIN" "$OFFICIAL_ROOT" "$action" "$@"
 }
 
 extract_created_id() {
@@ -213,104 +212,63 @@ PY
   fail "$failure_message"
 }
 
-compose_ip() {
-  (cd "$ROOT_DIR/docker/any-sync" && docker compose ps -q "$1" | xargs docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
-}
-
 printf '=== Phase 42: bidirectional v2.5 verification ===\n\n'
 
-[[ -f "$NETWORK_CONFIG_SRC" ]] || fail "missing network config: $NETWORK_CONFIG_SRC"
-[[ -f "$ROOT_DIR/rust/target/release/libmanytype_quic_ffi.so" ]] || \
-  fail "missing FFI library: $ROOT_DIR/rust/target/release/libmanytype_quic_ffi.so"
-
+oracle_run_preflight
 mkdir -p "$ARTIFACT_DIR" "$MANYTYPE_HOME" "$OFFICIAL_ROOT"
 cp "$NETWORK_CONFIG_SRC" "$NETWORK_YML"
+rm -f "$RUNTIME_METADATA_PATH"
 
-export LD_LIBRARY_PATH="$ROOT_DIR/rust/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+oracle_export_runtime_env
 
 printf 'Building official probe binary...\n'
-(cd "$ROOT_DIR/scripts/official_client_grpc_probe" && go build -o "$PROBE_BIN" .)
+oracle_build_probe_binary "$PROBE_BIN"
 
 printf 'Starting official any-sync stack...\n'
-(cd "$ROOT_DIR/docker/any-sync" && docker compose up -d >/dev/null)
-
-ADD_HOST_ARGS=(
-  --add-host "any-sync-node-1:$(compose_ip any-sync-node-1)"
-  --add-host "any-sync-node-2:$(compose_ip any-sync-node-2)"
-  --add-host "any-sync-node-3:$(compose_ip any-sync-node-3)"
-  --add-host "any-sync-coordinator:$(compose_ip any-sync-coordinator)"
-  --add-host "any-sync-filenode:$(compose_ip any-sync-filenode)"
-  --add-host "any-sync-consensusnode:$(compose_ip any-sync-consensusnode)"
-)
+oracle_compose_up
+ADD_HOST_ARGS=()
+oracle_populate_add_host_args ADD_HOST_ARGS
 
 PREFIX="phase42-$(date +%s%N)"
 MANYTYPE_FILE_NAME="${PREFIX}-manytype.pdf"
 OFFICIAL_FILE_NAME="${PREFIX}-official.pdf"
 MANYTYPE_FILE_PATH="$TMPDIR/$MANYTYPE_FILE_NAME"
-OFFICIAL_FILE_PATH="$TMPDIR/$OFFICIAL_FILE_NAME"
+OFFICIAL_FILE_HOST_PATH="$OFFICIAL_ROOT/$OFFICIAL_FILE_NAME"
+OFFICIAL_FILE_PATH="/root/.anytype/$OFFICIAL_FILE_NAME"
 printf 'manytype-file-%s\n' "$PREFIX" >"$MANYTYPE_FILE_PATH"
-printf 'official-file-%s\n' "$PREFIX" >"$OFFICIAL_FILE_PATH"
+printf 'official-file-%s\n' "$PREFIX" >"$OFFICIAL_FILE_HOST_PATH"
 
 printf 'Preparing Manytype home...\n'
 run_cli "$MANYTYPE_HOME" init >/dev/null
 run_cli "$MANYTYPE_HOME" create "${PREFIX}-seed" >"$TMPDIR/manytype-seed-create.txt"
-HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/tool/phase31_seed_live_space.dart" \
-  --network-config "$NETWORK_CONFIG_SRC" \
-  --wait-seconds 10 >/dev/null
+oracle_seed_live_space "$MANYTYPE_HOME" "$NETWORK_CONFIG_SRC" 10
 run_cli "$MANYTYPE_HOME" --network-config "$NETWORK_CONFIG_SRC" sync >/dev/null
 
 printf 'Computing invite material...\n'
-SPACE_INFO_JSON="$(HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/tool/phase31_identity_dump.dart")"
-SPACE_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["space_id"])' <<<"$SPACE_INFO_JSON")"
-ACCOUNT_SEED_HEX="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["account_seed_hex"])' <<<"$SPACE_INFO_JSON")"
+SPACE_INFO_JSON="$(oracle_identity_json "$MANYTYPE_HOME")"
+SPACE_ID="$(printf '%s' "$SPACE_INFO_JSON" | oracle_json_stdin_field space_id)"
+oracle_generate_invite_from_home "$MANYTYPE_HOME" "$PREFIX" "manytype" "$INVITE_JSON"
+oracle_publish_invite "$MANYTYPE_HOME" "$NETWORK_YML" "$INVITE_JSON" "$PUBLISH_JSON" writer
 
-(cd "$ROOT_DIR/scripts/phase31_invite_gen" && go run . \
-  --account-seed-hex "$ACCOUNT_SEED_HEX" \
-  --space-id "$SPACE_ID" \
-  --space-name "$PREFIX" \
-  --creator-name "manytype") >"$INVITE_JSON"
-
-HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/tool/phase31_space_invite_publish.dart" \
-  --network-config "$NETWORK_YML" \
-  --invite-json "$INVITE_JSON" \
-  --permissions writer >"$PUBLISH_JSON"
-
-INVITE_URL="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["invite_url"])' "$PUBLISH_JSON")"
+INVITE_URL="$(oracle_invite_url_from_json "$PUBLISH_JSON")"
 NETWORK_ID="$(sed -n 's/^networkId: //p' "$NETWORK_YML" | head -1)"
 [[ -n "$INVITE_URL" ]] || fail 'could not parse invite url'
 [[ -n "$NETWORK_ID" ]] || fail 'could not parse networkId'
 
 printf 'Starting official anytype-cli service...\n'
-docker run -d --name "$CLI_NAME" --network host "${ADD_HOST_ARGS[@]}" \
-  -v "$OFFICIAL_ROOT:/root/.anytype" \
-  -v "$TMPDIR:$TMPDIR" \
-  -v "$NETWORK_YML:/etc/anytype/network.yml:ro" \
-  "$ANYTYPE_IMAGE" serve --verbose --listen-address 0.0.0.0:31010 >/dev/null
+oracle_start_cli_service "$CLI_NAME" "$OFFICIAL_ROOT" "$NETWORK_YML" ADD_HOST_ARGS
 
-if ! wait_for_grpc; then
+if ! oracle_wait_for_grpc; then
   printf 'FAIL: anytype-cli gRPC did not become ready on 127.0.0.1:31010\n' >&2
   docker logs "$CLI_NAME" | tail -200 >&2 || true
   exit 1
 fi
 
 printf 'Creating official account...\n'
-ACCOUNT_CREATE_OUTPUT="$(docker run --rm --network host "${ADD_HOST_ARGS[@]}" \
-  -v "$OFFICIAL_ROOT:/root/.anytype" \
-  -v "$NETWORK_YML:/etc/anytype/network.yml:ro" \
-  "$ANYTYPE_IMAGE" auth create phase42-bot \
-  --network-config /etc/anytype/network.yml \
-  --root-path /root/.anytype)"
-
-ACCOUNT_KEY="$(printf '%s\n' "$ACCOUNT_CREATE_OUTPUT" | grep -oE '[A-Za-z0-9+/]{20,}={0,2}' | head -1)"
+ACCOUNT_KEY="$(oracle_create_official_account "$OFFICIAL_ROOT" "$NETWORK_YML" ADD_HOST_ARGS phase42-bot)"
 [[ -n "$ACCOUNT_KEY" ]] || fail 'could not parse official account key'
 
-docker run --rm --entrypoint sh \
-  -v "$OFFICIAL_ROOT:/root/.anytype" \
-  "$ANYTYPE_IMAGE" -lc 'chmod 644 /root/.anytype/config.json' >/dev/null
-
-API_KEY_OUTPUT="$(docker run --rm --network host "${ADD_HOST_ARGS[@]}" \
-  -v "$OFFICIAL_ROOT:/root/.anytype" \
-  "$ANYTYPE_IMAGE" auth apikey create phase42-integration)"
+API_KEY_OUTPUT="$(oracle_create_official_api_key "$OFFICIAL_ROOT" "$NETWORK_YML" ADD_HOST_ARGS phase42-integration)"
 API_KEY="$(printf '%s\n' "$API_KEY_OUTPUT" | sed -n 's/^Key: //p' | tail -1)"
 [[ -n "$API_KEY" ]] || fail 'could not parse official API key'
 
@@ -900,9 +858,22 @@ OFFICIAL_FILE_RELATION_KEY="$(json_get "$TMPDIR/official-file-relation.json" rel
 run_probe object-create --space-id "$OFFICIAL_SPACE_ID" --name "$PREFIX official file target" >"$TMPDIR/official-file-target.json"
 OFFICIAL_FILE_TARGET_ID="$(json_get "$TMPDIR/official-file-target.json" object_id)"
 run_probe object-add-relation --space-id "$OFFICIAL_SPACE_ID" --object-id "$OFFICIAL_FILE_TARGET_ID" --relation-keys "$OFFICIAL_FILE_RELATION_KEY" >"$TMPDIR/official-file-add-relation.json"
-run_probe upload --space-id "$OFFICIAL_SPACE_ID" --file "$OFFICIAL_FILE_PATH" >"$TMPDIR/official-file-upload.json"
-OFFICIAL_FILE_OBJECT_ID="$(json_get "$TMPDIR/official-file-upload.json" object_id)"
-[[ -n "$OFFICIAL_FILE_OBJECT_ID" ]] || fail 'could not parse official file object id'
+UPLOAD_OK=0
+for attempt in $(seq 1 3); do
+  run_probe upload --space-id "$OFFICIAL_SPACE_ID" --file "$OFFICIAL_FILE_PATH" >"$TMPDIR/official-file-upload.json" || true
+  UPLOAD_ERR="$(json_get "$TMPDIR/official-file-upload.json" error_code 2>/dev/null || true)"
+  OFFICIAL_FILE_OBJECT_ID="$(json_get "$TMPDIR/official-file-upload.json" object_id 2>/dev/null || true)"
+  if [[ -z "$UPLOAD_ERR" && -n "$OFFICIAL_FILE_OBJECT_ID" ]]; then
+    UPLOAD_OK=1
+    break
+  fi
+  printf 'Retrying official file upload (attempt %s/3)...\n' "$attempt" >&2
+  sleep 5
+done
+if [[ "$UPLOAD_OK" != "1" ]]; then
+  cat "$TMPDIR/official-file-upload.json" >&2 || true
+  fail 'could not parse official file object id'
+fi
 
 run_probe object-set-detail --space-id "$OFFICIAL_SPACE_ID" --object-id "$OFFICIAL_FILE_TARGET_ID" --detail-key "$OFFICIAL_FILE_RELATION_KEY" --detail-kind string --detail-value "$OFFICIAL_FILE_OBJECT_ID" >"$TMPDIR/official-file-set-detail.json"
 
@@ -1015,5 +986,14 @@ artifact = {
 pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
 
+mapfile -t PHASE42_ARTIFACTS < <(find "$ARTIFACT_DIR" -maxdepth 1 -type f | sort)
+oracle_write_metadata \
+  "$RUNTIME_METADATA_PATH" \
+  "phase42 bidirectional verification against the self-hosted official stack" \
+  "$NETWORK_CONFIG_SRC" \
+  "$PROBE_BIN" \
+  "${PHASE42_ARTIFACTS[@]}"
+
 printf '\nArtifacts written under %s\n' "$ARTIFACT_DIR"
+printf 'Runtime metadata written to %s\n' "$RUNTIME_METADATA_PATH"
 printf 'phase42 harness: PASSED\n'

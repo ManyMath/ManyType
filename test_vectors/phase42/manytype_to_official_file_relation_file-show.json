@@ -3,7 +3,7 @@
   "block_count": 8,
   "block_kinds": [
     {
-      "id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa",
+      "id": "bafyreihbigzdgkrdmtaer5cik3k5b77k233wzkd4rr4u5hdpsdxriavp2e",
       "kind": "smartblock"
     },
     {
@@ -37,16 +37,13 @@
   ],
   "dataviews": [],
   "detail_sets": {
-    "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa": {
-      "id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa"
-    },
-    "bafyreibwlx7xcqk53bpv6v445f74d46t7zteyconn67jsxhg5q6j4c2mli": {
+    "bafyreidea2qm6c6tumlwshbuyrpiofptvbhlt6ylvy323fu74ra3jlrsmy": {
       "apiObjectKey": "id",
       "backlinks": [],
-      "createdDate": 1776031494,
+      "createdDate": 1776045953,
       "creator": "_anytype_profile",
       "description": "Link to itself. Used in databases",
-      "id": "bafyreibwlx7xcqk53bpv6v445f74d46t7zteyconn67jsxhg5q6j4c2mli",
+      "id": "bafyreidea2qm6c6tumlwshbuyrpiofptvbhlt6ylvy323fu74ra3jlrsmy",
       "internalFlags": [],
       "isHidden": true,
       "isReadonly": true,
@@ -64,24 +61,27 @@
       "relationReadonlyValue": false,
       "resolvedLayout": 5,
       "restrictions": [
+        5,
+        7,
+        10,
         3,
         2,
         4,
-        5,
-        10,
         1,
-        6,
-        7
+        6
       ],
       "revision": 0,
       "snippet": "",
       "sourceObject": "_brid",
-      "spaceId": "bafyreihd3itjlzevtvufzi6gvwfztegrwgoxrrnc5odmlgyqtsd2bdanim.2568jyjd9lnqv",
-      "syncDate": 1776031494,
+      "spaceId": "bafyreic5aduiuicyyipfgu4rm7qk2nmvn4aeeuvujjhgpxbky6z7j4dafa.35n77wkzoq1mm",
+      "syncDate": 1776045954,
       "syncError": 0,
       "syncStatus": 0,
-      "type": "bafyreicayh7b4dph3qjchalyxyh3sgllsftsjxyxqlemo5ed4237w6tene",
+      "type": "bafyreiel7wley4y7pcm4d3cn72vip2rk27lvt6r2mmll3pbgqzjekxgaju",
       "uniqueKey": "rel-id"
+    },
+    "bafyreihbigzdgkrdmtaer5cik3k5b77k233wzkd4rr4u5hdpsdxriavp2e": {
+      "id": "bafyreihbigzdgkrdmtaer5cik3k5b77k233wzkd4rr4u5hdpsdxriavp2e"
     }
   },
   "file_blocks": [
@@ -92,18 +92,18 @@
       "size": 0,
       "state": "Done",
       "style": "Auto",
-      "target_object_id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa",
+      "target_object_id": "bafyreihbigzdgkrdmtaer5cik3k5b77k233wzkd4rr4u5hdpsdxriavp2e",
       "type": "File"
     }
   ],
-  "object_id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa",
+  "object_id": "bafyreihbigzdgkrdmtaer5cik3k5b77k233wzkd4rr4u5hdpsdxriavp2e",
   "relation_links": [],
   "relations": [],
   "resolved_relations": {},
   "root_details": {
-    "id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa"
+    "id": "bafyreihbigzdgkrdmtaer5cik3k5b77k233wzkd4rr4u5hdpsdxriavp2e"
   },
-  "root_id": "bafyreia4o6m6zblb2lunkksvozovr677fb5fcqgkqfo6yyjjnb5ljivtoa",
+  "root_id": "bafyreihbigzdgkrdmtaer5cik3k5b77k233wzkd4rr4u5hdpsdxriavp2e",
   "smart_block_type": "FileObject",
   "smart_block_type_number": 533,
   "text_blocks": [

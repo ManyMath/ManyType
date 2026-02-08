@@ -14,6 +14,9 @@ set -euo pipefail
 #      confirm the relation still resolves to a human-readable file label.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/self_hosted_oracle.sh"
+
 NETWORK_CONFIG="$ROOT_DIR/docker/any-sync/etc/client.yml"
 TMPDIR="$(mktemp -d)"
 MANYTYPE_HOME="$TMPDIR/manytype-home"
@@ -43,7 +46,7 @@ fail() {
 run_cli() {
   local home="$1"
   shift
-  HOME="$home" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" "$@"
+  oracle_run_cli "$home" "$@"
 }
 
 extract_created_id() {
@@ -53,18 +56,12 @@ extract_created_id() {
 
 printf '=== Phase 40: file relation round-trip against docker any-sync ===\n\n'
 
-[[ -f "$NETWORK_CONFIG" ]] || fail "missing network config: $NETWORK_CONFIG"
-[[ -f "$ROOT_DIR/rust/target/release/libmanytype_quic_ffi.so" ]] || \
-  fail "missing FFI library: $ROOT_DIR/rust/target/release/libmanytype_quic_ffi.so"
-
-if ! docker ps --format '{{.Names}}' | grep -Fxq 'any-sync-any-sync-filenode-1'; then
-  fail 'docker any-sync stack is not running (missing any-sync-any-sync-filenode-1)'
-fi
+oracle_run_preflight
 
 mkdir -p "$ROOT_DIR/test_vectors/phase40" "$MANYTYPE_HOME" "$MANYTYPE_HOME_2"
 printf 'phase40-pdf-payload-%s\n' "$(date +%s%N)" >"$PAYLOAD_FILE"
 
-export LD_LIBRARY_PATH="$ROOT_DIR/rust/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+oracle_export_runtime_env
 
 printf 'Preparing HOME 1...\n'
 run_cli "$MANYTYPE_HOME" init >/dev/null
@@ -76,9 +73,7 @@ RELATION_ID="$(extract_created_id "$TMPDIR/create-relation.txt")"
 [[ -n "$RELATION_ID" ]] || fail 'could not parse relation object id'
 
 printf 'Seeding live space...\n'
-HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/tool/phase31_seed_live_space.dart" \
-  --network-config "$NETWORK_CONFIG" \
-  --wait-seconds 2 >/dev/null
+oracle_seed_live_space "$MANYTYPE_HOME" "$NETWORK_CONFIG" 2
 
 printf 'Creating target page...\n'
 run_cli "$MANYTYPE_HOME" create "Phase40 Target" >"$TMPDIR/create-target.txt"
@@ -120,6 +115,7 @@ ARTIFACT_SYNC="$ROOT_DIR/test_vectors/phase40/file-relation-roundtrip-sync.json"
 ARTIFACT_TRANSFER="$ROOT_DIR/test_vectors/phase40/file-relation-roundtrip-transfer.json"
 ARTIFACT_HOME1="$ROOT_DIR/test_vectors/phase40/read-home1.txt"
 ARTIFACT_HOME2="$ROOT_DIR/test_vectors/phase40/read-home2.txt"
+ARTIFACT_METADATA="$ROOT_DIR/test_vectors/phase40/runtime-metadata.json"
 
 cp "$SYNC_CAPTURE" "$ARTIFACT_SYNC"
 cp "$TRANSFER_CAPTURE" "$ARTIFACT_TRANSFER"
@@ -135,7 +131,8 @@ python3 - "$ARTIFACT_JSON" \
   "$ARTIFACT_SYNC" \
   "$ARTIFACT_TRANSFER" \
   "$ARTIFACT_HOME1" \
-  "$ARTIFACT_HOME2" <<'PY'
+  "$ARTIFACT_HOME2" \
+  "$ARTIFACT_METADATA" <<'PY'
 import datetime as dt
 import json
 import pathlib
@@ -152,6 +149,7 @@ import sys
     transfer_capture_path,
     read_home1_path,
     read_home2_path,
+    metadata_path,
 ) = sys.argv[1:]
 
 artifact = {
@@ -170,10 +168,22 @@ artifact = {
     "file_transfer_capture_path": transfer_capture_path,
     "read_home1_path": read_home1_path,
     "read_home2_path": read_home2_path,
+    "metadata_path": metadata_path,
     "success": True,
 }
 pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
+
+oracle_write_metadata \
+  "$ARTIFACT_METADATA" \
+  "phase40 file relation round-trip through the self-hosted official Any-Sync stack" \
+  "$NETWORK_CONFIG" \
+  "" \
+  "$ARTIFACT_JSON" \
+  "$ARTIFACT_SYNC" \
+  "$ARTIFACT_TRANSFER" \
+  "$ARTIFACT_HOME1" \
+  "$ARTIFACT_HOME2"
 
 printf '\nArtifacts written:\n'
 printf '  %s\n' "$ARTIFACT_JSON"
@@ -181,4 +191,5 @@ printf '  %s\n' "$ARTIFACT_SYNC"
 printf '  %s\n' "$ARTIFACT_TRANSFER"
 printf '  %s\n' "$ARTIFACT_HOME1"
 printf '  %s\n' "$ARTIFACT_HOME2"
+printf '  %s\n' "$ARTIFACT_METADATA"
 printf '\nphase40 harness: PASSED\n'

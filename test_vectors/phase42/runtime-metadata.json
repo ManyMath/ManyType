@@ -1,0 +1,279 @@
+{
+  "captured_at": "2026-04-13T02:13:37.376014Z",
+  "scenario": "phase42 bidirectional verification against the self-hosted official stack",
+  "git": {
+    "branch": "main",
+    "commit": "d7570571ca0dcacb63b5454d23d1e0192594822a",
+    "dirty": true
+  },
+  "oracle_lock": {
+    "path": "docker/any-sync/oracle.lock.env",
+    "any_sync_versions": {
+      "ANY_SYNC_NODE_VERSION": "v0.10.5",
+      "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+      "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+      "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+    },
+    "anytype_cli_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+    "anytype_cli_tag": "0.1.12",
+    "anytype_cli_revision": "e39d5453dc854ad2afc02cbec20553d970660e23",
+    "resolved_image": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff"
+  },
+  "official_cli": {
+    "image_id": "sha256:ecda0ec3d9d6badce0fee8add23221ba81fee5182f387e6a785d303bb8cc43a0",
+    "repo_digest": "ghcr.io/anyproto/anytype-cli@sha256:3ca0666d05c6e248faf80ec5c35d5417b5b2cafc89b1b27687cc60a9b9d724ff",
+    "version": "0.1.12",
+    "revision": "e39d5453dc854ad2afc02cbec20553d970660e23",
+    "source": "https://github.com/anyproto/anytype-cli"
+  },
+  "docker_any_sync_env": {
+    "path": "docker/any-sync/.env",
+    "versions": {
+      "ANY_SYNC_NODE_VERSION": "v0.10.5",
+      "ANY_SYNC_FILENODE_VERSION": "v0.10.6",
+      "ANY_SYNC_COORDINATOR_VERSION": "v0.8.4",
+      "ANY_SYNC_CONSENSUSNODE_VERSION": "v0.6.8"
+    }
+  },
+  "network_config": {
+    "path": "docker/any-sync/etc/client.yml",
+    "sha256": "daaae745745dce399c9a12c299202294cb627a33ec7a38e7068810cdbcf33880",
+    "mtime": "2026-04-13T02:05:14.487545Z",
+    "network_id": "N9MGQuoafndHijnEJmWGJesLSepBQLXZWqvjejDY4hP7mFt5"
+  },
+  "binaries": {
+    "manytype_quic_ffi": {
+      "path": "rust/target/release/libmanytype_quic_ffi.so",
+      "exists": true,
+      "sha256": "978fd645384ec251b2393975b3f8afd704ff11472248e8c1983c6ebe911e28f7",
+      "mtime": "2026-04-09T01:49:59.786552Z",
+      "size": 7089088
+    },
+    "manytype_server_debug": {
+      "path": "rust/target/debug/manytype_server",
+      "exists": true,
+      "sha256": "22ac879d948fea606d9848cdefb5392af0d62046ee57e95c2783aa304feed871",
+      "mtime": "2026-04-12T03:47:29.329039Z",
+      "size": 109081752
+    },
+    "official_client_probe": {
+      "path": "/tmp/tmp.ZQz7Lbeydm/official_client_grpc_probe",
+      "exists": true,
+      "sha256": "9878b155a278a2d512ccf9e7e4234b5caa7f953f17eb8e9d207fc80d5235701a",
+      "mtime": "2026-04-13T02:05:12.578501Z",
+      "size": 41558179
+    }
+  },
+  "artifacts": [
+    {
+      "path": "test_vectors/phase42/collection_debug_capture.json",
+      "sha256": "5ae2898d2d73c7c8924e5715cb651a309806b9c93c8966ac67152ffadbad616f",
+      "mtime": "2026-04-12T18:39:59.131522Z",
+      "size": 1726234
+    },
+    {
+      "path": "test_vectors/phase42/latest_phase42_capture.json",
+      "sha256": "1dde2d840fdba6ba619d60b286a21e2fd920a8e1c2c17b88e2c6e3a83c1db2d2",
+      "mtime": "2026-04-12T18:29:08.922735Z",
+      "size": 1882874
+    },
+    {
+      "path": "test_vectors/phase42/manytype_sync_capture.json",
+      "sha256": "605178ca65a212a21c074c7420c6be8a7fa76ffaae13d9e310b16955dba182b2",
+      "mtime": "2026-04-12T17:29:47.805671Z",
+      "size": 1467106
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_blockupdate.json",
+      "sha256": "0544305584a6e30daa6442ff84bdc301a525d9f88043bdb58b372fb96cb80ffa",
+      "mtime": "2026-04-13T02:07:19.459545Z",
+      "size": 787
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_blockupdate_checked-show.json",
+      "sha256": "cf9b2305f46f69bf9a34268df9ee607427c1c003a6ea653ca06e062f51fd22ef",
+      "mtime": "2026-04-13T02:06:33.101345Z",
+      "size": 42584
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_blockupdate_style-show.json",
+      "sha256": "4e4eb578d6f07f51b53abbcd1b089ecaff9b283d6ce24ca9706ae6421eb243b5",
+      "mtime": "2026-04-13T02:07:19.398399Z",
+      "size": 42584
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_collection-show.json",
+      "sha256": "673e579457213f749fb61ff4a5db02c21c5b0a70b88dd42634d4f51b1d1852b6",
+      "mtime": "2026-04-13T02:10:58.661340Z",
+      "size": 45680
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_collection.json",
+      "sha256": "7794d760b2b7fd2456f411a538fd1b8048419ea92a91250bc047d0ee1e64daa4",
+      "mtime": "2026-04-13T02:10:58.714384Z",
+      "size": 729
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_file_relation.json",
+      "sha256": "4abfc69ed5fe2095df8bcdc891fb08d1d74c7dde7d218f3d5d3b9e139ebaa7a8",
+      "mtime": "2026-04-13T02:11:36.667412Z",
+      "size": 770
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_file_relation_file-show.json",
+      "sha256": "b7bb2daaf2b1e0e912adf3041dcca1f9d0fabe71eaa8792b48790c6e55b3a710",
+      "mtime": "2026-04-13T02:11:36.610188Z",
+      "size": 2952
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_file_relation_target-show.json",
+      "sha256": "a864327769b8e68250138b32ed5e00438c4e570335a0c3d7d29cd7b6a90aed13",
+      "mtime": "2026-04-13T02:11:36.571187Z",
+      "size": 42514
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_status_tag.json",
+      "sha256": "e149a6a04d37090110a805a235c601f2a8e34ed342d76ffe72f6a365f4e3f522",
+      "mtime": "2026-04-13T02:08:53.705695Z",
+      "size": 1301
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_status_tag_status-option-show.json",
+      "sha256": "1a24df8d7a22fbd311518247a7836fd266abd4c255cc0f2f25df6b7a144585d5",
+      "mtime": "2026-04-13T02:08:53.554530Z",
+      "size": 44392
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_status_tag_tag-option-a-show.json",
+      "sha256": "7796c3a42ae2490df3c758da5d66868466c71f8b627cda5b589a6a51de7b3c04",
+      "mtime": "2026-04-13T02:08:53.608532Z",
+      "size": 42713
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_status_tag_tag-option-b-show.json",
+      "sha256": "e8edda90345002952aa816a19b80247accef09e5bf0dfed8e235cc7a1e2a7850",
+      "mtime": "2026-04-13T02:08:53.649533Z",
+      "size": 42712
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_status_tag_target-show.json",
+      "sha256": "2673b766f4a92de1a150379164b124a22e0367a9e3ff8bba877df37b6a423c5e",
+      "mtime": "2026-04-13T02:08:53.509529Z",
+      "size": 45534
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_template.json",
+      "sha256": "a37c7599e83ec9d43ff643a5f5dcac194b95b2ffdcb979549c6e97226555ca02",
+      "mtime": "2026-04-13T02:12:27.747556Z",
+      "size": 901
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_template_applied-show.json",
+      "sha256": "6770f72c40eaadd97d7089e08f1bb9ced421d9441effc1e1bd34758d1957f8f1",
+      "mtime": "2026-04-13T02:12:15.161047Z",
+      "size": 43707
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_template_list.txt",
+      "sha256": "6ba33d089b49c37ef76c0855fc89d0a14cd8590a389d79c323fbfabf9969b535",
+      "mtime": "2026-04-13T02:12:27.686327Z",
+      "size": 68235
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_template_template-show.json",
+      "sha256": "2a115f76ecf073ddf9cd3e37b71aa2521fb2620293cf0f288c3f32d40f27ea90",
+      "mtime": "2026-04-13T02:12:15.124047Z",
+      "size": 47673
+    },
+    {
+      "path": "test_vectors/phase42/official-join.json",
+      "sha256": "d44889e90707382e59121eea6019ff3acecef4845e8a1cd6181474bd30cf1377",
+      "mtime": "2026-04-13T02:05:53.578934Z",
+      "size": 336
+    },
+    {
+      "path": "test_vectors/phase42/official_collection_debug_capture.json",
+      "sha256": "c6a7c1048389cdf8e45b96a4dd588a6d79788e4f8b55ed545ee1b95f852cbfe8",
+      "mtime": "2026-04-12T18:43:01.343116Z",
+      "size": 1838259
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_blockupdate.json",
+      "sha256": "ee5de629fcc90e50a7a6130f8ed1c5328880e8b0d9751280116fbcb974701945",
+      "mtime": "2026-04-13T02:12:40.072602Z",
+      "size": 517
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_blockupdate_edit.json",
+      "sha256": "e032b7764810074cba4b88e5e0cd2bef400850511881e51055813cea7f784dd6",
+      "mtime": "2026-04-13T02:12:27.808329Z",
+      "size": 217
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_blockupdate_read.txt",
+      "sha256": "500c765db2e42f2337abb4674ce03e604f142e325a6af208a30f6a8d154d5526",
+      "mtime": "2026-04-13T02:12:40.013601Z",
+      "size": 69139
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_collection.json",
+      "sha256": "3607d6556778c41b819d5f3211e95709e1a1902b59921f243ac91a7898e495c3",
+      "mtime": "2026-04-13T02:13:02.614712Z",
+      "size": 728
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_collection_read.txt",
+      "sha256": "81163749dc70018e4aed633f12c2d984b485b52f2842a4bf13c1ec78e34a67d4",
+      "mtime": "2026-04-13T02:13:02.560102Z",
+      "size": 72928
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_file_relation.json",
+      "sha256": "0188bb5dc3231e5c0b9516e2dc28d04eb53907eeac46240c59bb73f7be1a600e",
+      "mtime": "2026-04-13T02:13:14.496779Z",
+      "size": 602
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_file_relation_read.txt",
+      "sha256": "ddbe28e7d2a4424aabef76e4efd932df58fcd9d457b469e5e673e67ce8ef2e6f",
+      "mtime": "2026-04-13T02:13:14.431366Z",
+      "size": 74252
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_status_tag.json",
+      "sha256": "87dca28e4eb543d5625a36ff02aedcef6e8154207c9587ac1cdf61f718e48826",
+      "mtime": "2026-04-13T02:12:51.068397Z",
+      "size": 829
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_status_tag_read.txt",
+      "sha256": "bbc4ce9237c462a6a5a8004b756831adb7e4f9d6d1af2474e4f9cdfcf25e2153",
+      "mtime": "2026-04-13T02:12:50.983845Z",
+      "size": 70602
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_template.json",
+      "sha256": "7ae76bd60690e193a9a9a08460f009f30476ff51576122d589252de59d78300c",
+      "mtime": "2026-04-13T02:13:37.331685Z",
+      "size": 671
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_template_applied-read.txt",
+      "sha256": "46c8af40b4ede7f17a94c0104479a488a2af0d3498a3bda7af7b953a769bdb14",
+      "mtime": "2026-04-13T02:13:37.263873Z",
+      "size": 76775
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_template_clone-read.txt",
+      "sha256": "cba0ce3b209d4964aeda371aa9f4ae17e27fe66257da3db306754237fb83ba43",
+      "mtime": "2026-04-12T20:59:18.813549Z",
+      "size": 34
+    },
+    {
+      "path": "test_vectors/phase42/official_to_manytype_template_template-read.txt",
+      "sha256": "a7cb901a70c16584cbec68e4a7e0f895e633a27803337d115286f81be6bddb30",
+      "mtime": "2026-04-13T02:13:25.959622Z",
+      "size": 75618
+    }
+  ]
+}

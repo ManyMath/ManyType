@@ -24,6 +24,34 @@ def require_keys(data: dict, keys: set[str], label: str) -> None:
         raise SystemExit(f"[{label}] missing keys: {missing}")
 
 
+def validate_runtime_metadata(path: pathlib.Path, label: str) -> str:
+    data = load_json(path)
+    require_keys(
+        data,
+        {
+            "captured_at",
+            "scenario",
+            "git",
+            "oracle_lock",
+            "official_cli",
+            "docker_any_sync_env",
+            "network_config",
+            "binaries",
+            "artifacts",
+        },
+        label,
+    )
+    if not data["official_cli"].get("repo_digest"):
+        raise SystemExit(f"[{label}] official_cli.repo_digest is empty")
+    if not data["network_config"].get("network_id"):
+        raise SystemExit(f"[{label}] network_config.network_id is empty")
+    if data["binaries"]["manytype_quic_ffi"].get("exists") is not True:
+        raise SystemExit(f"[{label}] manytype_quic_ffi binary is missing")
+    if not isinstance(data.get("artifacts"), list) or not data["artifacts"]:
+        raise SystemExit(f"[{label}] artifacts is empty")
+    return f"[{label}] ok"
+
+
 def validate_manytype_sync_artifact(path: pathlib.Path, label: str) -> str:
     data = load_json(path)
     require_keys(
@@ -126,6 +154,7 @@ def validate_roundtrip_artifact(path: pathlib.Path) -> str:
             "file_transfer_capture_path",
             "read_home1_path",
             "read_home2_path",
+            "metadata_path",
             "success",
         },
         label,
@@ -164,6 +193,7 @@ def validate_roundtrip_artifact(path: pathlib.Path) -> str:
         pathlib.Path(data["file_transfer_capture_path"]),
         f"{label} transfer",
     )
+    validate_runtime_metadata(pathlib.Path(data["metadata_path"]), f"{label} metadata")
 
     return f"[{label}] artifact ok ({data['target_object_id']})"
 

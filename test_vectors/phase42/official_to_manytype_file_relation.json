@@ -1,11 +1,11 @@
 {
-  "captured_at": "2026-04-12T22:12:22.135587Z",
+  "captured_at": "2026-04-13T02:13:14.496682Z",
   "scenario": "official-authored file relation observed by Manytype",
-  "relation_id": "bafyreidprrsy2dznf4bmmyua5xsvit3ogpbrnp2h7f7o37v3upivvbjf7q",
-  "relation_key": "69dc18ba4f41580001935bbb",
-  "target_id": "bafyreifnplllxi2wcjtkjwudlgt5oyebdgbehx4srkukew3nos32wptez4",
-  "file_object_id": "bafyreidl7xf5eb6pf7evecftnb36oxwadngkvdj3b2xdvdv2nfz2w5mi2e",
-  "file_name": "phase42-1776031458645671303-official.pdf",
+  "relation_id": "bafyreigwvkcdv3oqkteowlof26r3hyb37ygxtixiebc4fvaijmke4nl3ei",
+  "relation_key": "69dc512e4f41580001d20c17",
+  "target_id": "bafyreicknqk325w7e423t3cixkhyoxqwlqm2byeb5ijjlk4wprbxqdwv7y",
+  "file_object_id": "bafyreifwk35hncsrtq5tteflwj7utspgz5oczcbdrfx3eib3jlipmsdgdq",
+  "file_name": "phase42-1776045916711036514-official.pdf",
   "read_path": "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_file_relation_read.txt",
   "success": true
 }

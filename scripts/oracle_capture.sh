@@ -8,7 +8,11 @@ set -euo pipefail
 #   3. dart pub get in packages/manytype_cli/ (Dart deps resolved)
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/self_hosted_oracle.sh"
+
 ORACLE_ARTIFACT_PATH="${ORACLE_ARTIFACT_PATH:-$ROOT_DIR/test_vectors/oracle-capture-artifact.json}"
+ORACLE_METADATA_PATH="${ORACLE_METADATA_PATH:-$ROOT_DIR/test_vectors/oracle-capture-metadata.json}"
 TMPDIR="$(mktemp -d)"
 
 cleanup() {
@@ -16,7 +20,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-export LD_LIBRARY_PATH="$ROOT_DIR/rust/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+oracle_run_preflight
+oracle_export_runtime_env
 export ROOT_DIR
 export TMPDIR
 export ORACLE_ARTIFACT_PATH
@@ -34,6 +39,13 @@ if [[ ! -f "$ORACLE_ARTIFACT_PATH" ]]; then
   printf 'FAIL: oracle capture artifact was not written: %s\n' "$ORACLE_ARTIFACT_PATH" >&2
   exit 1
 fi
+
+oracle_write_metadata \
+  "$ORACLE_METADATA_PATH" \
+  "oracle preflight capture against the self-hosted official Any-Sync stack" \
+  "$ROOT_DIR/docker/any-sync/etc/client.yml" \
+  "" \
+  "$ORACLE_ARTIFACT_PATH"
 
 python3 - "$ORACLE_ARTIFACT_PATH" <<'PYEOF'
 import json
@@ -82,4 +94,5 @@ print(
 PYEOF
 
 printf 'Oracle capture artifact written to: %s\n' "$ORACLE_ARTIFACT_PATH"
+printf 'Oracle metadata written to: %s\n' "$ORACLE_METADATA_PATH"
 printf 'oracle_capture.sh: PASSED\n'

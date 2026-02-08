@@ -1,16 +1,16 @@
 {
-  "captured_at": "2026-04-12T22:08:03.920385Z",
+  "captured_at": "2026-04-13T02:08:53.705610Z",
   "scenario": "manytype-authored status/tag observed by official",
-  "status_relation_id": "bafyreigr5ljoncamlablscz4vt33qbz5viwt35lors3lswn62cb2y32yla",
-  "status_key": "phase42-1776031458645671303-manytype-status",
-  "status_option_id": "bafyreidjgkcf6cebhtvld2ta7von3oxvzk2eqi3psgzk6ptjyhmanjyl6i",
-  "tag_relation_id": "bafyreibbckcjmd3sdniild5pskygr6rurq27mmghlkhqhphfyddc3iya5a",
-  "tag_key": "phase42-1776031458645671303-manytype-tag",
+  "status_relation_id": "bafyreiho5k2ik5nmlass64c3devbx4e2poc6d6gbng2sugbsoksy5oiway",
+  "status_key": "phase42-1776045916711036514-manytype-status",
+  "status_option_id": "bafyreifq42t7u6a5hyu6kfh4wchepx4d6eoxjpmzi7kg3ld6jarqrog6mq",
+  "tag_relation_id": "bafyreidd3z4z27khc2m47rri3dwhwmbcykvzgjuxdf7eeo5ixpuffxbha4",
+  "tag_key": "phase42-1776045916711036514-manytype-tag",
   "tag_option_ids": [
-    "bafyreih5sywytri54jphh6zx2x4475jri7dbqe3z2ghp4ixgdeqffuhhtm",
-    "bafyreihwr7al54y5ygx6jrbjqjkst743umtdrcf4v2uzr4amptm6gef4ne"
+    "bafyreieksxmeraaiug2bo4j7pejq242jorz4xtufuombcaqav4flljmu4e",
+    "bafyreid6e6ej3jcktqejyyncojnc4smhqzwodnrulz3f32vvrpfcm7z55u"
   ],
-  "object_id": "bafyreihxy2a7osxas5kxtjrij6x5llunt3zvuin3wi3lwngeintxygrz2a",
+  "object_id": "bafyreibwtmjylpihcx7p2q32gpzkkpjecw6gp4zooxiapte6sdm46zlwhq",
   "target_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_status_tag_target-show.json",
   "status_option_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_status_tag_status-option-show.json",
   "tag_option_a_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_status_tag_tag-option-a-show.json",
