@@ -10,6 +10,7 @@ import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/models.dart' as models;
 import 'package:manytype_protocol/manytype_protocol.dart';
+import 'package:manytype_protocol/spacesync.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -80,6 +81,64 @@ void main() {
         ),
         isNull,
       );
+    });
+
+    test('marks deleted objects from pulled settings-tree deletes', () async {
+      const settingsObjectId = 'settings-obj';
+      const deletedObjectId = 'obj-1';
+      final spaceKey = Uint8List.fromList(List<int>.filled(32, 7));
+      final treeKey = await deriveTreeKey(spaceKey, settingsObjectId);
+
+      await db.insertObject(deletedObjectId, 'space-a');
+
+      final settingsDelete = SettingsData(
+        content: [
+          SpaceSettingsContent(
+            objectDelete: ObjectDelete(id: deletedObjectId),
+          ),
+        ],
+      );
+      final encryptedDelete = await aesGcmEncrypt(
+        treeKey,
+        Uint8List.fromList(settingsDelete.writeToBuffer()),
+      );
+      final deleteChange = RawTreeChange(
+        payload: Uint8List.fromList(
+          TreeChange(
+            changesData: encryptedDelete,
+            readKeyId: 'acl-head',
+          ).writeToBuffer(),
+        ),
+      );
+      final settingsRoot = RawTreeChange(
+        payload: Uint8List.fromList(
+          RootChange(
+            spaceId: 'space-a',
+            changeType: 'anytype.space',
+          ).writeToBuffer(),
+        ),
+      );
+      final extraParentlessChange = RawTreeChange(
+        payload: Uint8List.fromList(
+          TreeChange(
+            changesData: Uint8List.fromList([1, 2, 3]),
+          ).writeToBuffer(),
+        ),
+      );
+
+      await storePulledChanges(
+        db,
+        'space-a',
+        settingsObjectId,
+        _lengthPrefixed([
+          Uint8List.fromList(extraParentlessChange.writeToBuffer()),
+          Uint8List.fromList(settingsRoot.writeToBuffer()),
+          Uint8List.fromList(deleteChange.writeToBuffer()),
+        ]),
+        spaceKey: spaceKey,
+      );
+
+      expect(await db.isObjectDeleted(deletedObjectId), isTrue);
     });
 
     test('read command surfaces attachment metadata separately from bytes',
