@@ -1,0 +1,36 @@
+{
+  "captured_at": "2026-04-15T05:18:06.520041Z",
+  "scenario": "phase63 manytype to official self-hosted collection compatibility",
+  "accepted_slice": {
+    "object_family": "collection smartblocks only",
+    "mutation_family": "collection membership and ordering via StoreSliceUpdate",
+    "container_object_type": "collection",
+    "included_operations": [
+      "create-collection",
+      "collection-add",
+      "collection-remove",
+      "collection-move-front"
+    ],
+    "proof_mode": "official-object-show-and-restart-reread"
+  },
+  "truth_surface": "self-hosted-official",
+  "manytype_to_official": {
+    "collection_id": "bafyreih5m4bepds2uk6wy6iwc5xwtkg634ewypp5ey26a2and4ge6xdchi",
+    "member_ids_created": [
+      "bafyreif7nhpvzmtawn2nvqskp6zlbxoketkg7rfh6jzqrdbxee5cdikcu4",
+      "bafyreiftysaejjvdyfb5b364ttz3s3flwyb6vsj2ixv4kc57gbdchilok4",
+      "bafyreihcruzlvsvyx2d3d7avn7y3uzhfduiyh6jgw6t5ngb7lujz2yggai"
+    ],
+    "expected_member_ids": [
+      "bafyreihcruzlvsvyx2d3d7avn7y3uzhfduiyh6jgw6t5ngb7lujz2yggai",
+      "bafyreiftysaejjvdyfb5b364ttz3s3flwyb6vsj2ixv4kc57gbdchilok4"
+    ],
+    "show_path": "/home/user/src/manytype/manytype/test_vectors/phase63/manytype_to_official_collection-show.json",
+    "restart_show_path": "/home/user/src/manytype/manytype/test_vectors/phase63/manytype_to_official_collection_restart-show.json",
+    "add_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase63/manytype_to_official_collection-add-sync.json",
+    "move_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase63/manytype_to_official_collection-move-sync.json",
+    "remove_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase63/manytype_to_official_collection-remove-sync.json"
+  },
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase63/runtime-metadata.json",
+  "success": true
+}

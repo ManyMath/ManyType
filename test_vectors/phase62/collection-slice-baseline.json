@@ -1,0 +1,118 @@
+{
+  "captured_at": "2026-04-15T05:11:47.482418Z",
+  "scenario": "phase62 compound tranche freeze and oracle baseline",
+  "accepted_slice": {
+    "object_family": "collection smartblocks only",
+    "mutation_family": "collection membership and ordering via StoreSliceUpdate",
+    "container_object_type": "collection",
+    "included_operations": [
+      "create-collection",
+      "collection-add",
+      "collection-remove",
+      "collection-move-front"
+    ],
+    "manytype_to_official_truth_surface": {
+      "label": "self-hosted-official",
+      "proof_mode": "official-object-show-and-restart-reread"
+    },
+    "official_to_manytype_truth_surface": {
+      "label": "manytype_server",
+      "proof_mode": "official-object-show-then-manytype-read-and-fresh-home-reread"
+    },
+    "excluded_variants": [
+      "AccountDelete parity",
+      "status/tag option flows",
+      "file-as-relation binding",
+      "template creation or application",
+      "set-only source filters",
+      "dataview configuration beyond bounded member membership/order",
+      "live network.anytype.io milestone gating",
+      "operator CLI expansion beyond the existing stable slice",
+      "broader object families"
+    ]
+  },
+  "candidate_ranking": [
+    {
+      "candidate": "collection-membership",
+      "decision": "accepted",
+      "rank": 1,
+      "rationale": "Already grounded locally and bidirectionally, with bounded add/remove/reorder operations and explicit final-state observation through official dataview order and Manytype member rereads.",
+      "evidence_paths": [
+        "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_a_create_add.json",
+        "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_b_remove.json",
+        "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_c_move.json",
+        "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_collection.json",
+        "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_collection.json"
+      ]
+    },
+    {
+      "candidate": "status-tag-option-flows",
+      "decision": "deferred",
+      "rank": 2,
+      "rationale": "Grounded, but the final-state contract spans relation parents, option objects, and resolution semantics, which is a broader first compound tranche than bounded collection membership/order.",
+      "evidence_paths": [
+        "/home/user/src/manytype/manytype/test_vectors/phase38/status-create.json",
+        "/home/user/src/manytype/manytype/test_vectors/phase38/tag-multi.json"
+      ]
+    },
+    {
+      "candidate": "template-application",
+      "decision": "deferred",
+      "rank": 3,
+      "rationale": "Grounded, but the accepted surface would need to freeze type creation, template state, and applied-clone semantics together, which is a larger semantic boundary than collection membership/order.",
+      "evidence_paths": [
+        "/home/user/src/manytype/manytype/.planning/milestones/v2.5-phases/41-templates-creation-and-application/41-VERIFICATION.md",
+        "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_template.json",
+        "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_template.json"
+      ]
+    },
+    {
+      "candidate": "file-as-relation-binding",
+      "decision": "deferred",
+      "rank": 4,
+      "rationale": "Grounded, but it drags in file-node and payload-transfer semantics beyond the narrow collection contract accepted for v2.10.",
+      "evidence_paths": [
+        "/home/user/src/manytype/manytype/test_vectors/phase40/file-relation-roundtrip.json"
+      ]
+    }
+  ],
+  "scope_decisions": {
+    "account_delete": {
+      "decision": "defer",
+      "reason": "Self-hosted official AccountDelete does not provide a bounded replayable acceptance path from the current Manytype truth surface, while manytype_server still reports stub success without observable lifecycle movement.",
+      "official_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase50/oracle_account_delete.json",
+      "local_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase50/local_account_delete.json",
+      "source_phase50_path": "/home/user/src/manytype/manytype/test_vectors/phase50/teardown-truth-baseline.json"
+    },
+    "official_to_manytype_server_requirement": {
+      "official_post_mutation_reread_required": true,
+      "fresh_home_reread_required": true,
+      "diagnostics_requirement": "Trace collection object, head, and observable member-order drift through repo-owned diagnostics instead of raw server logs alone."
+    }
+  },
+  "oracle_baseline": {
+    "preflight": "passed",
+    "network_config_path": "/home/user/src/manytype/manytype/docker/any-sync/etc/client.yml",
+    "client_yml_ready": true,
+    "exercised_binaries": [
+      "rust/target/release/libmanytype_quic_ffi.so",
+      "rust/target/debug/manytype_server",
+      "scripts/official_client_grpc_probe"
+    ]
+  },
+  "evidence_references": {
+    "phase39_add_path": "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_a_create_add.json",
+    "phase39_remove_path": "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_b_remove.json",
+    "phase39_move_path": "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_c_move.json",
+    "phase42_manytype_to_official_collection_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_collection.json",
+    "phase42_official_to_manytype_collection_path": "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_collection.json",
+    "phase38_status_path": "/home/user/src/manytype/manytype/test_vectors/phase38/status-create.json",
+    "phase38_tag_path": "/home/user/src/manytype/manytype/test_vectors/phase38/tag-multi.json",
+    "phase40_file_relation_path": "/home/user/src/manytype/manytype/test_vectors/phase40/file-relation-roundtrip.json",
+    "phase41_template_verification_path": "/home/user/src/manytype/manytype/.planning/milestones/v2.5-phases/41-templates-creation-and-application/41-VERIFICATION.md",
+    "phase42_manytype_to_official_template_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_template.json",
+    "phase42_official_to_manytype_template_path": "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_template.json"
+  },
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase62/runtime-metadata.json",
+  "success": true
+}

@@ -1,0 +1,44 @@
+{
+  "captured_at": "2026-04-15T05:20:11.299350Z",
+  "scenario": "phase64 official to manytype collection compatibility",
+  "accepted_slice": {
+    "object_family": "collection smartblocks only",
+    "mutation_family": "collection membership and ordering via StoreSliceUpdate",
+    "container_object_type": "collection",
+    "included_operations": [
+      "create-collection",
+      "collection-add",
+      "collection-remove",
+      "collection-move-front"
+    ],
+    "official_post_mutation_reread_required": true,
+    "manytype_observation_retry_required": true
+  },
+  "truth_surface": "manytype_server",
+  "official_to_manytype": {
+    "collection_id": "bafyreidqs3dyyk4o6lrzm4yktnqn5uaqsofti4lumu74uoxyrxjvcxy5he",
+    "member_ids_created": [
+      "bafyreihoqqiamqysn22ymsak3qorpwb5gylblhqhzs2xod6tulrdkquwe4",
+      "bafyreih53v5t6xjvaqctfobfy34imodrxdfgzut2z7546k67n5yn46n6ne",
+      "bafyreiddhjcmwcpsdzhzfvst634jdkve2jsq2avtfoxaqleql2r5pkf34y"
+    ],
+    "expected_member_ids": [
+      "bafyreiddhjcmwcpsdzhzfvst634jdkve2jsq2avtfoxaqleql2r5pkf34y",
+      "bafyreih53v5t6xjvaqctfobfy34imodrxdfgzut2z7546k67n5yn46n6ne"
+    ],
+    "official_convert_path": "/home/user/src/manytype/manytype/test_vectors/phase64/official_to_manytype_convert.json",
+    "official_add_path": "/home/user/src/manytype/manytype/test_vectors/phase64/official_to_manytype_add.json",
+    "official_sort_path": "/home/user/src/manytype/manytype/test_vectors/phase64/official_to_manytype_sort.json",
+    "official_remove_path": "/home/user/src/manytype/manytype/test_vectors/phase64/official_to_manytype_remove.json",
+    "official_show_path": "/home/user/src/manytype/manytype/test_vectors/phase64/official_to_manytype_show.json",
+    "read_path": "/home/user/src/manytype/manytype/test_vectors/phase64/official_to_manytype_read.txt",
+    "reopen_read_path": "/home/user/src/manytype/manytype/test_vectors/phase64/official_to_manytype_reopen-read.txt",
+    "main_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase64/official_to_manytype_main-sync.json",
+    "reopen_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase64/official_to_manytype_reopen-sync.json",
+    "diagnostics_path": "/home/user/src/manytype/manytype/test_vectors/phase64/official_to_manytype_diagnostics.json",
+    "main_observed_attempt": 4,
+    "reopen_observed_attempt": 1
+  },
+  "metadata_path": "/home/user/src/manytype/manytype/test_vectors/phase64/runtime-metadata.json",
+  "success": true
+}
