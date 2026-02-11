@@ -1,15 +1,15 @@
 {
-  "captured_at": "2026-04-12T22:01:55.590009Z",
+  "captured_at": "2026-04-16T22:14:09.619129Z",
   "scenario": "phase39 scenario B - remove 1 member",
-  "collection_id": "bafyreifgcjcwir4moab4a5stb7f6r2xmt6wjjuamabibk5pyf3dtwdwdsm",
-  "removed_member_id": "bafyreihjqjmozqmlpal3quqzrfpwllymtgdq7m3lfjqdveoqaefg3u5uq4",
+  "collection_id": "bafyreibqb4w42odpfmqq5sebcvmnlmf2ehwtwxi3u3o3jsadlwptld6b4e",
+  "removed_member_id": "bafyreigg2bofx2nzc6hhrxo3e3rflgdeykiqvd7ka6z36t4byxobhwlz54",
   "expected_members_ordered": [
-    "bafyreiekwdaebkuv3apld224fpi4anvpmc3s54kvcegukw7arwe7ovbrw4",
-    "bafyreiav2hbvcw5kljuedveg3mnplzblwxohme5m5bhflgscxnja6ykkfu"
+    "bafyreighis27l2qtfdik6l6sxidx4pwcksws64ftw7bs3nc7lcej2qo664",
+    "bafyreiewapnblqqlr2sbr4rk6edfesenlo7s5mjpnvpsr3exk7xuxcrg3m"
   ],
   "expected_member_lines": [
-    "- Member 3 (bafyreiekwdaebkuv3apld224fpi4anvpmc3s54kvcegukw7arwe7ovbrw4)",
-    "- Member 1 (bafyreiav2hbvcw5kljuedveg3mnplzblwxohme5m5bhflgscxnja6ykkfu)"
+    "- Member 3 (bafyreighis27l2qtfdik6l6sxidx4pwcksws64ftw7bs3nc7lcej2qo664)",
+    "- Member 1 (bafyreiewapnblqqlr2sbr4rk6edfesenlo7s5mjpnvpsr3exk7xuxcrg3m)"
   ],
   "observed_on_home2": true,
   "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_b_remove-sync.json",
