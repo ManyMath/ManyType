@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:libcompress/libcompress.dart';
+import 'package:libcompress/src/snappy/snappy_codec.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/manytype_protocol.dart'
     show RawTreeChange, TreeChange;

@@ -1,23 +1,23 @@
 {
-  "captured_at": "2026-04-16T22:15:10.642316Z",
+  "captured_at": "2026-04-16T22:26:23.334764Z",
   "scenario": "phase38 scenario C - tag regression: full-replace -> remove -> add",
   "relation_key": "taglist",
-  "target_object_id": "bafyreidhosk4zn4hfp46fn6vzarkbn6r5p2rnexcxxk5pbt3tcn5jqvibi",
+  "target_object_id": "bafyreidrn43nuzk2kpav3nxmzuuereqbryojwnktbq6rvdyoq4zkj2tn4y",
   "expected_initial_tag_ids": [
-    "bafyreibomucrhxjqgyv2adcoq2hhe3jdb2qrnh6vyff2rmypyh4d6grbfi",
-    "bafyreibue6nhy3lr4ysjk34dxpvsgpqcqozk2o6kuw3aecgwak5btx6zwe",
-    "bafyreifiepus7qksktibztr5kqnxsequd7svcg6htz6zxidypncu37syke"
+    "bafyreibidknw6dcy4grvvlmie2xauh3woqsttu4ccho7orullltznez6xy",
+    "bafyreiaqlz5qr4t3d5ej2wenjdh5wrkhijsbvfysbohho42df2maqawuqu",
+    "bafyreiegngvkokyo7piwejnom26ljagmizpbzrzzinycld4uh55wmr7h7e"
   ],
   "expected_removed": [
-    "bafyreibue6nhy3lr4ysjk34dxpvsgpqcqozk2o6kuw3aecgwak5btx6zwe"
+    "bafyreiaqlz5qr4t3d5ej2wenjdh5wrkhijsbvfysbohho42df2maqawuqu"
   ],
   "expected_added": [
-    "bafyreihq6femcxkooge6w75sj3dqtjntjjft3jlkqyzu4aoerra6nucvzq"
+    "bafyreidedlgbwwuhrrf6tdd63pag3hxrred45xqsj7kn34hnqzi3the3eu"
   ],
   "expected_final_tag_ids": [
-    "bafyreibomucrhxjqgyv2adcoq2hhe3jdb2qrnh6vyff2rmypyh4d6grbfi",
-    "bafyreifiepus7qksktibztr5kqnxsequd7svcg6htz6zxidypncu37syke",
-    "bafyreihq6femcxkooge6w75sj3dqtjntjjft3jlkqyzu4aoerra6nucvzq"
+    "bafyreibidknw6dcy4grvvlmie2xauh3woqsttu4ccho7orullltznez6xy",
+    "bafyreiegngvkokyo7piwejnom26ljagmizpbzrzzinycld4uh55wmr7h7e",
+    "bafyreidedlgbwwuhrrf6tdd63pag3hxrred45xqsj7kn34hnqzi3the3eu"
   ],
   "expected_final_tag_names_ordered": [
     "Alpha",
