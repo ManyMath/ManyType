@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
 import 'package:manytype_protocol/manytype_protocol.dart'
     show RawTreeChange, RootChange, TreeChange;
+
+import 'database_connection.dart';
 
 part 'database.g.dart';
 
@@ -69,7 +69,7 @@ class CachedBlobs extends Table {
 @DriftDatabase(
     tables: [Objects, Changes, StoreEntries, AttachmentRefs, CachedBlobs])
 class ManytypeDatabase extends _$ManytypeDatabase {
-  ManytypeDatabase(String dbPath) : super(_openConnection(dbPath));
+  ManytypeDatabase(String dbPath) : super(openConnectionForApp(dbPath));
 
   ManytypeDatabase.forTesting(super.executor);
 
@@ -282,16 +282,6 @@ class ManytypeDatabase extends _$ManytypeDatabase {
         .getSingleOrNull();
     return obj?.isDeleted ?? false;
   }
-}
-
-LazyDatabase _openConnection(String dbPath) {
-  return LazyDatabase(() async {
-    final dir = Directory(dbPath).parent;
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    return NativeDatabase.createInBackground(File(dbPath));
-  });
 }
 
 List<Change> _orderChangesForReplay(List<Change> rows) {
