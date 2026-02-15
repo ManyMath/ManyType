@@ -1,21 +1,21 @@
 {
-  "captured_at": "2026-04-17T08:04:05.415935Z",
+  "captured_at": "2026-04-17T08:17:28.919311Z",
   "scenario": "phase39 scenario A - create collection + add 3 members",
-  "collection_id": "bafyreihhq2w35ches4hdrh37s4cl5rhmlxg5crg5xnwpktck2vqpfv44za",
+  "collection_id": "bafyreighhw6lkj5wr6jl6txewkrmzs77gfbtlvahsgm74iomarncjnyqxu",
   "member_ids_created": [
-    "bafyreig6uhhkjhpabc7xlfckblxdqdmfu2lzyrchhvkenzjhoj33qvhxp4",
-    "bafyreid2retwh3uszbjsfbchowdesouwnehoeizvtri76l52n46knaabnu",
-    "bafyreibrogy3ahf3pdvm7utuy7h47eim5v7mjquyzqt6izqicgieydjsge"
+    "bafyreibudchwj37lxqp3gibrewthp6p4cntfz3pd3xlp5u6heqs2pezifa",
+    "bafyreigujq4xrcfli7svqiu76jlsjxs4xv3g4ntucbdmumiaguwhd45blu",
+    "bafyreia2xdd2lr4hw7pb76tvnuzzj7kgpqtxcwe2nklaij723lshniudqa"
   ],
   "expected_members_ordered": [
-    "bafyreibrogy3ahf3pdvm7utuy7h47eim5v7mjquyzqt6izqicgieydjsge",
-    "bafyreid2retwh3uszbjsfbchowdesouwnehoeizvtri76l52n46knaabnu",
-    "bafyreig6uhhkjhpabc7xlfckblxdqdmfu2lzyrchhvkenzjhoj33qvhxp4"
+    "bafyreia2xdd2lr4hw7pb76tvnuzzj7kgpqtxcwe2nklaij723lshniudqa",
+    "bafyreigujq4xrcfli7svqiu76jlsjxs4xv3g4ntucbdmumiaguwhd45blu",
+    "bafyreibudchwj37lxqp3gibrewthp6p4cntfz3pd3xlp5u6heqs2pezifa"
   ],
   "expected_member_lines": [
-    "- Member 3 (bafyreibrogy3ahf3pdvm7utuy7h47eim5v7mjquyzqt6izqicgieydjsge)",
-    "- Member 2 (bafyreid2retwh3uszbjsfbchowdesouwnehoeizvtri76l52n46knaabnu)",
-    "- Member 1 (bafyreig6uhhkjhpabc7xlfckblxdqdmfu2lzyrchhvkenzjhoj33qvhxp4)"
+    "- Member 3 (bafyreia2xdd2lr4hw7pb76tvnuzzj7kgpqtxcwe2nklaij723lshniudqa)",
+    "- Member 2 (bafyreigujq4xrcfli7svqiu76jlsjxs4xv3g4ntucbdmumiaguwhd45blu)",
+    "- Member 1 (bafyreibudchwj37lxqp3gibrewthp6p4cntfz3pd3xlp5u6heqs2pezifa)"
   ],
   "observed_on_home2": true,
   "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_a_create_add-sync.json",

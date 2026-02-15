@@ -1,23 +1,23 @@
 {
-  "captured_at": "2026-04-17T08:05:27.034240Z",
+  "captured_at": "2026-04-17T08:19:24.314028Z",
   "scenario": "phase38 scenario C - tag regression: full-replace -> remove -> add",
   "relation_key": "taglist",
-  "target_object_id": "bafyreialrwpelrammzotqbqlo7jbv6i6rsftciwdb3fabun5aqdsfd52le",
+  "target_object_id": "bafyreiasqhcli2vp6w3cr2bym4xtbc4m2bbff7by35xxrukwqglfprunsu",
   "expected_initial_tag_ids": [
-    "bafyreidbouormhopsml6jpaxb22ovqlsapxi4zd5ysqotfcy6d3kewbv2m",
-    "bafyreidmu65ls27nplp3laekigpqx6qg6uk7kyiyeghot3hxd6xvcxeqma",
-    "bafyreiarzrzt7folp4qtiirhon7viuknwh2ii3rabytsfls2bqu37qizc4"
+    "bafyreihjj6sipfoulxvrtm3s36ximdwf5cr7yv7t6a7sw67c3y3ezbep5i",
+    "bafyreicdy3gtf5omae3flmilvtsjrct36qtzypprhz2aaczjxvlikkbz6m",
+    "bafyreibw76xlvg3yhxqh34ytwhaz3ijsyiib5legiewejvrklaeqaaij3i"
   ],
   "expected_removed": [
-    "bafyreidmu65ls27nplp3laekigpqx6qg6uk7kyiyeghot3hxd6xvcxeqma"
+    "bafyreicdy3gtf5omae3flmilvtsjrct36qtzypprhz2aaczjxvlikkbz6m"
   ],
   "expected_added": [
-    "bafyreifmp42zvb632e6rsbwtu6mogwueum4f4lihr4eljksychdtzahoue"
+    "bafyreiehacklnv76fefllsazi4x4aaaar5wtqzz644lm47cbdx2iustcaq"
   ],
   "expected_final_tag_ids": [
-    "bafyreidbouormhopsml6jpaxb22ovqlsapxi4zd5ysqotfcy6d3kewbv2m",
-    "bafyreiarzrzt7folp4qtiirhon7viuknwh2ii3rabytsfls2bqu37qizc4",
-    "bafyreifmp42zvb632e6rsbwtu6mogwueum4f4lihr4eljksychdtzahoue"
+    "bafyreihjj6sipfoulxvrtm3s36ximdwf5cr7yv7t6a7sw67c3y3ezbep5i",
+    "bafyreibw76xlvg3yhxqh34ytwhaz3ijsyiib5legiewejvrklaeqaaij3i",
+    "bafyreiehacklnv76fefllsazi4x4aaaar5wtqzz644lm47cbdx2iustcaq"
   ],
   "expected_final_tag_names_ordered": [
     "Alpha",
