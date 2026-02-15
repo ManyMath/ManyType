@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:drift/native.dart';
+import 'package:manytype_cli/src/store/database_opener.dart';
 import 'package:manytype_cli/src/commands/file_transfer.dart';
 import 'package:manytype_cli/src/store/database.dart';
 import 'package:manytype_core/manytype_core.dart';
@@ -136,7 +136,7 @@ void main() {
     });
 
     test('open caches first download and reuses cache on reopen', () async {
-      final db = ManytypeDatabase.forTesting(NativeDatabase.memory());
+      final db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
       addTearDown(db.close);
 
       final payload = Uint8List.fromList('hello anytype'.codeUnits);

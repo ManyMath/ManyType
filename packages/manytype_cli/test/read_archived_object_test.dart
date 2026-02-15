@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNotNull;
-import 'package:drift/native.dart';
+import 'package:manytype_cli/src/store/database_opener.dart';
 import 'package:manytype_cli/src/commands/create.dart';
 import 'package:manytype_cli/src/commands/edit.dart';
 import 'package:manytype_cli/src/commands/list.dart';
@@ -21,8 +21,8 @@ void main() {
   late ManytypeDatabase db;
   late CliConfig config;
 
-  setUp(() {
-    db = ManytypeDatabase.forTesting(NativeDatabase.memory());
+  setUp(() async {
+    db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
     config =
         CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
   });

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:drift/native.dart';
+import 'package:manytype_cli/src/store/database_opener.dart';
 import 'package:manytype_cli/src/commands/read.dart';
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/sync_service.dart';
@@ -16,8 +16,8 @@ import 'package:test/test.dart';
 void main() {
   late ManytypeDatabase db;
 
-  setUp(() {
-    db = ManytypeDatabase.forTesting(NativeDatabase.memory());
+  setUp(() async {
+    db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
   });
 
   tearDown(() async {
