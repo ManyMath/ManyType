@@ -1,16 +1,16 @@
 {
-  "captured_at": "2026-04-17T07:56:02.435727Z",
+  "captured_at": "2026-04-17T08:04:52.786630Z",
   "scenario": "phase39 scenario C - move Member 3 after Member 1",
-  "collection_id": "bafyreienmw4i4whujru7gyrozgz3ft44pca3gbqjrghtcgzuig7mwhm55i",
-  "moved_member_id": "bafyreiarz7lp5hcrmj5rrdlnfve4g4i6keam7tmer4ulkkylodkrm6zdny",
-  "after_member_id": "bafyreiaj4ee4vib4u22hbilzm26hncztfyzsmx5edr5stcx56c7hzbtpdm",
+  "collection_id": "bafyreihhq2w35ches4hdrh37s4cl5rhmlxg5crg5xnwpktck2vqpfv44za",
+  "moved_member_id": "bafyreibrogy3ahf3pdvm7utuy7h47eim5v7mjquyzqt6izqicgieydjsge",
+  "after_member_id": "bafyreig6uhhkjhpabc7xlfckblxdqdmfu2lzyrchhvkenzjhoj33qvhxp4",
   "expected_members_ordered": [
-    "bafyreiaj4ee4vib4u22hbilzm26hncztfyzsmx5edr5stcx56c7hzbtpdm",
-    "bafyreiarz7lp5hcrmj5rrdlnfve4g4i6keam7tmer4ulkkylodkrm6zdny"
+    "bafyreig6uhhkjhpabc7xlfckblxdqdmfu2lzyrchhvkenzjhoj33qvhxp4",
+    "bafyreibrogy3ahf3pdvm7utuy7h47eim5v7mjquyzqt6izqicgieydjsge"
   ],
   "expected_member_lines": [
-    "- Member 1 (bafyreiaj4ee4vib4u22hbilzm26hncztfyzsmx5edr5stcx56c7hzbtpdm)",
-    "- Member 3 (bafyreiarz7lp5hcrmj5rrdlnfve4g4i6keam7tmer4ulkkylodkrm6zdny)"
+    "- Member 1 (bafyreig6uhhkjhpabc7xlfckblxdqdmfu2lzyrchhvkenzjhoj33qvhxp4)",
+    "- Member 3 (bafyreibrogy3ahf3pdvm7utuy7h47eim5v7mjquyzqt6izqicgieydjsge)"
   ],
   "observed_on_home2": true,
   "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_c_move-sync.json",

@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-04-15T15:52:50.437967Z",
+  "captured_at": "2026-04-17T08:03:33.019946Z",
   "scenario": "phase40 file relation round-trip through the self-hosted official Any-Sync stack",
   "git": {
     "branch": "main",
-    "commit": "20f584c68bd88614d707a87f0d0c0f8b44ecb03b",
+    "commit": "9f3238c8192d96b20833fbe355d4a0566cdc7496",
     "dirty": true
   },
   "oracle_lock": {
@@ -64,32 +64,32 @@
   "artifacts": [
     {
       "path": "test_vectors/phase40/file-relation-roundtrip.json",
-      "sha256": "c397c7628989b188d82360f1c9973a1517d902c9f14e25601f5b9ef1ecb1a7ac",
-      "mtime": "2026-04-15T15:52:50.401540Z",
+      "sha256": "4c69f4565e9bd4ec8f102b5094fa3f5b80b20e6847a46f5c574f4010996a3256",
+      "mtime": "2026-04-17T08:03:32.913271Z",
       "size": 1241
     },
     {
       "path": "test_vectors/phase40/file-relation-roundtrip-sync.json",
-      "sha256": "0128401b8447818c28878e8d42b6b860afe4dab49d0fe7a2f02312a6f6e828be",
-      "mtime": "2026-04-15T15:52:50.386048Z",
+      "sha256": "180bb333135c737f0f80a3a04988419ada60ca1d500430b13f6beb8d32b56721",
+      "mtime": "2026-04-17T08:03:32.889523Z",
       "size": 136610
     },
     {
       "path": "test_vectors/phase40/file-relation-roundtrip-transfer.json",
-      "sha256": "1ac2d05bd8659f1bbfd0ef748c019b2d821c78f8eead3c23daaf1effda58dd85",
-      "mtime": "2026-04-15T15:52:50.387061Z",
+      "sha256": "fd7af68a3224627c684778736fd4bce2103cc21bf8953f2c512a96c723809d52",
+      "mtime": "2026-04-17T08:03:32.890615Z",
       "size": 3272
     },
     {
       "path": "test_vectors/phase40/read-home1.txt",
-      "sha256": "1e51785a3f00a952a57ea63c36071c86dcdcd074de7adf744995f029cb888e59",
-      "mtime": "2026-04-15T15:52:50.387977Z",
+      "sha256": "12adb1e949248bfefe9a76e250b7f3a19f6818e11d603dd4c99f6c5374856878",
+      "mtime": "2026-04-17T08:03:32.891599Z",
       "size": 505
     },
     {
       "path": "test_vectors/phase40/read-home2.txt",
-      "sha256": "1e51785a3f00a952a57ea63c36071c86dcdcd074de7adf744995f029cb888e59",
-      "mtime": "2026-04-15T15:52:50.388816Z",
+      "sha256": "12adb1e949248bfefe9a76e250b7f3a19f6818e11d603dd4c99f6c5374856878",
+      "mtime": "2026-04-17T08:03:32.892311Z",
       "size": 505
     }
   ]
