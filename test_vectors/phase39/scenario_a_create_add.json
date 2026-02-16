@@ -1,21 +1,21 @@
 {
-  "captured_at": "2026-04-17T08:39:56.891894Z",
+  "captured_at": "2026-04-17T08:49:30.686687Z",
   "scenario": "phase39 scenario A - create collection + add 3 members",
-  "collection_id": "bafyreidtf3wqjp6ctdqxwmdb5mzmtkhzs7ucretsehw5oe7aqnwwps3hte",
+  "collection_id": "bafyreiecikc53rdqs2ov53hjcw5dp2akcojx54efxev3o4bqxjimunoohi",
   "member_ids_created": [
-    "bafyreibya4ejjfvdglpmhq6j63l24d5fo77lhkbjvcedogj22lvlofp3qy",
-    "bafyreib2o4w36l2libg24zq5lfgrzds3lnjo7c3fahbzkl5spsvcwxkrky",
-    "bafyreide53xtlgrr3hii3aujmunjwddo4vrwp3lvjzytx3kqmrdhb7gpwm"
+    "bafyreih4c7w6k45muvap5avbmghnr2ldkpb5fmwdavuljodyufwhsyvypi",
+    "bafyreiaolbgwxumrdealwrdirx6oflnwamkaqgdb63b2lnup65pazdh7w4",
+    "bafyreid2doil2zvm27apzufcmvcheabdedgk7tvuq2fu2zlsx7zf4n3s4q"
   ],
   "expected_members_ordered": [
-    "bafyreide53xtlgrr3hii3aujmunjwddo4vrwp3lvjzytx3kqmrdhb7gpwm",
-    "bafyreib2o4w36l2libg24zq5lfgrzds3lnjo7c3fahbzkl5spsvcwxkrky",
-    "bafyreibya4ejjfvdglpmhq6j63l24d5fo77lhkbjvcedogj22lvlofp3qy"
+    "bafyreid2doil2zvm27apzufcmvcheabdedgk7tvuq2fu2zlsx7zf4n3s4q",
+    "bafyreiaolbgwxumrdealwrdirx6oflnwamkaqgdb63b2lnup65pazdh7w4",
+    "bafyreih4c7w6k45muvap5avbmghnr2ldkpb5fmwdavuljodyufwhsyvypi"
   ],
   "expected_member_lines": [
-    "- Member 3 (bafyreide53xtlgrr3hii3aujmunjwddo4vrwp3lvjzytx3kqmrdhb7gpwm)",
-    "- Member 2 (bafyreib2o4w36l2libg24zq5lfgrzds3lnjo7c3fahbzkl5spsvcwxkrky)",
-    "- Member 1 (bafyreibya4ejjfvdglpmhq6j63l24d5fo77lhkbjvcedogj22lvlofp3qy)"
+    "- Member 3 (bafyreid2doil2zvm27apzufcmvcheabdedgk7tvuq2fu2zlsx7zf4n3s4q)",
+    "- Member 2 (bafyreiaolbgwxumrdealwrdirx6oflnwamkaqgdb63b2lnup65pazdh7w4)",
+    "- Member 1 (bafyreih4c7w6k45muvap5avbmghnr2ldkpb5fmwdavuljodyufwhsyvypi)"
   ],
   "observed_on_home2": true,
   "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_a_create_add-sync.json",
