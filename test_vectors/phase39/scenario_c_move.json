@@ -1,16 +1,16 @@
 {
-  "captured_at": "2026-04-17T08:50:17.099914Z",
+  "captured_at": "2026-04-17T08:57:07.389558Z",
   "scenario": "phase39 scenario C - move Member 3 after Member 1",
-  "collection_id": "bafyreiecikc53rdqs2ov53hjcw5dp2akcojx54efxev3o4bqxjimunoohi",
-  "moved_member_id": "bafyreid2doil2zvm27apzufcmvcheabdedgk7tvuq2fu2zlsx7zf4n3s4q",
-  "after_member_id": "bafyreih4c7w6k45muvap5avbmghnr2ldkpb5fmwdavuljodyufwhsyvypi",
+  "collection_id": "bafyreigndnd44yciulkntxzuxvyg63abbn7xw6fbgfhbzf7criqzllfzb4",
+  "moved_member_id": "bafyreih5inyikmpkoadgjp6xwzzfas6ev7sbudyklrttftcyhtlgudrh3q",
+  "after_member_id": "bafyreibd5d5nlk43z3ytsjpisucahsyhwwoqsmnisgakeu4mqx3tiogj6e",
   "expected_members_ordered": [
-    "bafyreih4c7w6k45muvap5avbmghnr2ldkpb5fmwdavuljodyufwhsyvypi",
-    "bafyreid2doil2zvm27apzufcmvcheabdedgk7tvuq2fu2zlsx7zf4n3s4q"
+    "bafyreibd5d5nlk43z3ytsjpisucahsyhwwoqsmnisgakeu4mqx3tiogj6e",
+    "bafyreih5inyikmpkoadgjp6xwzzfas6ev7sbudyklrttftcyhtlgudrh3q"
   ],
   "expected_member_lines": [
-    "- Member 1 (bafyreih4c7w6k45muvap5avbmghnr2ldkpb5fmwdavuljodyufwhsyvypi)",
-    "- Member 3 (bafyreid2doil2zvm27apzufcmvcheabdedgk7tvuq2fu2zlsx7zf4n3s4q)"
+    "- Member 1 (bafyreibd5d5nlk43z3ytsjpisucahsyhwwoqsmnisgakeu4mqx3tiogj6e)",
+    "- Member 3 (bafyreih5inyikmpkoadgjp6xwzzfas6ev7sbudyklrttftcyhtlgudrh3q)"
   ],
   "observed_on_home2": true,
   "manytype_sync_capture_path": "/home/user/src/manytype/manytype/test_vectors/phase39/scenario_c_move-sync.json",

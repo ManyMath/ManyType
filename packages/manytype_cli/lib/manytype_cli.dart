@@ -1,2 +1,17 @@
 /// Manytype CLI application library.
 library manytype_cli;
+
+export 'src/acl_codec.dart';
+export 'src/acl_sync_service.dart';
+export 'src/collection_keys.dart';
+export 'src/config.dart';
+export 'src/consensus_service.dart';
+export 'src/coordinator_service.dart';
+export 'src/head_sync_client.dart';
+export 'src/identity.dart';
+export 'src/network_config.dart';
+export 'src/peer_id.dart';
+export 'src/space_pull_bootstrap.dart';
+export 'src/store/database.dart';
+
+void main() {}
