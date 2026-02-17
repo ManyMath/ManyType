@@ -1,13 +1,13 @@
 {
-  "captured_at": "2026-04-17T08:56:42.840298Z",
+  "captured_at": "2026-04-17T09:09:37.583540Z",
   "scenario": "phase38 scenario B - tag relation 3-option full replace + two-home read resolution",
   "relation_key": "taglist",
-  "target_object_id": "bafyreihkmz5y5utabjhupq7hndenxyvciefiht6nwnxg63dbqcysumhvby",
+  "target_object_id": "bafyreifymctkq57ibnmzvwa6mgolxtiwvczndq4mrqzu7rflqtkgsc2wyu",
   "expected_tag_count": 3,
   "expected_tag_ids": [
-    "bafyreic2zjurp3qn4zbry4wufy6he57kas7uztlqpvl2xx3jpmzckhq2n4",
-    "bafyreif2hyx7yoieppd2cpycrg5pdsxtv4la7teevcn77efvb5lqpyffsu",
-    "bafyreicfgvmzv5nzl776rwq6u7psb76xewmpjlmzbp4nijhey4byzwwdfq"
+    "bafyreifvekbkry7x3k3wckjx225h6wqqdshwd4f4sxzcf7hnbqlwirknyi",
+    "bafyreihherx4fj5wrrmc5nv3n45oa6fk4e43bs44krj3cunb4sv4c7ffxa",
+    "bafyreiddqu2ddomv5uibpagengm3r3qtxshn43sjvb7uqufcjzff4z5bay"
   ],
   "expected_tag_names_ordered": [
     "Alpha",
