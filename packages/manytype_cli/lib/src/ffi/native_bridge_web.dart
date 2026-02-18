@@ -1,0 +1,42 @@
+import 'dart:typed_data';
+
+class NativeBridge {
+  NativeBridge() {
+    throw UnsupportedError('NativeBridge is not available on web');
+  }
+
+  int connect(String addr, Uint8List peerSeed, Uint8List accountSeed) {
+    throw UnsupportedError('NativeBridge.connect is not available on web');
+  }
+
+  Uint8List invoke(int handleId, String method, Uint8List payload) {
+    throw UnsupportedError('NativeBridge.invoke is not available on web');
+  }
+
+  Uint8List syncObject(
+    int handleId,
+    String spaceId,
+    String objectId,
+    Uint8List payload,
+  ) {
+    throw UnsupportedError('NativeBridge.syncObject is not available on web');
+  }
+
+  Uint8List requestObject(
+    int handleId,
+    String spaceId,
+    String objectId,
+    Uint8List payload,
+  ) {
+    throw UnsupportedError(
+        'NativeBridge.requestObject is not available on web');
+  }
+
+  Uint8List syncStore(int handleId, Uint8List messagesData) {
+    throw UnsupportedError('NativeBridge.syncStore is not available on web');
+  }
+
+  void freeHandle(int handleId) {
+    throw UnsupportedError('NativeBridge.freeHandle is not available on web');
+  }
+}
