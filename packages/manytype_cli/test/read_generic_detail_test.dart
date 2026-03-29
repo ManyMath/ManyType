@@ -12,12 +12,18 @@ import 'package:manytype_cli/src/sync_service.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:test/test.dart';
 
+import 'web/web_db_test_helpers.dart';
+
 void main() {
   const testMnemonic =
       'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 
   late ManytypeDatabase db;
   late CliConfig config;
+
+  setUpAll(() async {
+    await configureWebTestDatabaseAssets();
+  });
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());

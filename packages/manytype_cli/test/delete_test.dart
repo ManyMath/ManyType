@@ -17,12 +17,18 @@ import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart'
     show Value;
 import 'package:test/test.dart';
 
+import 'web/web_db_test_helpers.dart';
+
 void main() {
   const testMnemonic =
       'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 
   late ManytypeDatabase db;
   late CliConfig config;
+
+  setUpAll(() async {
+    await configureWebTestDatabaseAssets();
+  });
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());

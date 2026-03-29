@@ -15,12 +15,18 @@ import 'package:manytype_protocol/events.dart';
 import 'package:manytype_protocol/manytype_protocol.dart'
     show RawTreeChange, TreeChange;
 
+import 'web/web_db_test_helpers.dart';
+
 void main() {
   const testMnemonic =
       'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 
   late ManytypeDatabase db;
   late CliConfig config;
+
+  setUpAll(() async {
+    await configureWebTestDatabaseAssets();
+  });
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());

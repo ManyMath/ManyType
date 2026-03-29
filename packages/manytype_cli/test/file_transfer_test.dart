@@ -7,7 +7,13 @@ import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/filesync.dart' as filesync;
 import 'package:test/test.dart';
 
+import 'web/web_db_test_helpers.dart';
+
 void main() {
+  setUpAll(() async {
+    await configureWebTestDatabaseAssets();
+  });
+
   group('file transfer helpers', () {
     test(
         'upload skips BlockPush when BlocksCheck reports the blob exists in space',

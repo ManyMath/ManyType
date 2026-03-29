@@ -13,8 +13,14 @@ import 'package:manytype_protocol/manytype_protocol.dart';
 import 'package:manytype_protocol/spacesync.dart';
 import 'package:test/test.dart';
 
+import 'web/web_db_test_helpers.dart';
+
 void main() {
   late ManytypeDatabase db;
+
+  setUpAll(() async {
+    await configureWebTestDatabaseAssets();
+  });
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());

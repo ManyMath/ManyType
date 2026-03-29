@@ -12,6 +12,8 @@ import 'package:manytype_cli/src/store/database.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/models.dart';
 
+import 'web/web_db_test_helpers.dart';
+
 void main() {
   // Known BIP-39 test vector mnemonic
   const testMnemonic =
@@ -19,6 +21,10 @@ void main() {
 
   late ManytypeDatabase db;
   late CliConfig config;
+
+  setUpAll(() async {
+    await configureWebTestDatabaseAssets();
+  });
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());

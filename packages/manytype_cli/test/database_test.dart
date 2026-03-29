@@ -2,8 +2,14 @@ import 'package:manytype_cli/src/store/database_opener.dart';
 import 'package:test/test.dart';
 import 'package:manytype_cli/src/store/database.dart';
 
+import 'web/web_db_test_helpers.dart';
+
 void main() {
   late ManytypeDatabase db;
+
+  setUpAll(() async {
+    await configureWebTestDatabaseAssets();
+  });
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
@@ -96,13 +102,17 @@ void main() {
       expect(spaceHeads['obj-2'], ['cid-2']);
     });
 
-    test('insertOrReplace updates existing object', () async {
+    test('insertObject ignores re-seeing an existing object id', () async {
+      // insertObject uses insertOrIgnore (not insertOrReplace) so that sync
+      // frequently re-seeing an existing object row does not clear
+      // soft-delete state already applied locally. See delete_test.dart
+      // 're-seeing an object row does not clear an existing delete flag'.
       await db.insertObject('obj-1', 'space-a');
       await db.insertObject('obj-1', 'space-b');
 
       final all = await db.getAllObjects();
       expect(all.length, 1);
-      expect(all.first.spaceId, 'space-b');
+      expect(all.first.spaceId, 'space-a');
     });
 
     test('upserts and retrieves store entries by space', () async {
