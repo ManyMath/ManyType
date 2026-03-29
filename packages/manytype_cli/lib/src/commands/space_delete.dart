@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/coordinator_service.dart';
@@ -190,7 +189,7 @@ Future<int> spaceDeleteCommand({
   };
 
   if (jsonOutput) {
-    stdout.writeln(const JsonEncoder.withIndent('  ').convert(report));
+    print(const JsonEncoder.withIndent('  ').convert(report));
   } else {
     _printHumanReport(report, assessment);
   }
@@ -430,14 +429,14 @@ void _printHumanReport(
   final reconnectStatus =
       _statusLabel(reconnect['status'] as Map<String, Object?>);
 
-  stdout.writeln('Command: space-delete');
-  stdout.writeln('Space: ${report['space_id']}');
-  stdout.writeln('Accepted truth surface: $kAcceptedSpaceDeleteTruthSurface');
-  stdout.writeln('Proof mode: $kAcceptedSpaceDeleteProofMode');
-  stdout.writeln(
+  print('Command: space-delete');
+  print('Space: ${report['space_id']}');
+  print('Accepted truth surface: $kAcceptedSpaceDeleteTruthSurface');
+  print('Proof mode: $kAcceptedSpaceDeleteProofMode');
+  print(
       'Observed status path: $initialPre -> $initialPost -> $reconnectStatus');
-  stdout.writeln('Outcome: ${assessment.outcome}');
-  stdout.writeln('Reason: ${assessment.reason}');
+  print('Outcome: ${assessment.outcome}');
+  print('Reason: ${assessment.reason}');
 }
 
 String _statusLabel(Map<String, Object?> statusResult) {

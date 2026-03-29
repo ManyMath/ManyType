@@ -1,9 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:fixnum/fixnum.dart';
-import 'package:libcompress/libcompress.dart';
+import 'package:libcompress/src/snappy/snappy_codec.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/coordinator.dart';
@@ -17,6 +16,7 @@ import 'network_config.dart';
 import 'store/database.dart';
 import 'ffi/native_bridge.dart';
 import 'head_sync_client.dart';
+import 'sync_capture.dart';
 
 final _snappy = SnappyCodec();
 
@@ -1347,7 +1347,7 @@ class _SessionCapture {
     required String? networkConfigPath,
   }) {
     return _SessionCapture._(
-      path: Platform.environment['MANYTYPE_SYNC_CAPTURE_PATH'],
+      path: readSyncCapturePath(),
       coordinatorAddress: coordinatorAddress,
       officialInteropMode: officialInteropMode,
       spaceId: spaceId,
@@ -1419,10 +1419,8 @@ class _SessionCapture {
 
   Future<void> flush() async {
     if (!_enabled) return;
-    final file = File(path!);
-    await file.parent.create(recursive: true);
     final encoder = JsonEncoder.withIndent('  ');
-    await file.writeAsString('${encoder.convert(_payload)}\n');
+    await writeSyncCaptureFile(path!, '${encoder.convert(_payload)}\n');
   }
 }
 
