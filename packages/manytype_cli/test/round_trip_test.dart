@@ -1,3 +1,7 @@
+@TestOn('vm') // shells out via Process.run to the bin/manytype.dart CLI binary against a live server
+@Tags(['round_trip'])
+library;
+
 // Integration test for the full create -> sync -> read round-trip.
 //
 // Run with: dart test packages/manytype_cli/test/round_trip_test.dart
@@ -6,9 +10,10 @@
 //   2. FFI library built: cargo build -p manytype_quic_ffi --release
 //   3. LD_LIBRARY_PATH includes rust/target/release/
 
-@Tags(['round_trip'])
 import 'dart:io';
 import 'package:test/test.dart';
+
+import 'support/repo_root.dart';
 
 void main() {
   late Directory tempDir;
@@ -22,7 +27,7 @@ void main() {
   });
 
   test('create -> sync -> read round-trip', () async {
-    final repoRoot = Directory.current.path;
+    final repoRoot = findRepoRoot();
     final env = {
       ...Platform.environment,
       'HOME': tempDir.path,

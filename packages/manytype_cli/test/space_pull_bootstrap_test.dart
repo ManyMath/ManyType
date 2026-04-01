@@ -1,3 +1,4 @@
+@TestOn('vm') // FFI live-server space pull/bootstrap against the docker oracle stack
 @Tags(['round_trip'])
 library;
 
@@ -14,6 +15,8 @@ import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 import 'package:manytype_protocol/spacesync.dart';
 import 'package:test/test.dart';
+
+import 'support/repo_root.dart';
 
 import 'support/phase17_test_helpers.dart';
 
@@ -135,7 +138,7 @@ void main() {
 
   test('oracle accepts an AclRequestJoin record through AclSyncService',
       () async {
-    final repoRoot = Directory.current.path;
+    final repoRoot = findRepoRoot();
     final networkConfigPath = '$repoRoot/docker/any-sync/etc/client.yml';
     final networkConfig = await loadNetworkConfig(networkConfigPath);
     final coordinatorAddress =

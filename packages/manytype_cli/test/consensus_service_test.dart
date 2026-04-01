@@ -1,3 +1,4 @@
+@TestOn('vm') // connects to a live consensus node via NativeBridge (FFI) — no web transport
 @Tags(['round_trip'])
 library;
 

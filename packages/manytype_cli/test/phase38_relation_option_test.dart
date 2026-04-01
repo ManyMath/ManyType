@@ -1,3 +1,6 @@
+@TestOn('vm') // shells out via Process.run to a cargo-build + bash harness against a live server (see file header)
+library;
+
 // Phase 38: STRelationOption trees + status/tag relation values
 //
 // Dart test per 38-CONTEXT D-17. Shells out to the two-home harness at

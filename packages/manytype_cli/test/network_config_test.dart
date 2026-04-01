@@ -1,3 +1,6 @@
+@TestOn('vm') // reads/writes real client.yml files via dart:io Directory/File — no browser filesystem equivalent used here
+library;
+
 import 'dart:io';
 
 import 'package:manytype_cli/src/network_config.dart';

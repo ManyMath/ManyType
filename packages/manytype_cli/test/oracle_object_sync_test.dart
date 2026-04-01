@@ -1,3 +1,4 @@
+@TestOn('vm') // shells out via Process.start to a bash harness + live docker oracle stack
 @Tags(['round_trip'])
 library;
 
@@ -13,6 +14,8 @@ import 'package:manytype_protocol/manytype_protocol.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import 'support/repo_root.dart';
+
 void main() {
   late Directory tempHome;
 
@@ -26,7 +29,7 @@ void main() {
   });
 
   test('official object sync capture: push new object to oracle', () async {
-    final repoRoot = Directory.current.path;
+    final repoRoot = findRepoRoot();
     final manytypeDir = Directory(p.join(tempHome.path, '.manytype'));
     await manytypeDir.create(recursive: true);
     final configPath = p.join(manytypeDir.path, 'config.toml');

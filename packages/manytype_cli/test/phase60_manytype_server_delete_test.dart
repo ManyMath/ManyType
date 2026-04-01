@@ -1,3 +1,6 @@
+@TestOn('vm') // shells out via Process.run to a cargo-build + bash harness against a live server (see file header)
+library;
+
 import 'dart:io';
 
 import 'package:test/test.dart';

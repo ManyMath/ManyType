@@ -1,3 +1,6 @@
+@TestOn('vm') // shells out via Process.run to spawn a real manytype_server subprocess
+library;
+
 import 'dart:async';
 import 'dart:io';
 

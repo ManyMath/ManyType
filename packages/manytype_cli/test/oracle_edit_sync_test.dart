@@ -1,3 +1,4 @@
+@TestOn('vm') // shells out via Process.run to a bash harness + live docker oracle stack
 @Tags(['round_trip'])
 library;
 
@@ -13,6 +14,8 @@ import 'package:manytype_cli/src/store/database.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+
+import 'support/repo_root.dart';
 
 void main() {
   late Directory homeA;
@@ -31,7 +34,7 @@ void main() {
   test(
     'oracle edit: push edit is visible after reconnect',
     () async {
-      final repoRoot = Directory.current.path;
+      final repoRoot = findRepoRoot();
       final networkConfigPath =
           p.join(repoRoot, 'docker', 'any-sync', 'etc', 'client.yml');
       final manytypeDirA = Directory(p.join(homeA.path, '.manytype'));
@@ -168,7 +171,7 @@ void main() {
   test(
     'oracle edit: repeated sync after edit is idempotent',
     () async {
-      final repoRoot = Directory.current.path;
+      final repoRoot = findRepoRoot();
       final networkConfigPath =
           p.join(repoRoot, 'docker', 'any-sync', 'etc', 'client.yml');
       final manytypeDirA = Directory(p.join(homeA.path, '.manytype'));
@@ -285,7 +288,7 @@ void main() {
   test(
     'oracle edit: head divergence is rejected on double push',
     () async {
-      final repoRoot = Directory.current.path;
+      final repoRoot = findRepoRoot();
       final networkConfigPath =
           p.join(repoRoot, 'docker', 'any-sync', 'etc', 'client.yml');
       final manytypeDirA = Directory(p.join(homeA.path, '.manytype'));

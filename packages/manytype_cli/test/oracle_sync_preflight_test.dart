@@ -1,3 +1,4 @@
+@TestOn('vm') // shells out via Process.run to a bash harness + live docker oracle stack
 @Tags(['round_trip'])
 library;
 
@@ -12,6 +13,8 @@ import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/coordinator.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+
+import 'support/repo_root.dart';
 
 void main() {
   late Directory tempHome;
@@ -28,7 +31,7 @@ void main() {
   test(
       'seeded oracle sync captures SpaceStatusCheck before SpaceSign and SpacePush',
       () async {
-    final repoRoot = Directory.current.path;
+    final repoRoot = findRepoRoot();
     final manytypeDir = Directory(p.join(tempHome.path, '.manytype'));
     await manytypeDir.create(recursive: true);
     final configPath = p.join(manytypeDir.path, 'config.toml');

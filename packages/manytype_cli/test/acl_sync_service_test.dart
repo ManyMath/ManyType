@@ -1,3 +1,6 @@
+@TestOn('vm') // connects to a live coordinator/sync node via NativeBridge (FFI) — no web transport
+library;
+
 import 'dart:io';
 import 'dart:typed_data';
 

@@ -1,3 +1,6 @@
+@TestOn('vm') // shells out via Process.run to a bash harness + live docker oracle stack
+library;
+
 import 'dart:io';
 
 import 'package:test/test.dart';

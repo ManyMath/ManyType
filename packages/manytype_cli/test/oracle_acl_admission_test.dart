@@ -1,7 +1,7 @@
+@TestOn('vm') // FFI live-server ACL admission against the docker oracle stack
 @Tags(['round_trip'])
 library;
 
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:manytype_cli/src/acl_sync_service.dart';
@@ -13,13 +13,15 @@ import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 import 'package:test/test.dart';
 
+import 'support/repo_root.dart';
+
 import 'support/phase17_test_helpers.dart';
 
 void main() {
   test(
     'oracle accepts first owner AclAccountInvite without space limit reached',
     () async {
-      final repoRoot = Directory.current.path;
+      final repoRoot = findRepoRoot();
       final networkConfigPath = '$repoRoot/docker/any-sync/etc/client.yml';
       final networkConfig = await loadNetworkConfig(networkConfigPath);
       final coordinatorAddress =
@@ -79,7 +81,7 @@ void main() {
   test(
     'oracle accepts AclAccountRequestJoin from a joiner after invite',
     () async {
-      final repoRoot = Directory.current.path;
+      final repoRoot = findRepoRoot();
       final networkConfigPath = '$repoRoot/docker/any-sync/etc/client.yml';
       final networkConfig = await loadNetworkConfig(networkConfigPath);
       final coordinatorAddress =

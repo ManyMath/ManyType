@@ -1,3 +1,6 @@
+@TestOn('vm') // reads/writes real config.toml files via dart:io Directory/File — no browser filesystem equivalent used here
+library;
+
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:manytype_cli/src/config.dart';
