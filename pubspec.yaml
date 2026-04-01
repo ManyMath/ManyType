@@ -23,6 +23,17 @@ melos:
         concurrency: 1
       packageFilters:
         dirExists: test
+    test:web:
+      run: |
+        if [ -f tool/fetch_web_test_assets.dart ]; then
+          dart run tool/fetch_web_test_assets.dart
+        fi
+        dart test -p chrome -j 1
+      description: Fetch web test assets (if any) and run the chrome test suite for every package with tests.
+      exec:
+        concurrency: 1
+      packageFilters:
+        dirExists: test
     analyze:
       run: dart analyze .
       exec:
