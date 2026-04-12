@@ -5,6 +5,9 @@ import 'package:args/args.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/models.dart';
 
+import 'package:manytype_cli/src/account_registry.dart';
+import 'package:manytype_cli/src/account_resolver.dart';
+import 'package:manytype_cli/src/commands/account.dart';
 import 'package:manytype_cli/src/commands/create.dart';
 import 'package:manytype_cli/src/commands/delete.dart';
 import 'package:manytype_cli/src/commands/edit.dart';
@@ -21,6 +24,56 @@ import 'package:manytype_cli/src/commands/sync.dart';
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/store/database.dart';
 
+/// Resolves the config + db path for the currently-active account.
+///
+/// If a named account profile is selected (via [accountOverride],
+/// [envAccountId], or the persisted current pointer), its own config/db is
+/// used — normally `accounts/<id>/{config.toml,store.db}`, or the aliased
+/// legacy paths if this profile came from [AccountRegistry.migrateLegacyAccount].
+///
+/// If no account profiles exist at all yet and a legacy top-level
+/// `~/.manytype/config.toml` is found, it is migrated in place (registered
+/// as a real profile aliasing the legacy paths — no files are moved or
+/// copied) so it becomes visible to `account list`/`account use` from then
+/// on. If neither a profile nor a legacy config exists, falls back to
+/// `CliConfig.load()`'s own "run `manytype init`" error. An explicit
+/// [accountOverride]/[envAccountId] with no matching profile is a real
+/// error, not something to silently fall back past.
+Future<({CliConfig config, String dbPath})> _resolveActive({
+  String? accountOverride,
+  String? envAccountId,
+  String? serverOverride,
+}) async {
+  try {
+    final accountId = await AccountResolver.resolveAccountId(
+      explicitAccountId: accountOverride,
+      envAccountId: envAccountId,
+    );
+    final accounts = await AccountRegistry.listAccounts();
+    final summary = accounts.firstWhere((a) => a.id == accountId);
+    final configPath =
+        summary.configPathOverride ?? AccountRegistry.accountConfigPath(accountId);
+    final dbPath = summary.dbPathOverride ?? AccountRegistry.accountDbPath(accountId);
+    final config = await CliConfig.loadFrom(configPath, serverOverride: serverOverride);
+    return (config: config, dbPath: dbPath);
+  } on NoAccountError {
+    if (accountOverride != null || envAccountId != null) {
+      rethrow;
+    }
+    if (await File(CliConfig.configPath).exists()) {
+      final legacyConfig = await CliConfig.load(serverOverride: serverOverride);
+      await AccountRegistry.migrateLegacyAccount(
+        legacyConfigPath: CliConfig.configPath,
+        legacyDbPath: CliConfig.dbPath,
+        legacyMnemonic: legacyConfig.mnemonic,
+      );
+      return (config: legacyConfig, dbPath: CliConfig.dbPath);
+    }
+    final config = await CliConfig.load(serverOverride: serverOverride);
+    return (config: config, dbPath: CliConfig.dbPath);
+  }
+}
+
 Future<void> main(List<String> arguments) async {
   final parser = ArgParser()
     ..addFlag('help', abbr: 'h', negatable: false)
@@ -28,6 +81,9 @@ Future<void> main(List<String> arguments) async {
         help: 'Server address (overrides config)', defaultsTo: null)
     ..addOption('network-config',
         help: 'Path to an any-sync client.yml network config',
+        defaultsTo: null)
+    ..addOption('account',
+        help: 'Account id or name to operate against (overrides current selection)',
         defaultsTo: null);
 
   final createParser = ArgParser()
@@ -182,14 +238,15 @@ Future<void> main(List<String> arguments) async {
   parser.addCommand('file-open', fileOpenParser);
   parser.addCommand('probe-network');
   parser.addCommand('probe-file-node', probeFileNodeParser);
+  parser.addCommand('account', buildAccountParser());
 
   final results = parser.parse(arguments);
 
   if (results['help'] == true || results.command == null) {
     print('Usage: manytype <command> [options]');
     print(
-      'Commands: init, create, sync, read, edit, delete, list, file-upload, '
-      'file-open, probe-network, probe-file-node, space-delete, '
+      'Commands: init, account, create, sync, read, edit, delete, list, '
+      'file-upload, file-open, probe-network, probe-file-node, space-delete, '
       'acl-lifecycle, consensus-bootstrap, consensus-continue, '
       'space-pull-bootstrap, space-pull-refetch',
     );
@@ -200,8 +257,14 @@ Future<void> main(List<String> arguments) async {
   final command = results.command!;
   final serverOverride = results['server'] as String?;
   final networkConfigPath = results['network-config'] as String?;
+  final accountOverride = results['account'] as String?;
+  final envAccountId = Platform.environment['MANYTYPE_ACCOUNT'];
 
   switch (command.name) {
+    case 'account':
+      await accountCommand(command, envAccountId: envAccountId);
+      break;
+
     case 'init':
       await CliConfig.initialize();
       print('Initialized ~/.manytype/');
@@ -209,8 +272,13 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'create':
-      final config = await CliConfig.load(serverOverride: serverOverride);
-      final db = ManytypeDatabase(CliConfig.dbPath);
+      final active = await _resolveActive(
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+        serverOverride: serverOverride,
+      );
+      final config = active.config;
+      final db = ManytypeDatabase(active.dbPath);
       final text =
           command.rest.isNotEmpty ? command.rest.join(' ') : 'Untitled';
       final asType = command['as-type'] == true;
@@ -354,21 +422,31 @@ Future<void> main(List<String> arguments) async {
             'create --sync requires --network-config <path>',
           );
         }
-        final db = ManytypeDatabase(CliConfig.dbPath);
+        final db = ManytypeDatabase(active.dbPath);
         await syncCommand(db, config, networkConfigPath: networkConfigPath);
         await db.close();
       }
       break;
 
     case 'sync':
-      final config = await CliConfig.load(serverOverride: serverOverride);
-      final db = ManytypeDatabase(CliConfig.dbPath);
+      final active = await _resolveActive(
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+        serverOverride: serverOverride,
+      );
+      final config = active.config;
+      final db = ManytypeDatabase(active.dbPath);
       await syncCommand(db, config, networkConfigPath: networkConfigPath);
       await db.close();
       break;
 
     case 'read':
-      final config = await CliConfig.load(serverOverride: serverOverride);
+      final active = await _resolveActive(
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+        serverOverride: serverOverride,
+      );
+      final config = active.config;
 
       if (command['sync'] == true) {
         if (networkConfigPath == null) {
@@ -376,12 +454,12 @@ Future<void> main(List<String> arguments) async {
             'read --sync requires --network-config <path>',
           );
         }
-        final syncDb = ManytypeDatabase(CliConfig.dbPath);
+        final syncDb = ManytypeDatabase(active.dbPath);
         await syncCommand(syncDb, config, networkConfigPath: networkConfigPath);
         await syncDb.close();
       }
 
-      final db = ManytypeDatabase(CliConfig.dbPath);
+      final db = ManytypeDatabase(active.dbPath);
       final objId = command.rest.isNotEmpty ? command.rest.first : null;
       await readCommand(db, config, objectId: objId);
       await db.close();
@@ -598,8 +676,13 @@ Future<void> main(List<String> arguments) async {
           'edit requires --network-config <path>',
         );
       }
-      final config = await CliConfig.load(serverOverride: serverOverride);
-      final db = ManytypeDatabase(CliConfig.dbPath);
+      final active = await _resolveActive(
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+        serverOverride: serverOverride,
+      );
+      final config = active.config;
+      final db = ManytypeDatabase(active.dbPath);
       await editCommand(objectId, newText, db, config,
           networkConfigPath: networkConfigPath,
           checkbox: hasCheckbox,
@@ -634,8 +717,13 @@ Future<void> main(List<String> arguments) async {
           'delete requires --network-config <path>',
         );
       }
-      final config = await CliConfig.load(serverOverride: serverOverride);
-      final db = ManytypeDatabase(CliConfig.dbPath);
+      final active = await _resolveActive(
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+        serverOverride: serverOverride,
+      );
+      final config = active.config;
+      final db = ManytypeDatabase(active.dbPath);
       await deleteCommand(
         command['id'] as String,
         db,
@@ -646,8 +734,13 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'list':
-      final config = await CliConfig.load(serverOverride: serverOverride);
-      final db = ManytypeDatabase(CliConfig.dbPath);
+      final active = await _resolveActive(
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+        serverOverride: serverOverride,
+      );
+      final config = active.config;
+      final db = ManytypeDatabase(active.dbPath);
       await listCommand(
         db,
         config,
@@ -675,7 +768,12 @@ Future<void> main(List<String> arguments) async {
       if (deletionDurationMinutes == null) {
         throw StateError('--deletion-duration-minutes must be an integer');
       }
-      final config = await CliConfig.load(serverOverride: serverOverride);
+      final active = await _resolveActive(
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+        serverOverride: serverOverride,
+      );
+      final config = active.config;
       final exitCode = await spaceDeleteCommand(
         config: config,
         networkConfigPath: networkConfigPath,
@@ -752,8 +850,13 @@ Future<void> main(List<String> arguments) async {
       if (command.rest.isEmpty) {
         throw StateError('file-upload requires a source file path');
       }
-      final config = await CliConfig.load(serverOverride: serverOverride);
-      final db = ManytypeDatabase(CliConfig.dbPath);
+      final active = await _resolveActive(
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+        serverOverride: serverOverride,
+      );
+      final config = active.config;
+      final db = ManytypeDatabase(active.dbPath);
       await fileUploadCommand(
         db,
         config,
@@ -774,8 +877,13 @@ Future<void> main(List<String> arguments) async {
       if (fileId == null || fileId.isEmpty) {
         throw StateError('file-open requires --file-id <id>');
       }
-      final config = await CliConfig.load(serverOverride: serverOverride);
-      final db = ManytypeDatabase(CliConfig.dbPath);
+      final active = await _resolveActive(
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+        serverOverride: serverOverride,
+      );
+      final config = active.config;
+      final db = ManytypeDatabase(active.dbPath);
       await fileOpenCommand(
         db,
         config,
@@ -793,7 +901,12 @@ Future<void> main(List<String> arguments) async {
           'probe-network requires --network-config <path>',
         );
       }
-      final config = await CliConfig.load(serverOverride: serverOverride);
+      final active = await _resolveActive(
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+        serverOverride: serverOverride,
+      );
+      final config = active.config;
       await probeNetworkCommand(config, networkConfigPath: networkConfigPath);
       break;
 
@@ -803,7 +916,12 @@ Future<void> main(List<String> arguments) async {
           'probe-file-node requires --network-config <path>',
         );
       }
-      final config = await CliConfig.load(serverOverride: serverOverride);
+      final active = await _resolveActive(
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+        serverOverride: serverOverride,
+      );
+      final config = active.config;
       await probeFileNodeCommand(
         config,
         networkConfigPath: networkConfigPath,
