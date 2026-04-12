@@ -1,0 +1,187 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+
+import 'account_profile.dart';
+
+/// Native (vm) account registry backed by files under `~/.manytype`:
+/// - `accounts.json`: index of known account summaries (no secrets)
+/// - `current`: plain-text file naming the currently-selected account id
+/// - `accounts/<id>/config.toml`: that account's mnemonic + server_address
+/// - `accounts/<id>/store.db`: that account's database
+class AccountRegistry {
+  /// Test-only override for [baseDir]. When null, baseDir resolves to
+  /// `$HOME/.manytype` (or `$USERPROFILE` on Windows) as usual.
+  static String? testBaseDirOverride;
+
+  static String get baseDir {
+    if (testBaseDirOverride != null) {
+      return testBaseDirOverride!;
+    }
+    final home =
+        Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
+    return p.join(home, '.manytype');
+  }
+
+  static String get registryPath => p.join(baseDir, 'accounts.json');
+  static String get currentPath => p.join(baseDir, 'current');
+  static String get accountsDir => p.join(baseDir, 'accounts');
+
+  static String accountDir(String id) => p.join(accountsDir, id);
+  static String accountConfigPath(String id) =>
+      p.join(accountDir(id), 'config.toml');
+  static String accountDbPath(String id) => p.join(accountDir(id), 'store.db');
+  static String accountDownloadsDir(String id) =>
+      p.join(accountDir(id), 'downloads');
+
+  /// List all known account summaries, in the order they were registered.
+  static Future<List<AccountSummary>> listAccounts() async {
+    final file = File(registryPath);
+    if (!await file.exists()) {
+      return [];
+    }
+    final content = await file.readAsString();
+    if (content.trim().isEmpty) {
+      return [];
+    }
+    final decoded = jsonDecode(content) as Map<String, dynamic>;
+    final accounts = (decoded['accounts'] as List<dynamic>? ?? [])
+        .map((e) => AccountSummary.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return accounts;
+  }
+
+  static Future<void> _writeAccounts(List<AccountSummary> accounts) async {
+    final dir = Directory(baseDir);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    final file = File(registryPath);
+    final encoded = jsonEncode({
+      'accounts': accounts.map((a) => a.toJson()).toList(),
+    });
+    await file.writeAsString(encoded);
+  }
+
+  /// Register (or re-register, idempotently) an account summary in the
+  /// shared index. Does not touch the account's own config/db.
+  static Future<void> registerAccount(AccountSummary summary) async {
+    final accounts = await listAccounts();
+    final withoutExisting = accounts.where((a) => a.id != summary.id).toList();
+    await _writeAccounts([...withoutExisting, summary]);
+  }
+
+  /// Remove an account's registry entry and delete its on-disk directory
+  /// (config.toml + store.db + downloads). This is local profile removal
+  /// only: never the protocol-level AccountDelete operation.
+  static Future<void> removeAccount(String id) async {
+    final accounts = await listAccounts();
+    await _writeAccounts(accounts.where((a) => a.id != id).toList());
+
+    final dir = Directory(accountDir(id));
+    if (await dir.exists()) {
+      await dir.delete(recursive: true);
+    }
+
+    final currentId = await getCurrentAccountId();
+    if (currentId == id) {
+      final file = File(currentPath);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
+  }
+
+  static Future<String?> getCurrentAccountId() async {
+    final file = File(currentPath);
+    if (!await file.exists()) {
+      return null;
+    }
+    final content = (await file.readAsString()).trim();
+    return content.isEmpty ? null : content;
+  }
+
+  static Future<void> setCurrentAccountId(String id) async {
+    final dir = Directory(baseDir);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    await File(currentPath).writeAsString(id);
+  }
+
+  /// Create the on-disk directory for a new account and write its
+  /// config.toml (mnemonic + server_address). Registers the summary in the
+  /// shared index. Does not change which account is "current".
+  static Future<AccountProfile> createAccount({
+    required String mnemonic,
+    required String displayName,
+    String serverAddress = '127.0.0.1:33020',
+  }) async {
+    final id = await AccountProfile.deriveAccountId(mnemonic);
+    final dir = Directory(accountDir(id));
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
+    final createdAt = DateTime.now().toUtc();
+    final configFile = File(accountConfigPath(id));
+    await configFile.writeAsString(
+      'mnemonic = "$mnemonic"\nserver_address = "$serverAddress"\n',
+    );
+
+    await registerAccount(AccountSummary(
+      id: id,
+      displayName: displayName,
+      createdAt: createdAt,
+    ));
+
+    return AccountProfile(
+      id: id,
+      displayName: displayName,
+      mnemonic: mnemonic,
+      createdAt: createdAt,
+    );
+  }
+
+  /// Register a pre-existing legacy single-account install (a top-level
+  /// `~/.manytype/config.toml` + `store.db`, from before named account
+  /// profiles existed) as a real, selectable account profile: without
+  /// moving or copying any files. The registered [AccountSummary] carries
+  /// `configPathOverride`/`dbPathOverride` pointing at the exact legacy
+  /// paths, so the migrated account's storage location never changes and
+  /// there is no risk of two divergent copies of the data.
+  ///
+  /// No-op (returns null) if any account is already registered: this makes
+  /// the migration idempotent and safe to attempt on every invocation.
+  static Future<AccountProfile?> migrateLegacyAccount({
+    required String legacyConfigPath,
+    required String legacyDbPath,
+    required String legacyMnemonic,
+    String displayName = 'default',
+  }) async {
+    final existing = await listAccounts();
+    if (existing.isNotEmpty) {
+      return null;
+    }
+
+    final id = await AccountProfile.deriveAccountId(legacyMnemonic);
+    final createdAt = DateTime.now().toUtc();
+
+    await registerAccount(AccountSummary(
+      id: id,
+      displayName: displayName,
+      createdAt: createdAt,
+      configPathOverride: legacyConfigPath,
+      dbPathOverride: legacyDbPath,
+    ));
+    await setCurrentAccountId(id);
+
+    return AccountProfile(
+      id: id,
+      displayName: displayName,
+      mnemonic: legacyMnemonic,
+      createdAt: createdAt,
+    );
+  }
+}
