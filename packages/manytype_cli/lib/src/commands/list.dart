@@ -12,6 +12,7 @@ import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart'
 import '../config.dart';
 import '../collection_keys.dart';
 import '../identity.dart';
+import '../session.dart';
 import '../store/database.dart';
 import '../sync_service.dart';
 
@@ -46,10 +47,10 @@ class ObjectMeta {
 
 /// List objects from local store with optional type and field filters.
 ///
-/// Syncs first, then queries the local Drift database for non-deleted objects,
-/// decodes metadata from each object's change tree, applies filters, and prints
-/// an aligned three-column table.
-Future<void> listCommand(
+/// Syncs first, then queries the local Drift database for non-deleted
+/// objects, decodes metadata from each object's change tree, and applies
+/// filters.
+Future<List<ObjectMeta>> listCommand(
   ManytypeDatabase db,
   CliConfig config, {
   String? networkConfigPath,
@@ -110,7 +111,7 @@ Future<void> listCommand(
   }
 
   // Apply --type filter.
-  final results = metas
+  return metas
       .where(
         (m) => matchesObjectMetaFilters(
           m,
@@ -119,8 +120,32 @@ Future<void> listCommand(
         ),
       )
       .toList();
+}
 
-  _printObjectTable(results);
+/// Library-facing facade over object listing, for consumers that hold a
+/// [ManytypeSession] instead of driving the CLI directly. Exposed as
+/// `session.objects` — gains `create`/`edit`/`delete` methods as those
+/// command modules convert in turn (see docs/m016-web-api-surface.md).
+class ListFacade {
+  const ListFacade(this._session);
+
+  final ManytypeSession _session;
+
+  Future<List<ObjectMeta>> list({
+    String? networkConfigPath,
+    String? typeFilter,
+    String? whereFilter,
+    SyncService? syncService,
+  }) {
+    return listCommand(
+      _session.db,
+      _session.config,
+      networkConfigPath: networkConfigPath,
+      typeFilter: typeFilter,
+      whereFilter: whereFilter,
+      syncService: syncService,
+    );
+  }
 }
 
 bool matchesObjectMetaFilters(
@@ -456,32 +481,3 @@ void _insertCollectionIds(
   current.insertAll(index + 1, values);
 }
 
-/// Print an aligned three-column table of object metadata.
-void _printObjectTable(List<ObjectMeta> metas) {
-  if (metas.isEmpty) {
-    print('No objects found.');
-    return;
-  }
-
-  // Compute column widths.
-  var idWidth = 'ID'.length;
-  var typeWidth = 'TYPE'.length;
-  for (final meta in metas) {
-    if (meta.id.length > idWidth) idWidth = meta.id.length;
-    if (meta.displayType.length > typeWidth) {
-      typeWidth = meta.displayType.length;
-    }
-  }
-
-  // Print header.
-  print('${"ID".padRight(idWidth)}  ${"TYPE".padRight(typeWidth)}  NAME');
-
-  // Print rows.
-  for (final meta in metas) {
-    print(
-      '${meta.id.padRight(idWidth)}  '
-      '${meta.displayType.padRight(typeWidth)}  '
-      '${meta.displayName}',
-    );
-  }
-}

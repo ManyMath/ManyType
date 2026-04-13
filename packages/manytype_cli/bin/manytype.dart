@@ -23,6 +23,32 @@ import 'package:manytype_cli/src/commands/sync.dart';
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/store/database.dart';
 
+/// Print an aligned three-column table of object metadata.
+void _printObjectTable(List<ObjectMeta> metas) {
+  if (metas.isEmpty) {
+    print('No objects found.');
+    return;
+  }
+
+  var idWidth = 'ID'.length;
+  var typeWidth = 'TYPE'.length;
+  for (final meta in metas) {
+    if (meta.id.length > idWidth) idWidth = meta.id.length;
+    if (meta.displayType.length > typeWidth) {
+      typeWidth = meta.displayType.length;
+    }
+  }
+
+  print('${"ID".padRight(idWidth)}  ${"TYPE".padRight(typeWidth)}  NAME');
+  for (final meta in metas) {
+    print(
+      '${meta.id.padRight(idWidth)}  '
+      '${meta.displayType.padRight(typeWidth)}  '
+      '${meta.displayName}',
+    );
+  }
+}
+
 Future<void> main(List<String> arguments) async {
   final parser = ArgParser()
     ..addFlag('help', abbr: 'h', negatable: false)
@@ -690,13 +716,14 @@ Future<void> main(List<String> arguments) async {
       );
       final config = active.config;
       final db = ManytypeDatabase(active.dbPath);
-      await listCommand(
+      final results = await listCommand(
         db,
         config,
         networkConfigPath: networkConfigPath,
         typeFilter: command['type'] as String?,
         whereFilter: command['where'] as String?,
       );
+      _printObjectTable(results);
       await db.close();
       break;
 

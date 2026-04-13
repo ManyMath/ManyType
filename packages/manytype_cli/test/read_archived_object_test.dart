@@ -57,32 +57,26 @@ void main() {
     expect(readOutput, isNot(contains(objectId)));
     expect(readOutput, isNot(contains('Archived object')));
 
-    final listOutput = await _capturePrints(() async {
-      await listCommand(
-        db,
-        config,
-        networkConfigPath: 'unused-network.yml',
-        syncService: _NoopSyncService(),
-      );
-    });
-    expect(listOutput, contains('ID'));
-    expect(listOutput, isNot(contains(objectId)));
-    expect(listOutput, isNot(contains('Archived object')));
+    final listResults = await listCommand(
+      db,
+      config,
+      networkConfigPath: 'unused-network.yml',
+      syncService: _NoopSyncService(),
+    );
+    expect(listResults.any((meta) => meta.id == objectId), isFalse);
+    expect(listResults.any((meta) => meta.name == 'Archived object'), isFalse);
   });
 
   test('list can read local store without network config', () async {
     await createCommand('Local list object', db, config);
 
-    final listOutput = await _capturePrints(() async {
-      await listCommand(
-        db,
-        config,
-        syncService: _FailingSyncService(),
-      );
-    });
+    final listResults = await listCommand(
+      db,
+      config,
+      syncService: _FailingSyncService(),
+    );
 
-    expect(listOutput, contains('ID'));
-    expect(listOutput, contains('Local list object'));
+    expect(listResults.any((meta) => meta.name == 'Local list object'), isTrue);
   });
 
   test('cli read refuses archived object ids', () async {
