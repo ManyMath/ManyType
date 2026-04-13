@@ -10,6 +10,7 @@ import '../config.dart';
 import '../ffi/native_bridge.dart';
 import '../identity.dart';
 import '../network_config.dart';
+import '../session.dart';
 import '../store/database.dart';
 import 'sync.dart' show seedLiveSpaceForSync;
 
@@ -36,6 +37,18 @@ class OpenedBlobResult {
   });
 
   final Uint8List bytes;
+  final bool fromCache;
+}
+
+class OpenedFileResult {
+  const OpenedFileResult({
+    required this.outputPath,
+    required this.cid,
+    required this.fromCache,
+  });
+
+  final String outputPath;
+  final String cid;
   final bool fromCache;
 }
 
@@ -77,7 +90,7 @@ Future<UploadedBlobResult> uploadBlobWithNetworkConfig(
   }
 }
 
-Future<void> fileUploadCommand(
+Future<UploadedBlobResult> fileUploadCommand(
   ManytypeDatabase db,
   CliConfig config, {
   required String networkConfigPath,
@@ -91,7 +104,7 @@ Future<void> fileUploadCommand(
 
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final bytes = await sourceFile.readAsBytes();
-  final result = await uploadBlobWithNetworkConfig(
+  return uploadBlobWithNetworkConfig(
     db,
     config,
     networkConfigPath: networkConfigPath,
@@ -99,14 +112,9 @@ Future<void> fileUploadCommand(
     fileId: fileId,
     bytes: bytes,
   );
-  print(
-    result.uploaded
-        ? 'Uploaded $fileId (cid=${result.cid})'
-        : 'Skipped upload for $fileId (cid=${result.cid}) - blob already present',
-  );
 }
 
-Future<void> fileOpenCommand(
+Future<OpenedFileResult> fileOpenCommand(
   ManytypeDatabase db,
   CliConfig config, {
   required String networkConfigPath,
@@ -123,11 +131,45 @@ Future<void> fileOpenCommand(
     );
   }
 
+  final result = await openBlobWithNetworkConfig(
+    db,
+    config,
+    networkConfigPath: networkConfigPath,
+    identity: identity,
+    fileId: fileId,
+    cid: resolvedCid,
+  );
+  final destinationPath =
+      outputPath ?? CliConfig.downloadPath(fileId, resolvedCid);
+  final outputFile = File(destinationPath);
+  await outputFile.parent.create(recursive: true);
+  await outputFile.writeAsBytes(result.bytes, flush: true);
+  return OpenedFileResult(
+    outputPath: outputFile.path,
+    cid: resolvedCid,
+    fromCache: result.fromCache,
+  );
+}
+
+/// Opens a blob by CID, connecting to the file node only on a cache miss.
+///
+/// Used by both [fileOpenCommand] (which additionally resolves a CID from
+/// stored attachment refs and writes the bytes to a path) and
+/// [FileTransferFacade.open] (which takes bytes as-is, for callers with no
+/// filesystem).
+Future<OpenedBlobResult> openBlobWithNetworkConfig(
+  ManytypeDatabase db,
+  CliConfig config, {
+  required String networkConfigPath,
+  required Identity identity,
+  required String fileId,
+  required String cid,
+}) async {
   final capture = _FileTransferCapture.start();
   final cached = await db.getCachedBlob(
     spaceId: identity.spaceId,
     fileId: fileId,
-    cid: resolvedCid,
+    cid: cid,
   );
 
   NativeBridge? bridge;
@@ -149,37 +191,67 @@ Future<void> fileOpenCommand(
       );
     }
 
-    final result = await openBlobFromFileNode(
+    return await openBlobFromFileNode(
       db: db,
       fileHandleId: fileHandleId,
       invoke: bridge?.invoke,
       spaceId: identity.spaceId,
       fileId: fileId,
-      cid: resolvedCid,
+      cid: cid,
       capture: capture,
-    );
-    final destinationPath =
-        outputPath ?? CliConfig.downloadPath(fileId, resolvedCid);
-    final outputFile = File(destinationPath);
-    await outputFile.parent.create(recursive: true);
-    await outputFile.writeAsBytes(result.bytes, flush: true);
-    capture.recordNote(
-      'wrote_output',
-      {
-        'file_id': fileId,
-        'cid': resolvedCid,
-        'output_path': outputFile.path,
-        'source': result.fromCache ? 'cache' : 'network',
-      },
-    );
-    print(
-      'Opened $fileId (${result.fromCache ? "cache" : "network"}) -> ${outputFile.path}',
     );
   } finally {
     if (fileHandleId != null && bridge != null) {
       bridge.freeHandle(fileHandleId);
     }
     await capture.flush();
+  }
+}
+
+/// Library-facing facade over file upload/download, for consumers that
+/// hold a [ManytypeSession] instead of driving the CLI directly. Bytes in,
+/// bytes out: no filesystem path assumed, so it also works on web.
+class FileTransferFacade {
+  const FileTransferFacade(this._session);
+
+  final ManytypeSession _session;
+
+  Future<UploadedBlobResult> upload({
+    required String networkConfigPath,
+    required String fileId,
+    required Uint8List bytes,
+  }) {
+    return uploadBlobWithNetworkConfig(
+      _session.db,
+      _session.config,
+      networkConfigPath: networkConfigPath,
+      identity: _session.identity,
+      fileId: fileId,
+      bytes: bytes,
+    );
+  }
+
+  Future<OpenedBlobResult> open({
+    required String networkConfigPath,
+    required String fileId,
+    String? cid,
+  }) async {
+    final resolvedCid = cid ??
+        await _resolveStoredCid(_session.db, _session.identity.spaceId, fileId);
+    if (resolvedCid == null || resolvedCid.isEmpty) {
+      throw StateError(
+        'No CID available for $fileId. Pass an explicit cid or sync attachment '
+        'metadata first.',
+      );
+    }
+    return openBlobWithNetworkConfig(
+      _session.db,
+      _session.config,
+      networkConfigPath: networkConfigPath,
+      identity: _session.identity,
+      fileId: fileId,
+      cid: resolvedCid,
+    );
   }
 }
 

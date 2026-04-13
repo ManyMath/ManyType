@@ -806,12 +806,17 @@ Future<void> main(List<String> arguments) async {
       );
       final config = active.config;
       final db = ManytypeDatabase(active.dbPath);
-      await fileUploadCommand(
+      final uploadResult = await fileUploadCommand(
         db,
         config,
         networkConfigPath: networkConfigPath,
         fileId: fileId,
         sourcePath: command.rest.first,
+      );
+      print(
+        uploadResult.uploaded
+            ? 'Uploaded $fileId (cid=${uploadResult.cid})'
+            : 'Skipped upload for $fileId (cid=${uploadResult.cid}) - blob already present',
       );
       await db.close();
       break;
@@ -833,13 +838,17 @@ Future<void> main(List<String> arguments) async {
       );
       final config = active.config;
       final db = ManytypeDatabase(active.dbPath);
-      await fileOpenCommand(
+      final openResult = await fileOpenCommand(
         db,
         config,
         networkConfigPath: networkConfigPath,
         fileId: fileId,
         cid: command['cid'] as String?,
         outputPath: command['output'] as String?,
+      );
+      print(
+        'Opened $fileId (${openResult.fromCache ? "cache" : "network"}) -> '
+        '${openResult.outputPath}',
       );
       await db.close();
       break;
