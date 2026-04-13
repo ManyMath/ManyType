@@ -5,8 +5,7 @@ import 'package:args/args.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/models.dart';
 
-import 'package:manytype_cli/src/account_registry.dart';
-import 'package:manytype_cli/src/account_resolver.dart';
+import 'package:manytype_cli/src/active_account.dart';
 import 'package:manytype_cli/src/commands/account.dart';
 import 'package:manytype_cli/src/commands/create.dart';
 import 'package:manytype_cli/src/commands/delete.dart';
@@ -23,56 +22,6 @@ import 'package:manytype_cli/src/commands/space_pull_flow.dart';
 import 'package:manytype_cli/src/commands/sync.dart';
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/store/database.dart';
-
-/// Resolves the config + db path for the currently-active account.
-///
-/// If a named account profile is selected (via [accountOverride],
-/// [envAccountId], or the persisted current pointer), its own config/db is
-/// used — normally `accounts/<id>/{config.toml,store.db}`, or the aliased
-/// legacy paths if this profile came from [AccountRegistry.migrateLegacyAccount].
-///
-/// If no account profiles exist at all yet and a legacy top-level
-/// `~/.manytype/config.toml` is found, it is migrated in place (registered
-/// as a real profile aliasing the legacy paths — no files are moved or
-/// copied) so it becomes visible to `account list`/`account use` from then
-/// on. If neither a profile nor a legacy config exists, falls back to
-/// `CliConfig.load()`'s own "run `manytype init`" error. An explicit
-/// [accountOverride]/[envAccountId] with no matching profile is a real
-/// error, not something to silently fall back past.
-Future<({CliConfig config, String dbPath})> _resolveActive({
-  String? accountOverride,
-  String? envAccountId,
-  String? serverOverride,
-}) async {
-  try {
-    final accountId = await AccountResolver.resolveAccountId(
-      explicitAccountId: accountOverride,
-      envAccountId: envAccountId,
-    );
-    final accounts = await AccountRegistry.listAccounts();
-    final summary = accounts.firstWhere((a) => a.id == accountId);
-    final configPath =
-        summary.configPathOverride ?? AccountRegistry.accountConfigPath(accountId);
-    final dbPath = summary.dbPathOverride ?? AccountRegistry.accountDbPath(accountId);
-    final config = await CliConfig.loadFrom(configPath, serverOverride: serverOverride);
-    return (config: config, dbPath: dbPath);
-  } on NoAccountError {
-    if (accountOverride != null || envAccountId != null) {
-      rethrow;
-    }
-    if (await File(CliConfig.configPath).exists()) {
-      final legacyConfig = await CliConfig.load(serverOverride: serverOverride);
-      await AccountRegistry.migrateLegacyAccount(
-        legacyConfigPath: CliConfig.configPath,
-        legacyDbPath: CliConfig.dbPath,
-        legacyMnemonic: legacyConfig.mnemonic,
-      );
-      return (config: legacyConfig, dbPath: CliConfig.dbPath);
-    }
-    final config = await CliConfig.load(serverOverride: serverOverride);
-    return (config: config, dbPath: CliConfig.dbPath);
-  }
-}
 
 Future<void> main(List<String> arguments) async {
   final parser = ArgParser()
@@ -272,7 +221,7 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'create':
-      final active = await _resolveActive(
+      final active = await resolveActiveAccount(
         accountOverride: accountOverride,
         envAccountId: envAccountId,
         serverOverride: serverOverride,
@@ -429,7 +378,7 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'sync':
-      final active = await _resolveActive(
+      final active = await resolveActiveAccount(
         accountOverride: accountOverride,
         envAccountId: envAccountId,
         serverOverride: serverOverride,
@@ -441,7 +390,7 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'read':
-      final active = await _resolveActive(
+      final active = await resolveActiveAccount(
         accountOverride: accountOverride,
         envAccountId: envAccountId,
         serverOverride: serverOverride,
@@ -676,7 +625,7 @@ Future<void> main(List<String> arguments) async {
           'edit requires --network-config <path>',
         );
       }
-      final active = await _resolveActive(
+      final active = await resolveActiveAccount(
         accountOverride: accountOverride,
         envAccountId: envAccountId,
         serverOverride: serverOverride,
@@ -717,7 +666,7 @@ Future<void> main(List<String> arguments) async {
           'delete requires --network-config <path>',
         );
       }
-      final active = await _resolveActive(
+      final active = await resolveActiveAccount(
         accountOverride: accountOverride,
         envAccountId: envAccountId,
         serverOverride: serverOverride,
@@ -734,7 +683,7 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'list':
-      final active = await _resolveActive(
+      final active = await resolveActiveAccount(
         accountOverride: accountOverride,
         envAccountId: envAccountId,
         serverOverride: serverOverride,
@@ -768,7 +717,7 @@ Future<void> main(List<String> arguments) async {
       if (deletionDurationMinutes == null) {
         throw StateError('--deletion-duration-minutes must be an integer');
       }
-      final active = await _resolveActive(
+      final active = await resolveActiveAccount(
         accountOverride: accountOverride,
         envAccountId: envAccountId,
         serverOverride: serverOverride,
@@ -850,7 +799,7 @@ Future<void> main(List<String> arguments) async {
       if (command.rest.isEmpty) {
         throw StateError('file-upload requires a source file path');
       }
-      final active = await _resolveActive(
+      final active = await resolveActiveAccount(
         accountOverride: accountOverride,
         envAccountId: envAccountId,
         serverOverride: serverOverride,
@@ -877,7 +826,7 @@ Future<void> main(List<String> arguments) async {
       if (fileId == null || fileId.isEmpty) {
         throw StateError('file-open requires --file-id <id>');
       }
-      final active = await _resolveActive(
+      final active = await resolveActiveAccount(
         accountOverride: accountOverride,
         envAccountId: envAccountId,
         serverOverride: serverOverride,
@@ -901,7 +850,7 @@ Future<void> main(List<String> arguments) async {
           'probe-network requires --network-config <path>',
         );
       }
-      final active = await _resolveActive(
+      final active = await resolveActiveAccount(
         accountOverride: accountOverride,
         envAccountId: envAccountId,
         serverOverride: serverOverride,
@@ -916,7 +865,7 @@ Future<void> main(List<String> arguments) async {
           'probe-file-node requires --network-config <path>',
         );
       }
-      final active = await _resolveActive(
+      final active = await resolveActiveAccount(
         accountOverride: accountOverride,
         envAccountId: envAccountId,
         serverOverride: serverOverride,
