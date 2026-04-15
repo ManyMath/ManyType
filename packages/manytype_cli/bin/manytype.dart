@@ -5,6 +5,8 @@ import 'package:args/args.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/models.dart';
 
+import 'package:manytype_cli/src/account_registry.dart';
+import 'package:manytype_cli/src/account_resolver.dart';
 import 'package:manytype_cli/src/active_account.dart';
 import 'package:manytype_cli/src/commands/account.dart';
 import 'package:manytype_cli/src/commands/create.dart';
@@ -22,6 +24,92 @@ import 'package:manytype_cli/src/commands/space_pull_flow.dart';
 import 'package:manytype_cli/src/commands/sync.dart';
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/store/database.dart';
+
+/// Handles the `manytype account <subcommand>` command group: parses the
+/// subcommand's args, calls the typed `commands/account.dart` functions,
+/// and prints/sets `exitCode` for the CLI.
+Future<void> _runAccountCommand(
+  ArgResults command, {
+  String? envAccountId,
+}) async {
+  final sub = command.command;
+  if (sub == null) {
+    stderr.writeln(
+      'Usage: manytype account <create|list|use|current|remove> [options]',
+    );
+    exitCode = 1;
+    return;
+  }
+
+  try {
+    switch (sub.name) {
+      case 'create':
+        final result =
+            await createAccountCommand(name: sub['name'] as String?);
+        print('Created account "${result.displayName}" (${result.id})');
+        print('Mnemonic saved to ${result.configPath}');
+        if (result.isCurrent) {
+          print('Selected as the current account.');
+        }
+        break;
+
+      case 'list':
+        final accounts = await listAccountsCommand();
+        if (accounts.isEmpty) {
+          print('No accounts. Run: manytype account create --name <name>');
+          break;
+        }
+        final currentId = await AccountRegistry.getCurrentAccountId();
+        for (final account in accounts) {
+          final marker = account.id == currentId ? '* ' : '  ';
+          print('$marker${account.displayName}\t${account.id}');
+        }
+        break;
+
+      case 'use':
+        if (sub.rest.isEmpty) {
+          stderr.writeln('Usage: manytype account use <id|name>');
+          exitCode = 1;
+          break;
+        }
+        final result = await useAccountCommand(sub.rest.first);
+        print('Current account set to ${result.id}');
+        break;
+
+      case 'current':
+        final summary = await currentAccountCommand(envAccountId: envAccountId);
+        print('${summary.displayName}\t${summary.id}');
+        break;
+
+      case 'remove':
+        if (sub.rest.isEmpty) {
+          stderr.writeln('Usage: manytype account remove <id>');
+          exitCode = 1;
+          break;
+        }
+        final result = await removeAccountCommand(sub.rest.first);
+        print(
+          'Removed local account profile ${result.id} (local profile only '
+          ':  this does not run the protocol-level AccountDelete coordinator '
+          'operation).',
+        );
+        break;
+
+      default:
+        stderr.writeln('Unknown account subcommand: ${sub.name}');
+        exitCode = 1;
+    }
+  } on AmbiguousAccountError catch (e) {
+    stderr.writeln('Error: ${e.message}');
+    exitCode = 1;
+  } on NoAccountError catch (e) {
+    stderr.writeln('Error: ${e.message}');
+    exitCode = 1;
+  } on StateError catch (e) {
+    stderr.writeln('Error: ${e.message}');
+    exitCode = 1;
+  }
+}
 
 /// Print an aligned three-column table of object metadata.
 void _printObjectTable(List<ObjectMeta> metas) {
@@ -237,7 +325,7 @@ Future<void> main(List<String> arguments) async {
 
   switch (command.name) {
     case 'account':
-      await accountCommand(command, envAccountId: envAccountId);
+      await _runAccountCommand(command, envAccountId: envAccountId);
       break;
 
     case 'init':

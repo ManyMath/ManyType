@@ -1,130 +1,132 @@
-import 'dart:io';
-
 import 'package:args/args.dart';
 import 'package:manytype_core/manytype_core.dart' show generateMnemonic;
 
+import '../account_profile.dart';
 import '../account_registry.dart';
 import '../account_resolver.dart';
+import '../session.dart';
 
-/// Handles the `manytype account <subcommand>` command group.
-///
-/// Local account-profile management only — `account remove` deletes a
-/// profile's local directory and registry entry, it never performs the
-/// protocol-level `AccountDelete` coordinator teardown operation.
-Future<void> accountCommand(ArgResults command, {String? envAccountId}) async {
-  final sub = command.command;
-  if (sub == null) {
-    stderr.writeln(
-      'Usage: manytype account <create|list|use|current|remove> [options]',
-    );
-    exitCode = 1;
-    return;
-  }
+/// Result of [createAccountCommand].
+class AccountCreateResult {
+  const AccountCreateResult({
+    required this.id,
+    required this.displayName,
+    required this.configPath,
+    required this.isCurrent,
+  });
 
-  try {
-    switch (sub.name) {
-      case 'create':
-        await _create(sub);
-        break;
-      case 'list':
-        await _list();
-        break;
-      case 'use':
-        await _use(sub);
-        break;
-      case 'current':
-        await _current(envAccountId: envAccountId);
-        break;
-      case 'remove':
-        await _remove(sub);
-        break;
-      default:
-        stderr.writeln('Unknown account subcommand: ${sub.name}');
-        exitCode = 1;
-    }
-  } on AmbiguousAccountError catch (e) {
-    stderr.writeln('Error: ${e.message}');
-    exitCode = 1;
-  } on NoAccountError catch (e) {
-    stderr.writeln('Error: ${e.message}');
-    exitCode = 1;
-  }
+  final String id;
+  final String displayName;
+  final String configPath;
+  final bool isCurrent;
 }
 
-Future<void> _create(ArgResults sub) async {
-  final name = sub['name'] as String? ?? 'default';
+/// Result of [useAccountCommand].
+class AccountUseResult {
+  const AccountUseResult({required this.id});
+
+  final String id;
+}
+
+/// Result of [removeAccountCommand].
+class AccountRemoveResult {
+  const AccountRemoveResult({required this.id});
+
+  final String id;
+}
+
+/// Create a new local account profile, selecting it as current if it's the
+/// only one registered.
+Future<AccountCreateResult> createAccountCommand({String? name}) async {
+  final displayName = name ?? 'default';
   final mnemonic = generateMnemonic();
   final profile = await AccountRegistry.createAccount(
     mnemonic: mnemonic,
-    displayName: name,
+    displayName: displayName,
   );
 
   final accounts = await AccountRegistry.listAccounts();
-  if (accounts.length == 1) {
+  final isCurrent = accounts.length == 1;
+  if (isCurrent) {
     await AccountRegistry.setCurrentAccountId(profile.id);
   }
 
-  print('Created account "$name" (${profile.id})');
-  print('Mnemonic saved to ${AccountRegistry.accountConfigPath(profile.id)}');
-  if (accounts.length == 1) {
-    print('Selected as the current account.');
-  }
+  return AccountCreateResult(
+    id: profile.id,
+    displayName: displayName,
+    configPath: AccountRegistry.accountConfigPath(profile.id),
+    isCurrent: isCurrent,
+  );
 }
 
-Future<void> _list() async {
-  final accounts = await AccountRegistry.listAccounts();
-  if (accounts.isEmpty) {
-    print('No accounts. Run: manytype account create --name <name>');
-    return;
-  }
-  final currentId = await AccountRegistry.getCurrentAccountId();
-  for (final account in accounts) {
-    final marker = account.id == currentId ? '* ' : '  ';
-    print('$marker${account.displayName}\t${account.id}');
-  }
-}
+/// List all known account summaries, in registration order.
+Future<List<AccountSummary>> listAccountsCommand() =>
+    AccountRegistry.listAccounts();
 
-Future<void> _use(ArgResults sub) async {
-  if (sub.rest.isEmpty) {
-    stderr.writeln('Usage: manytype account use <id|name>');
-    exitCode = 1;
-    return;
-  }
-  final idOrName = sub.rest.first;
+/// Select [idOrName] as the current account.
+///
+/// Throws [AmbiguousAccountError] or [NoAccountError] if it can't be
+/// resolved to exactly one account.
+Future<AccountUseResult> useAccountCommand(String idOrName) async {
   final resolvedId = await AccountResolver.resolveAccountId(
     explicitAccountId: idOrName,
   );
   await AccountRegistry.setCurrentAccountId(resolvedId);
-  print('Current account set to $resolvedId');
+  return AccountUseResult(id: resolvedId);
 }
 
-Future<void> _current({String? envAccountId}) async {
+/// Resolve and return the current account's summary.
+///
+/// Throws [AmbiguousAccountError] or [NoAccountError] if it can't be
+/// resolved to exactly one account.
+Future<AccountSummary> currentAccountCommand({String? envAccountId}) async {
   final resolvedId = await AccountResolver.resolveAccountId(
     envAccountId: envAccountId,
   );
   final accounts = await AccountRegistry.listAccounts();
-  final summary = accounts.firstWhere((a) => a.id == resolvedId);
-  print('${summary.displayName}\t${summary.id}');
+  return accounts.firstWhere((a) => a.id == resolvedId);
 }
 
-Future<void> _remove(ArgResults sub) async {
-  if (sub.rest.isEmpty) {
-    stderr.writeln('Usage: manytype account remove <id>');
-    exitCode = 1;
-    return;
-  }
-  final id = sub.rest.first;
+/// Remove a local account profile (and its on-disk directory).
+///
+/// Local profile removal only: never the protocol-level `AccountDelete`
+/// coordinator teardown operation.
+///
+/// Throws [StateError] if no account matches [id].
+Future<AccountRemoveResult> removeAccountCommand(String id) async {
   final accounts = await AccountRegistry.listAccounts();
   if (accounts.every((a) => a.id != id)) {
-    stderr.writeln('Error: No account found matching "$id".');
-    exitCode = 1;
-    return;
+    throw StateError('No account found matching "$id".');
   }
   await AccountRegistry.removeAccount(id);
-  print(
-    'Removed local account profile $id (local profile only — this does not '
-    'run the protocol-level AccountDelete coordinator operation).',
-  );
+  return AccountRemoveResult(id: id);
+}
+
+/// Library-facing facade over account-profile management, for consumers
+/// that hold a [ManytypeSession] instead of driving the CLI directly.
+/// Exposed as `session.accounts`. Unlike the other domain facades this one
+/// doesn't touch [ManytypeSession.db]/[ManytypeSession.config]: account
+/// profiles are managed in the shared registry, ahead of any particular
+/// session being opened: but it's grouped under the session for a
+/// consistent `session.<domain>.<verb>(...)` call shape.
+class AccountsFacade {
+  const AccountsFacade(this._session);
+
+  // ignore: unused_field
+  final ManytypeSession _session;
+
+  Future<AccountCreateResult> create({String? name}) =>
+      createAccountCommand(name: name);
+
+  Future<List<AccountSummary>> list() => listAccountsCommand();
+
+  Future<AccountUseResult> use(String idOrName) =>
+      useAccountCommand(idOrName);
+
+  Future<AccountSummary> current({String? envAccountId}) =>
+      currentAccountCommand(envAccountId: envAccountId);
+
+  Future<AccountRemoveResult> remove(String id) => removeAccountCommand(id);
 }
 
 /// Builds the `account` command's ArgParser, including its subcommands.

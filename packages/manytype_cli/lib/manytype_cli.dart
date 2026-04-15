@@ -4,6 +4,7 @@ library manytype_cli;
 export 'src/acl_codec.dart';
 export 'src/acl_sync_service.dart';
 export 'src/collection_keys.dart';
+export 'src/commands/account.dart';
 export 'src/commands/file_transfer.dart';
 export 'src/commands/list.dart';
 export 'src/commands/probe_file_node.dart';
