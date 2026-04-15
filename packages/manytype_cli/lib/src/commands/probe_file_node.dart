@@ -9,6 +9,41 @@ import '../config.dart';
 import '../ffi/native_bridge.dart';
 import '../identity.dart';
 import '../network_config.dart';
+import '../session.dart';
+
+/// Outcome of a single RPC attempted against the resolved file node.
+class FileNodeProbeAttempt {
+  const FileNodeProbeAttempt({
+    required this.method,
+    required this.success,
+    this.error,
+  });
+
+  final String method;
+  final bool success;
+  final String? error;
+}
+
+/// Result of resolving and probing a FileAPI node via [probeFileNodeCommand].
+class FileNodeProbeResult {
+  const FileNodeProbeResult({
+    required this.coordinatorAddress,
+    required this.fileAddress,
+    required this.networkId,
+    required this.configurationId,
+    required this.nodeCount,
+    required this.readOnly,
+    required this.attempts,
+  });
+
+  final String coordinatorAddress;
+  final String fileAddress;
+  final String networkId;
+  final String configurationId;
+  final int nodeCount;
+  final bool readOnly;
+  final List<FileNodeProbeAttempt> attempts;
+}
 
 /// Connect to a coordinator, resolve the FileAPI node, and attempt a narrow
 /// set of file RPCs against it.
@@ -17,7 +52,7 @@ import '../network_config.dart';
 /// workflow. It verifies that FileAPI discovery works and that the CLI can
 /// route file RPCs to the selected file node while recording a reusable
 /// artifact for later interop phases.
-Future<void> probeFileNodeCommand(
+Future<FileNodeProbeResult> probeFileNodeCommand(
   CliConfig config, {
   required String networkConfigPath,
   bool readOnly = false,
@@ -28,8 +63,8 @@ Future<void> probeFileNodeCommand(
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final bridge = NativeBridge();
   final capture = _FileProbeCapture.start(readOnly: readOnly);
+  final attempts = <FileNodeProbeAttempt>[];
 
-  print('Connecting to coordinator at $coordinatorAddress...');
   final coordinatorHandleId =
       bridge.connect(coordinatorAddress, identity.seed, identity.accountSeed);
   capture.recordConnection(role: 'coordinator', address: coordinatorAddress);
@@ -60,21 +95,20 @@ Future<void> probeFileNodeCommand(
       'node_count': response.nodes.length,
     });
 
-    print('Resolved FileAPI node: $fileAddress');
     final fileHandleId =
         bridge.connect(fileAddress, identity.seed, identity.accountSeed);
     capture.recordConnection(role: 'file-node', address: fileAddress);
 
     try {
-      await _attemptProbe(
+      attempts.add(await _attemptProbe(
         bridge: bridge,
         capture: capture,
         handleId: fileHandleId,
         role: 'file-node',
         method: '/filesync.File/Check',
         requestBytes: Uint8List.fromList(CheckRequest().writeToBuffer()),
-      );
-      await _attemptProbe(
+      ));
+      attempts.add(await _attemptProbe(
         bridge: bridge,
         capture: capture,
         handleId: fileHandleId,
@@ -88,8 +122,8 @@ Future<void> probeFileNodeCommand(
             ],
           ).writeToBuffer(),
         ),
-      );
-      await _attemptProbe(
+      ));
+      attempts.add(await _attemptProbe(
         bridge: bridge,
         capture: capture,
         handleId: fileHandleId,
@@ -102,9 +136,9 @@ Future<void> probeFileNodeCommand(
             wait: false,
           ).writeToBuffer(),
         ),
-      );
+      ));
       if (!readOnly) {
-        await _attemptProbe(
+        attempts.add(await _attemptProbe(
           bridge: bridge,
           capture: capture,
           handleId: fileHandleId,
@@ -118,20 +152,48 @@ Future<void> probeFileNodeCommand(
               data: Uint8List.fromList('phase-21-probe'.codeUnits),
             ).writeToBuffer(),
           ),
-        );
+        ));
       }
     } finally {
       bridge.freeHandle(fileHandleId);
     }
 
-    print('File-node probe completed.');
+    return FileNodeProbeResult(
+      coordinatorAddress: coordinatorAddress,
+      fileAddress: fileAddress,
+      networkId: response.networkId,
+      configurationId: response.configurationId,
+      nodeCount: response.nodes.length,
+      readOnly: readOnly,
+      attempts: attempts,
+    );
   } finally {
     bridge.freeHandle(coordinatorHandleId);
     await capture.flush();
   }
 }
 
-Future<void> _attemptProbe({
+/// Library-facing facade over FileAPI node probing, for consumers that hold
+/// a [ManytypeSession] instead of driving the CLI directly. Exposed as
+/// `session.probeFileNode`.
+class ProbeFileNodeFacade {
+  const ProbeFileNodeFacade(this._session);
+
+  final ManytypeSession _session;
+
+  Future<FileNodeProbeResult> probe({
+    required String networkConfigPath,
+    bool readOnly = false,
+  }) {
+    return probeFileNodeCommand(
+      _session.config,
+      networkConfigPath: networkConfigPath,
+      readOnly: readOnly,
+    );
+  }
+}
+
+Future<FileNodeProbeAttempt> _attemptProbe({
   required NativeBridge bridge,
   required _FileProbeCapture capture,
   required int handleId,
@@ -147,11 +209,17 @@ Future<void> _attemptProbe({
       requestBytes: requestBytes,
       responseBytes: responseBytes,
     );
+    return FileNodeProbeAttempt(method: method, success: true);
   } catch (error) {
     capture.recordRpcError(
       role: role,
       method: method,
       requestBytes: requestBytes,
+      error: error.toString(),
+    );
+    return FileNodeProbeAttempt(
+      method: method,
+      success: false,
       error: error.toString(),
     );
   }

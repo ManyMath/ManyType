@@ -6,6 +6,7 @@ export 'src/acl_sync_service.dart';
 export 'src/collection_keys.dart';
 export 'src/commands/file_transfer.dart';
 export 'src/commands/list.dart';
+export 'src/commands/probe_file_node.dart';
 export 'src/config.dart';
 export 'src/consensus_service.dart';
 export 'src/coordinator_service.dart';

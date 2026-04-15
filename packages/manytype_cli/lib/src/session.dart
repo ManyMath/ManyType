@@ -1,6 +1,7 @@
 import 'active_account.dart';
 import 'commands/file_transfer.dart';
 import 'commands/list.dart';
+import 'commands/probe_file_node.dart';
 import 'config.dart';
 import 'identity.dart';
 import 'store/database.dart';
@@ -48,6 +49,8 @@ class ManytypeSession {
   FileTransferFacade get fileTransfer => FileTransferFacade(this);
 
   ListFacade get objects => ListFacade(this);
+
+  ProbeFileNodeFacade get probeFileNode => ProbeFileNodeFacade(this);
 
   Future<void> close() => db.close();
 }

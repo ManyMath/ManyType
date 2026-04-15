@@ -907,11 +907,14 @@ Future<void> main(List<String> arguments) async {
         serverOverride: serverOverride,
       );
       final config = active.config;
-      await probeFileNodeCommand(
+      print('Connecting to coordinator...');
+      final probeResult = await probeFileNodeCommand(
         config,
         networkConfigPath: networkConfigPath,
         readOnly: command['read-only'] == true,
       );
+      print('Resolved FileAPI node: ${probeResult.fileAddress}');
+      print('File-node probe completed.');
       break;
   }
 }
