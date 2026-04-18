@@ -48,17 +48,15 @@ void main() {
     expect(objectId, isNotNull);
     final id = objectId!;
 
-    final output = await _capturePrints(() async {
-      await deleteCommand(
-        id,
-        db,
-        config,
-        networkConfigPath: 'unused-network.yml',
-        syncService: _NoopSyncService(),
-      );
-    });
+    final result = await deleteCommand(
+      id,
+      db,
+      config,
+      networkConfigPath: 'unused-network.yml',
+      syncService: _NoopSyncService(),
+    );
 
-    expect(output, contains('Deleted $id'));
+    expect(result.objectId, id);
     expect(await db.isObjectDeleted(id), isTrue);
 
     final objectDetails = await _replayDetails(db, config, id);
@@ -199,17 +197,4 @@ Future<Uint8List> _treeKeyForObject(CliConfig config, String objectId) async {
     ..setRange(32, 64, identity.accountKeyPair.publicKey);
   final spaceKey = await deriveSpaceKey(accountPrivRaw);
   return deriveTreeKey(spaceKey, objectId);
-}
-
-Future<String> _capturePrints(Future<void> Function() fn) async {
-  final prints = <String>[];
-  await runZoned(
-    () async => await fn(),
-    zoneSpecification: ZoneSpecification(
-      print: (_, __, ___, String msg) {
-        prints.add(msg);
-      },
-    ),
-  );
-  return prints.join('\n');
 }

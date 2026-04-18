@@ -16,6 +16,7 @@ import '../session.dart';
 import '../store/database.dart';
 import '../sync_service.dart';
 import 'create.dart';
+import 'delete.dart';
 
 final _snappy = SnappyCodec();
 
@@ -123,10 +124,10 @@ Future<List<ObjectMeta>> listCommand(
       .toList();
 }
 
-/// Library-facing facade over object listing/creation, for consumers that
-/// hold a [ManytypeSession] instead of driving the CLI directly. Exposed as
-/// `session.objects` — gains `edit`/`delete` methods as those command
-/// modules convert in turn (see docs/m016-web-api-surface.md).
+/// Library-facing facade over object listing/creation/deletion, for
+/// consumers that hold a [ManytypeSession] instead of driving the CLI
+/// directly. Exposed as `session.objects` — gains an `edit` method as that
+/// command module converts in turn (see docs/m016-web-api-surface.md).
 class ListFacade {
   const ListFacade(this._session);
 
@@ -193,6 +194,20 @@ class ListFacade {
       templateId: templateId,
       color: color,
       textProvided: textProvided,
+    );
+  }
+
+  Future<DeleteResult> delete(
+    String objectId, {
+    required String networkConfigPath,
+    SyncService? syncService,
+  }) {
+    return deleteCommand(
+      objectId,
+      _session.db,
+      _session.config,
+      networkConfigPath: networkConfigPath,
+      syncService: syncService,
     );
   }
 }

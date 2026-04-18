@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:manytype_core/manytype_core.dart';
@@ -17,7 +16,14 @@ import '../identity.dart';
 import '../store/database.dart';
 import '../sync_service.dart';
 
-Future<void> deleteCommand(
+/// Result of [deleteCommand].
+class DeleteResult {
+  const DeleteResult({required this.objectId});
+
+  final String objectId;
+}
+
+Future<DeleteResult> deleteCommand(
   String objectId,
   ManytypeDatabase db,
   CliConfig config, {
@@ -29,14 +35,12 @@ Future<void> deleteCommand(
   // 1. Verify the object exists locally
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
-    print('Object not found locally -- run `manytype sync` first');
-    exit(1);
+    throw StateError('Object not found locally -- run `manytype sync` first');
   }
 
   // Check if already deleted
   if (await db.isObjectDeleted(objectId)) {
-    print('Object $objectId is already deleted');
-    exit(1);
+    throw StateError('Object $objectId is already deleted');
   }
 
   // 2. Sync to get latest state
@@ -68,15 +72,13 @@ Future<void> deleteCommand(
     }
   }
   if (settingsPayloadId == null) {
-    print('Could not find settings tree for space');
-    exit(1);
+    throw StateError('Could not find settings tree for space');
   }
 
   // 5. Get current heads for the settings tree
   final settingsHeads = await db.getObjectHeads(settingsPayloadId);
   if (settingsHeads.isEmpty) {
-    print('No heads found for settings tree');
-    exit(1);
+    throw StateError('No heads found for settings tree');
   }
 
   // Find root change ID for settings tree (snapshotBaseId)
@@ -90,21 +92,18 @@ Future<void> deleteCommand(
     }
   }
   if (settingsRootId == null) {
-    print('Could not find root change for settings tree');
-    exit(1);
+    throw StateError('Could not find root change for settings tree');
   }
 
   final objectHeads = await db.getObjectHeads(objectId);
   if (objectHeads.isEmpty) {
-    print('No heads found for target object');
-    exit(1);
+    throw StateError('No heads found for target object');
   }
 
   final objectChanges = await db.getChangesForObject(objectId);
   final objectRootId = _findRootChangeId(objectChanges);
   if (objectRootId == null) {
-    print('Could not find root change for target object');
-    exit(1);
+    throw StateError('Could not find root change for target object');
   }
 
   // 6. Archive the target object so official discovery surfaces treat the
@@ -180,7 +179,7 @@ Future<void> deleteCommand(
   // 11. Sync to push the settings tree change
   await syncServiceRef.sync(db, config, networkConfigPath: networkConfigPath);
 
-  print('Deleted $objectId');
+  return DeleteResult(objectId: objectId);
 }
 
 String? _findRootChangeId(List<Change> changes) {

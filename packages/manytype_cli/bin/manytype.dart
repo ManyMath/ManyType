@@ -835,12 +835,13 @@ Future<void> main(List<String> arguments) async {
       );
       final config = active.config;
       final db = ManytypeDatabase(active.dbPath);
-      await deleteCommand(
+      final deleteResult = await deleteCommand(
         command['id'] as String,
         db,
         config,
         networkConfigPath: networkConfigPath,
       );
+      print('Deleted ${deleteResult.objectId}');
       await db.close();
       break;
 
