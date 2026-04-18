@@ -4,6 +4,7 @@ import 'commands/file_transfer.dart';
 import 'commands/list.dart';
 import 'commands/probe_file_node.dart';
 import 'commands/probe_network.dart';
+import 'commands/space_delete.dart';
 import 'config.dart';
 import 'identity.dart';
 import 'store/database.dart';
@@ -57,6 +58,8 @@ class ManytypeSession {
   AccountsFacade get accounts => AccountsFacade(this);
 
   ProbeNetworkFacade get probeNetwork => ProbeNetworkFacade(this);
+
+  SpaceDeleteFacade get spaceDelete => SpaceDeleteFacade(this);
 
   Future<void> close() => db.close();
 }

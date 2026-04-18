@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
@@ -109,6 +110,39 @@ Future<void> _runAccountCommand(
     stderr.writeln('Error: ${e.message}');
     exitCode = 1;
   }
+}
+
+/// Print a [SpaceDeleteReport] in the CLI's human-readable format.
+void _printSpaceDeleteReport(SpaceDeleteReport report) {
+  final initialPre =
+      _spaceStatusLabel(report.initial['pre_status'] as Map<String, Object?>);
+  final initialPost = _spaceStatusLabel(
+    report.initial['post_status'] as Map<String, Object?>,
+  );
+  final reconnectStatus = _spaceStatusLabel(
+    report.afterReconnect['status'] as Map<String, Object?>,
+  );
+
+  print('Command: space-delete');
+  print('Space: ${report.spaceId}');
+  print('Accepted truth surface: $kAcceptedSpaceDeleteTruthSurface');
+  print('Proof mode: $kAcceptedSpaceDeleteProofMode');
+  print(
+      'Observed status path: $initialPre -> $initialPost -> $reconnectStatus');
+  print('Outcome: ${report.assessment.outcome}');
+  print('Reason: ${report.assessment.reason}');
+}
+
+String _spaceStatusLabel(Map<String, Object?> statusResult) {
+  if (statusResult['ok'] != true) {
+    return 'error';
+  }
+  final value = statusResult['value'];
+  if (value == null) {
+    return 'unknown';
+  }
+  final valueMap = value as Map;
+  return valueMap['status']?.toString() ?? 'unknown';
 }
 
 /// Print an aligned three-column table of object metadata.
@@ -852,16 +886,22 @@ Future<void> main(List<String> arguments) async {
         serverOverride: serverOverride,
       );
       final config = active.config;
-      final exitCode = await spaceDeleteCommand(
+      final spaceDeleteReport = await spaceDeleteCommand(
         config: config,
         networkConfigPath: networkConfigPath,
         requestedSpaceId: command['space-id'] as String?,
         waitSeconds: waitSeconds,
         deletionDurationMinutes: deletionDurationMinutes,
-        jsonOutput: command['json'] == true,
       );
-      if (exitCode != 0) {
-        exit(exitCode);
+      if (command['json'] == true) {
+        print(
+          const JsonEncoder.withIndent('  ').convert(spaceDeleteReport.toJson()),
+        );
+      } else {
+        _printSpaceDeleteReport(spaceDeleteReport);
+      }
+      if (!spaceDeleteReport.assessment.supported) {
+        exit(2);
       }
       break;
 

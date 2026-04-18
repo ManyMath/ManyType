@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/coordinator_service.dart';
 import 'package:manytype_cli/src/ffi/native_bridge.dart';
 import 'package:manytype_cli/src/identity.dart';
 import 'package:manytype_cli/src/network_config.dart';
+import 'package:manytype_cli/src/session.dart';
 import 'package:manytype_protocol/coordinator.dart';
 
 const String kAcceptedSpaceDeleteTruthSurface = 'self-hosted-official';
@@ -118,13 +118,58 @@ SpaceDeleteAssessment assessSpaceDeleteContract({
   );
 }
 
-Future<int> spaceDeleteCommand({
+/// Structured report produced by [spaceDeleteCommand], covering both the
+/// initial delete attempt and the reconnect-backed status reread used to
+/// verify it. `toJson()` matches the `--json` CLI output shape.
+class SpaceDeleteReport {
+  const SpaceDeleteReport({
+    required this.capturedAt,
+    required this.assessment,
+    required this.networkConfigPath,
+    required this.coordinatorAddress,
+    required this.spaceId,
+    required this.waitSeconds,
+    required this.deletionDurationMinutes,
+    required this.initial,
+    required this.afterReconnect,
+  });
+
+  final DateTime capturedAt;
+  final SpaceDeleteAssessment assessment;
+  final String networkConfigPath;
+  final String coordinatorAddress;
+  final String spaceId;
+  final int waitSeconds;
+  final int deletionDurationMinutes;
+  final Map<String, Object?> initial;
+  final Map<String, Object?> afterReconnect;
+
+  Map<String, Object?> toJson() => {
+        'captured_at': capturedAt.toIso8601String(),
+        'command': 'space-delete',
+        'accepted_contract': {
+          'truth_surface': kAcceptedSpaceDeleteTruthSurface,
+          'proof_mode': kAcceptedSpaceDeleteProofMode,
+          'supported_preconditions': kAcceptedSpaceDeletePreconditions,
+          'required_observations': kAcceptedSpaceDeleteObservations,
+        },
+        'assessment': assessment.toJson(),
+        'network_config_path': networkConfigPath,
+        'coordinator_address': coordinatorAddress,
+        'space_id': spaceId,
+        'wait_seconds': waitSeconds,
+        'deletion_duration_minutes': deletionDurationMinutes,
+        'initial': initial,
+        'after_reconnect': afterReconnect,
+      };
+}
+
+Future<SpaceDeleteReport> spaceDeleteCommand({
   required CliConfig config,
   required String networkConfigPath,
   String? requestedSpaceId,
   int waitSeconds = 6,
   int deletionDurationMinutes = 0,
-  bool jsonOutput = false,
 }) async {
   if (waitSeconds < 0) {
     throw StateError('--wait-seconds must be a non-negative integer');
@@ -169,32 +214,41 @@ Future<int> spaceDeleteCommand({
     reconnectStatus: _statusName(reconnectCapture.status),
   );
 
-  final report = <String, Object?>{
-    'captured_at': DateTime.now().toUtc().toIso8601String(),
-    'command': 'space-delete',
-    'accepted_contract': {
-      'truth_surface': kAcceptedSpaceDeleteTruthSurface,
-      'proof_mode': kAcceptedSpaceDeleteProofMode,
-      'supported_preconditions': kAcceptedSpaceDeletePreconditions,
-      'required_observations': kAcceptedSpaceDeleteObservations,
-    },
-    'assessment': assessment.toJson(),
-    'network_config_path': networkConfigPath,
-    'coordinator_address': coordinatorAddress,
-    'space_id': spaceId,
-    'wait_seconds': waitSeconds,
-    'deletion_duration_minutes': deletionDurationMinutes,
-    'initial': initialCapture.toJson(),
-    'after_reconnect': reconnectCapture.toJson(),
-  };
+  return SpaceDeleteReport(
+    capturedAt: DateTime.now().toUtc(),
+    assessment: assessment,
+    networkConfigPath: networkConfigPath,
+    coordinatorAddress: coordinatorAddress,
+    spaceId: spaceId,
+    waitSeconds: waitSeconds,
+    deletionDurationMinutes: deletionDurationMinutes,
+    initial: initialCapture.toJson(),
+    afterReconnect: reconnectCapture.toJson(),
+  );
+}
 
-  if (jsonOutput) {
-    print(const JsonEncoder.withIndent('  ').convert(report));
-  } else {
-    _printHumanReport(report, assessment);
+/// Library-facing facade over the space-delete probe/verification flow,
+/// for consumers that hold a [ManytypeSession] instead of driving the CLI
+/// directly. Exposed as `session.spaceDelete`.
+class SpaceDeleteFacade {
+  const SpaceDeleteFacade(this._session);
+
+  final ManytypeSession _session;
+
+  Future<SpaceDeleteReport> run({
+    required String networkConfigPath,
+    String? requestedSpaceId,
+    int waitSeconds = 6,
+    int deletionDurationMinutes = 0,
+  }) {
+    return spaceDeleteCommand(
+      config: _session.config,
+      networkConfigPath: networkConfigPath,
+      requestedSpaceId: requestedSpaceId,
+      waitSeconds: waitSeconds,
+      deletionDurationMinutes: deletionDurationMinutes,
+    );
   }
-
-  return assessment.supported ? 0 : 2;
 }
 
 class _InitialDeleteCapture {
@@ -416,39 +470,3 @@ Map<String, Object?> _spaceStatusToJson(SpaceStatusPayload payload) => {
           : null,
     };
 
-void _printHumanReport(
-  Map<String, Object?> report,
-  SpaceDeleteAssessment assessment,
-) {
-  final initial = report['initial'] as Map<String, Object?>;
-  final reconnect = report['after_reconnect'] as Map<String, Object?>;
-  final initialPre =
-      _statusLabel(initial['pre_status'] as Map<String, Object?>);
-  final initialPost =
-      _statusLabel(initial['post_status'] as Map<String, Object?>);
-  final reconnectStatus =
-      _statusLabel(reconnect['status'] as Map<String, Object?>);
-
-  print('Command: space-delete');
-  print('Space: ${report['space_id']}');
-  print('Accepted truth surface: $kAcceptedSpaceDeleteTruthSurface');
-  print('Proof mode: $kAcceptedSpaceDeleteProofMode');
-  print(
-      'Observed status path: $initialPre -> $initialPost -> $reconnectStatus');
-  print('Outcome: ${assessment.outcome}');
-  print('Reason: ${assessment.reason}');
-}
-
-String _statusLabel(Map<String, Object?> statusResult) {
-  if (statusResult['ok'] != true) {
-    return 'error';
-  }
-  final value = statusResult['value'];
-  if (value is Map<String, Object?>) {
-    return value['status'] as String? ?? 'unknown';
-  }
-  if (value is Map) {
-    return value['status']?.toString() ?? 'unknown';
-  }
-  return 'unknown';
-}
