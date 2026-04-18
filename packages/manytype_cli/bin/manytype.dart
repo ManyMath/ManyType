@@ -980,7 +980,15 @@ Future<void> main(List<String> arguments) async {
         serverOverride: serverOverride,
       );
       final config = active.config;
-      await probeNetworkCommand(config, networkConfigPath: networkConfigPath);
+      print('Connecting to coordinator...');
+      final networkProbeResult = await probeNetworkCommand(
+        config,
+        networkConfigPath: networkConfigPath,
+      );
+      print('NetworkConfiguration exchange succeeded.');
+      print('Network: ${networkProbeResult.networkId}');
+      print('Configuration ID: ${networkProbeResult.configurationId}');
+      print('Nodes returned: ${networkProbeResult.nodeCount}');
       break;
 
     case 'probe-file-node':

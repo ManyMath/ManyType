@@ -6,12 +6,28 @@ import '../config.dart';
 import '../ffi/native_bridge.dart';
 import '../identity.dart';
 import '../network_config.dart';
+import '../session.dart';
+
+/// Result of a successful NetworkConfiguration exchange with a coordinator.
+class NetworkProbeResult {
+  const NetworkProbeResult({
+    required this.coordinatorAddress,
+    required this.networkId,
+    required this.configurationId,
+    required this.nodeCount,
+  });
+
+  final String coordinatorAddress;
+  final String networkId;
+  final String configurationId;
+  final int nodeCount;
+}
 
 /// Connect to a coordinator and perform only the NetworkConfiguration exchange.
 ///
 /// This is intentionally narrower than `sync` so live production validation can
 /// stop at the first coordinator RPC without attempting object or store sync.
-Future<void> probeNetworkCommand(
+Future<NetworkProbeResult> probeNetworkCommand(
   CliConfig config, {
   required String networkConfigPath,
 }) async {
@@ -21,7 +37,6 @@ Future<void> probeNetworkCommand(
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final bridge = NativeBridge();
 
-  print('Connecting to coordinator at $coordinatorAddress...');
   final handleId =
       bridge.connect(coordinatorAddress, identity.seed, identity.accountSeed);
 
@@ -35,11 +50,29 @@ Future<void> probeNetworkCommand(
     );
     final response = NetworkConfigurationResponse.fromBuffer(responseBytes);
 
-    print('NetworkConfiguration exchange succeeded.');
-    print('Network: ${response.networkId}');
-    print('Configuration ID: ${response.configurationId}');
-    print('Nodes returned: ${response.nodes.length}');
+    return NetworkProbeResult(
+      coordinatorAddress: coordinatorAddress,
+      networkId: response.networkId,
+      configurationId: response.configurationId,
+      nodeCount: response.nodes.length,
+    );
   } finally {
     bridge.freeHandle(handleId);
+  }
+}
+
+/// Library-facing facade over the NetworkConfiguration probe, for consumers
+/// that hold a [ManytypeSession] instead of driving the CLI directly.
+/// Exposed as `session.probeNetwork`.
+class ProbeNetworkFacade {
+  const ProbeNetworkFacade(this._session);
+
+  final ManytypeSession _session;
+
+  Future<NetworkProbeResult> probe({required String networkConfigPath}) {
+    return probeNetworkCommand(
+      _session.config,
+      networkConfigPath: networkConfigPath,
+    );
   }
 }
