@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:manytype_cli/src/acl_sync_service.dart';
@@ -18,11 +17,95 @@ const List<String> kSpacePullBackendRequirements = <String>[
   'refetch requires the state JSON written by space-pull-bootstrap',
 ];
 
-Future<int> spacePullBootstrapCommand({
+/// Report produced by [spacePullBootstrapCommand]. `toJson()` matches the
+/// `--json` CLI output shape.
+class SpacePullBootstrapReport {
+  const SpacePullBootstrapReport({
+    required this.capturedAt,
+    required this.networkConfigPath,
+    required this.serverAddress,
+    required this.spaceId,
+    required this.aclRootId,
+    required this.inviteRecordId,
+    required this.spaceHeaderId,
+    required this.aclPayloadId,
+    required this.aclRecordIds,
+    this.statePath,
+  });
+
+  final DateTime capturedAt;
+  final String networkConfigPath;
+  final String serverAddress;
+  final String spaceId;
+  final String aclRootId;
+  final String inviteRecordId;
+  final String spaceHeaderId;
+  final String aclPayloadId;
+  final List<String> aclRecordIds;
+  final String? statePath;
+
+  Map<String, Object?> toJson() => {
+        'captured_at': capturedAt.toIso8601String(),
+        'command': 'space-pull-bootstrap',
+        'backend_label': kSpacePullBackendLabel,
+        'backend_requirements': kSpacePullBackendRequirements,
+        'network_config_path': networkConfigPath,
+        'server_address': serverAddress,
+        'space_id': spaceId,
+        'acl_root_id': aclRootId,
+        'invite_record_id': inviteRecordId,
+        'space_header_id': spaceHeaderId,
+        'acl_payload_id': aclPayloadId,
+        'acl_record_ids': aclRecordIds,
+        'state_path': statePath,
+      };
+}
+
+/// Report produced by [spacePullRefetchCommand]. `toJson()` matches the
+/// `--json` CLI output shape.
+class SpacePullRefetchReport {
+  const SpacePullRefetchReport({
+    required this.capturedAt,
+    required this.serverAddress,
+    required this.stateIn,
+    required this.spaceId,
+    required this.aclRootId,
+    required this.inviteRecordId,
+    required this.spaceHeaderId,
+    required this.aclPayloadId,
+    required this.aclRecordIds,
+  });
+
+  final DateTime capturedAt;
+  final String serverAddress;
+  final String stateIn;
+  final String spaceId;
+  final String aclRootId;
+  final String inviteRecordId;
+  final String spaceHeaderId;
+  final String aclPayloadId;
+  final List<String> aclRecordIds;
+
+  Map<String, Object?> toJson() => {
+        'captured_at': capturedAt.toIso8601String(),
+        'command': 'space-pull-refetch',
+        'backend_label': kSpacePullBackendLabel,
+        'backend_requirements': kSpacePullBackendRequirements,
+        'server_address': serverAddress,
+        'state_in': stateIn,
+        'space_id': spaceId,
+        'acl_root_id': aclRootId,
+        'invite_record_id': inviteRecordId,
+        'space_header_id': spaceHeaderId,
+        'acl_payload_id': aclPayloadId,
+        'acl_record_ids': aclRecordIds,
+      };
+}
+
+Future<SpacePullBootstrapReport> spacePullBootstrapCommand({
   required String networkConfigPath,
   required String serverAddress,
   String? stateOut,
-  bool jsonOutput = false,
 }) async {
   final fixture = await createEphemeralSpaceFixture(
     networkConfigPath: networkConfigPath,
@@ -107,36 +190,18 @@ Future<int> spacePullBootstrapCommand({
       );
     }
 
-    final report = <String, Object?>{
-      'captured_at': DateTime.now().toUtc().toIso8601String(),
-      'command': 'space-pull-bootstrap',
-      'backend_label': kSpacePullBackendLabel,
-      'backend_requirements': kSpacePullBackendRequirements,
-      'network_config_path': networkConfigPath,
-      'server_address': serverAddress,
-      'space_id': fixture.identity.spaceId,
-      'acl_root_id': fixture.aclRootId,
-      'invite_record_id': inviteResponse.id,
-      'space_header_id': payload.spaceHeader.id,
-      'acl_payload_id': payload.aclPayloadId,
-      'acl_record_ids': aclRecordIds,
-      'state_path': stateOut,
-    };
-
-    if (jsonOutput) {
-      stdout.writeln(const JsonEncoder.withIndent('  ').convert(report));
-    } else {
-      stdout.writeln('Command: space-pull-bootstrap');
-      stdout.writeln('Backend: $kSpacePullBackendLabel');
-      stdout.writeln('Space: ${fixture.identity.spaceId}');
-      stdout.writeln('ACL root: ${fixture.aclRootId}');
-      stdout.writeln('Invite record: ${inviteResponse.id}');
-      if (stateOut != null && stateOut.isNotEmpty) {
-        stdout.writeln('State: $stateOut');
-      }
-    }
-
-    return 0;
+    return SpacePullBootstrapReport(
+      capturedAt: DateTime.now().toUtc(),
+      networkConfigPath: networkConfigPath,
+      serverAddress: serverAddress,
+      spaceId: fixture.identity.spaceId,
+      aclRootId: fixture.aclRootId,
+      inviteRecordId: inviteResponse.id,
+      spaceHeaderId: payload.spaceHeader.id,
+      aclPayloadId: payload.aclPayloadId,
+      aclRecordIds: aclRecordIds,
+      statePath: stateOut,
+    );
   } finally {
     if (handleId != null) {
       bridge.freeHandle(handleId);
@@ -145,10 +210,9 @@ Future<int> spacePullBootstrapCommand({
   }
 }
 
-Future<int> spacePullRefetchCommand({
+Future<SpacePullRefetchReport> spacePullRefetchCommand({
   String? serverOverride,
   required String stateIn,
-  bool jsonOutput = false,
 }) async {
   final state = SpacePullFlowState.fromJson(await readJsonFile(stateIn));
   final serverAddress = serverOverride ?? state.serverAddress;
@@ -182,31 +246,17 @@ Future<int> spacePullRefetchCommand({
       );
     }
 
-    final report = <String, Object?>{
-      'captured_at': DateTime.now().toUtc().toIso8601String(),
-      'command': 'space-pull-refetch',
-      'backend_label': kSpacePullBackendLabel,
-      'backend_requirements': kSpacePullBackendRequirements,
-      'server_address': serverAddress,
-      'state_in': stateIn,
-      'space_id': state.spaceId,
-      'acl_root_id': state.aclRootId,
-      'invite_record_id': state.inviteRecordId,
-      'space_header_id': payload.spaceHeader.id,
-      'acl_payload_id': payload.aclPayloadId,
-      'acl_record_ids': aclRecordIds,
-    };
-
-    if (jsonOutput) {
-      stdout.writeln(const JsonEncoder.withIndent('  ').convert(report));
-    } else {
-      stdout.writeln('Command: space-pull-refetch');
-      stdout.writeln('Backend: $kSpacePullBackendLabel');
-      stdout.writeln('Space: ${state.spaceId}');
-      stdout.writeln('Invite record: ${state.inviteRecordId}');
-    }
-
-    return 0;
+    return SpacePullRefetchReport(
+      capturedAt: DateTime.now().toUtc(),
+      serverAddress: serverAddress,
+      stateIn: stateIn,
+      spaceId: state.spaceId,
+      aclRootId: state.aclRootId,
+      inviteRecordId: state.inviteRecordId,
+      spaceHeaderId: payload.spaceHeader.id,
+      aclPayloadId: payload.aclPayloadId,
+      aclRecordIds: aclRecordIds,
+    );
   } finally {
     bridge.freeHandle(handleId);
   }

@@ -13,6 +13,7 @@ export 'src/commands/list.dart';
 export 'src/commands/probe_file_node.dart';
 export 'src/commands/probe_network.dart';
 export 'src/commands/space_delete.dart';
+export 'src/commands/space_pull_flow.dart';
 export 'src/config.dart';
 export 'src/consensus_service.dart';
 export 'src/coordinator_service.dart';

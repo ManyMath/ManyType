@@ -956,20 +956,49 @@ Future<void> main(List<String> arguments) async {
           'space-pull-bootstrap requires --network-config <path>',
         );
       }
-      await spacePullBootstrapCommand(
+      final spacePullBootstrapReport = await spacePullBootstrapCommand(
         networkConfigPath: networkConfigPath,
         serverAddress: serverOverride ?? '127.0.0.1:33020',
         stateOut: command['state-out'] as String?,
-        jsonOutput: command['json'] == true,
       );
+      if (command['json'] == true) {
+        stdout.writeln(
+          const JsonEncoder.withIndent('  ')
+              .convert(spacePullBootstrapReport.toJson()),
+        );
+      } else {
+        stdout.writeln('Command: space-pull-bootstrap');
+        stdout.writeln('Backend: $kSpacePullBackendLabel');
+        stdout.writeln('Space: ${spacePullBootstrapReport.spaceId}');
+        stdout.writeln('ACL root: ${spacePullBootstrapReport.aclRootId}');
+        stdout.writeln(
+          'Invite record: ${spacePullBootstrapReport.inviteRecordId}',
+        );
+        if (spacePullBootstrapReport.statePath != null &&
+            spacePullBootstrapReport.statePath!.isNotEmpty) {
+          stdout.writeln('State: ${spacePullBootstrapReport.statePath}');
+        }
+      }
       break;
 
     case 'space-pull-refetch':
-      await spacePullRefetchCommand(
+      final spacePullRefetchReport = await spacePullRefetchCommand(
         serverOverride: serverOverride,
         stateIn: command['state-in'] as String,
-        jsonOutput: command['json'] == true,
       );
+      if (command['json'] == true) {
+        stdout.writeln(
+          const JsonEncoder.withIndent('  ')
+              .convert(spacePullRefetchReport.toJson()),
+        );
+      } else {
+        stdout.writeln('Command: space-pull-refetch');
+        stdout.writeln('Backend: $kSpacePullBackendLabel');
+        stdout.writeln('Space: ${spacePullRefetchReport.spaceId}');
+        stdout.writeln(
+          'Invite record: ${spacePullRefetchReport.inviteRecordId}',
+        );
+      }
       break;
 
     case 'file-upload':
