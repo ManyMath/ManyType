@@ -912,10 +912,26 @@ Future<void> main(List<String> arguments) async {
           'acl-lifecycle requires --network-config <path>',
         );
       }
-      await aclLifecycleCommand(
+      final aclLifecycleReport = await aclLifecycleCommand(
         networkConfigPath: networkConfigPath,
-        jsonOutput: command['json'] == true,
       );
+      if (command['json'] == true) {
+        stdout.writeln(
+          const JsonEncoder.withIndent('  ').convert(aclLifecycleReport.toJson()),
+        );
+      } else {
+        stdout.writeln('Command: acl-lifecycle');
+        stdout.writeln('Backend: $kAclLifecycleBackendLabel');
+        stdout.writeln('Space: ${aclLifecycleReport.spaceId}');
+        stdout.writeln('ACL root: ${aclLifecycleReport.aclRootId}');
+        stdout.writeln('Invite record: ${aclLifecycleReport.inviteRecordId}');
+        stdout.writeln('Join record: ${aclLifecycleReport.joinRecordId}');
+        stdout.writeln('Accept record: ${aclLifecycleReport.acceptRecordId}');
+        stdout.writeln(
+          'Joiner permission: ${aclLifecycleReport.joinerPermission}',
+        );
+        stdout.writeln('Joiner status: ${aclLifecycleReport.joinerStatus}');
+      }
       break;
 
     case 'consensus-bootstrap':

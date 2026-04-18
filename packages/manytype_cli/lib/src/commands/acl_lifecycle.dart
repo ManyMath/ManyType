@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:manytype_cli/src/acl_sync_service.dart';
@@ -17,9 +15,63 @@ const List<String> kAclLifecycleBackendRequirements = <String>[
   'creates an ephemeral owner space and seeds it live before ACL writes',
 ];
 
-Future<int> aclLifecycleCommand({
+/// Report produced by [aclLifecycleCommand]: an owner space seeded live,
+/// invited/joined/accepted through a full ACL record round-trip, and the
+/// resulting decoded ACL state for the joiner. `toJson()` matches the
+/// `--json` CLI output shape.
+class AclLifecycleReport {
+  const AclLifecycleReport({
+    required this.capturedAt,
+    required this.networkConfigPath,
+    required this.coordinatorAddress,
+    required this.spaceId,
+    required this.aclRootId,
+    required this.inviteRecordId,
+    required this.joinRecordId,
+    required this.acceptRecordId,
+    required this.recordIdsAfterAccept,
+    required this.tailAfterJoinIds,
+    required this.joinerIdentityHex,
+    required this.joinerPermission,
+    required this.joinerStatus,
+  });
+
+  final DateTime capturedAt;
+  final String networkConfigPath;
+  final String coordinatorAddress;
+  final String spaceId;
+  final String aclRootId;
+  final String inviteRecordId;
+  final String joinRecordId;
+  final String acceptRecordId;
+  final List<String> recordIdsAfterAccept;
+  final List<String> tailAfterJoinIds;
+  final String joinerIdentityHex;
+  final String? joinerPermission;
+  final String? joinerStatus;
+
+  Map<String, Object?> toJson() => {
+        'captured_at': capturedAt.toIso8601String(),
+        'command': 'acl-lifecycle',
+        'backend_label': kAclLifecycleBackendLabel,
+        'backend_requirements': kAclLifecycleBackendRequirements,
+        'network_config_path': networkConfigPath,
+        'coordinator_address': coordinatorAddress,
+        'space_id': spaceId,
+        'acl_root_id': aclRootId,
+        'invite_record_id': inviteRecordId,
+        'join_record_id': joinRecordId,
+        'accept_record_id': acceptRecordId,
+        'record_ids_after_accept': recordIdsAfterAccept,
+        'tail_after_join_ids': tailAfterJoinIds,
+        'joiner_identity_hex': joinerIdentityHex,
+        'joiner_permission': joinerPermission,
+        'joiner_status': joinerStatus,
+      };
+}
+
+Future<AclLifecycleReport> aclLifecycleCommand({
   required String networkConfigPath,
-  bool jsonOutput = false,
 }) async {
   final networkConfig = await loadNetworkConfig(networkConfigPath);
   final coordinatorAddress =
@@ -165,41 +217,22 @@ Future<int> aclLifecycleCommand({
       );
     }
 
-    final report = <String, Object?>{
-      'captured_at': DateTime.now().toUtc().toIso8601String(),
-      'command': 'acl-lifecycle',
-      'backend_label': kAclLifecycleBackendLabel,
-      'backend_requirements': kAclLifecycleBackendRequirements,
-      'network_config_path': networkConfigPath,
-      'coordinator_address': coordinatorAddress,
-      'space_id': ownerFixture.identity.spaceId,
-      'acl_root_id': ownerFixture.aclRootId,
-      'invite_record_id': inviteResponse.id,
-      'join_record_id': joinResponse.id,
-      'accept_record_id': acceptResponse.id,
-      'record_ids_after_accept':
+    return AclLifecycleReport(
+      capturedAt: DateTime.now().toUtc(),
+      networkConfigPath: networkConfigPath,
+      coordinatorAddress: coordinatorAddress,
+      spaceId: ownerFixture.identity.spaceId,
+      aclRootId: ownerFixture.aclRootId,
+      inviteRecordId: inviteResponse.id,
+      joinRecordId: joinResponse.id,
+      acceptRecordId: acceptResponse.id,
+      recordIdsAfterAccept:
           recordsAfterAccept.map((record) => record.id).toList(),
-      'tail_after_join_ids': tailAfterJoin.map((record) => record.id).toList(),
-      'joiner_identity_hex': joinerHex,
-      'joiner_permission': permission?.name,
-      'joiner_status': status?.name,
-    };
-
-    if (jsonOutput) {
-      stdout.writeln(const JsonEncoder.withIndent('  ').convert(report));
-    } else {
-      stdout.writeln('Command: acl-lifecycle');
-      stdout.writeln('Backend: $kAclLifecycleBackendLabel');
-      stdout.writeln('Space: ${ownerFixture.identity.spaceId}');
-      stdout.writeln('ACL root: ${ownerFixture.aclRootId}');
-      stdout.writeln('Invite record: ${inviteResponse.id}');
-      stdout.writeln('Join record: ${joinResponse.id}');
-      stdout.writeln('Accept record: ${acceptResponse.id}');
-      stdout.writeln('Joiner permission: ${permission?.name}');
-      stdout.writeln('Joiner status: ${status?.name}');
-    }
-
-    return 0;
+      tailAfterJoinIds: tailAfterJoin.map((record) => record.id).toList(),
+      joinerIdentityHex: joinerHex,
+      joinerPermission: permission?.name,
+      joinerStatus: status?.name,
+    );
   } finally {
     if (ownerHandle != null) {
       ownerBridge.freeHandle(ownerHandle);

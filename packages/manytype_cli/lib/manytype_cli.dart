@@ -5,6 +5,7 @@ export 'src/acl_codec.dart';
 export 'src/acl_sync_service.dart';
 export 'src/collection_keys.dart';
 export 'src/commands/account.dart';
+export 'src/commands/acl_lifecycle.dart';
 export 'src/commands/create.dart';
 export 'src/commands/delete.dart';
 export 'src/commands/file_transfer.dart';
