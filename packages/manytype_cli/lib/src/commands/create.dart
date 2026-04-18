@@ -74,6 +74,39 @@ RelationFormat _parseRelationFormat(String? format) {
   };
 }
 
+/// Records that a newly-created STRelationOption was appended to its parent
+/// STRelation's `selectDict` (Phase 38: only set for `--as-relation-option`).
+class AppendedRelationOption {
+  const AppendedRelationOption({
+    required this.parentStRelationId,
+    required this.selectDictSize,
+  });
+
+  final String parentStRelationId;
+  final int selectDictSize;
+}
+
+/// Result of [createCommand].
+class CreateResult {
+  const CreateResult({
+    required this.objectId,
+    required this.spaceId,
+    required this.objectKind,
+    required this.displayName,
+    required this.changeCount,
+    required this.spaceInitialized,
+    this.appendedOption,
+  });
+
+  final String objectId;
+  final String spaceId;
+  final String objectKind;
+  final String displayName;
+  final int changeCount;
+  final bool spaceInitialized;
+  final AppendedRelationOption? appendedOption;
+}
+
 /// Create a new text object and persist to local store.
 ///
 /// Builds an ObjectTree with a signed root change and a text block change,
@@ -81,7 +114,7 @@ RelationFormat _parseRelationFormat(String? format) {
 ///
 /// Per D-08: identity derived fresh from mnemonic.
 /// Per D-07: persisted as normalized objects + changes rows.
-Future<void> createCommand(
+Future<CreateResult> createCommand(
   String text,
   ManytypeDatabase db,
   CliConfig config, {
@@ -116,7 +149,8 @@ Future<void> createCommand(
   final existingObjects = await db.getObjectsBySpace(spaceId);
 
   String aclHeadId;
-  if (existingObjects.isEmpty) {
+  final spaceInitialized = existingObjects.isEmpty;
+  if (spaceInitialized) {
     final aclRoot = await _buildDerivedAclRoot(
       spaceId: spaceId,
       accountSeed: identity.accountSeed,
@@ -217,7 +251,6 @@ Future<void> createCommand(
     }
 
     aclHeadId = aclRoot.id;
-    print('Initialized space: $spaceId');
   } else {
     aclHeadId = await _findAclRootId(db, existingObjects, spaceId);
   }
@@ -434,6 +467,7 @@ Future<void> createCommand(
   );
 
   int changeCount = 2;
+  AppendedRelationOption? appendedOption;
 
   // Phase 38: atomic parent STRelation selectDict update (D-04). Executed
   // only for --as-relation-option. Finds the parent STRelation locally by
@@ -588,9 +622,9 @@ Future<void> createCommand(
       jsonEncode(parentLatestHeads),
     );
 
-    print(
-      'Appended option $objectId to STRelation $parentStRelationId '
-      '(selectDict now has ${updatedSelectDict.listValue.values.length} entries)',
+    appendedOption = AppendedRelationOption(
+      parentStRelationId: parentStRelationId,
+      selectDictSize: updatedSelectDict.listValue.values.length,
     );
   }
 
@@ -609,9 +643,15 @@ Future<void> createCommand(
                           : asRelationOption
                               ? 'relation-option'
                               : 'object';
-  print('Created $objectKind: $objectId');
-  print('Text: $displayName');
-  print('Changes: $changeCount (root + snapshot)');
+  return CreateResult(
+    objectId: objectId,
+    spaceId: spaceId,
+    objectKind: objectKind,
+    displayName: displayName,
+    changeCount: changeCount,
+    spaceInitialized: spaceInitialized,
+    appendedOption: appendedOption,
+  );
 }
 
 class _ResolvedTargetObjectType {

@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:manytype_cli/manytype_cli.dart';
-import 'package:manytype_cli/src/commands/create.dart';
 import 'package:manytype_cli/src/store/database_opener.dart';
 import 'package:manytype_cli/src/sync_service.dart';
 import 'package:manytype_core/manytype_core.dart';

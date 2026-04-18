@@ -15,6 +15,7 @@ import '../identity.dart';
 import '../session.dart';
 import '../store/database.dart';
 import '../sync_service.dart';
+import 'create.dart';
 
 final _snappy = SnappyCodec();
 
@@ -122,10 +123,10 @@ Future<List<ObjectMeta>> listCommand(
       .toList();
 }
 
-/// Library-facing facade over object listing, for consumers that hold a
-/// [ManytypeSession] instead of driving the CLI directly. Exposed as
-/// `session.objects` — gains `create`/`edit`/`delete` methods as those
-/// command modules convert in turn (see docs/m016-web-api-surface.md).
+/// Library-facing facade over object listing/creation, for consumers that
+/// hold a [ManytypeSession] instead of driving the CLI directly. Exposed as
+/// `session.objects` — gains `edit`/`delete` methods as those command
+/// modules convert in turn (see docs/m016-web-api-surface.md).
 class ListFacade {
   const ListFacade(this._session);
 
@@ -144,6 +145,54 @@ class ListFacade {
       typeFilter: typeFilter,
       whereFilter: whereFilter,
       syncService: syncService,
+    );
+  }
+
+  Future<CreateResult> create(
+    String text, {
+    bool checkbox = false,
+    bool numberedList = false,
+    bool toggle = false,
+    bool quote = false,
+    bool callout = false,
+    bool asType = false,
+    bool asRelation = false,
+    bool asSet = false,
+    bool asCollection = false,
+    bool asTemplate = false,
+    bool asRelationOption = false,
+    String? name,
+    String? format,
+    String? sourceType,
+    String? forRelation,
+    String? targetObjectType,
+    String? templateId,
+    String? color,
+    bool textProvided = true,
+  }) {
+    return createCommand(
+      text,
+      _session.db,
+      _session.config,
+      checkbox: checkbox,
+      numberedList: numberedList,
+      toggle: toggle,
+      quote: quote,
+      callout: callout,
+      asType: asType,
+      asRelation: asRelation,
+      asSet: asSet,
+      asCollection: asCollection,
+      asTemplate: asTemplate,
+      asRelationOption: asRelationOption,
+      name: name,
+      format: format,
+      sourceType: sourceType,
+      forRelation: forRelation,
+      targetObjectType: targetObjectType,
+      templateId: templateId,
+      color: color,
+      textProvided: textProvided,
     );
   }
 }

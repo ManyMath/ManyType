@@ -453,7 +453,7 @@ Future<void> main(List<String> arguments) async {
         }
       }
 
-      await createCommand(
+      final createResult = await createCommand(
         text,
         db,
         config,
@@ -477,6 +477,20 @@ Future<void> main(List<String> arguments) async {
         color: colorArg,
         textProvided: command.rest.isNotEmpty,
       );
+      if (createResult.spaceInitialized) {
+        print('Initialized space: ${createResult.spaceId}');
+      }
+      if (createResult.appendedOption != null) {
+        final appended = createResult.appendedOption!;
+        print(
+          'Appended option ${createResult.objectId} to STRelation '
+          '${appended.parentStRelationId} (selectDict now has '
+          '${appended.selectDictSize} entries)',
+        );
+      }
+      print('Created ${createResult.objectKind}: ${createResult.objectId}');
+      print('Text: ${createResult.displayName}');
+      print('Changes: ${createResult.changeCount} (root + snapshot)');
       await db.close();
 
       if (command['sync'] == true) {

@@ -145,28 +145,24 @@ void main() {
     });
 
     test('creates template smartblock bound to an STType', () async {
-      final typeOutput = await _capturePrints(() async {
-        await createCommand(
-          'ignored',
-          db,
-          config,
-          asType: true,
-          name: 'Project',
-        );
-      });
-      final typeId = _extractCreatedId(typeOutput);
+      final typeResult = await createCommand(
+        'ignored',
+        db,
+        config,
+        asType: true,
+        name: 'Project',
+      );
+      final typeId = typeResult.objectId;
 
-      final templateOutput = await _capturePrints(() async {
-        await createCommand(
-          'ignored',
-          db,
-          config,
-          asTemplate: true,
-          name: 'Project Template',
-          targetObjectType: typeId,
-        );
-      });
-      final templateId = _extractCreatedId(templateOutput);
+      final templateResult = await createCommand(
+        'ignored',
+        db,
+        config,
+        asTemplate: true,
+        name: 'Project Template',
+        targetObjectType: typeId,
+      );
+      final templateId = templateResult.objectId;
 
       final replayed = await _replayObject(db, config, templateId);
       expect(replayed.smartBlockType, SmartBlockType.Template.value);
@@ -188,40 +184,34 @@ void main() {
     });
 
     test('creates normal objects by cloning template state', () async {
-      final typeOutput = await _capturePrints(() async {
-        await createCommand(
-          'ignored',
-          db,
-          config,
-          asType: true,
-          name: 'Task',
-        );
-      });
-      final typeId = _extractCreatedId(typeOutput);
+      final typeResult = await createCommand(
+        'ignored',
+        db,
+        config,
+        asType: true,
+        name: 'Task',
+      );
+      final typeId = typeResult.objectId;
 
-      final templateOutput = await _capturePrints(() async {
-        await createCommand(
-          'Checklist seed',
-          db,
-          config,
-          asTemplate: true,
-          checkbox: true,
-          name: 'Task Template',
-          targetObjectType: typeId,
-        );
-      });
-      final templateId = _extractCreatedId(templateOutput);
+      final templateResult = await createCommand(
+        'Checklist seed',
+        db,
+        config,
+        asTemplate: true,
+        checkbox: true,
+        name: 'Task Template',
+        targetObjectType: typeId,
+      );
+      final templateId = templateResult.objectId;
 
-      final objectOutput = await _capturePrints(() async {
-        await createCommand(
-          'Task 1',
-          db,
-          config,
-          templateId: templateId,
-          textProvided: true,
-        );
-      });
-      final objectId = _extractCreatedId(objectOutput);
+      final objectResult = await createCommand(
+        'Task 1',
+        db,
+        config,
+        templateId: templateId,
+        textProvided: true,
+      );
+      final objectId = objectResult.objectId;
 
       final replayed = await _replayObject(db, config, objectId);
       expect(replayed.smartBlockType, SmartBlockType.Page.value);
@@ -252,39 +242,33 @@ void main() {
 
     test('applies template name prefill when no positional text is provided',
         () async {
-      final typeOutput = await _capturePrints(() async {
-        await createCommand(
-          'ignored',
-          db,
-          config,
-          asType: true,
-          name: 'Recipe',
-        );
-      });
-      final typeId = _extractCreatedId(typeOutput);
+      final typeResult = await createCommand(
+        'ignored',
+        db,
+        config,
+        asType: true,
+        name: 'Recipe',
+      );
+      final typeId = typeResult.objectId;
 
-      final templateOutput = await _capturePrints(() async {
-        await createCommand(
-          'seed body',
-          db,
-          config,
-          asTemplate: true,
-          name: 'Recipe Template',
-          targetObjectType: typeId,
-        );
-      });
-      final templateId = _extractCreatedId(templateOutput);
+      final templateResult = await createCommand(
+        'seed body',
+        db,
+        config,
+        asTemplate: true,
+        name: 'Recipe Template',
+        targetObjectType: typeId,
+      );
+      final templateId = templateResult.objectId;
 
-      final objectOutput = await _capturePrints(() async {
-        await createCommand(
-          '',
-          db,
-          config,
-          templateId: templateId,
-          textProvided: false,
-        );
-      });
-      final objectId = _extractCreatedId(objectOutput);
+      final objectResult = await createCommand(
+        '',
+        db,
+        config,
+        templateId: templateId,
+        textProvided: false,
+      );
+      final objectId = objectResult.objectId;
 
       final replayed = await _replayObject(db, config, objectId);
       expect(
@@ -297,28 +281,6 @@ void main() {
       expect(titleBlock.text.text, 'Recipe Template');
     });
   });
-}
-
-Future<String> _capturePrints(Future<void> Function() run) async {
-  final lines = <String>[];
-  await runZoned(
-    run,
-    zoneSpecification: ZoneSpecification(
-      print: (_, __, ___, String line) {
-        lines.add(line);
-      },
-    ),
-  );
-  return lines.join('\n');
-}
-
-String _extractCreatedId(String output) {
-  final match =
-      RegExp(r'^Created [^:]+: (\S+)$', multiLine: true).firstMatch(output);
-  if (match == null) {
-    throw StateError('Could not find created object id in output:\n$output');
-  }
-  return match.group(1)!;
 }
 
 Future<ReplayedObjectState> _replayObject(
