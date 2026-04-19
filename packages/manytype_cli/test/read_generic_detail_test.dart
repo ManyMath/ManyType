@@ -62,9 +62,8 @@ void main() {
       stringListValue: const ['description', 'sourceObject'],
     );
 
-    final output = await _capturePrints(() async {
-      await readCommand(db, config, objectId: objectId);
-    });
+    final result = await readCommand(db, config, objectId: objectId);
+    final output = result.detail!.lines.join('\n');
 
     expect(output, contains('[description] Readable description'));
     expect(
@@ -124,17 +123,4 @@ Future<Uint8List> _treeKeyForObject(CliConfig config, String objectId) async {
     ..setRange(32, 64, identity.accountKeyPair.publicKey);
   final spaceKey = await deriveSpaceKey(accountPrivRaw);
   return deriveTreeKey(spaceKey, objectId);
-}
-
-Future<String> _capturePrints(Future<void> Function() fn) async {
-  final prints = <String>[];
-  await runZoned(
-    () async => await fn(),
-    zoneSpecification: ZoneSpecification(
-      print: (_, __, ___, String msg) {
-        prints.add(msg);
-      },
-    ),
-  );
-  return prints.join('\n');
 }

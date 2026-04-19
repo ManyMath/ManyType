@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:manytype_cli/src/store/database_opener.dart';
@@ -158,16 +157,15 @@ void main() {
         cid: 'bafy-metadata-hash',
       );
 
-      final output = await _capturePrints(() async {
-        await readCommand(
-          db,
-          CliConfig(
-            mnemonic: generateMnemonic(),
-            serverAddress: '127.0.0.1:33020',
-          ),
-          objectId: 'obj-1',
-        );
-      });
+      final readResult = await readCommand(
+        db,
+        CliConfig(
+          mnemonic: generateMnemonic(),
+          serverAddress: '127.0.0.1:33020',
+        ),
+        objectId: 'obj-1',
+      );
+      final output = readResult.detail!.lines.join('\n');
 
       expect(output, contains('Attachments:'));
       expect(output, contains('file-1 (cid=bafy-metadata-hash)'));
@@ -193,17 +191,4 @@ Uint8List _lengthPrefixed(List<Uint8List> messages) {
     builder.add(message);
   }
   return builder.toBytes();
-}
-
-Future<String> _capturePrints(Future<void> Function() run) async {
-  final lines = <String>[];
-  await runZoned(
-    run,
-    zoneSpecification: ZoneSpecification(
-      print: (_, __, ___, String line) {
-        lines.add(line);
-      },
-    ),
-  );
-  return lines.join('\n');
 }

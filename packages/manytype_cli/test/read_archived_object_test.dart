@@ -51,9 +51,8 @@ void main() {
       boolValue: 'true',
     );
 
-    final readOutput = await _capturePrints(() async {
-      await readCommand(db, config);
-    });
+    final readResult = await readCommand(db, config);
+    final readOutput = readResult.listing!.lines.join('\n');
     expect(readOutput, isNot(contains(objectId)));
     expect(readOutput, isNot(contains('Archived object')));
 
@@ -205,19 +204,6 @@ Future<Uint8List> _treeKeyForObject(CliConfig config, String objectId) async {
     ..setRange(32, 64, identity.accountKeyPair.publicKey);
   final spaceKey = await deriveSpaceKey(accountPrivRaw);
   return deriveTreeKey(spaceKey, objectId);
-}
-
-Future<String> _capturePrints(Future<void> Function() fn) async {
-  final prints = <String>[];
-  await runZoned(
-    () async => await fn(),
-    zoneSpecification: ZoneSpecification(
-      print: (_, __, ___, String msg) {
-        prints.add(msg);
-      },
-    ),
-  );
-  return prints.join('\n');
 }
 
 String _findRepoRoot() {

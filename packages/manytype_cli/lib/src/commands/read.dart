@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:libcompress/src/snappy/snappy_codec.dart';
@@ -17,11 +16,58 @@ import '../store/database.dart';
 
 final _snappy = SnappyCodec();
 
+/// Rendered text report for the `read` command's list-all-objects view
+/// (no object ID given). `lines` mirrors exactly what the CLI printed to
+/// stdout, one entry per line (including blank separator lines).
+class ReadListResult {
+  const ReadListResult({required this.spaceId, required this.lines});
+
+  final String spaceId;
+  final List<String> lines;
+}
+
+/// Rendered text report for the `read` command's single-object detail view.
+/// `lines` mirrors exactly what the CLI printed to stdout, one entry per
+/// line (including blank separator lines).
+class ReadDetailResult {
+  const ReadDetailResult({
+    required this.objectId,
+    required this.lines,
+    this.notFound = false,
+  });
+
+  final String objectId;
+  final List<String> lines;
+
+  /// True when no local changes exist for [objectId]: [lines] then holds
+  /// just the "Object not found" message.
+  final bool notFound;
+}
+
+/// Result of [readCommand]. Exactly one of [listing]/[detail] is non-null,
+/// depending on whether an `objectId` was passed.
+class ReadResult {
+  const ReadResult({this.listing, this.detail});
+
+  final ReadListResult? listing;
+  final ReadDetailResult? detail;
+}
+
+/// Thrown by [readCommand] when the requested object has been deleted or
+/// archived. Distinct from the "not found locally" case (which is not an
+/// error: see [ReadDetailResult.notFound]).
+class ObjectUnavailableError extends StateError {
+  ObjectUnavailableError(this.objectId)
+      : super('Object $objectId has been deleted or archived');
+
+  final String objectId;
+}
+
 /// Read and display objects from local store.
 ///
 /// Without arguments: lists all objects with text previews.
 /// With object ID: shows that object's full content.
-Future<void> readCommand(
+Future<ReadResult> readCommand(
   ManytypeDatabase db,
   CliConfig config, {
   String? objectId,
@@ -30,27 +76,30 @@ Future<void> readCommand(
   final spaceId = identity.spaceId;
 
   if (objectId != null) {
-    await _showObject(db, config, objectId);
+    return ReadResult(detail: await _showObject(db, config, objectId));
   } else {
-    await _listObjects(db, spaceId, config);
+    return ReadResult(listing: await _listObjects(db, spaceId, config));
   }
 }
 
 /// List all objects in the space with text previews.
-Future<void> _listObjects(
+Future<ReadListResult> _listObjects(
   ManytypeDatabase db,
   String spaceId,
   CliConfig config,
 ) async {
+  final lines = <String>[];
+  void emit(String line) => lines.add(line);
+
   final objects = await db.getNonDeletedObjectsBySpace(spaceId);
   if (objects.isEmpty) {
-    print('No objects found. Create one with: manytype create "your text"');
-    return;
+    emit('No objects found. Create one with: manytype create "your text"');
+    return ReadListResult(spaceId: spaceId, lines: lines);
   }
 
   final spaceKey = await _tryDeriveSpaceKey(config);
-  print('Objects in space ($spaceId):');
-  print('');
+  emit('Objects in space ($spaceId):');
+  emit('');
   for (final obj in objects) {
     if (await _isObjectArchived(db, obj.id, spaceKey)) {
       continue;
@@ -60,28 +109,33 @@ Future<void> _listObjects(
     final attachments = await db.getAttachmentRefsByObject(obj.id);
     final textPreview = extractTextPreview(changes);
 
-    print('  ${obj.id}');
-    print('    Created: ${obj.createdAt}');
-    print('    Changes: ${changes.length}');
-    print('    Heads: ${heads.join(", ")}');
+    emit('  ${obj.id}');
+    emit('    Created: ${obj.createdAt}');
+    emit('    Changes: ${changes.length}');
+    emit('    Heads: ${heads.join(", ")}');
     if (textPreview.isNotEmpty) {
-      print('    Text: $textPreview');
+      emit('    Text: $textPreview');
     }
-    _printAttachmentRefs(attachments, indent: '    ');
-    print('');
+    _printAttachmentRefs(attachments, emit, indent: '    ');
+    emit('');
   }
+
+  return ReadListResult(spaceId: spaceId, lines: lines);
 }
 
 /// Show detailed content for a specific object.
-Future<void> _showObject(
+Future<ReadDetailResult> _showObject(
   ManytypeDatabase db,
   CliConfig config,
   String objectId,
 ) async {
+  final lines = <String>[];
+  void emit(String line) => lines.add(line);
+
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
-    print('Object not found: $objectId');
-    return;
+    emit('Object not found: $objectId');
+    return ReadDetailResult(objectId: objectId, lines: lines, notFound: true);
   }
 
   // Official Anytype trees encrypt `TreeChange.changesData` using a tree key
@@ -106,8 +160,7 @@ Future<void> _showObject(
 
   if (await db.isObjectDeleted(objectId) ||
       await _isObjectArchived(db, objectId, spaceKey)) {
-    print('Object $objectId has been deleted or archived');
-    exit(1);
+    throw ObjectUnavailableError(objectId);
   }
 
   // Phase 38: Build the STRelationOption index ONCE per read invocation.
@@ -141,29 +194,30 @@ Future<void> _showObject(
     }
   }
 
-  print('Object: $objectId');
-  print('Changes: ${changes.length}');
+  emit('Object: $objectId');
+  emit('Changes: ${changes.length}');
 
   // Extract and display SmartBlockType from root change.
   final smartBlockType = _extractSmartBlockType(changes);
   if (smartBlockType != null) {
     switch (smartBlockType) {
       case 528: // SmartBlockType.STType
-        print('  Kind: [Type]');
+        emit('  Kind: [Type]');
       case 521: // SmartBlockType.STRelation
-        print('  Kind: [Relation]');
+        emit('  Kind: [Relation]');
       case 288: // SmartBlockType.Template
-        print('  Kind: [Template]');
+        emit('  Kind: [Template]');
       case 16: // SmartBlockType.Page
-        print('  Kind: [Page]');
+        emit('  Kind: [Page]');
       default:
-        print('  Kind: [$smartBlockType]');
+        emit('  Kind: [$smartBlockType]');
     }
   }
 
   // Extract snapshot metadata (objectTypes, relationLinks, details, Dataview blocks).
   await _printSnapshotMetadata(
     changes,
+    emit,
     db: db,
     spaceKey: spaceKey,
     cachedChangesByObject: cachedChangesByObject,
@@ -172,14 +226,14 @@ Future<void> _showObject(
     optIndex: optIndex,
   );
 
-  _printAttachmentRefs(await db.getAttachmentRefsByObject(objectId));
-  print('');
+  _printAttachmentRefs(await db.getAttachmentRefsByObject(objectId), emit);
+  emit('');
 
   for (final change in changes) {
     try {
       // Database rawBytes = serialized RawTreeChange (payload + signature).
       final rawTreeChange = RawTreeChange.fromBuffer(change.rawBytes);
-      print('  Change ${change.id}:');
+      emit('  Change ${change.id}:');
 
       if (rawTreeChange.payload.isNotEmpty) {
         // Try as TreeChange first (non-root changes have changesData).
@@ -188,20 +242,23 @@ Future<void> _showObject(
           if (treeChange.changesData.isNotEmpty) {
             await _printBlockChanges(
               treeChange,
+              emit,
               treeKey: treeKey,
             );
           } else {
-            print('    (no block data)');
+            emit('    (no block data)');
           }
         } catch (_) {
           // Root changes use RootChange proto (no changesData).
-          print('    (root change)');
+          emit('    (root change)');
         }
       }
     } catch (e) {
-      print('  Change ${change.id}: (binary, ${change.rawBytes.length} bytes)');
+      emit('  Change ${change.id}: (binary, ${change.rawBytes.length} bytes)');
     }
   }
+
+  return ReadDetailResult(objectId: objectId, lines: lines);
 }
 
 Future<Uint8List?> _tryDeriveSpaceKey(CliConfig config) async {
@@ -246,18 +303,19 @@ Future<bool> _isObjectArchived(
 }
 
 void _printAttachmentRefs(
-  List<StoredAttachmentRef> attachments, {
+  List<StoredAttachmentRef> attachments,
+  void Function(String) emit, {
   String indent = '',
 }) {
   if (attachments.isEmpty) {
     return;
   }
 
-  print('${indent}Attachments:');
+  emit('${indent}Attachments:');
   for (final attachment in attachments) {
     final cidLabel =
         attachment.cid.isEmpty ? 'metadata only' : 'cid=${attachment.cid}';
-    print('${indent}  ${attachment.fileId} ($cidLabel)');
+    emit('${indent}  ${attachment.fileId} ($cidLabel)');
   }
 }
 
@@ -336,7 +394,8 @@ String _extractTextFromDecodedChangeBytes(Uint8List decoded) {
 /// `_printSnapshotBlocks` can render the *current* replayed state (Phase 37:
 /// BlockUpdate mutations must be visible on re-read).
 Future<void> _printSnapshotMetadata(
-  List<Change> changes, {
+  List<Change> changes,
+  void Function(String) emit, {
   required ManytypeDatabase db,
   required Uint8List? spaceKey,
   Map<String, List<Change>> cachedChangesByObject = const {},
@@ -379,12 +438,12 @@ Future<void> _printSnapshotMetadata(
 
   // objectTypes
   if (snapData.objectTypes.isNotEmpty) {
-    print('  Type: ${snapData.objectTypes.join(', ')}');
+    emit('  Type: ${snapData.objectTypes.join(', ')}');
   }
 
   // relationLinks
   if (snapData.relationLinks.isNotEmpty) {
-    print(
+    emit(
         '  Relations: ${snapData.relationLinks.map((l) => l.key).join(', ')}');
   }
 
@@ -392,10 +451,10 @@ Future<void> _printSnapshotMetadata(
   if (snapData.hasDetails()) {
     final fields = snapData.details.fields;
     if (fields.containsKey('name')) {
-      print('  Name: ${fields['name']!.stringValue}');
+      emit('  Name: ${fields['name']!.stringValue}');
     }
     if (smartBlockType == 521 && fields.containsKey('relationFormat')) {
-      print('  Format: ${_formatName(fields['relationFormat']!.numberValue)}');
+      emit('  Format: ${_formatName(fields['relationFormat']!.numberValue)}');
     }
     if (fields.containsKey('targetObjectType')) {
       final targetTypeId = fields['targetObjectType']!.stringValue;
@@ -406,13 +465,13 @@ Future<void> _printSnapshotMetadata(
         cachedChanges: cachedChangesByObject[targetTypeId],
       );
       if (targetTypeName == null) {
-        print('  Target Type: $targetTypeId');
+        emit('  Target Type: $targetTypeId');
       } else {
-        print('  Target Type: $targetTypeName ($targetTypeId)');
+        emit('  Target Type: $targetTypeName ($targetTypeId)');
       }
     }
     if (fields.containsKey('sourceObject')) {
-      print('  Source Template: ${fields['sourceObject']!.stringValue}');
+      emit('  Source Template: ${fields['sourceObject']!.stringValue}');
     }
   }
 
@@ -422,7 +481,7 @@ Future<void> _printSnapshotMetadata(
       final dv = block.dataview;
       final sources = dv.source.join(', ');
       final viewCount = dv.views.length;
-      print('  [Dataview] source: $sources, views: $viewCount');
+      emit('  [Dataview] source: $sources, views: $viewCount');
     }
   }
 
@@ -559,7 +618,7 @@ Future<void> _printSnapshotMetadata(
     final val = mergedDetails[link.key];
     if (val == null) continue;
     final rendered = _formatOptionRelationValue(val, optIndex);
-    print('  [${link.key}] $rendered');
+    emit('  [${link.key}] $rendered');
     renderedRelationKeys.add(link.key);
   }
   // Value-based fallback: detect option-relation details whose values
@@ -581,7 +640,7 @@ Future<void> _printSnapshotMetadata(
       }
       if (!looksLikeOptionRef) continue;
       final rendered = _formatOptionRelationValue(val, optIndex);
-      print('  [${entry.key}] $rendered');
+      emit('  [${entry.key}] $rendered');
       renderedRelationKeys.add(entry.key);
     }
   }
@@ -601,7 +660,7 @@ Future<void> _printSnapshotMetadata(
       assumeFileRelation: true,
     );
     if (rendered == null) continue;
-    print('  [${link.key}] $rendered');
+    emit('  [${link.key}] $rendered');
     renderedRelationKeys.add(link.key);
   }
   if (spaceKey != null) {
@@ -615,7 +674,7 @@ Future<void> _printSnapshotMetadata(
         assumeFileRelation: false,
       );
       if (rendered == null) continue;
-      print('  [${entry.key}] $rendered');
+      emit('  [${entry.key}] $rendered');
       renderedRelationKeys.add(entry.key);
     }
   }
@@ -626,13 +685,14 @@ Future<void> _printSnapshotMetadata(
     }
     final rendered = _formatGenericDetailValue(entry.value);
     if (rendered == null) continue;
-    print('  [${entry.key}] $rendered');
+    emit('  [${entry.key}] $rendered');
     renderedRelationKeys.add(entry.key);
   }
 
-  _printSnapshotBlocks(blockOrder, blockState);
+  _printSnapshotBlocks(blockOrder, blockState, emit);
   await _printCollectionMembers(
     db,
+    emit,
     spaceKey: spaceKey,
     blocks: blockState.values.toList(growable: false),
     collections: mergedCollections,
@@ -648,6 +708,7 @@ Future<void> _printSnapshotMetadata(
 void _printSnapshotBlocks(
   List<String> blockOrder,
   Map<String, Block> blockState,
+  void Function(String) emit,
 ) {
   // Structural blocks with well-known fixed ids (see
   // manytype_core/lib/src/crdt/block.dart createMinimalPageSnapshotBase).
@@ -669,39 +730,40 @@ void _printSnapshotBlocks(
     switch (style) {
       case Block_Content_Text_Style.Checkbox:
         final mark = block.text.checked ? '[x]' : '[ ]';
-        print('    [${block.id}] $mark [Checkbox] $text');
+        emit('    [${block.id}] $mark [Checkbox] $text');
         break;
       case Block_Content_Text_Style.Header1:
-        print('    [${block.id}] [Header1] $text');
+        emit('    [${block.id}] [Header1] $text');
         break;
       case Block_Content_Text_Style.Header2:
-        print('    [${block.id}] [Header2] $text');
+        emit('    [${block.id}] [Header2] $text');
         break;
       case Block_Content_Text_Style.Header3:
-        print('    [${block.id}] [Header3] $text');
+        emit('    [${block.id}] [Header3] $text');
         break;
       case Block_Content_Text_Style.Quote:
-        print('    [${block.id}] [Quote] $text');
+        emit('    [${block.id}] [Quote] $text');
         break;
       case Block_Content_Text_Style.Numbered:
-        print('    [${block.id}] [Numbered] $text');
+        emit('    [${block.id}] [Numbered] $text');
         break;
       case Block_Content_Text_Style.Toggle:
-        print('    [${block.id}] [Toggle] $text');
+        emit('    [${block.id}] [Toggle] $text');
         break;
       case Block_Content_Text_Style.Callout:
-        print('    [${block.id}] [Callout] $text');
+        emit('    [${block.id}] [Callout] $text');
         break;
       case Block_Content_Text_Style.Paragraph:
       default:
-        print('    [${block.id}] [Paragraph] $text');
+        emit('    [${block.id}] [Paragraph] $text');
         break;
     }
   }
 }
 
 Future<void> _printCollectionMembers(
-  ManytypeDatabase db, {
+  ManytypeDatabase db,
+  void Function(String) emit, {
   required Uint8List? spaceKey,
   required List<Block> blocks,
   required Map<String, Value> collections,
@@ -720,10 +782,10 @@ Future<void> _printCollectionMembers(
       ? const <String>[]
       : _readCollectionStringList(collections[storeKey]);
 
-  print('');
-  print('## Members');
+  emit('');
+  emit('## Members');
   if (memberIds.isEmpty) {
-    print('(empty)');
+    emit('(empty)');
     return;
   }
 
@@ -734,7 +796,7 @@ Future<void> _printCollectionMembers(
       spaceKey: spaceKey,
       cachedChanges: cachedChangesByObject[memberId],
     );
-    print('- ${memberName ?? '<unknown>'} ($memberId)');
+    emit('- ${memberName ?? '<unknown>'} ($memberId)');
   }
 }
 
@@ -852,7 +914,8 @@ void _insertCollectionIds(
 
 /// Print block content from changesData bytes.
 Future<void> _printBlockChanges(
-  TreeChange treeChange, {
+  TreeChange treeChange,
+  void Function(String) emit, {
   required Uint8List? treeKey,
 }) async {
   try {
@@ -866,19 +929,19 @@ Future<void> _printBlockChanges(
         final key = content.detailsSet.key;
         final val = content.detailsSet.value;
         if (key == 'name' && val.hasStringValue()) {
-          print('    Text (updated): "${val.stringValue}"');
+          emit('    Text (updated): "${val.stringValue}"');
         } else if (val.hasStringValue()) {
-          print('    $key: ${val.stringValue}');
+          emit('    $key: ${val.stringValue}');
         } else if (val.hasBoolValue()) {
-          print('    $key (bool): ${val.boolValue}');
+          emit('    $key (bool): ${val.boolValue}');
         } else if (val.hasNumberValue()) {
           final dt = DateTime.fromMillisecondsSinceEpoch(
             val.numberValue.toInt() * 1000,
             isUtc: true,
           );
-          print('    $key (date): ${dt.toIso8601String().substring(0, 10)}');
+          emit('    $key (date): ${dt.toIso8601String().substring(0, 10)}');
         } else if (val.hasListValue()) {
-          print('    $key: ${_formatGenericStringList(val.listValue)}');
+          emit('    $key: ${_formatGenericStringList(val.listValue)}');
         }
       }
       if (content.hasBlockCreate()) {
@@ -889,22 +952,22 @@ Future<void> _printBlockChanges(
             switch (style) {
               case Block_Content_Text_Style.Checkbox:
                 final mark = block.text.checked ? '[x]' : '[ ]';
-                print('    [${block.id}] $mark [Checkbox] $text');
+                emit('    [${block.id}] $mark [Checkbox] $text');
               case Block_Content_Text_Style.Numbered:
-                print('    [${block.id}] [Numbered] $text');
+                emit('    [${block.id}] [Numbered] $text');
               case Block_Content_Text_Style.Toggle:
-                print('    [${block.id}] [Toggle] $text');
+                emit('    [${block.id}] [Toggle] $text');
               case Block_Content_Text_Style.Quote:
-                print('    [${block.id}] [Quote] $text');
+                emit('    [${block.id}] [Quote] $text');
               case Block_Content_Text_Style.Callout:
-                print('    [${block.id}] [Callout] $text');
+                emit('    [${block.id}] [Callout] $text');
               default:
-                print('    [${block.id}] Text: "$text"');
+                emit('    [${block.id}] Text: "$text"');
             }
           }
           if (block.hasDataview()) {
             final dv = block.dataview;
-            print(
+            emit(
                 '    [${block.id}] [Dataview] source: ${dv.source.join(', ')}, views: ${dv.views.length}');
           }
         }
@@ -914,7 +977,7 @@ Future<void> _printBlockChanges(
           try {
             final eventMsg = Event_Message.fromBuffer(eventBytes);
             if (eventMsg.hasBlockSetText()) {
-              print(
+              emit(
                   '    Text (updated): "${eventMsg.blockSetText.text.value}"');
             }
           } catch (_) {
@@ -924,7 +987,7 @@ Future<void> _printBlockChanges(
       }
     }
   } catch (e) {
-    print('    (could not decode block changes)');
+    emit('    (could not decode block changes)');
   }
 }
 

@@ -14,6 +14,7 @@ export 'src/commands/file_transfer.dart';
 export 'src/commands/list.dart';
 export 'src/commands/probe_file_node.dart';
 export 'src/commands/probe_network.dart';
+export 'src/commands/read.dart';
 export 'src/commands/space_delete.dart';
 export 'src/commands/space_pull_flow.dart';
 export 'src/config.dart';

@@ -17,6 +17,8 @@ import '../store/database.dart';
 import '../sync_service.dart';
 import 'create.dart';
 import 'delete.dart';
+import 'edit.dart';
+import 'read.dart';
 
 final _snappy = SnappyCodec();
 
@@ -124,10 +126,9 @@ Future<List<ObjectMeta>> listCommand(
       .toList();
 }
 
-/// Library-facing facade over object listing/creation/deletion, for
-/// consumers that hold a [ManytypeSession] instead of driving the CLI
-/// directly. Exposed as `session.objects` — gains an `edit` method as that
-/// command module converts in turn (see docs/m016-web-api-surface.md).
+/// Library-facing facade over object listing/creation/deletion/editing/
+/// reading, for consumers that hold a [ManytypeSession] instead of driving
+/// the CLI directly. Exposed as `session.objects`.
 class ListFacade {
   const ListFacade(this._session);
 
@@ -209,6 +210,68 @@ class ListFacade {
       networkConfigPath: networkConfigPath,
       syncService: syncService,
     );
+  }
+
+  Future<EditResult> edit(
+    String objectId,
+    String? newText, {
+    required String networkConfigPath,
+    SyncService? syncService,
+    bool checkbox = false,
+    String? checkboxText,
+    String? relationKey,
+    String? stringValue,
+    List<String>? stringListValue,
+    String? boolValue,
+    String? dateValue,
+    String? fileRelationPath,
+    String? objectIdValue,
+    String? blockId,
+    String? setText,
+    bool? setChecked,
+    Block_Content_Text_Style? setStyle,
+    String? status,
+    List<String>? tagIds,
+    List<String> tagAdds = const <String>[],
+    List<String> tagRemoves = const <String>[],
+    String? collectionAddId,
+    String? collectionRemoveId,
+    String? collectionMoveId,
+    String afterId = '',
+  }) {
+    return editCommand(
+      objectId,
+      newText,
+      _session.db,
+      _session.config,
+      networkConfigPath: networkConfigPath,
+      syncService: syncService,
+      checkbox: checkbox,
+      checkboxText: checkboxText,
+      relationKey: relationKey,
+      stringValue: stringValue,
+      stringListValue: stringListValue,
+      boolValue: boolValue,
+      dateValue: dateValue,
+      fileRelationPath: fileRelationPath,
+      objectIdValue: objectIdValue,
+      blockId: blockId,
+      setText: setText,
+      setChecked: setChecked,
+      setStyle: setStyle,
+      status: status,
+      tagIds: tagIds,
+      tagAdds: tagAdds,
+      tagRemoves: tagRemoves,
+      collectionAddId: collectionAddId,
+      collectionRemoveId: collectionRemoveId,
+      collectionMoveId: collectionMoveId,
+      afterId: afterId,
+    );
+  }
+
+  Future<ReadResult> read({String? objectId}) {
+    return readCommand(_session.db, _session.config, objectId: objectId);
   }
 }
 

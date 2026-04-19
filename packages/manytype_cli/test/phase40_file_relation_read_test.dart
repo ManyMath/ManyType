@@ -61,9 +61,8 @@ void main() {
         ),
       );
 
-      final output = await _capturePrints(() async {
-        await readCommand(db, config, objectId: parentId);
-      });
+      final readResult = await readCommand(db, config, objectId: parentId);
+      final output = readResult.detail!.lines.join('\n');
 
       expect(output, contains('[attachment] spec.pdf (application/pdf)'));
     });
@@ -87,9 +86,8 @@ void main() {
         ),
       );
 
-      final output = await _capturePrints(() async {
-        await readCommand(db, config, objectId: parentId);
-      });
+      final readResult = await readCommand(db, config, objectId: parentId);
+      final output = readResult.detail!.lines.join('\n');
 
       expect(output, contains('[attachment] <unknown-file:missing->'));
     });
@@ -125,9 +123,8 @@ void main() {
         ),
       );
 
-      final output = await _capturePrints(() async {
-        await readCommand(db, config, objectId: parentId);
-      });
+      final readResult = await readCommand(db, config, objectId: parentId);
+      final output = readResult.detail!.lines.join('\n');
 
       expect(output, contains('[attachment] diagram.png (image/png)'));
     });
@@ -247,17 +244,4 @@ Uint8List _encodeVarint(int value) {
   }
   out.add(current & 0x7f);
   return Uint8List.fromList(out);
-}
-
-Future<String> _capturePrints(Future<void> Function() run) async {
-  final lines = <String>[];
-  await runZoned(
-    run,
-    zoneSpecification: ZoneSpecification(
-      print: (_, __, ___, String line) {
-        lines.add(line);
-      },
-    ),
-  );
-  return lines.join('\n');
 }

@@ -649,7 +649,14 @@ Future<void> main(List<String> arguments) async {
 
       final db = ManytypeDatabase(active.dbPath);
       final objId = command.rest.isNotEmpty ? command.rest.first : null;
-      await readCommand(db, config, objectId: objId);
+      try {
+        final readResult = await readCommand(db, config, objectId: objId);
+        final readLines = readResult.listing?.lines ?? readResult.detail!.lines;
+        readLines.forEach(print);
+      } on ObjectUnavailableError catch (e) {
+        print(e.message);
+        exitCode = 1;
+      }
       await db.close();
       break;
 
