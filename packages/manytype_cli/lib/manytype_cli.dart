@@ -17,6 +17,7 @@ export 'src/commands/probe_network.dart';
 export 'src/commands/read.dart';
 export 'src/commands/space_delete.dart';
 export 'src/commands/space_pull_flow.dart';
+export 'src/commands/sync.dart';
 export 'src/config.dart';
 export 'src/consensus_service.dart';
 export 'src/coordinator_service.dart';
