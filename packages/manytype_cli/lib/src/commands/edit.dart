@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' show File;
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -23,7 +23,73 @@ import 'file_transfer.dart';
 
 final _snappy = SnappyCodec();
 
-Future<void> editCommand(
+/// File object created by [editCommand] when writing a `--file-relation`
+/// value (a new FileObject is created and uploaded, then referenced by ID).
+class FileRelationWriteResult {
+  const FileRelationWriteResult({
+    required this.fileObjectId,
+    required this.cid,
+    required this.fileName,
+    required this.mime,
+    required this.uploaded,
+  });
+
+  final String fileObjectId;
+  final String cid;
+  final String fileName;
+  final String mime;
+  final bool uploaded;
+}
+
+/// Result of [editCommand]. Only the fields relevant to the edit(s)
+/// actually requested are non-null/non-empty.
+class EditResult {
+  const EditResult({
+    required this.objectId,
+    this.textChangeId,
+    this.blockChangeId,
+    this.relationChangeId,
+    this.relationKey,
+    this.fileRelationResult,
+    this.relationStringValue,
+    this.relationStringListValue,
+    this.relationStatus,
+    this.relationTagIds,
+    this.relationTagAdds = const <String>[],
+    this.relationTagRemoves = const <String>[],
+    this.relationBoolValue,
+    this.relationDateValue,
+    this.relationObjectIdValue,
+    this.blockUpdateChangeId,
+    this.blockId,
+    this.blockUpdateDescription,
+    this.collectionChangeId,
+    this.collectionChangeDescription,
+  });
+
+  final String objectId;
+  final String? textChangeId;
+  final String? blockChangeId;
+  final String? relationChangeId;
+  final String? relationKey;
+  final FileRelationWriteResult? fileRelationResult;
+  final String? relationStringValue;
+  final List<String>? relationStringListValue;
+  final String? relationStatus;
+  final List<String>? relationTagIds;
+  final List<String> relationTagAdds;
+  final List<String> relationTagRemoves;
+  final String? relationBoolValue;
+  final String? relationDateValue;
+  final String? relationObjectIdValue;
+  final String? blockUpdateChangeId;
+  final String? blockId;
+  final String? blockUpdateDescription;
+  final String? collectionChangeId;
+  final String? collectionChangeDescription;
+}
+
+Future<EditResult> editCommand(
   String objectId,
   String? newText,
   ManytypeDatabase db,
@@ -54,8 +120,7 @@ Future<void> editCommand(
 }) async {
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
-    print('Object not found locally — run `manytype sync` first');
-    exit(1);
+    throw StateError('Object not found locally: run `manytype sync` first');
   }
 
   syncService ??= SyncService();
@@ -64,8 +129,7 @@ Future<void> editCommand(
   final freshChanges = await db.getChangesForObject(objectId);
   final currentHeads = await db.getObjectHeads(objectId);
   if (currentHeads.isEmpty) {
-    print('No heads found for object $objectId after sync');
-    exit(1);
+    throw StateError('No heads found for object $objectId after sync');
   }
 
   String? snapshotBaseId;
@@ -77,8 +141,7 @@ Future<void> editCommand(
     }
   }
   if (snapshotBaseId == null) {
-    print('Could not find root change for object $objectId');
-    exit(1);
+    throw StateError('Could not find root change for object $objectId');
   }
 
   final identity = await Identity.fromMnemonic(config.mnemonic);
@@ -355,8 +418,7 @@ Future<void> editCommand(
       treeKey,
     );
     if (collectionState == null) {
-      print('Error: object $objectId is not a collection');
-      exit(1);
+      throw StateError('Error: object $objectId is not a collection');
     }
 
     final storeKey = collectionState.storeKey;
@@ -382,10 +444,9 @@ Future<void> editCommand(
       collectionChangeDescription = 'collection-remove=$collectionRemoveId';
     } else {
       if (!memberIds.contains(memberId)) {
-        print(
+        throw StateError(
           'Error: collection member $memberId is not present in $objectId',
         );
-        exit(1);
       }
       collectionOp = buildStoreSliceUpdateMove(
         key: storeKey,
@@ -433,11 +494,10 @@ Future<void> editCommand(
         replayed.snapshot.details.fields['name']?.stringValue.trim() ?? '';
     final actualText = _extractPrimaryTextBlockText(replayed.snapshot) ?? '';
     if (actualName != newText || actualText != newText) {
-      print(
+      throw StateError(
         'Verification failed: name="$actualName" text="$actualText" '
         'does not match expected "$newText"',
       );
-      exit(1);
     }
   }
   if (relationKey != null && fileRelationResult != null) {
@@ -450,20 +510,18 @@ Future<void> editCommand(
     );
     final actualValue = actualDetails[relationKey];
     if (!_detailValuesEqual(actualValue, expectedRelationValue)) {
-      print(
+      throw StateError(
         'Verification failed: relation $relationKey does not match the '
         'expected value after sync',
       );
-      exit(1);
     }
     final fileObjectChanges =
         await db.getChangesForObject(fileRelationResult.fileObjectId);
     if (fileObjectChanges.isEmpty) {
-      print(
+      throw StateError(
         'Verification failed: FileObject ${fileRelationResult.fileObjectId} '
         'is missing locally after sync',
       );
-      exit(1);
     }
   } else if (relationKey != null && expectedRelationValue != null) {
     final verifyChanges = await db.getChangesForObject(objectId);
@@ -475,67 +533,43 @@ Future<void> editCommand(
     );
     final actualValue = actualDetails[relationKey];
     if (!_detailValuesEqual(actualValue, expectedRelationValue)) {
-      print(
+      throw StateError(
         'Verification failed: relation $relationKey does not match the '
         'expected value after sync',
       );
-      exit(1);
     }
   }
 
-  print('Edited object: $objectId');
-  if (textChangeId != null) print('Text change: $textChangeId');
-  if (blockChangeId != null) print('Block change: $blockChangeId');
-  if (relationChangeId != null) {
-    if (fileRelationResult != null) {
-      final mimeSuffix = _hasSpecificMime(fileRelationResult.mime)
-          ? ' (${fileRelationResult.mime})'
-          : '';
-      print(
-        'Relation change: $relationChangeId '
-        '($relationKey = ${fileRelationResult.fileObjectId})',
-      );
-      print(
-        'FileObject: ${fileRelationResult.fileObjectId} '
-        '[${fileRelationResult.fileName}$mimeSuffix, '
-        'cid=${fileRelationResult.cid}, '
-        '${fileRelationResult.uploaded ? "uploaded" : "existing-blob"}]',
-      );
-    } else if (stringValue != null) {
-      print('Set detail: $relationKey = $stringValue');
-    } else if (stringListValue != null) {
-      print('Set detail list: $relationKey = [${stringListValue.join(", ")}]');
-    } else if (status != null) {
-      print('Set status: $relationKey = $status');
-    } else if (tagIds != null) {
-      print(
-        'Set tag: $relationKey = [${tagIds.join(", ")}] (full replace, ${tagIds.length} values)',
-      );
-    } else if (tagAdds.isNotEmpty || tagRemoves.isNotEmpty) {
-      print(
-        'Updated tag: $relationKey '
-        '(added: ${tagAdds.join(", ")}; removed: ${tagRemoves.join(", ")})',
-      );
-    } else {
-      final displayValue = boolValue ?? dateValue ?? objectIdValue ?? '';
-      print(
-          'Relation change: $relationChangeId ($relationKey = $displayValue)');
-    }
-  }
-  if (blockUpdateChangeId != null) {
-    print(
-      'Block update: $blockUpdateChangeId (block-id=$blockId, $blockUpdateDescription)',
-    );
-  }
-  if (collectionChangeDescription != null) {
-    if (collectionChangeId != null) {
-      print(
-        'Collection change: $collectionChangeId ($collectionChangeDescription)',
-      );
-    } else {
-      print('Collection change: no-op ($collectionChangeDescription)');
-    }
-  }
+  return EditResult(
+    objectId: objectId,
+    textChangeId: textChangeId,
+    blockChangeId: blockChangeId,
+    relationChangeId: relationChangeId,
+    relationKey: relationKey,
+    fileRelationResult: fileRelationResult == null
+        ? null
+        : FileRelationWriteResult(
+            fileObjectId: fileRelationResult.fileObjectId,
+            cid: fileRelationResult.cid,
+            fileName: fileRelationResult.fileName,
+            mime: fileRelationResult.mime,
+            uploaded: fileRelationResult.uploaded,
+          ),
+    relationStringValue: stringValue,
+    relationStringListValue: stringListValue,
+    relationStatus: status,
+    relationTagIds: tagIds,
+    relationTagAdds: tagAdds,
+    relationTagRemoves: tagRemoves,
+    relationBoolValue: boolValue,
+    relationDateValue: dateValue,
+    relationObjectIdValue: objectIdValue,
+    blockUpdateChangeId: blockUpdateChangeId,
+    blockId: blockId,
+    blockUpdateDescription: blockUpdateDescription,
+    collectionChangeId: collectionChangeId,
+    collectionChangeDescription: collectionChangeDescription,
+  );
 }
 
 Future<({String storeKey, List<String> memberIds})?> _loadCollectionState(
@@ -1057,9 +1091,6 @@ Block_Content_File_Type _fileBlockTypeForMime(String mime) {
   }
   return Block_Content_File_Type.File;
 }
-
-bool _hasSpecificMime(String mime) =>
-    mime.isNotEmpty && mime != 'application/octet-stream';
 
 Uint8List _encodeVarint(int value) {
   var v = value;

@@ -9,6 +9,7 @@ export 'src/commands/acl_lifecycle.dart';
 export 'src/commands/consensus_flow.dart';
 export 'src/commands/create.dart';
 export 'src/commands/delete.dart';
+export 'src/commands/edit.dart';
 export 'src/commands/file_transfer.dart';
 export 'src/commands/list.dart';
 export 'src/commands/probe_file_node.dart';

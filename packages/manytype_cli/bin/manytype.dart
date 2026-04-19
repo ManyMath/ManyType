@@ -112,6 +112,83 @@ Future<void> _runAccountCommand(
   }
 }
 
+/// Print an [EditResult] in the CLI's human-readable format.
+void _printEditResult(EditResult result) {
+  print('Edited object: ${result.objectId}');
+  if (result.textChangeId != null) print('Text change: ${result.textChangeId}');
+  if (result.blockChangeId != null) {
+    print('Block change: ${result.blockChangeId}');
+  }
+  if (result.relationChangeId != null) {
+    final fileRelationResult = result.fileRelationResult;
+    if (fileRelationResult != null) {
+      final mimeSuffix = _hasSpecificMime(fileRelationResult.mime)
+          ? ' (${fileRelationResult.mime})'
+          : '';
+      print(
+        'Relation change: ${result.relationChangeId} '
+        '(${result.relationKey} = ${fileRelationResult.fileObjectId})',
+      );
+      print(
+        'FileObject: ${fileRelationResult.fileObjectId} '
+        '[${fileRelationResult.fileName}$mimeSuffix, '
+        'cid=${fileRelationResult.cid}, '
+        '${fileRelationResult.uploaded ? "uploaded" : "existing-blob"}]',
+      );
+    } else if (result.relationStringValue != null) {
+      print('Set detail: ${result.relationKey} = ${result.relationStringValue}');
+    } else if (result.relationStringListValue != null) {
+      print(
+        'Set detail list: ${result.relationKey} = '
+        '[${result.relationStringListValue!.join(", ")}]',
+      );
+    } else if (result.relationStatus != null) {
+      print('Set status: ${result.relationKey} = ${result.relationStatus}');
+    } else if (result.relationTagIds != null) {
+      final tagIds = result.relationTagIds!;
+      print(
+        'Set tag: ${result.relationKey} = [${tagIds.join(", ")}] '
+        '(full replace, ${tagIds.length} values)',
+      );
+    } else if (result.relationTagAdds.isNotEmpty ||
+        result.relationTagRemoves.isNotEmpty) {
+      print(
+        'Updated tag: ${result.relationKey} '
+        '(added: ${result.relationTagAdds.join(", ")}; '
+        'removed: ${result.relationTagRemoves.join(", ")})',
+      );
+    } else {
+      final displayValue = result.relationBoolValue ??
+          result.relationDateValue ??
+          result.relationObjectIdValue ??
+          '';
+      print(
+        'Relation change: ${result.relationChangeId} '
+        '(${result.relationKey} = $displayValue)',
+      );
+    }
+  }
+  if (result.blockUpdateChangeId != null) {
+    print(
+      'Block update: ${result.blockUpdateChangeId} '
+      '(block-id=${result.blockId}, ${result.blockUpdateDescription})',
+    );
+  }
+  if (result.collectionChangeDescription != null) {
+    if (result.collectionChangeId != null) {
+      print(
+        'Collection change: ${result.collectionChangeId} '
+        '(${result.collectionChangeDescription})',
+      );
+    } else {
+      print('Collection change: no-op (${result.collectionChangeDescription})');
+    }
+  }
+}
+
+bool _hasSpecificMime(String mime) =>
+    mime.isNotEmpty && mime != 'application/octet-stream';
+
 /// Print a [SpaceDeleteReport] in the CLI's human-readable format.
 void _printSpaceDeleteReport(SpaceDeleteReport report) {
   final initialPre =
@@ -794,7 +871,7 @@ Future<void> main(List<String> arguments) async {
       );
       final config = active.config;
       final db = ManytypeDatabase(active.dbPath);
-      await editCommand(objectId, newText, db, config,
+      final editResult = await editCommand(objectId, newText, db, config,
           networkConfigPath: networkConfigPath,
           checkbox: hasCheckbox,
           checkboxText: hasCheckbox
@@ -819,6 +896,7 @@ Future<void> main(List<String> arguments) async {
           collectionRemoveId: collectionRemoveId,
           collectionMoveId: collectionMoveId,
           afterId: afterArg ?? '');
+      _printEditResult(editResult);
       await db.close();
       break;
 
