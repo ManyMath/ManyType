@@ -935,19 +935,48 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'consensus-bootstrap':
-      await consensusBootstrapCommand(
+      final consensusBootstrapReport = await consensusBootstrapCommand(
         serverAddress: serverOverride ?? '127.0.0.1:33020',
         stateOut: command['state-out'] as String?,
-        jsonOutput: command['json'] == true,
       );
+      if (command['json'] == true) {
+        stdout.writeln(
+          const JsonEncoder.withIndent('  ')
+              .convert(consensusBootstrapReport.toJson()),
+        );
+      } else {
+        stdout.writeln('Command: consensus-bootstrap');
+        stdout.writeln('Backend: $kConsensusBackendLabel');
+        stdout.writeln('Log: ${consensusBootstrapReport.logId}');
+        stdout.writeln('Root: ${consensusBootstrapReport.rootId}');
+        stdout.writeln(
+          'First record: ${consensusBootstrapReport.firstRecordId}',
+        );
+        if (consensusBootstrapReport.statePath != null &&
+            consensusBootstrapReport.statePath!.isNotEmpty) {
+          stdout.writeln('State: ${consensusBootstrapReport.statePath}');
+        }
+      }
       break;
 
     case 'consensus-continue':
-      await consensusContinueCommand(
+      final consensusContinueReport = await consensusContinueCommand(
         serverOverride: serverOverride,
         stateIn: command['state-in'] as String,
-        jsonOutput: command['json'] == true,
       );
+      if (command['json'] == true) {
+        stdout.writeln(
+          const JsonEncoder.withIndent('  ')
+              .convert(consensusContinueReport.toJson()),
+        );
+      } else {
+        stdout.writeln('Command: consensus-continue');
+        stdout.writeln('Backend: $kConsensusBackendLabel');
+        stdout.writeln('Log: ${consensusContinueReport.logId}');
+        stdout.writeln(
+          'Second record: ${consensusContinueReport.secondRecordId}',
+        );
+      }
       break;
 
     case 'space-pull-bootstrap':

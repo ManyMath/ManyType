@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:manytype_cli/src/acl_sync_service.dart';
@@ -17,10 +15,97 @@ const List<String> kConsensusBackendRequirements = <String>[
   'continuation requires the state JSON written by consensus-bootstrap',
 ];
 
-Future<int> consensusBootstrapCommand({
+/// Report produced by [consensusBootstrapCommand]. `toJson()` matches the
+/// `--json` CLI output shape.
+class ConsensusBootstrapReport {
+  const ConsensusBootstrapReport({
+    required this.capturedAt,
+    required this.serverAddress,
+    required this.logId,
+    required this.spaceId,
+    required this.rootId,
+    required this.firstRecordId,
+    required this.recordIdsAfterFirst,
+    required this.tailAfterRootIds,
+    this.statePath,
+  });
+
+  final DateTime capturedAt;
+  final String serverAddress;
+  final String logId;
+  final String spaceId;
+  final String rootId;
+  final String firstRecordId;
+  final List<String> recordIdsAfterFirst;
+  final List<String> tailAfterRootIds;
+  final String? statePath;
+
+  Map<String, Object?> toJson() => {
+        'captured_at': capturedAt.toIso8601String(),
+        'command': 'consensus-bootstrap',
+        'backend_label': kConsensusBackendLabel,
+        'backend_requirements': kConsensusBackendRequirements,
+        'server_address': serverAddress,
+        'log_id': logId,
+        'space_id': spaceId,
+        'root_id': rootId,
+        'first_record_id': firstRecordId,
+        'record_ids_after_first': recordIdsAfterFirst,
+        'tail_after_root_ids': tailAfterRootIds,
+        'state_path': statePath,
+      };
+}
+
+/// Report produced by [consensusContinueCommand]. `toJson()` matches the
+/// `--json` CLI output shape.
+class ConsensusContinueReport {
+  const ConsensusContinueReport({
+    required this.capturedAt,
+    required this.serverAddress,
+    required this.stateIn,
+    required this.logId,
+    required this.spaceId,
+    required this.rootId,
+    required this.firstRecordId,
+    required this.secondRecordId,
+    required this.recordIdsBeforeContinue,
+    required this.recordIdsAfterContinue,
+    required this.tailAfterFirstIds,
+  });
+
+  final DateTime capturedAt;
+  final String serverAddress;
+  final String stateIn;
+  final String logId;
+  final String spaceId;
+  final String rootId;
+  final String firstRecordId;
+  final String secondRecordId;
+  final List<String> recordIdsBeforeContinue;
+  final List<String> recordIdsAfterContinue;
+  final List<String> tailAfterFirstIds;
+
+  Map<String, Object?> toJson() => {
+        'captured_at': capturedAt.toIso8601String(),
+        'command': 'consensus-continue',
+        'backend_label': kConsensusBackendLabel,
+        'backend_requirements': kConsensusBackendRequirements,
+        'server_address': serverAddress,
+        'state_in': stateIn,
+        'log_id': logId,
+        'space_id': spaceId,
+        'root_id': rootId,
+        'first_record_id': firstRecordId,
+        'second_record_id': secondRecordId,
+        'record_ids_before_continue': recordIdsBeforeContinue,
+        'record_ids_after_continue': recordIdsAfterContinue,
+        'tail_after_first_ids': tailAfterFirstIds,
+      };
+}
+
+Future<ConsensusBootstrapReport> consensusBootstrapCommand({
   required String serverAddress,
   String? stateOut,
-  bool jsonOutput = false,
 }) async {
   final mnemonic = generateMnemonic();
   final identity = await Identity.fromMnemonic(mnemonic);
@@ -98,45 +183,26 @@ Future<int> consensusBootstrapCommand({
       );
     }
 
-    final report = <String, Object?>{
-      'captured_at': DateTime.now().toUtc().toIso8601String(),
-      'command': 'consensus-bootstrap',
-      'backend_label': kConsensusBackendLabel,
-      'backend_requirements': kConsensusBackendRequirements,
-      'server_address': serverAddress,
-      'log_id': identity.spaceId,
-      'space_id': identity.spaceId,
-      'root_id': root.id,
-      'first_record_id': firstResponse.id,
-      'record_ids_after_first':
+    return ConsensusBootstrapReport(
+      capturedAt: DateTime.now().toUtc(),
+      serverAddress: serverAddress,
+      logId: identity.spaceId,
+      spaceId: identity.spaceId,
+      rootId: root.id,
+      firstRecordId: firstResponse.id,
+      recordIdsAfterFirst:
           recordsAfterFirst.map((record) => record.id).toList(),
-      'tail_after_root_ids': tailAfterRoot.map((record) => record.id).toList(),
-      'state_path': stateOut,
-    };
-
-    if (jsonOutput) {
-      stdout.writeln(const JsonEncoder.withIndent('  ').convert(report));
-    } else {
-      stdout.writeln('Command: consensus-bootstrap');
-      stdout.writeln('Backend: $kConsensusBackendLabel');
-      stdout.writeln('Log: ${identity.spaceId}');
-      stdout.writeln('Root: ${root.id}');
-      stdout.writeln('First record: ${firstResponse.id}');
-      if (stateOut != null && stateOut.isNotEmpty) {
-        stdout.writeln('State: $stateOut');
-      }
-    }
-
-    return 0;
+      tailAfterRootIds: tailAfterRoot.map((record) => record.id).toList(),
+      statePath: stateOut,
+    );
   } finally {
     bridge.freeHandle(handleId);
   }
 }
 
-Future<int> consensusContinueCommand({
+Future<ConsensusContinueReport> consensusContinueCommand({
   String? serverOverride,
   required String stateIn,
-  bool jsonOutput = false,
 }) async {
   final state = ConsensusFlowState.fromJson(await readJsonFile(stateIn));
   final serverAddress = serverOverride ?? state.serverAddress;
@@ -197,36 +263,19 @@ Future<int> consensusContinueCommand({
       throw StateError('Consensus continuation did not match later ACL reads');
     }
 
-    final report = <String, Object?>{
-      'captured_at': DateTime.now().toUtc().toIso8601String(),
-      'command': 'consensus-continue',
-      'backend_label': kConsensusBackendLabel,
-      'backend_requirements': kConsensusBackendRequirements,
-      'server_address': serverAddress,
-      'state_in': stateIn,
-      'log_id': state.spaceId,
-      'space_id': state.spaceId,
-      'root_id': state.rootId,
-      'first_record_id': state.firstRecordId,
-      'second_record_id': secondResponse.id,
-      'record_ids_before_continue':
-          recordsBefore.map((record) => record.id).toList(),
-      'record_ids_after_continue':
-          recordsAfter.map((record) => record.id).toList(),
-      'tail_after_first_ids':
-          tailAfterFirst.map((record) => record.id).toList(),
-    };
-
-    if (jsonOutput) {
-      stdout.writeln(const JsonEncoder.withIndent('  ').convert(report));
-    } else {
-      stdout.writeln('Command: consensus-continue');
-      stdout.writeln('Backend: $kConsensusBackendLabel');
-      stdout.writeln('Log: ${state.spaceId}');
-      stdout.writeln('Second record: ${secondResponse.id}');
-    }
-
-    return 0;
+    return ConsensusContinueReport(
+      capturedAt: DateTime.now().toUtc(),
+      serverAddress: serverAddress,
+      stateIn: stateIn,
+      logId: state.spaceId,
+      spaceId: state.spaceId,
+      rootId: state.rootId,
+      firstRecordId: state.firstRecordId,
+      secondRecordId: secondResponse.id,
+      recordIdsBeforeContinue: recordsBefore.map((record) => record.id).toList(),
+      recordIdsAfterContinue: recordsAfter.map((record) => record.id).toList(),
+      tailAfterFirstIds: tailAfterFirst.map((record) => record.id).toList(),
+    );
   } finally {
     bridge.freeHandle(handleId);
   }
