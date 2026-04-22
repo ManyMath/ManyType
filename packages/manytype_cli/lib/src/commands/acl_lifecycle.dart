@@ -9,6 +9,8 @@ import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 
+import '../session.dart';
+
 const String kAclLifecycleBackendLabel = 'self-hosted-official';
 const List<String> kAclLifecycleBackendRequirements = <String>[
   'requires a reachable self-hosted official Any-Sync coordinator from --network-config',
@@ -241,5 +243,25 @@ Future<AclLifecycleReport> aclLifecycleCommand({
       joinerBridge.freeHandle(joinerHandle);
     }
     await ownerFixture.dispose();
+  }
+}
+
+/// Library-facing facade over the ACL invite/join/accept diagnostic
+/// round-trip, for consumers that hold a [ManytypeSession] instead of
+/// driving the CLI directly. Exposed as `session.aclLifecycle`.
+///
+/// Like [AccountsFacade]/`ProbeNetworkFacade`, this doesn't touch
+/// [ManytypeSession.db]/[ManytypeSession.config]: it seeds its own
+/// ephemeral owner/joiner spaces against the coordinator named in
+/// `networkConfigPath`: but it's grouped under the session for a
+/// consistent `session.<domain>.<verb>(...)` call shape.
+class AclLifecycleFacade {
+  const AclLifecycleFacade(this._session);
+
+  // ignore: unused_field
+  final ManytypeSession _session;
+
+  Future<AclLifecycleReport> run({required String networkConfigPath}) {
+    return aclLifecycleCommand(networkConfigPath: networkConfigPath);
   }
 }
