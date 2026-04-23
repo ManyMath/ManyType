@@ -1,6 +1,7 @@
 import 'active_account.dart';
 import 'commands/account.dart';
 import 'commands/acl_lifecycle.dart';
+import 'commands/consensus_flow.dart';
 import 'commands/file_transfer.dart';
 import 'commands/list.dart';
 import 'commands/probe_file_node.dart';
@@ -63,6 +64,8 @@ class ManytypeSession {
   SpaceDeleteFacade get spaceDelete => SpaceDeleteFacade(this);
 
   AclLifecycleFacade get aclLifecycle => AclLifecycleFacade(this);
+
+  ConsensusFlowFacade get consensus => ConsensusFlowFacade(this);
 
   Future<void> close() => db.close();
 }
