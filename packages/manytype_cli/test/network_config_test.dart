@@ -94,6 +94,58 @@ nodes:
       expect(requireCoordinatorNode(config).peerId, 'peer-coordinator');
     });
 
+    test('resolveNetworkConfig prefers content over path', () async {
+      final config = await resolveNetworkConfig(
+        networkConfigContent: '''
+id: test
+networkId: content-net
+nodes:
+  - peerId: peer-coordinator
+    addresses:
+      - 127.0.0.1:1004
+    types:
+      - coordinator
+''',
+      );
+
+      expect(config.networkId, 'content-net');
+    });
+
+    test('resolveNetworkConfig falls back to path', () async {
+      final file = File('${tempDir.path}/client.yml');
+      await file.writeAsString('''
+id: test
+networkId: path-net
+nodes:
+  - peerId: peer-coordinator
+    addresses:
+      - 127.0.0.1:1004
+    types:
+      - coordinator
+''');
+
+      final config = await resolveNetworkConfig(networkConfigPath: file.path);
+
+      expect(config.networkId, 'path-net');
+    });
+
+    test('resolveNetworkConfig rejects both path and content', () {
+      expect(
+        () => resolveNetworkConfig(
+          networkConfigPath: 'x.yml',
+          networkConfigContent: 'id: test',
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('resolveNetworkConfig rejects neither path nor content', () {
+      expect(
+        () => resolveNetworkConfig(),
+        throwsArgumentError,
+      );
+    });
+
     test('prefers localhost file address from coordinator response', () {
       final address = chooseFileAddressFromResponse([
         Node(
