@@ -7,6 +7,7 @@ import 'commands/list.dart';
 import 'commands/probe_file_node.dart';
 import 'commands/probe_network.dart';
 import 'commands/space_delete.dart';
+import 'commands/space_pull_flow.dart';
 import 'config.dart';
 import 'identity.dart';
 import 'store/database.dart';
@@ -66,6 +67,8 @@ class ManytypeSession {
   AclLifecycleFacade get aclLifecycle => AclLifecycleFacade(this);
 
   ConsensusFlowFacade get consensus => ConsensusFlowFacade(this);
+
+  SpacePullFlowFacade get spacePull => SpacePullFlowFacade(this);
 
   Future<void> close() => db.close();
 }

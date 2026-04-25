@@ -10,6 +10,8 @@ import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 
+import '../session.dart';
+
 const String kSpacePullBackendLabel = 'manytype_server';
 const List<String> kSpacePullBackendRequirements = <String>[
   'requires a reachable manytype_server tree/coordinator surface',
@@ -259,5 +261,42 @@ Future<SpacePullRefetchReport> spacePullRefetchCommand({
     );
   } finally {
     bridge.freeHandle(handleId);
+  }
+}
+
+/// Library-facing facade over the space-pull bootstrap/refetch diagnostic
+/// flow, for consumers that hold a [ManytypeSession] instead of driving the
+/// CLI directly. Exposed as `session.spacePull`.
+///
+/// Like [ConsensusFlowFacade], this doesn't touch [ManytypeSession.db]/
+/// [ManytypeSession.config]: each call connects with its own ephemeral or
+/// state-file-derived identity: but it's grouped under the session for a
+/// consistent `session.<domain>.<verb>(...)` call shape.
+class SpacePullFlowFacade {
+  const SpacePullFlowFacade(this._session);
+
+  // ignore: unused_field
+  final ManytypeSession _session;
+
+  Future<SpacePullBootstrapReport> bootstrap({
+    required String networkConfigPath,
+    required String serverAddress,
+    String? stateOut,
+  }) {
+    return spacePullBootstrapCommand(
+      networkConfigPath: networkConfigPath,
+      serverAddress: serverAddress,
+      stateOut: stateOut,
+    );
+  }
+
+  Future<SpacePullRefetchReport> refetch({
+    String? serverOverride,
+    required String stateIn,
+  }) {
+    return spacePullRefetchCommand(
+      serverOverride: serverOverride,
+      stateIn: stateIn,
+    );
   }
 }
