@@ -1,4 +1,5 @@
 import '../config.dart';
+import '../session.dart';
 import '../store/database.dart';
 import '../sync_service.dart';
 
@@ -19,4 +20,21 @@ Future<void> seedLiveSpaceForSync(
   final syncService = SyncService();
   await syncService.seedLiveSpaceForSync(db, config,
       networkConfigPath: networkConfigPath);
+}
+
+/// Library-facing facade over head sync against the network, for consumers
+/// that hold a [ManytypeSession] instead of driving the CLI directly.
+/// Exposed as `session.sync`.
+class SyncFacade {
+  const SyncFacade(this._session);
+
+  final ManytypeSession _session;
+
+  Future<void> run({String? networkConfigPath}) {
+    return syncCommand(
+      _session.db,
+      _session.config,
+      networkConfigPath: networkConfigPath,
+    );
+  }
 }
