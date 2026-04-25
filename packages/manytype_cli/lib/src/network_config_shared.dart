@@ -1,4 +1,5 @@
 import 'package:manytype_protocol/coordinator.dart';
+import 'package:yaml/yaml.dart';
 
 class NetworkConfigNode {
   final String peerId;
@@ -22,6 +23,46 @@ class NetworkConfigFile {
     required this.networkId,
     required this.nodes,
   });
+}
+
+/// Parses a `client.yml`-shaped any-sync network config from its raw YAML
+/// text. Pure Dart (the `yaml` package has no dart:io dependency) so this
+/// works on web too: unlike `loadNetworkConfig(path)`, which is vm-only
+/// because it reads the path itself. Web callers that fetch/read config
+/// content some other way (no filesystem) can call this directly (see
+/// M016, docs/m016-web-api-surface.md scope item 3).
+NetworkConfigFile parseNetworkConfig(String yamlContent, {String? source}) {
+  final label = source ?? '<content>';
+  final raw = loadYaml(yamlContent);
+  if (raw is! YamlMap) {
+    throw StateError('Invalid network config YAML at $label');
+  }
+
+  final nodesRaw = raw['nodes'];
+  if (nodesRaw is! YamlList) {
+    throw StateError('Network config at $label is missing nodes');
+  }
+
+  return NetworkConfigFile(
+    id: (raw['id'] ?? '').toString(),
+    networkId: (raw['networkId'] ?? '').toString(),
+    nodes: nodesRaw.map((node) {
+      if (node is! YamlMap) {
+        throw StateError('Invalid node entry in $label');
+      }
+      final addresses = (node['addresses'] as YamlList? ?? const [])
+          .map((value) => value.toString())
+          .toList();
+      final types = (node['types'] as YamlList? ?? const [])
+          .map((value) => value.toString())
+          .toList();
+      return NetworkConfigNode(
+        peerId: (node['peerId'] ?? '').toString(),
+        addresses: addresses,
+        types: types,
+      );
+    }).toList(),
+  );
 }
 
 String normalizeQuicAddress(String address) {

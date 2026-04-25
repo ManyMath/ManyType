@@ -78,6 +78,22 @@ nodes:
       expect(address, '127.0.0.1:1011');
     });
 
+    test('parseNetworkConfig reads content directly, no filesystem', () {
+      final config = parseNetworkConfig('''
+id: test
+networkId: content-net
+nodes:
+  - peerId: peer-coordinator
+    addresses:
+      - 127.0.0.1:1004
+    types:
+      - coordinator
+''');
+
+      expect(config.networkId, 'content-net');
+      expect(requireCoordinatorNode(config).peerId, 'peer-coordinator');
+    });
+
     test('prefers localhost file address from coordinator response', () {
       final address = chooseFileAddressFromResponse([
         Node(
