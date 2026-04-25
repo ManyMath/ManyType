@@ -29,9 +29,13 @@ class NetworkProbeResult {
 /// stop at the first coordinator RPC without attempting object or store sync.
 Future<NetworkProbeResult> probeNetworkCommand(
   CliConfig config, {
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
 }) async {
-  final networkConfig = await loadNetworkConfig(networkConfigPath);
+  final networkConfig = await resolveNetworkConfig(
+    networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
+  );
   final coordinatorAddress =
       chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
   final identity = await Identity.fromMnemonic(config.mnemonic);
@@ -69,10 +73,14 @@ class ProbeNetworkFacade {
 
   final ManytypeSession _session;
 
-  Future<NetworkProbeResult> probe({required String networkConfigPath}) {
+  Future<NetworkProbeResult> probe({
+    String? networkConfigPath,
+    String? networkConfigContent,
+  }) {
     return probeNetworkCommand(
       _session.config,
       networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
     );
   }
 }
