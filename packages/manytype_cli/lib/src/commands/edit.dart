@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io' show File;
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -19,6 +18,7 @@ import '../config.dart';
 import '../identity.dart';
 import '../store/database.dart';
 import '../sync_service.dart';
+import 'file_relation_source.dart';
 import 'file_transfer.dart';
 
 final _snappy = SnappyCodec();
@@ -104,6 +104,8 @@ Future<EditResult> editCommand(
   String? boolValue,
   String? dateValue,
   String? fileRelationPath,
+  Uint8List? fileRelationBytes,
+  String? fileRelationFileName,
   String? objectIdValue,
   String? blockId,
   String? setText,
@@ -118,6 +120,17 @@ Future<EditResult> editCommand(
   String? collectionMoveId,
   String afterId = '',
 }) async {
+  if (fileRelationBytes != null && fileRelationPath != null) {
+    throw ArgumentError(
+      'Pass either fileRelationPath or fileRelationBytes, not both',
+    );
+  }
+  if (fileRelationBytes != null && fileRelationFileName == null) {
+    throw ArgumentError(
+      'fileRelationFileName is required when fileRelationBytes is set',
+    );
+  }
+
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
     throw StateError('Object not found locally: run `manytype sync` first');
@@ -250,7 +263,18 @@ Future<EditResult> editCommand(
   // If a relation key is provided, build a DetailsSet with the typed Value.
   if (relationKey != null) {
     Value relationValue;
-    if (fileRelationPath != null) {
+    if (fileRelationPath != null || fileRelationBytes != null) {
+      final Uint8List bytes;
+      final String fileName;
+      if (fileRelationBytes != null) {
+        bytes = fileRelationBytes;
+        fileName = fileRelationFileName!;
+      } else {
+        bytes = await readFileRelationSourceBytes(fileRelationPath!);
+        final rawName = p.basename(fileRelationPath).trim();
+        fileName = rawName.isEmpty ? 'attachment' : rawName;
+      }
+
       fileRelationResult = await _createFileObjectForRelation(
         db: db,
         config: config,
@@ -259,7 +283,8 @@ Future<EditResult> editCommand(
         spaceId: spaceId,
         spaceKey: spaceKey,
         aclHeadId: aclHeadId,
-        sourcePath: fileRelationPath,
+        bytes: bytes,
+        fileName: fileName,
       );
       relationValue = Value(stringValue: fileRelationResult.fileObjectId);
     } else if (stringValue != null) {
@@ -914,16 +939,9 @@ Future<_FileRelationWriteResult> _createFileObjectForRelation({
   required String spaceId,
   required Uint8List spaceKey,
   required String aclHeadId,
-  required String sourcePath,
+  required Uint8List bytes,
+  required String fileName,
 }) async {
-  final sourceFile = File(sourcePath);
-  if (!await sourceFile.exists()) {
-    throw StateError('Source file not found: $sourcePath');
-  }
-
-  final bytes = await sourceFile.readAsBytes();
-  final rawName = p.basename(sourceFile.path).trim();
-  final fileName = rawName.isEmpty ? 'attachment' : rawName;
   final mime = _inferMimeType(fileName);
   final layout = _layoutForMime(mime);
   final fileType = _fileBlockTypeForMime(mime);

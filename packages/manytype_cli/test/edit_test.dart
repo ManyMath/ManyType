@@ -140,6 +140,52 @@ void main() {
     );
   });
 
+  test('edit rejects fileRelationPath and fileRelationBytes together',
+      () async {
+    await createCommand('File relation object', db, config);
+    final objectId =
+        await _findObjectIdByName(db, config, 'File relation object');
+    expect(objectId, isNotNull);
+
+    expect(
+      () => editCommand(
+        objectId!,
+        null,
+        db,
+        config,
+        networkConfigPath: 'unused-network.yml',
+        syncService: _NoopSyncService(),
+        relationKey: 'coverImage',
+        fileRelationPath: 'some/path.png',
+        fileRelationBytes: Uint8List.fromList([1, 2, 3]),
+        fileRelationFileName: 'cover.png',
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+
+  test('edit rejects fileRelationBytes without fileRelationFileName',
+      () async {
+    await createCommand('File relation object 2', db, config);
+    final objectId =
+        await _findObjectIdByName(db, config, 'File relation object 2');
+    expect(objectId, isNotNull);
+
+    expect(
+      () => editCommand(
+        objectId!,
+        null,
+        db,
+        config,
+        networkConfigPath: 'unused-network.yml',
+        syncService: _NoopSyncService(),
+        relationKey: 'coverImage',
+        fileRelationBytes: Uint8List.fromList([1, 2, 3]),
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+
   test('edit writes generic string-list details via detailsSet', () async {
     await createCommand('List object', db, config);
 
