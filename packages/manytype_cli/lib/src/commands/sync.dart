@@ -7,19 +7,30 @@ Future<void> syncCommand(
   ManytypeDatabase db,
   CliConfig config, {
   String? networkConfigPath,
+  String? networkConfigContent,
 }) async {
   final syncService = SyncService();
-  await syncService.sync(db, config, networkConfigPath: networkConfigPath);
+  await syncService.sync(
+    db,
+    config,
+    networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
+  );
 }
 
 Future<void> seedLiveSpaceForSync(
   ManytypeDatabase db,
   CliConfig config, {
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
 }) async {
   final syncService = SyncService();
-  await syncService.seedLiveSpaceForSync(db, config,
-      networkConfigPath: networkConfigPath);
+  await syncService.seedLiveSpaceForSync(
+    db,
+    config,
+    networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
+  );
 }
 
 /// Library-facing facade over head sync against the network, for consumers
@@ -30,11 +41,15 @@ class SyncFacade {
 
   final ManytypeSession _session;
 
-  Future<void> run({String? networkConfigPath}) {
+  Future<void> run({
+    String? networkConfigPath,
+    String? networkConfigContent,
+  }) {
     return syncCommand(
       _session.db,
       _session.config,
       networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
     );
   }
 }

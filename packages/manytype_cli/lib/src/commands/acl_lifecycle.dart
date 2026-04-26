@@ -24,7 +24,8 @@ const List<String> kAclLifecycleBackendRequirements = <String>[
 class AclLifecycleReport {
   const AclLifecycleReport({
     required this.capturedAt,
-    required this.networkConfigPath,
+    this.networkConfigPath,
+    this.networkConfigContent,
     required this.coordinatorAddress,
     required this.spaceId,
     required this.aclRootId,
@@ -39,7 +40,8 @@ class AclLifecycleReport {
   });
 
   final DateTime capturedAt;
-  final String networkConfigPath;
+  final String? networkConfigPath;
+  final String? networkConfigContent;
   final String coordinatorAddress;
   final String spaceId;
   final String aclRootId;
@@ -73,13 +75,18 @@ class AclLifecycleReport {
 }
 
 Future<AclLifecycleReport> aclLifecycleCommand({
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
 }) async {
-  final networkConfig = await loadNetworkConfig(networkConfigPath);
+  final networkConfig = await resolveNetworkConfig(
+    networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
+  );
   final coordinatorAddress =
       chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
   final ownerFixture = await createEphemeralSpaceFixture(
     networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
     text: 'acl-lifecycle-seed',
   );
   final joinerIdentity = await Identity.fromMnemonic(generateMnemonic());
@@ -222,6 +229,7 @@ Future<AclLifecycleReport> aclLifecycleCommand({
     return AclLifecycleReport(
       capturedAt: DateTime.now().toUtc(),
       networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
       coordinatorAddress: coordinatorAddress,
       spaceId: ownerFixture.identity.spaceId,
       aclRootId: ownerFixture.aclRootId,
@@ -261,7 +269,13 @@ class AclLifecycleFacade {
   // ignore: unused_field
   final ManytypeSession _session;
 
-  Future<AclLifecycleReport> run({required String networkConfigPath}) {
-    return aclLifecycleCommand(networkConfigPath: networkConfigPath);
+  Future<AclLifecycleReport> run({
+    String? networkConfigPath,
+    String? networkConfigContent,
+  }) {
+    return aclLifecycleCommand(
+      networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
+    );
   }
 }

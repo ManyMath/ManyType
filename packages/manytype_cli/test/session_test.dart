@@ -14,6 +14,7 @@ class _FailingSyncService extends SyncService {
     ManytypeDatabase db,
     CliConfig config, {
     String? networkConfigPath,
+    String? networkConfigContent,
   }) {
     fail('sync should not be called');
   }

@@ -19,7 +19,8 @@ class EphemeralSpaceFixture {
     required this.db,
     required this.config,
     required this.identity,
-    required this.networkConfigPath,
+    this.networkConfigPath,
+    this.networkConfigContent,
     required this.aclRootId,
   });
 
@@ -27,7 +28,8 @@ class EphemeralSpaceFixture {
   final ManytypeDatabase db;
   final CliConfig config;
   final Identity identity;
-  final String networkConfigPath;
+  final String? networkConfigPath;
+  final String? networkConfigContent;
   final String aclRootId;
 
   Future<void> dispose() async {
@@ -107,7 +109,8 @@ class SpacePullFlowState {
 }
 
 Future<EphemeralSpaceFixture> createEphemeralSpaceFixture({
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
   String serverAddress = '127.0.0.1:33020',
   String text = 'operator-flow-seed',
 }) async {
@@ -130,6 +133,7 @@ Future<EphemeralSpaceFixture> createEphemeralSpaceFixture({
     config: config,
     identity: identity,
     networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
     aclRootId: aclRootId,
   );
 }
@@ -140,6 +144,7 @@ Future<void> seedEphemeralSpaceFixture(EphemeralSpaceFixture fixture) {
       fixture.db,
       fixture.config,
       networkConfigPath: fixture.networkConfigPath,
+      networkConfigContent: fixture.networkConfigContent,
     ),
   );
 }

@@ -62,8 +62,10 @@ class SyncService {
     ManytypeDatabase db,
     CliConfig config, {
     String? networkConfigPath,
+    String? networkConfigContent,
   }) async {
-    final officialInteropMode = networkConfigPath != null;
+    final officialInteropMode =
+        networkConfigPath != null || networkConfigContent != null;
     final identity = await Identity.fromMnemonic(config.mnemonic);
     final spaceId = identity.spaceId;
     final accountPrivRaw = Uint8List(64)
@@ -73,12 +75,14 @@ class SyncService {
     final capture = _SessionCapture.start(
       officialInteropMode: officialInteropMode,
       spaceId: spaceId,
-      coordinatorAddress: networkConfigPath == null
-          ? config.serverAddress
-          : chooseBestAddress(
-              requireCoordinatorNode(await loadNetworkConfig(networkConfigPath))
-                  .addresses,
-            ),
+      coordinatorAddress: officialInteropMode
+          ? chooseBestAddress(
+              requireCoordinatorNode(await resolveNetworkConfig(
+                networkConfigPath: networkConfigPath,
+                networkConfigContent: networkConfigContent,
+              )).addresses,
+            )
+          : config.serverAddress,
       networkConfigPath: networkConfigPath,
     );
     final bridge = NativeBridge();
@@ -148,7 +152,7 @@ class SyncService {
           SpaceSignResponse.fromBuffer(spaceSignResponseBytes);
       final receiptBytes = spaceSignResponse.receipt.writeToBuffer();
 
-      if (networkConfigPath == null) {
+      if (!officialInteropMode) {
         syncHandleIds.add(coordinatorHandleId);
       } else {
         if (syncAddresses.isEmpty) {
@@ -499,13 +503,16 @@ class SyncService {
   Future<void> seedLiveSpaceForSync(
     ManytypeDatabase db,
     CliConfig config, {
-    required String networkConfigPath,
+    String? networkConfigPath,
+    String? networkConfigContent,
   }) async {
     final identity = await Identity.fromMnemonic(config.mnemonic);
     final bridge = NativeBridge();
     final coordinatorAddress = chooseBestAddress(
-      requireCoordinatorNode(await loadNetworkConfig(networkConfigPath))
-          .addresses,
+      requireCoordinatorNode(await resolveNetworkConfig(
+        networkConfigPath: networkConfigPath,
+        networkConfigContent: networkConfigContent,
+      )).addresses,
     );
     int? coordinatorHandleId;
     final syncHandleIds = <int>[];

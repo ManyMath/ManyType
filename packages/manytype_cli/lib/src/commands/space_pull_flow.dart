@@ -24,7 +24,8 @@ const List<String> kSpacePullBackendRequirements = <String>[
 class SpacePullBootstrapReport {
   const SpacePullBootstrapReport({
     required this.capturedAt,
-    required this.networkConfigPath,
+    this.networkConfigPath,
+    this.networkConfigContent,
     required this.serverAddress,
     required this.spaceId,
     required this.aclRootId,
@@ -36,7 +37,8 @@ class SpacePullBootstrapReport {
   });
 
   final DateTime capturedAt;
-  final String networkConfigPath;
+  final String? networkConfigPath;
+  final String? networkConfigContent;
   final String serverAddress;
   final String spaceId;
   final String aclRootId;
@@ -105,12 +107,14 @@ class SpacePullRefetchReport {
 }
 
 Future<SpacePullBootstrapReport> spacePullBootstrapCommand({
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
   required String serverAddress,
   String? stateOut,
 }) async {
   final fixture = await createEphemeralSpaceFixture(
     networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
     serverAddress: serverAddress,
     text: 'space-pull-bootstrap-seed',
   );
@@ -195,6 +199,7 @@ Future<SpacePullBootstrapReport> spacePullBootstrapCommand({
     return SpacePullBootstrapReport(
       capturedAt: DateTime.now().toUtc(),
       networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
       serverAddress: serverAddress,
       spaceId: fixture.identity.spaceId,
       aclRootId: fixture.aclRootId,
@@ -279,12 +284,14 @@ class SpacePullFlowFacade {
   final ManytypeSession _session;
 
   Future<SpacePullBootstrapReport> bootstrap({
-    required String networkConfigPath,
+    String? networkConfigPath,
+    String? networkConfigContent,
     required String serverAddress,
     String? stateOut,
   }) {
     return spacePullBootstrapCommand(
       networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
       serverAddress: serverAddress,
       stateOut: stateOut,
     );

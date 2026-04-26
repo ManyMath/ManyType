@@ -133,6 +133,7 @@ class _NoopSyncService extends SyncService {
     ManytypeDatabase db,
     CliConfig config, {
     String? networkConfigPath,
+    String? networkConfigContent,
   }) async {}
 }
 
