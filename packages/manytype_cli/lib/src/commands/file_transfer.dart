@@ -55,7 +55,8 @@ class OpenedFileResult {
 Future<UploadedBlobResult> uploadBlobWithNetworkConfig(
   ManytypeDatabase db,
   CliConfig config, {
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
   required Identity identity,
   required String fileId,
   required Uint8List bytes,
@@ -66,11 +67,13 @@ Future<UploadedBlobResult> uploadBlobWithNetworkConfig(
     db,
     config,
     networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
   );
   final fileHandleId = await _connectToFileNode(
     bridge: bridge,
     config: config,
     networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
     identity: identity,
     capture: capture,
   );
@@ -117,7 +120,8 @@ Future<UploadedBlobResult> fileUploadCommand(
 Future<OpenedFileResult> fileOpenCommand(
   ManytypeDatabase db,
   CliConfig config, {
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
   required String fileId,
   String? cid,
   String? outputPath,
@@ -135,6 +139,7 @@ Future<OpenedFileResult> fileOpenCommand(
     db,
     config,
     networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
     identity: identity,
     fileId: fileId,
     cid: resolvedCid,
@@ -160,7 +165,8 @@ Future<OpenedFileResult> fileOpenCommand(
 Future<OpenedBlobResult> openBlobWithNetworkConfig(
   ManytypeDatabase db,
   CliConfig config, {
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
   required Identity identity,
   required String fileId,
   required String cid,
@@ -180,12 +186,14 @@ Future<OpenedBlobResult> openBlobWithNetworkConfig(
         db,
         config,
         networkConfigPath: networkConfigPath,
+        networkConfigContent: networkConfigContent,
       );
       bridge = NativeBridge();
       fileHandleId = await _connectToFileNode(
         bridge: bridge,
         config: config,
         networkConfigPath: networkConfigPath,
+        networkConfigContent: networkConfigContent,
         identity: identity,
         capture: capture,
       );
@@ -217,7 +225,8 @@ class FileTransferFacade {
   final ManytypeSession _session;
 
   Future<UploadedBlobResult> upload({
-    required String networkConfigPath,
+    String? networkConfigPath,
+    String? networkConfigContent,
     required String fileId,
     required Uint8List bytes,
   }) {
@@ -225,6 +234,7 @@ class FileTransferFacade {
       _session.db,
       _session.config,
       networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
       identity: _session.identity,
       fileId: fileId,
       bytes: bytes,
@@ -232,7 +242,8 @@ class FileTransferFacade {
   }
 
   Future<OpenedBlobResult> open({
-    required String networkConfigPath,
+    String? networkConfigPath,
+    String? networkConfigContent,
     required String fileId,
     String? cid,
   }) async {
@@ -248,6 +259,7 @@ class FileTransferFacade {
       _session.db,
       _session.config,
       networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
       identity: _session.identity,
       fileId: fileId,
       cid: resolvedCid,
@@ -404,11 +416,15 @@ Future<OpenedBlobResult> openBlobFromFileNode({
 Future<int> _connectToFileNode({
   required NativeBridge bridge,
   required CliConfig config,
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
   required Identity identity,
   required _FileTransferCapture capture,
 }) async {
-  final networkConfig = await loadNetworkConfig(networkConfigPath);
+  final networkConfig = await resolveNetworkConfig(
+    networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
+  );
   final coordinatorAddress =
       chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
   final coordinatorHandleId =
