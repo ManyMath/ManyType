@@ -54,10 +54,14 @@ class FileNodeProbeResult {
 /// artifact for later interop phases.
 Future<FileNodeProbeResult> probeFileNodeCommand(
   CliConfig config, {
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
   bool readOnly = false,
 }) async {
-  final networkConfig = await loadNetworkConfig(networkConfigPath);
+  final networkConfig = await resolveNetworkConfig(
+    networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
+  );
   final coordinatorAddress =
       chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
   final identity = await Identity.fromMnemonic(config.mnemonic);
@@ -182,12 +186,14 @@ class ProbeFileNodeFacade {
   final ManytypeSession _session;
 
   Future<FileNodeProbeResult> probe({
-    required String networkConfigPath,
+    String? networkConfigPath,
+    String? networkConfigContent,
     bool readOnly = false,
   }) {
     return probeFileNodeCommand(
       _session.config,
       networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
       readOnly: readOnly,
     );
   }
