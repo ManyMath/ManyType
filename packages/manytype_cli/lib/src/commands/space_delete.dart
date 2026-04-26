@@ -125,7 +125,8 @@ class SpaceDeleteReport {
   const SpaceDeleteReport({
     required this.capturedAt,
     required this.assessment,
-    required this.networkConfigPath,
+    this.networkConfigPath,
+    this.networkConfigContent,
     required this.coordinatorAddress,
     required this.spaceId,
     required this.waitSeconds,
@@ -136,7 +137,8 @@ class SpaceDeleteReport {
 
   final DateTime capturedAt;
   final SpaceDeleteAssessment assessment;
-  final String networkConfigPath;
+  final String? networkConfigPath;
+  final String? networkConfigContent;
   final String coordinatorAddress;
   final String spaceId;
   final int waitSeconds;
@@ -166,7 +168,8 @@ class SpaceDeleteReport {
 
 Future<SpaceDeleteReport> spaceDeleteCommand({
   required CliConfig config,
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
   String? requestedSpaceId,
   int waitSeconds = 6,
   int deletionDurationMinutes = 0,
@@ -182,7 +185,10 @@ Future<SpaceDeleteReport> spaceDeleteCommand({
 
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final spaceId = requestedSpaceId ?? identity.spaceId;
-  final networkConfig = await loadNetworkConfig(networkConfigPath);
+  final networkConfig = await resolveNetworkConfig(
+    networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
+  );
   final coordinatorAddress =
       chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
 
@@ -218,6 +224,7 @@ Future<SpaceDeleteReport> spaceDeleteCommand({
     capturedAt: DateTime.now().toUtc(),
     assessment: assessment,
     networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
     coordinatorAddress: coordinatorAddress,
     spaceId: spaceId,
     waitSeconds: waitSeconds,
@@ -236,7 +243,8 @@ class SpaceDeleteFacade {
   final ManytypeSession _session;
 
   Future<SpaceDeleteReport> run({
-    required String networkConfigPath,
+    String? networkConfigPath,
+    String? networkConfigContent,
     String? requestedSpaceId,
     int waitSeconds = 6,
     int deletionDurationMinutes = 0,
@@ -244,6 +252,7 @@ class SpaceDeleteFacade {
     return spaceDeleteCommand(
       config: _session.config,
       networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
       requestedSpaceId: requestedSpaceId,
       waitSeconds: waitSeconds,
       deletionDurationMinutes: deletionDurationMinutes,
