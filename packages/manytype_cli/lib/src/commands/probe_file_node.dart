@@ -6,6 +6,7 @@ import 'package:manytype_protocol/coordinator.dart';
 import 'package:manytype_protocol/filesync.dart';
 
 import '../config.dart';
+import '../debug_capture_env.dart';
 import '../ffi/native_bridge.dart';
 import '../identity.dart';
 import '../network_config.dart';
@@ -244,8 +245,8 @@ class _FileProbeCapture {
 
   static _FileProbeCapture start({required bool readOnly}) {
     return _FileProbeCapture._(
-      path: Platform.environment['MANYTYPE_FILE_CAPTURE_PATH'] ??
-          Platform.environment['MANYTYPE_SYNC_CAPTURE_PATH'],
+      path: readDebugCaptureEnv('MANYTYPE_FILE_CAPTURE_PATH') ??
+          readDebugCaptureEnv('MANYTYPE_SYNC_CAPTURE_PATH'),
       readOnly: readOnly,
     );
   }

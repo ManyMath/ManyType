@@ -7,6 +7,7 @@ import 'package:manytype_protocol/coordinator.dart';
 import 'package:manytype_protocol/filesync.dart' as filesync;
 
 import '../config.dart';
+import '../debug_capture_env.dart';
 import '../ffi/native_bridge.dart';
 import '../identity.dart';
 import '../network_config.dart';
@@ -508,8 +509,8 @@ class _FileTransferCapture {
   final Map<String, Object?> _payload;
 
   static _FileTransferCapture start() {
-    final path = Platform.environment['MANYTYPE_FILE_TRANSFER_CAPTURE_PATH'] ??
-        Platform.environment['MANYTYPE_FILE_CAPTURE_PATH'];
+    final path = readDebugCaptureEnv('MANYTYPE_FILE_TRANSFER_CAPTURE_PATH') ??
+        readDebugCaptureEnv('MANYTYPE_FILE_CAPTURE_PATH');
     final payload = <String, Object?>{
       'captured_at': DateTime.now().toUtc().toIso8601String(),
       'events': <Map<String, Object?>>[],
