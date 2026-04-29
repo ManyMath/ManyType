@@ -58,6 +58,7 @@ Future<List<ObjectMeta>> listCommand(
   ManytypeDatabase db,
   CliConfig config, {
   String? networkConfigPath,
+  String? networkConfigContent,
   String? typeFilter,
   String? whereFilter,
   SyncService? syncService,
@@ -71,9 +72,14 @@ Future<List<ObjectMeta>> listCommand(
   final spaceKey = await deriveSpaceKey(accountPrivRaw);
 
   // Sync before listing when network access is explicitly requested.
-  if (networkConfigPath != null) {
+  if (networkConfigPath != null || networkConfigContent != null) {
     final syncServiceRef = syncService ?? SyncService();
-    await syncServiceRef.sync(db, config, networkConfigPath: networkConfigPath);
+    await syncServiceRef.sync(
+      db,
+      config,
+      networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
+    );
   }
 
   // Query all non-deleted objects.
@@ -136,6 +142,7 @@ class ListFacade {
 
   Future<List<ObjectMeta>> list({
     String? networkConfigPath,
+    String? networkConfigContent,
     String? typeFilter,
     String? whereFilter,
     SyncService? syncService,
@@ -144,6 +151,7 @@ class ListFacade {
       _session.db,
       _session.config,
       networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
       typeFilter: typeFilter,
       whereFilter: whereFilter,
       syncService: syncService,
@@ -200,7 +208,8 @@ class ListFacade {
 
   Future<DeleteResult> delete(
     String objectId, {
-    required String networkConfigPath,
+    String? networkConfigPath,
+    String? networkConfigContent,
     SyncService? syncService,
   }) {
     return deleteCommand(
@@ -208,6 +217,7 @@ class ListFacade {
       _session.db,
       _session.config,
       networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
       syncService: syncService,
     );
   }
@@ -215,7 +225,8 @@ class ListFacade {
   Future<EditResult> edit(
     String objectId,
     String? newText, {
-    required String networkConfigPath,
+    String? networkConfigPath,
+    String? networkConfigContent,
     SyncService? syncService,
     bool checkbox = false,
     String? checkboxText,
@@ -247,6 +258,7 @@ class ListFacade {
       _session.db,
       _session.config,
       networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
       syncService: syncService,
       checkbox: checkbox,
       checkboxText: checkboxText,

@@ -27,7 +27,8 @@ Future<DeleteResult> deleteCommand(
   String objectId,
   ManytypeDatabase db,
   CliConfig config, {
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
   SyncService? syncService,
 }) async {
   final syncServiceRef = syncService ?? SyncService();
@@ -44,7 +45,12 @@ Future<DeleteResult> deleteCommand(
   }
 
   // 2. Sync to get latest state
-  await syncServiceRef.sync(db, config, networkConfigPath: networkConfigPath);
+  await syncServiceRef.sync(
+    db,
+    config,
+    networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
+  );
 
   // 3. Load identity and derive keys
   final identity = await Identity.fromMnemonic(config.mnemonic);
@@ -177,7 +183,12 @@ Future<DeleteResult> deleteCommand(
   await db.markObjectDeleted(objectId);
 
   // 11. Sync to push the settings tree change
-  await syncServiceRef.sync(db, config, networkConfigPath: networkConfigPath);
+  await syncServiceRef.sync(
+    db,
+    config,
+    networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
+  );
 
   return DeleteResult(objectId: objectId);
 }

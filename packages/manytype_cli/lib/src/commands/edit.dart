@@ -94,7 +94,8 @@ Future<EditResult> editCommand(
   String? newText,
   ManytypeDatabase db,
   CliConfig config, {
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
   SyncService? syncService,
   bool checkbox = false,
   String? checkboxText,
@@ -137,7 +138,12 @@ Future<EditResult> editCommand(
   }
 
   syncService ??= SyncService();
-  await syncService.sync(db, config, networkConfigPath: networkConfigPath);
+  await syncService.sync(
+    db,
+    config,
+    networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
+  );
 
   final freshChanges = await db.getChangesForObject(objectId);
   final currentHeads = await db.getObjectHeads(objectId);
@@ -279,6 +285,7 @@ Future<EditResult> editCommand(
         db: db,
         config: config,
         networkConfigPath: networkConfigPath,
+        networkConfigContent: networkConfigContent,
         identity: identity,
         spaceId: spaceId,
         spaceKey: spaceKey,
@@ -504,7 +511,12 @@ Future<EditResult> editCommand(
     }
   }
 
-  await syncService.sync(db, config, networkConfigPath: networkConfigPath);
+  await syncService.sync(
+    db,
+    config,
+    networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
+  );
 
   // Verify text change updates both the object name and the rendered text.
   if (newText != null) {
@@ -934,7 +946,8 @@ class _FileRelationWriteResult {
 Future<_FileRelationWriteResult> _createFileObjectForRelation({
   required ManytypeDatabase db,
   required CliConfig config,
-  required String networkConfigPath,
+  String? networkConfigPath,
+  String? networkConfigContent,
   required Identity identity,
   required String spaceId,
   required Uint8List spaceKey,
@@ -961,6 +974,7 @@ Future<_FileRelationWriteResult> _createFileObjectForRelation({
     db,
     config,
     networkConfigPath: networkConfigPath,
+    networkConfigContent: networkConfigContent,
     identity: identity,
     fileId: fileObjectId,
     bytes: bytes,
