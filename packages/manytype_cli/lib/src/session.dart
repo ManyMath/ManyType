@@ -1,5 +1,6 @@
 import 'active_account.dart';
 import 'commands/account.dart';
+import 'commands/account_delete.dart';
 import 'commands/acl_lifecycle.dart';
 import 'commands/consensus_flow.dart';
 import 'commands/file_transfer.dart';
@@ -61,6 +62,8 @@ class ManytypeSession {
   ProbeFileNodeFacade get probeFileNode => ProbeFileNodeFacade(this);
 
   AccountsFacade get accounts => AccountsFacade(this);
+
+  AccountDeleteFacade get accountDelete => AccountDeleteFacade(this);
 
   ProbeNetworkFacade get probeNetwork => ProbeNetworkFacade(this);
 

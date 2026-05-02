@@ -10,6 +10,7 @@ import 'package:manytype_cli/src/account_registry.dart';
 import 'package:manytype_cli/src/account_resolver.dart';
 import 'package:manytype_cli/src/active_account.dart';
 import 'package:manytype_cli/src/commands/account.dart';
+import 'package:manytype_cli/src/commands/account_delete.dart';
 import 'package:manytype_cli/src/commands/create.dart';
 import 'package:manytype_cli/src/commands/delete.dart';
 import 'package:manytype_cli/src/commands/edit.dart';
@@ -210,6 +211,13 @@ void _printSpaceDeleteReport(SpaceDeleteReport report) {
   print('Reason: ${report.assessment.reason}');
 }
 
+/// Print an [AccountDeleteReport] in the CLI's human-readable format.
+void _printAccountDeleteReport(AccountDeleteReport report) {
+  print('Command: account-delete');
+  print('Outcome: ${report.assessment.outcome}');
+  print('Reason: ${report.assessment.reason}');
+}
+
 String _spaceStatusLabel(Map<String, Object?> statusResult) {
   if (statusResult['ok'] != true) {
     return 'error';
@@ -374,6 +382,10 @@ Future<void> main(List<String> arguments) async {
     ..addFlag('json',
         negatable: false,
         help: 'Emit the structured space-delete report as JSON');
+  final accountDeleteParser = ArgParser()
+    ..addFlag('json',
+        negatable: false,
+        help: 'Emit the structured account-delete report as JSON');
   final listParser = ArgParser()
     ..addOption('type', help: 'Filter by object type key (e.g. ot-page)')
     ..addOption('where', help: 'Filter by relation key=value (e.g. done=true)');
@@ -401,6 +413,7 @@ Future<void> main(List<String> arguments) async {
   parser.addCommand('edit', editParser);
   parser.addCommand('delete', deleteParser);
   parser.addCommand('space-delete', spaceDeleteParser);
+  parser.addCommand('account-delete', accountDeleteParser);
   parser.addCommand('acl-lifecycle', aclLifecycleParser);
   parser.addCommand('consensus-bootstrap', consensusBootstrapParser);
   parser.addCommand('consensus-continue', consensusContinueParser);
@@ -421,7 +434,7 @@ Future<void> main(List<String> arguments) async {
     print(
       'Commands: init, account, create, sync, read, edit, delete, list, '
       'file-upload, file-open, probe-network, probe-file-node, space-delete, '
-      'acl-lifecycle, consensus-bootstrap, consensus-continue, '
+      'account-delete, acl-lifecycle, consensus-bootstrap, consensus-continue, '
       'space-pull-bootstrap, space-pull-refetch',
     );
     print(parser.usage);
@@ -987,6 +1000,34 @@ Future<void> main(List<String> arguments) async {
         _printSpaceDeleteReport(spaceDeleteReport);
       }
       if (!spaceDeleteReport.assessment.supported) {
+        exit(2);
+      }
+      break;
+
+    case 'account-delete':
+      if (networkConfigPath == null) {
+        throw StateError(
+          'account-delete requires --network-config <path>',
+        );
+      }
+      final activeForAccountDelete = await resolveActiveAccount(
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+        serverOverride: serverOverride,
+      );
+      final accountDeleteReport = await accountDeleteCommand(
+        config: activeForAccountDelete.config,
+        networkConfigPath: networkConfigPath,
+      );
+      if (command['json'] == true) {
+        print(
+          const JsonEncoder.withIndent('  ')
+              .convert(accountDeleteReport.toJson()),
+        );
+      } else {
+        _printAccountDeleteReport(accountDeleteReport);
+      }
+      if (!accountDeleteReport.assessment.supported) {
         exit(2);
       }
       break;
