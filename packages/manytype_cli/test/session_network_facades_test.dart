@@ -1,19 +1,17 @@
 @TestOn('browser')
 library;
 
-// M016/scope-item-4 follow-up — the facades that ultimately construct
-// `NativeBridge()` (spaceDelete, aclLifecycle, consensus, sync,
-// probeNetwork, probeFileNode, accountDelete) can't be driven end to end on
-// web without a live server, so they were left out of session_test.dart's
-// chrome coverage. That's a real platform gap, but it should be a *verified*
-// gap, not an assumed one: this proves each facade fails predictably with
-// `UnsupportedError` (lib/src/ffi/native_bridge_web.dart) — a clean,
-// typed signal for web consumers — rather than crashing some other way.
-//
-// spacePull's bootstrap/refetch aren't covered here: both build their
-// fixture via `dart:io` (temp directories / JSON file state) before ever
-// reaching `NativeBridge()`, so they're unusable on web for reasons beyond
-// just the network layer — see docs/m016-web-api-surface.md.
+// M016/scope-item-4 follow-up: none of these facades (spaceDelete,
+// aclLifecycle, consensus, spacePull, sync, probeNetwork, probeFileNode,
+// accountDelete) can be driven end to end on web without a live server, so
+// they were left out of session_test.dart's chrome coverage. That's a real
+// platform gap, but it should be a *verified* gap, not an assumed one: this
+// proves each facade still fails predictably with `UnsupportedError` on
+// web: either from `NativeBridge()` directly
+// (lib/src/ffi/native_bridge_web.dart) or, for spacePull/consensus.continueFlow,
+// from the `dart:io` (temp directories / JSON state files) they touch before
+// ever reaching `NativeBridge()`: rather than crashing some other, less
+// legible way.
 import 'package:manytype_cli/manytype_cli.dart';
 import 'package:manytype_cli/src/store/database_opener.dart';
 import 'package:manytype_core/manytype_core.dart';
@@ -116,6 +114,39 @@ void main() {
 
       await expectLater(
         session.sync.run(networkConfigContent: _minimalNetworkConfig),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test('session.spacePull.bootstrap', () async {
+      final session = await openSession();
+      addTearDown(session.close);
+
+      await expectLater(
+        session.spacePull.bootstrap(
+          networkConfigContent: _minimalNetworkConfig,
+          serverAddress: '127.0.0.1:0',
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test('session.spacePull.refetch', () async {
+      final session = await openSession();
+      addTearDown(session.close);
+
+      await expectLater(
+        session.spacePull.refetch(stateIn: 'unused.json'),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test('session.consensus.continueFlow', () async {
+      final session = await openSession();
+      addTearDown(session.close);
+
+      await expectLater(
+        session.consensus.continueFlow(stateIn: 'unused.json'),
         throwsA(isA<UnsupportedError>()),
       );
     });
