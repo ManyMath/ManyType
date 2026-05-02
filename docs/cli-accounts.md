@@ -14,8 +14,17 @@ install. Each account has its own database: data never crosses accounts.
 - `manytype account current`: print the currently-selected account.
 - `manytype account remove <id>`: delete a **local** account profile (its
   config and database). This does **not** perform the Anytype protocol-level
-  `AccountDelete` coordinator teardown operation — that is a distinct, still
-  out-of-scope operation (see `.gsd/DECISIONS.md`).
+  `AccountDelete` coordinator teardown operation: see `manytype account-delete`
+  below for that, and note the two are unrelated: removing the local profile
+  does not delete anything on the coordinator, and running `account-delete`
+  does not remove the local profile.
+- `manytype account-delete --network-config <path>`: send the protocol-level
+  `AccountDelete` request to the coordinator (bounded probe, not yet an
+  accepted parity surface: see `docs/m016-web-api-surface.md`'s "Out of
+  scope" section). Exits non-zero and prints a structured
+  `unsupported-surface-or-scenario` assessment — `AccountDelete` has no
+  reread/status-check RPC to independently verify a response, unlike
+  `space-delete`, so this command cannot currently report success.
 
 Every other command (`create`, `sync`, `read`, `edit`, `list`, etc.) operates
 against whichever account is currently selected, using this precedence:
