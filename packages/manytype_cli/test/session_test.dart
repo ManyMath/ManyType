@@ -122,6 +122,29 @@ void main() {
       );
     });
 
+    test('session.objects.delete removes an object with no CLI I/O',
+        () async {
+      final identity = await Identity.fromMnemonic(testMnemonic);
+      final session = ManytypeSession(
+        db: ManytypeDatabase.forTesting(await openDatabaseForTesting()),
+        config: CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:0'),
+        identity: identity,
+      );
+      addTearDown(session.close);
+
+      final created = await session.objects.create('Session object to delete');
+
+      await session.objects.delete(
+        created.objectId,
+        syncService: _NoopSyncService(),
+      );
+
+      final results = await session.objects.list(
+        syncService: _FailingSyncService(),
+      );
+      expect(results.any((meta) => meta.id == created.objectId), isFalse);
+    });
+
     test('session.accounts drives the account-profile lifecycle', () async {
       await resetAccountRegistryForTest(
         DateTime.now().microsecondsSinceEpoch.toString(),
