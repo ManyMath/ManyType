@@ -14,7 +14,6 @@ library;
 // legible way.
 import 'package:manytype_cli/manytype_cli.dart';
 import 'package:manytype_cli/src/store/database_opener.dart';
-import 'package:manytype_core/manytype_core.dart';
 import 'package:test/test.dart';
 
 import 'web/web_db_test_helpers.dart';
