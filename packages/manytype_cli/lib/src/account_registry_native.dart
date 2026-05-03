@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'account_profile.dart';
+import 'config.dart';
 
 /// Native (vm) account registry backed by files under `~/.manytype`:
 /// - `accounts.json`: index of known account summaries (no secrets)
@@ -91,6 +92,26 @@ class AccountRegistry {
         await file.delete();
       }
     }
+  }
+
+  /// Load an account's config (mnemonic + server address), the same way
+  /// [resolveActiveAccount] does for the currently-active account : 
+  /// respecting [AccountSummary.configPathOverride] for migrated legacy
+  /// accounts. Throws [StateError] if no account is registered under [id].
+  static Future<CliConfig> loadConfig(String id, {String? serverOverride}) async {
+    final accounts = await listAccounts();
+    AccountSummary? summary;
+    for (final account in accounts) {
+      if (account.id == id) {
+        summary = account;
+        break;
+      }
+    }
+    if (summary == null) {
+      throw StateError('no account registered with id $id');
+    }
+    final configPath = summary.configPathOverride ?? accountConfigPath(id);
+    return CliConfig.loadFrom(configPath, serverOverride: serverOverride);
   }
 
   static Future<String?> getCurrentAccountId() async {

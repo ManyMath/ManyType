@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:web/web.dart' as web;
 
 import 'account_profile.dart';
+import 'config.dart';
 
 /// Web account registry backed by `window.localStorage`:
 /// - `<prefix>:accounts`: JSON index of known account summaries
@@ -80,6 +81,22 @@ class AccountRegistry {
     if (currentId == id) {
       _storage.removeItem(_currentKey);
     }
+  }
+
+  /// Load an account's config (mnemonic + server address) from localStorage
+  ///: the web counterpart to native's `CliConfig.loadFrom(config.toml)`,
+  /// since there is no config.toml on web. Throws [StateError] if no
+  /// account is registered under [id].
+  static Future<CliConfig> loadConfig(String id, {String? serverOverride}) async {
+    final mnemonic = _storage.getItem(_mnemonicKey(id));
+    if (mnemonic == null) {
+      throw StateError('no account registered with id $id');
+    }
+    final storedServer = _storage.getItem(_serverKey(id));
+    return CliConfig(
+      mnemonic: mnemonic,
+      serverAddress: serverOverride ?? storedServer ?? '127.0.0.1:33020',
+    );
   }
 
   static Future<String?> getCurrentAccountId() async {

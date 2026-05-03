@@ -1,3 +1,4 @@
+import 'account_registry.dart';
 import 'active_account.dart';
 import 'commands/account.dart';
 import 'commands/account_delete.dart';
@@ -34,9 +35,9 @@ class ManytypeSession {
   final Identity identity;
 
   /// Resolves the active account (see [resolveActiveAccount]) and opens a
-  /// session against its config/db. Native/vm only — on web, construct a
-  /// [CliConfig] and [ManytypeDatabase] directly and use the default
-  /// constructor instead.
+  /// session against its config/db. Native/vm only: [resolveActiveAccount]
+  /// reads `~/.manytype`, which has no web equivalent; web callers use
+  /// [openWeb] instead.
   static Future<ManytypeSession> open({
     String? accountOverride,
     String? envAccountId,
@@ -51,6 +52,37 @@ class ManytypeSession {
     return ManytypeSession(
       db: ManytypeDatabase(active.dbPath),
       config: active.config,
+      identity: identity,
+    );
+  }
+
+  /// Web counterpart to [open]: builds a session for an account already
+  /// registered via [AccountRegistry.createAccount] (there is no
+  /// `~/.manytype` filesystem to resolve an active account from on web, so
+  /// callers pass [accountId] explicitly instead of relying on a persisted
+  /// "current" pointer). Loads that account's config via
+  /// [AccountRegistry.loadConfig] and opens its OPFS/IndexedDB-backed
+  /// database via [AccountRegistry.accountDbPath]: the same
+  /// [ManytypeDatabase] default constructor [open] uses, now reachable on
+  /// web (M017).
+  ///
+  /// Works on native too (same [AccountRegistry] API on both platforms),
+  /// but [open] is the natural choice there since it also handles legacy
+  /// single-account migration; this exists for web hosts that manage
+  /// account selection themselves rather than through a CLI-style "current
+  /// account" pointer.
+  static Future<ManytypeSession> openWeb({
+    required String accountId,
+    String? serverOverride,
+  }) async {
+    final config = await AccountRegistry.loadConfig(
+      accountId,
+      serverOverride: serverOverride,
+    );
+    final identity = await Identity.fromMnemonic(config.mnemonic);
+    return ManytypeSession(
+      db: ManytypeDatabase(AccountRegistry.accountDbPath(accountId)),
+      config: config,
       identity: identity,
     );
   }
