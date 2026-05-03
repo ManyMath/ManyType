@@ -63,8 +63,9 @@ void main() {
         await idb2.close();
       });
 
-      test('chosenImplementation is unsafeIndexedDb (R037 — not inMemory)',
-          () async {
+      test(
+          'chosenImplementation is loggable (R037: worker cross-origin '
+          'falls back to inMemory under dart test -p chrome)', () async {
         final dbName =
             'manytype-s02-impl-check-${DateTime.now().microsecondsSinceEpoch}';
         final result = await WasmDatabase.open(
@@ -78,14 +79,18 @@ void main() {
             '[M014/S02] chosenImplementation=${result.chosenImplementation}');
         print('[M014/S02] missingFeatures=${result.missingFeatures}');
 
-        // When the worker fails to load (cross-origin), WasmDatabase.open falls
-        // back to unsafeIndexedDb or inMemory. In headless chrome without COOP/COEP,
-        // unsafeIndexedDb is the expected fallback. If we get inMemory, the worker
-        // AND IndexedDB both failed — that's the R037 guard.
+        // When the worker fails to load (cross-origin: this test's asset
+        // server runs on a different port than the test page), WasmDatabase.open
+        // falls back through unsafeIndexedDb to inMemory. Empirically, under
+        // dart test -p chrome, the worker load fails with
+        // MissingBrowserFeature.workerError and this lands on inMemory (see
+        // app_persistence_test.dart's R041 diagnostic, which observes the same
+        // thing). A real deployment serves the worker same-origin and gets a
+        // durable implementation instead: this test only documents what
+        // WasmDatabase.open chooses in the test harness's environment.
         //
         // For the true persistence proof, we rely on the round-trip test above
-        // which uses IndexedDbFileSystem directly. This test documents what
-        // WasmDatabase.open chooses in this environment.
+        // which uses IndexedDbFileSystem directly.
         printOnFailure(
             'chosenImplementation: ${result.chosenImplementation}');
         printOnFailure('missingFeatures: ${result.missingFeatures}');
