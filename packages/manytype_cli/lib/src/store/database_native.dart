@@ -3,7 +3,12 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 
-Future<QueryExecutor> openDatabaseForApp(String dbPath) async {
+import 'web_storage_diagnostics.dart';
+
+/// [onWebStorageDiagnostics] is web-only diagnostics; ignored here since
+/// native storage is always a real, durable, single-process file.
+Future<QueryExecutor> openDatabaseForApp(String dbPath,
+    {WebStorageDiagnosticsCallback? onWebStorageDiagnostics}) async {
   final dir = Directory(dbPath).parent;
   if (!await dir.exists()) {
     await dir.create(recursive: true);

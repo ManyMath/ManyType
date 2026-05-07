@@ -5,6 +5,9 @@ import 'package:manytype_protocol/manytype_protocol.dart'
     show RawTreeChange, RootChange, TreeChange;
 
 import 'database_connection.dart';
+import 'web_storage_diagnostics.dart';
+
+export 'web_storage_diagnostics.dart';
 
 part 'database.g.dart';
 
@@ -69,7 +72,15 @@ class CachedBlobs extends Table {
 @DriftDatabase(
     tables: [Objects, Changes, StoreEntries, AttachmentRefs, CachedBlobs])
 class ManytypeDatabase extends _$ManytypeDatabase {
-  ManytypeDatabase(String dbPath) : super(openConnectionForApp(dbPath));
+  /// [onWebStorageDiagnostics], if given, is invoked once the storage
+  /// backend resolves on web (ignored on native). Use it to warn callers
+  /// when the browser fell back to an implementation that isn't durable
+  /// (`inMemory`) or isn't safe across multiple tabs (`unsafeIndexedDb`) : 
+  /// see [WebStorageDiagnostics].
+  ManytypeDatabase(String dbPath,
+      {WebStorageDiagnosticsCallback? onWebStorageDiagnostics})
+      : super(openConnectionForApp(dbPath,
+            onWebStorageDiagnostics: onWebStorageDiagnostics));
 
   ManytypeDatabase.forTesting(super.executor);
 

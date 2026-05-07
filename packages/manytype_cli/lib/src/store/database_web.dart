@@ -2,6 +2,30 @@ import 'package:drift/drift.dart';
 import 'package:drift/wasm.dart';
 import 'package:sqlite3/wasm.dart';
 
+import 'web_storage_diagnostics.dart';
+
+/// Storage implementations drift documents as safe when the same database is
+/// opened in multiple tabs at once (see `WasmStorageImplementation`'s
+/// doc-comments). `unsafeIndexedDb` and `inMemory` are excluded.
+const _multiTabSafeImplementations = {
+  WasmStorageImplementation.opfsShared,
+  WasmStorageImplementation.opfsLocks,
+  WasmStorageImplementation.sharedIndexedDb,
+};
+
+/// Maps drift's [WasmDatabaseResult] onto the platform-agnostic
+/// [WebStorageDiagnostics] surfaced through [openDatabaseForApp].
+WebStorageDiagnostics webStorageDiagnosticsFromWasmResult(
+    WasmDatabaseResult result) {
+  return WebStorageDiagnostics(
+    implementationName: result.chosenImplementation.name,
+    isDurable: result.chosenImplementation != WasmStorageImplementation.inMemory,
+    isMultiTabSafe:
+        _multiTabSafeImplementations.contains(result.chosenImplementation),
+    missingFeatures: result.missingFeatures.map((f) => f.name).toList(),
+  );
+}
+
 /// Test-only override for [openDatabaseForApp]'s asset URIs. A real deployed
 /// web app serves `sqlite3.wasm`/`drift_worker.dart.js` at its own origin
 /// root, so the relative-path defaults below resolve correctly; `dart test
@@ -11,8 +35,10 @@ import 'package:sqlite3/wasm.dart';
 /// analogous override on [openDatabaseForTesting].
 ({Uri sqlite3, Uri driftWorker})? webAppAssetUriOverride;
 
-Future<QueryExecutor> openDatabaseForApp(String dbPath) async {
+Future<QueryExecutor> openDatabaseForApp(String dbPath,
+    {WebStorageDiagnosticsCallback? onWebStorageDiagnostics}) async {
   final result = await openWasmDatabaseForApp(dbPath);
+  onWebStorageDiagnostics?.call(webStorageDiagnosticsFromWasmResult(result));
   return result.resolvedExecutor;
 }
 

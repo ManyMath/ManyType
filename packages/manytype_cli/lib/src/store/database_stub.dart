@@ -1,6 +1,9 @@
 import 'package:drift/drift.dart';
 
-Future<QueryExecutor> openDatabaseForApp(String dbPath) {
+import 'web_storage_diagnostics.dart';
+
+Future<QueryExecutor> openDatabaseForApp(String dbPath,
+    {WebStorageDiagnosticsCallback? onWebStorageDiagnostics}) {
   throw UnsupportedError(
     'openDatabaseForApp is not supported on this platform',
   );

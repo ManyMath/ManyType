@@ -71,9 +71,13 @@ class ManytypeSession {
   /// single-account migration; this exists for web hosts that manage
   /// account selection themselves rather than through a CLI-style "current
   /// account" pointer.
+  ///
+  /// [onWebStorageDiagnostics], if given, is forwarded to the
+  /// [ManytypeDatabase] constructor: see its doc comment.
   static Future<ManytypeSession> openWeb({
     required String accountId,
     String? serverOverride,
+    WebStorageDiagnosticsCallback? onWebStorageDiagnostics,
   }) async {
     final config = await AccountRegistry.loadConfig(
       accountId,
@@ -81,7 +85,10 @@ class ManytypeSession {
     );
     final identity = await Identity.fromMnemonic(config.mnemonic);
     return ManytypeSession(
-      db: ManytypeDatabase(AccountRegistry.accountDbPath(accountId)),
+      db: ManytypeDatabase(
+        AccountRegistry.accountDbPath(accountId),
+        onWebStorageDiagnostics: onWebStorageDiagnostics,
+      ),
       config: config,
       identity: identity,
     );
