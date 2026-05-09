@@ -34,6 +34,23 @@ melos:
         concurrency: 1
       packageFilters:
         dirExists: test
+    test:ci:
+      run: dart test --exclude-tags=round_trip -j 1
+      description: |
+        Run the VM test suite excluding tests tagged `round_trip` (docker
+        any-sync oracle / live manytype_server integration tests). Every
+        other VM test either has no live-infra dependency or self-skips via
+        an env-var gate (MANYTYPE_LIVE_SERVER_TESTS, MANYTYPE_RUN_PHASE*)
+        when its prerequisites aren't set up, so this target is safe to run
+        in a bare CI runner with no docker/server/FFI setup. `-j 1` is
+        required: some harness tests (phase38/phase39) build and start a
+        real manytype_server themselves and race on port allocation under
+        concurrent test-file execution (`-j 4` reproduced intermittent
+        "Address already in use" failures; `-j 1` did not).
+      exec:
+        concurrency: 1
+      packageFilters:
+        dirExists: test
     analyze:
       run: dart analyze .
       exec:
