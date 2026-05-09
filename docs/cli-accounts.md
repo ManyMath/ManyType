@@ -19,12 +19,17 @@ install. Each account has its own database: data never crosses accounts.
   does not delete anything on the coordinator, and running `account-delete`
   does not remove the local profile.
 - `manytype account-delete --network-config <path>`: send the protocol-level
-  `AccountDelete` request to the coordinator (bounded probe, not yet an
-  accepted parity surface: see `docs/m016-web-api-surface.md`'s "Out of
-  scope" section). Exits non-zero and prints a structured
-  `unsupported-surface-or-scenario` assessment — `AccountDelete` has no
-  reread/status-check RPC to independently verify a response, unlike
-  `space-delete`, so this command cannot currently report success.
+  `AccountDelete` request to the coordinator, then immediately repeat it for
+  the same identity. `AccountDelete` has no reread/status-check RPC to
+  independently verify a single response the way `space-delete` can: but
+  the official self-hosted oracle rejects a second `AccountDelete` call for
+  an already-deleted account with "account is deleted"
+  (`test_vectors/phase50/oracle_account_delete.json`), and `manytype_server`
+  now mirrors that idempotency contract. The command accepts
+  (`supported-and-verified`, exit 0) only when the second call is
+  independently rejected on those grounds; otherwise it exits non-zero with
+  a structured `unsupported-surface-or-scenario` assessment. See
+  `docs/m018-account-delete-idempotency.md`.
 
 Every other command (`create`, `sync`, `read`, `edit`, `list`, etc.) operates
 against whichever account is currently selected, using this precedence:

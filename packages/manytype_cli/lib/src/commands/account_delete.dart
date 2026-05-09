@@ -7,22 +7,28 @@ import 'package:manytype_cli/src/identity.dart';
 import 'package:manytype_cli/src/network_config.dart';
 import 'package:manytype_cli/src/session.dart';
 
-/// Unlike `SpaceDelete`'s `SpaceStatusCheck` reread, `AccountDelete`
-/// has no per-account status RPC, and `DeletionLog` records are scoped by
+/// Unlike `SpaceDelete`'s `SpaceStatusCheck` reread, `AccountDelete` has no
+/// per-account status RPC, and `DeletionLog` records are scoped by
 /// `space_id`, not account identity (see `DeletionLogRecord` in
-/// `coordinator.proto`) — so a positive `AccountDeleteResponse` cannot be
-/// independently reread and confirmed the way `SpaceDelete` can. Phase 50
-/// evidence backs this up: the `manytype_server` stub surface returns
-/// `ok: true` with a positive timestamp yet never changes any observable
-/// state, so response success alone is known to be an unreliable signal.
-/// Until a bounded, replayable acceptance path is captured, this command
-/// can only ever report `unsupported-surface-or-scenario`.
+/// `coordinator.proto`): so a positive `AccountDeleteResponse` alone cannot
+/// be independently reread and confirmed the way `SpaceDelete` can.
+///
+/// The official self-hosted oracle does expose one observable, replayable
+/// signal for this RPC, though: a second `AccountDelete` call for an
+/// already-deleted account is rejected with "account is deleted"
+/// (`test_vectors/phase50/oracle_account_delete.json`). `manytype_server`
+/// now mirrors this idempotency contract (see `handle_account_delete` in
+/// `rust/manytype_server/src/coordinator.rs`), so this command issues a
+/// second `AccountDelete` call for the same identity immediately after the
+/// first succeeds, and accepts the bounded contract only if that second call
+/// is independently rejected on the same grounds.
 const String kAccountDeleteVerificationCaveat =
     'AccountDelete has no reread/status-check RPC analogous to SpaceStatusCheck, '
     'and DeletionLog records are space-scoped, not account-scoped, so a '
-    'response cannot be independently verified. Reported outcomes are '
-    'therefore capped at unsupported-surface-or-scenario until a bounded, '
-    'replayable acceptance path is captured.';
+    'single response cannot be independently verified. Acceptance instead '
+    'requires a second AccountDelete call for the same identity to be '
+    'rejected with "account is deleted": the one observable, replayable '
+    'signal the official any-sync coordinator exposes for this RPC.';
 
 class AccountDeleteAssessment {
   const AccountDeleteAssessment({
@@ -45,9 +51,15 @@ class AccountDeleteAssessment {
       };
 }
 
+/// [secondCallOk]/[secondCallError] describe a second `AccountDelete` call
+/// issued for the same identity immediately after the first succeeded. This
+/// is the only independently-observable signal any-sync exposes for account
+/// deletion: see [kAccountDeleteVerificationCaveat].
 AccountDeleteAssessment assessAccountDeleteContract({
   required bool responseOk,
   required String? responseError,
+  bool? secondCallOk,
+  String? secondCallError,
 }) {
   if (!responseOk) {
     return AccountDeleteAssessment(
@@ -58,12 +70,31 @@ AccountDeleteAssessment assessAccountDeleteContract({
           'AccountDelete RPC did not complete successfully on the observed surface: ${responseError ?? 'unknown error'}.',
     );
   }
-  return const AccountDeleteAssessment(
+
+  final rejectedAsDeleted = secondCallOk == false &&
+      (secondCallError?.toLowerCase().contains('account is deleted') ??
+          false);
+  if (rejectedAsDeleted) {
+    return const AccountDeleteAssessment(
+      outcome: 'supported-and-verified',
+      supported: true,
+      observedSurfaceLabel: 'accepted-account-delete-idempotency-surface',
+      reason:
+          'The first AccountDelete request returned ok, and a second request '
+          'for the same identity was independently rejected with "account is '
+          'deleted": the one observable signal any-sync exposes for '
+          'AccountDelete. This satisfies the bounded acceptance contract.',
+    );
+  }
+
+  return AccountDeleteAssessment(
     outcome: 'unsupported-surface-or-scenario',
     supported: false,
     observedSurfaceLabel: 'response-succeeded-but-unverifiable',
-    reason:
-        'The delete request returned ok, but $kAccountDeleteVerificationCaveat',
+    reason: 'The delete request returned ok, but the repeat-call idempotency '
+        'check did not confirm deletion (secondCallOk: $secondCallOk, '
+        'secondCallError: ${secondCallError ?? 'none'}). '
+        '$kAccountDeleteVerificationCaveat',
   );
 }
 
@@ -77,6 +108,7 @@ class AccountDeleteReport {
     this.networkConfigContent,
     required this.coordinatorAddress,
     required this.response,
+    required this.secondResponse,
   });
 
   final DateTime capturedAt;
@@ -86,6 +118,10 @@ class AccountDeleteReport {
   final String coordinatorAddress;
   final Map<String, Object?> response;
 
+  /// Result of the immediate second `AccountDelete` call for the same
+  /// identity, used to prove idempotency: see [kAccountDeleteVerificationCaveat].
+  final Map<String, Object?> secondResponse;
+
   Map<String, Object?> toJson() => {
         'captured_at': capturedAt.toIso8601String(),
         'command': 'account-delete',
@@ -94,6 +130,7 @@ class AccountDeleteReport {
         'network_config_path': networkConfigPath,
         'coordinator_address': coordinatorAddress,
         'response': response,
+        'second_response': secondResponse,
       };
 }
 
@@ -118,6 +155,9 @@ Future<AccountDeleteReport> accountDeleteCommand({
   Map<String, Object?> responseJson;
   bool responseOk;
   String? responseError;
+  Map<String, Object?> secondResponseJson;
+  bool? secondResponseOk;
+  String? secondResponseError;
   try {
     final networkConfiguration =
         coordinator.networkConfigurationForHandle(handleId);
@@ -143,6 +183,39 @@ Future<AccountDeleteReport> accountDeleteCommand({
         'error': responseError,
       };
     }
+
+    if (responseOk) {
+      // Immediately repeat the call for the same identity: this is the one
+      // observable, replayable signal any-sync exposes for AccountDelete
+      // (see kAccountDeleteVerificationCaveat).
+      try {
+        final secondResponse = await coordinator.accountDelete(
+          handleId: handleId,
+          identity: identity,
+          networkId: networkConfiguration.networkId,
+        );
+        secondResponseOk = true;
+        secondResponseError = null;
+        secondResponseJson = {
+          'ok': true,
+          'value': {
+            'to_be_deleted_timestamp':
+                secondResponse.toBeDeletedTimestamp.toInt(),
+          },
+        };
+      } catch (error) {
+        secondResponseOk = false;
+        secondResponseError = error.toString();
+        secondResponseJson = {
+          'ok': false,
+          'error': secondResponseError,
+        };
+      }
+    } else {
+      secondResponseOk = null;
+      secondResponseError = null;
+      secondResponseJson = {'ok': null, 'skipped': 'first call did not succeed'};
+    }
   } finally {
     bridge.freeHandle(handleId);
   }
@@ -150,6 +223,8 @@ Future<AccountDeleteReport> accountDeleteCommand({
   final assessment = assessAccountDeleteContract(
     responseOk: responseOk,
     responseError: responseError,
+    secondCallOk: secondResponseOk,
+    secondCallError: secondResponseError,
   );
 
   return AccountDeleteReport(
@@ -159,6 +234,7 @@ Future<AccountDeleteReport> accountDeleteCommand({
     networkConfigContent: networkConfigContent,
     coordinatorAddress: coordinatorAddress,
     response: responseJson,
+    secondResponse: secondResponseJson,
   );
 }
 
