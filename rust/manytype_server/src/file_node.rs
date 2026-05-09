@@ -595,7 +595,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                Some(hex::encode(OWNER_PEER_ID)),
+                Some(OWNER_PEER_ID.to_string()),
             )
             .unwrap();
 
@@ -891,7 +891,11 @@ mod tests {
     }
 
     #[test]
-    fn check_lists_only_owned_spaces() {
+    fn check_lists_owned_spaces_plus_prejoin_placeholder() {
+        // handle_check advertises every known space (plus a leading empty
+        // space id for pre-join flows like SpaceInviteView) regardless of
+        // the calling peer, since real authorization is enforced by the
+        // mutating RPCs instead. See handle_check's doc comment.
         let temp_dir = TempDir::new().unwrap();
         let sync_state = seeded_sync_state(&temp_dir);
         let response = CheckResponse::decode(
@@ -900,7 +904,10 @@ mod tests {
                 .as_slice(),
         )
         .unwrap();
-        assert_eq!(response.space_ids, vec!["space-1".to_string()]);
+        assert_eq!(
+            response.space_ids,
+            vec![String::new(), "space-1".to_string()]
+        );
         assert!(response.allow_write);
 
         let other = CheckResponse::decode(
@@ -909,8 +916,8 @@ mod tests {
                 .as_slice(),
         )
         .unwrap();
-        assert!(other.space_ids.is_empty());
-        assert!(!other.allow_write);
+        assert_eq!(other.space_ids, vec![String::new(), "space-1".to_string()]);
+        assert!(other.allow_write);
     }
 
     #[test]
@@ -1043,7 +1050,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                Some(hex::encode(OWNER_PEER_ID)),
+                Some(OWNER_PEER_ID.to_string()),
             )
             .unwrap();
 

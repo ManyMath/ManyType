@@ -1243,7 +1243,7 @@ mod tests {
                 "/spacesync.SpaceSync/SpacePush",
                 &mut server_stream,
                 &state,
-                "peer",
+                &hex::encode(b"peer"),
             )
             .await
             .unwrap();
@@ -1281,7 +1281,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_dispatch_object_sync_stream() {
-        use manytype_proto::spacesync::ObjectSyncMessage;
+        use manytype_proto::spacesync::{ObjectSyncMessage, SpaceSubscription};
 
         let (client, server) = duplex(4096);
         let mut server_stream = DrpcStream::new(server);
@@ -1301,28 +1301,51 @@ mod tests {
             .unwrap();
         });
 
-        // Send one ObjectSyncMessage as a message frame (done=true per message)
-        let msg = ObjectSyncMessage {
+        // Official any-sync clients open ObjectSyncStream with a
+        // SpaceSubscription control message (empty object_id). The server
+        // always acks these regardless of payload contents.
+        let subscription_msg = ObjectSyncMessage {
             space_id: "sp-1".to_string(),
-            object_id: "obj-1".to_string(),
+            object_id: String::new(),
             request_id: "req-1".to_string(),
-            payload: b"change-data".to_vec(),
+            payload: SpaceSubscription {
+                space_ids: vec!["sp-1".to_string()],
+                ..Default::default()
+            }
+            .encode_to_vec(),
             ..Default::default()
         };
         client_stream
-            .write_message(0, 0, &msg.encode_to_vec())
+            .write_message(0, 0, &subscription_msg.encode_to_vec())
             .await
             .unwrap();
 
-        // Read the confirmation response (non-final -- stream continues)
+        // Read the subscription ack (non-final -- stream continues)
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_MESSAGE);
         assert_eq!(frame.stream_id, 1);
         assert_eq!(frame.message_id, 1);
         let response = ObjectSyncMessage::decode(frame.data.as_ref()).unwrap();
         assert_eq!(response.space_id, "sp-1");
-        assert_eq!(response.object_id, "obj-1");
         assert_eq!(response.reply_id, "req-1");
+
+        // A per-object push-style message with a payload the server can't
+        // interpret as a recognized tree message produces no ack: official
+        // clients treat these as semantic updates, not per-message acks
+        // (see handle_object_sync_message's should_write comment above).
+        // Send it followed directly by close-send; the server's close-send
+        // response is the first frame we expect back.
+        let push_msg = ObjectSyncMessage {
+            space_id: "sp-1".to_string(),
+            object_id: "obj-1".to_string(),
+            request_id: "req-2".to_string(),
+            payload: b"change-data".to_vec(),
+            ..Default::default()
+        };
+        client_stream
+            .write_message(0, 0, &push_msg.encode_to_vec())
+            .await
+            .unwrap();
 
         // Send close-send to end the stream
         client_stream
@@ -1601,7 +1624,7 @@ mod tests {
                 "/filesync.File/BlockGet",
                 &mut server_stream,
                 &state,
-                "peer",
+                &hex::encode(b"peer"),
             )
             .await;
             assert!(result.is_err());
@@ -1665,7 +1688,7 @@ mod tests {
                     "/spacesync.SpaceSync/SpacePush",
                     &mut server_stream,
                     &state,
-                    "peer",
+                    &hex::encode(b"peer"),
                 )
                 .await
                 .unwrap();
