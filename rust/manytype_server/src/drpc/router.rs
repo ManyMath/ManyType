@@ -300,8 +300,22 @@ where
         }
         "/coordinator.Coordinator/AccountDelete" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes = coordinator::handle_account_delete(&request_bytes)?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            match coordinator::handle_account_delete(&request_bytes, &state.sync_state) {
+                Ok(response_bytes) => {
+                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
+                        .await
+                }
+                Err(error) => {
+                    write_error_response(
+                        stream,
+                        stream_id,
+                        &mut next_message_id,
+                        &error.to_string(),
+                    )
+                    .await?;
+                    bail!("{error}");
+                }
+            }
         }
         "/coordinator.Coordinator/DeletionLog" => {
             let request_bytes = stream.read_message().await?;

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LockResult, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 #[cfg(test)]
@@ -13,6 +13,8 @@ use prost::Message;
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 
 const GLOBAL_SPACES_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("spaces");
+const GLOBAL_DELETED_ACCOUNTS_TABLE: TableDefinition<&str, &[u8]> =
+    TableDefinition::new("deleted_accounts");
 const SPACE_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("meta");
 const SPACE_HEADS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("heads");
 const SPACE_OBJECT_CHANGES_TABLE: TableDefinition<&str, &[u8]> =
@@ -49,6 +51,7 @@ pub struct SpaceState {
 #[derive(Clone)]
 pub struct SharedSyncState {
     inner: Arc<RwLock<HashMap<String, SpaceState>>>,
+    deleted_accounts: Arc<RwLock<HashSet<String>>>,
     storage: Arc<SyncStateStorage>,
 }
 
@@ -91,6 +94,7 @@ impl SyncStateStorage {
         std::fs::create_dir_all(&paths.spaces_dir)?;
         let global_db = Database::create(&paths.global_db_path)?;
         ensure_table(&global_db, GLOBAL_SPACES_TABLE)?;
+        ensure_table(&global_db, GLOBAL_DELETED_ACCOUNTS_TABLE)?;
         Ok(Self {
             global_db,
             root_dir: paths.root_dir,
@@ -326,16 +330,58 @@ impl SyncStateStorage {
         write_txn.commit()?;
         Ok(())
     }
+
+    fn load_deleted_accounts(&self) -> Result<HashSet<String>> {
+        let read_txn = self.global_db.begin_read()?;
+        let table = read_txn.open_table(GLOBAL_DELETED_ACCOUNTS_TABLE)?;
+        Ok(table
+            .iter()?
+            .flatten()
+            .map(|entry| entry.0.value().to_string())
+            .collect())
+    }
+
+    fn persist_deleted_account(&self, account_key: &str) -> Result<()> {
+        let _guard = self.persist_lock.lock().unwrap();
+        let write_txn = self.global_db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(GLOBAL_DELETED_ACCOUNTS_TABLE)?;
+            table.insert(account_key, b"1".as_slice())?;
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
 }
 
 impl SharedSyncState {
     pub fn open(config_path: impl AsRef<Path>) -> Result<Self> {
         let storage = Arc::new(SyncStateStorage::open(config_path.as_ref())?);
         let spaces = storage.load_spaces()?;
+        let deleted_accounts = storage.load_deleted_accounts()?;
         Ok(Self {
             inner: Arc::new(RwLock::new(spaces)),
+            deleted_accounts: Arc::new(RwLock::new(deleted_accounts)),
             storage,
         })
+    }
+
+    /// Returns whether `AccountDelete` has already been accepted for this
+    /// account identity. Mirrors the one observable signal the official
+    /// any-sync coordinator exposes for account deletion (a repeat
+    /// `AccountDelete` call is rejected with "account is deleted"): there is
+    /// no per-account status/reread RPC to check this any other way.
+    pub fn is_account_deleted(&self, account_identity: &[u8]) -> bool {
+        let key = hex::encode(account_identity);
+        self.deleted_accounts.read().unwrap().contains(&key)
+    }
+
+    pub fn mark_account_deleted(&self, account_identity: &[u8]) -> Result<()> {
+        let key = hex::encode(account_identity);
+        {
+            let mut deleted = self.deleted_accounts.write().unwrap();
+            deleted.insert(key.clone());
+        }
+        self.storage.persist_deleted_account(&key)
     }
 
     pub fn read(&self) -> LockResult<RwLockReadGuard<'_, HashMap<String, SpaceState>>> {

@@ -8,8 +8,9 @@ use prost::Message;
 
 use manytype_proto::consensus::{RawRecord, RawRecordWithId, RecordAddRequest};
 use manytype_proto::coordinator::{
-    AccountDeleteRequest, AccountDeleteResponse, AclAddRecordRequest, AclAddRecordResponse,
-    AclGetRecordsRequest, AclGetRecordsResponse, AclUploadInviteRequest, AclUploadInviteResponse,
+    AccountDeleteRequest, AccountDeleteResponse, AccountDeletionConfirmPayload,
+    AclAddRecordRequest, AclAddRecordResponse, AclGetRecordsRequest, AclGetRecordsResponse,
+    AclUploadInviteRequest, AclUploadInviteResponse, DeletionConfirmPayloadWithSignature,
     DeletionLogRequest, DeletionLogResponse, NetworkConfigurationRequest,
     NetworkConfigurationResponse, Node, NodeType, SpaceDeleteRequest, SpaceDeleteResponse,
     SpaceMakeShareableRequest, SpaceMakeShareableResponse, SpacePermissions, SpaceReceipt,
@@ -218,13 +219,30 @@ pub fn handle_space_delete(request_bytes: &[u8]) -> Result<Vec<u8>> {
 
 /// Handle /coordinator.Coordinator/AccountDelete
 ///
-/// Stub: returns success with a future timestamp. No actual account teardown in v2.4.
-pub fn handle_account_delete(request_bytes: &[u8]) -> Result<Vec<u8>> {
-    let _request = AccountDeleteRequest::decode(request_bytes)?;
+/// No actual account teardown (that remains out of scope, same as
+/// `SpaceDelete`), but a repeat call for the same account identity is
+/// rejected with "account is deleted": the one observable, replayable
+/// signal the official any-sync coordinator exposes for this RPC (there is
+/// no per-account status/reread RPC, and `DeletionLog` is space-scoped).
+/// Confirmed against the official self-hosted oracle in
+/// `test_vectors/phase50/oracle_account_delete.json`.
+pub fn handle_account_delete(
+    request_bytes: &[u8],
+    sync_state: &SharedSyncState,
+) -> Result<Vec<u8>> {
+    let request = AccountDeleteRequest::decode(request_bytes)?;
+    let signed = DeletionConfirmPayloadWithSignature::decode(request.deletion_payload.as_slice())?;
+    let payload = AccountDeletionConfirmPayload::decode(signed.deletion_payload.as_slice())?;
+
+    if sync_state.is_account_deleted(&payload.account_identity) {
+        anyhow::bail!("account is deleted");
+    }
+    sync_state.mark_account_deleted(&payload.account_identity)?;
+
     let response = AccountDeleteResponse {
         to_be_deleted_timestamp: unix_now_secs() as i64,
     };
-    tracing::info!("coordinator: AccountDelete stub (no-op)");
+    tracing::info!("coordinator: AccountDelete accepted (no teardown, idempotency tracked)");
     Ok(response.encode_to_vec())
 }
 
@@ -813,12 +831,53 @@ mod tests {
         assert!(response.to_be_deleted_timestamp > 0);
     }
 
-    #[test]
-    fn account_delete_stub_returns_timestamp() {
-        let request = AccountDeleteRequest {
-            ..Default::default()
+    fn account_delete_request(identity: &[u8]) -> AccountDeleteRequest {
+        let payload = AccountDeletionConfirmPayload {
+            peer_id: "peer-1".to_string(),
+            account_identity: identity.to_vec(),
+            network_id: "network-1".to_string(),
+            timestamp: unix_now_secs() as i64,
         };
-        let response_bytes = handle_account_delete(&request.encode_to_vec()).unwrap();
+        let signed = DeletionConfirmPayloadWithSignature {
+            deletion_payload: payload.encode_to_vec(),
+            signature: vec![],
+        };
+        AccountDeleteRequest {
+            deletion_payload_id: "payload-1".to_string(),
+            deletion_payload: signed.encode_to_vec(),
+        }
+    }
+
+    #[test]
+    fn account_delete_first_call_returns_timestamp() {
+        let sync_state = new_shared_sync_state();
+        let request = account_delete_request(b"account-1");
+        let response_bytes = handle_account_delete(&request.encode_to_vec(), &sync_state).unwrap();
+        let response = AccountDeleteResponse::decode(response_bytes.as_slice()).unwrap();
+        assert!(response.to_be_deleted_timestamp > 0);
+    }
+
+    #[test]
+    fn account_delete_second_call_rejected() {
+        let sync_state = new_shared_sync_state();
+        let request = account_delete_request(b"account-1");
+        handle_account_delete(&request.encode_to_vec(), &sync_state).unwrap();
+
+        let error = handle_account_delete(&request.encode_to_vec(), &sync_state).unwrap_err();
+        assert!(error.to_string().contains("account is deleted"));
+    }
+
+    #[test]
+    fn account_delete_tracks_identity_independently() {
+        let sync_state = new_shared_sync_state();
+        handle_account_delete(
+            &account_delete_request(b"account-1").encode_to_vec(),
+            &sync_state,
+        )
+        .unwrap();
+
+        let other = account_delete_request(b"account-2");
+        let response_bytes = handle_account_delete(&other.encode_to_vec(), &sync_state).unwrap();
         let response = AccountDeleteResponse::decode(response_bytes.as_slice()).unwrap();
         assert!(response.to_be_deleted_timestamp > 0);
     }
