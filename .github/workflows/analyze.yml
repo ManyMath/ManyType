@@ -23,3 +23,6 @@ jobs:
 
       - name: melos run analyze
         run: dart pub global run melos run analyze --no-select
+
+      - name: melos run format-check
+        run: dart pub global run melos run format-check --no-select

@@ -55,6 +55,11 @@ melos:
       run: dart analyze .
       exec:
         concurrency: 1
+    format-check:
+      run: dart format --output=none --set-exit-if-changed .
+      description: Fail if any file isn't formatted per `dart format`.
+      exec:
+        concurrency: 1
     codegen:
       run: npx @bufbuild/buf generate
       description: Generate Dart and Rust protobuf types from proto/
