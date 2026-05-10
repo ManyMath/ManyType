@@ -31,8 +31,6 @@ class ObjectTree {
     _parentMap[rootId] = []; // root has no parents
   }
 
-  ObjectTree._internal();
-
   /// Current head CIDs, sorted for deterministic comparison.
   List<String> get heads => _headIds.toList()..sort();
 

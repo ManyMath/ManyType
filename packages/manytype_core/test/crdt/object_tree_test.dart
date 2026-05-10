@@ -1,7 +1,6 @@
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:fixnum/fixnum.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 import 'package:test/test.dart';

@@ -1,0 +1,25 @@
+name: Static analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Activate melos
+        run: dart pub global activate melos
+
+      - name: melos bootstrap
+        run: dart pub global run melos bootstrap
+
+      - name: melos run analyze
+        run: dart pub global run melos run analyze --no-select

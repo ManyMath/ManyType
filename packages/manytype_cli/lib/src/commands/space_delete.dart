@@ -407,11 +407,6 @@ Future<_ReconnectCapture> _captureReconnectStatus({
 }
 
 class _CapturedResult<T> {
-  const _CapturedResult._({
-    required this.value,
-    required this.error,
-  });
-
   const _CapturedResult.success(T this.value) : error = null;
 
   const _CapturedResult.failure(String this.error) : value = null;
