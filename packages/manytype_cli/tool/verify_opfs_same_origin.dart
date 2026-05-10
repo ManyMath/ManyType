@@ -67,8 +67,7 @@ Future<void> main() async {
       // Cross-origin isolation is required for OPFS's full-featured
       // implementations (opfsShared/opfsLocks use SharedArrayBuffer); a
       // real deployment that wants durable OPFS storage must set these too.
-      request.response.headers
-          .set('Cross-Origin-Opener-Policy', 'same-origin');
+      request.response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
       request.response.headers
           .set('Cross-Origin-Embedder-Policy', 'require-corp');
       if (!await file.exists()) {
@@ -116,8 +115,11 @@ Future<void> main() async {
     final ws = await WebSocket.connect(wsUrl);
     var msgId = 0;
     void send(String method, [Map<String, Object?>? params]) {
-      ws.add(jsonEncode(
-          {'id': ++msgId, 'method': method, if (params != null) 'params': params}));
+      ws.add(jsonEncode({
+        'id': ++msgId,
+        'method': method,
+        if (params != null) 'params': params
+      }));
     }
 
     final replies = <int, Map<String, Object?>>{};
@@ -141,14 +143,14 @@ Future<void> main() async {
           'expression': "document.getElementById('result')?.textContent ?? ''"
         },
       }));
-      final deadlineForReply =
-          DateTime.now().add(const Duration(seconds: 2));
-      while (!replies.containsKey(id) && DateTime.now().isBefore(deadlineForReply)) {
+      final deadlineForReply = DateTime.now().add(const Duration(seconds: 2));
+      while (!replies.containsKey(id) &&
+          DateTime.now().isBefore(deadlineForReply)) {
         await Future<void>.delayed(const Duration(milliseconds: 50));
       }
       final reply = replies.remove(id);
-      final value = (reply?['result']
-          as Map<String, Object?>?)?['result'] as Map<String, Object?>?;
+      final value = (reply?['result'] as Map<String, Object?>?)?['result']
+          as Map<String, Object?>?;
       final text = value?['value'] as String?;
       if (text != null && text.isNotEmpty) {
         probeResult = jsonDecode(text) as Map<String, Object?>;
@@ -187,8 +189,7 @@ Future<void> main() async {
     final isOpfs =
         implementation == 'opfsShared' || implementation == 'opfsLocks';
     if (!isOpfs) {
-      stdout.writeln(
-          'WARN: durable and persisted, but did not resolve to OPFS '
+      stdout.writeln('WARN: durable and persisted, but did not resolve to OPFS '
           '(got $implementation): headless Chrome may be missing a '
           'feature a real browser has.');
     }

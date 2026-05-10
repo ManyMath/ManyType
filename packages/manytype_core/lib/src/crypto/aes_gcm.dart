@@ -27,8 +27,7 @@ Future<Uint8List> aesGcmEncrypt(Uint8List key, Uint8List plaintext) async {
   final result = Uint8List(nonce.length + ciphertext.length + mac.length);
   result.setRange(0, nonce.length, nonce);
   result.setRange(nonce.length, nonce.length + ciphertext.length, ciphertext);
-  result.setRange(
-      nonce.length + ciphertext.length, result.length, mac);
+  result.setRange(nonce.length + ciphertext.length, result.length, mac);
 
   return result;
 }
@@ -44,8 +43,7 @@ Future<Uint8List> aesGcmDecrypt(Uint8List key, Uint8List data) async {
 
   final nonce = data.sublist(0, nonceBytes);
   final ciphertextAndTag = data.sublist(nonceBytes);
-  final ciphertext =
-      ciphertextAndTag.sublist(0, ciphertextAndTag.length - 16);
+  final ciphertext = ciphertextAndTag.sublist(0, ciphertextAndTag.length - 16);
   final mac = Mac(ciphertextAndTag.sublist(ciphertextAndTag.length - 16));
 
   final secretBox = SecretBox(

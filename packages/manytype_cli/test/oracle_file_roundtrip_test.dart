@@ -1,4 +1,5 @@
-@TestOn('vm') // shells out via Process.run to a bash harness + live docker oracle stack
+@TestOn(
+    'vm') // shells out via Process.run to a bash harness + live docker oracle stack
 library;
 
 import 'dart:io';
@@ -9,7 +10,8 @@ void main() {
   test('docker oracle round-trip uploads, downloads, and reopens from cache',
       () async {
     if (!await _oraclePrereqsAvailable()) {
-      print('Skipping docker oracle round-trip test: prerequisites unavailable');
+      print(
+          'Skipping docker oracle round-trip test: prerequisites unavailable');
       return;
     }
 
@@ -53,8 +55,7 @@ void main() {
     ]);
     expect(upload.exitCode, 0, reason: upload.stderr.toString());
     final uploadStdout = upload.stdout.toString();
-    final cidMatch =
-        RegExp(r'cid=([a-z0-9]+)').firstMatch(uploadStdout);
+    final cidMatch = RegExp(r'cid=([a-z0-9]+)').firstMatch(uploadStdout);
     expect(cidMatch, isNotNull, reason: uploadStdout);
     final cid = cidMatch!.group(1)!;
 

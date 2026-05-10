@@ -473,4 +473,3 @@ Map<String, Object?> _spaceStatusToJson(SpaceStatusPayload payload) => {
             }
           : null,
     };
-

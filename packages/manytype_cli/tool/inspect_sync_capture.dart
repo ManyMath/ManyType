@@ -21,8 +21,7 @@ void main(List<String> args) {
     exit(66);
   }
 
-  final capture =
-      jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+  final capture = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
   final events = (capture['events'] as List<dynamic>? ?? const [])
       .cast<Map<String, dynamic>>();
 
@@ -41,7 +40,8 @@ void main(List<String> args) {
             .cast<Map<String, dynamic>>();
 
     final decodedRequests = _decodeRequestMessages(requestMessages, matchIds);
-    final decodedResponses = _decodeResponseMessages(responseMessages, matchIds);
+    final decodedResponses =
+        _decodeResponseMessages(responseMessages, matchIds);
     if (decodedRequests.isEmpty && decodedResponses.isEmpty) {
       continue;
     }
@@ -66,7 +66,8 @@ void main(List<String> args) {
   }
 
   if (matched == 0) {
-    stdout.writeln('No ObjectSyncStream messages matched: ${matchIds.join(",")}');
+    stdout
+        .writeln('No ObjectSyncStream messages matched: ${matchIds.join(",")}');
   }
 }
 
@@ -145,7 +146,8 @@ List<String> _decodeResponseMessages(
 bool _matches(Set<String> wanted, Set<String> actual) =>
     wanted.any(actual.contains);
 
-({List<String> lines, Set<String> matchIds}) _summarizeTree(TreeSyncMessage tree) {
+({List<String> lines, Set<String> matchIds}) _summarizeTree(
+    TreeSyncMessage tree) {
   final lines = <String>[];
   final matchIds = <String>{};
   if (tree.hasRootChange()) {

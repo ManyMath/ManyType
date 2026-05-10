@@ -67,8 +67,7 @@ void main() {
 
   group('proto roundtrip', () {
     test('HeadSyncRequest serializes and deserializes', () {
-      final original = spacesync.HeadSyncRequest()
-        ..spaceId = 'test-space-123';
+      final original = spacesync.HeadSyncRequest()..spaceId = 'test-space-123';
       final bytes = original.writeToBuffer();
       final decoded = spacesync.HeadSyncRequest.fromBuffer(bytes);
       expect(decoded.spaceId, equals('test-space-123'));

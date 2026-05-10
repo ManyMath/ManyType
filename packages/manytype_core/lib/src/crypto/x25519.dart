@@ -41,7 +41,8 @@ Uint8List ed25519PublicKeyToCurve25519PublicKey(Uint8List ed25519PublicKey) {
   final rc =
       TweetNaClExt.crypto_sign_ed25519_pk_to_x25519_pk(out, ed25519PublicKey);
   if (rc != 0) {
-    throw StateError('Invalid Ed25519 public key (failed Curve25519 conversion)');
+    throw StateError(
+        'Invalid Ed25519 public key (failed Curve25519 conversion)');
   }
   return out;
 }
@@ -94,7 +95,8 @@ Uint8List encryptToEd25519PublicKey({
   required Uint8List recipientEd25519PublicKey,
   required Uint8List message,
 }) {
-  final curvePub = ed25519PublicKeyToCurve25519PublicKey(recipientEd25519PublicKey);
+  final curvePub =
+      ed25519PublicKeyToCurve25519PublicKey(recipientEd25519PublicKey);
   return encryptX25519(recipientCurvePublicKey: curvePub, message: message);
 }
 

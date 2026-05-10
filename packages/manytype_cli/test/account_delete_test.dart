@@ -26,7 +26,8 @@ void main() {
 
       expect(result.supported, isFalse);
       expect(result.outcome, 'unsupported-surface-or-scenario');
-      expect(result.observedSurfaceLabel, 'response-succeeded-but-unverifiable');
+      expect(
+          result.observedSurfaceLabel, 'response-succeeded-but-unverifiable');
       expect(result.reason, contains(kAccountDeleteVerificationCaveat));
     });
 
@@ -37,7 +38,8 @@ void main() {
         responseOk: true,
         responseError: null,
         secondCallOk: false,
-        secondCallError: 'Exception: FFI error: remote error: account is deleted',
+        secondCallError:
+            'Exception: FFI error: remote error: account is deleted',
       );
 
       expect(result.supported, isTrue);
@@ -67,8 +69,7 @@ void main() {
       );
     });
 
-    test(
-        'does not accept when the second call fails for an unrelated reason',
+    test('does not accept when the second call fails for an unrelated reason',
         () {
       final result = assessAccountDeleteContract(
         responseOk: true,

@@ -1,4 +1,5 @@
-@TestOn('vm') // shells out via Process.run to spawn a real manytype_server subprocess
+@TestOn(
+    'vm') // shells out via Process.run to spawn a real manytype_server subprocess
 library;
 
 import 'dart:async';
@@ -88,8 +89,7 @@ void main() {
         driftRuntimeOptions.dontWarnAboutMultipleDatabases;
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
     addTearDown(() {
-      driftRuntimeOptions.dontWarnAboutMultipleDatabases =
-          previousWarningValue;
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = previousWarningValue;
     });
 
     final configDir = Directory('${tempDir.path}/.manytype');

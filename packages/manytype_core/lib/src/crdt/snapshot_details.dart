@@ -88,8 +88,7 @@ Future<Map<String, Value>> replayObjectDetails({
 
       for (final content in change.content) {
         if (content.hasDetailsSet()) {
-          details[content.detailsSet.key] =
-              content.detailsSet.value.deepCopy();
+          details[content.detailsSet.key] = content.detailsSet.value.deepCopy();
         }
       }
     } catch (_) {

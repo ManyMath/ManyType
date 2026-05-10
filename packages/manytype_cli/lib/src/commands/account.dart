@@ -120,8 +120,7 @@ class AccountsFacade {
 
   Future<List<AccountSummary>> list() => listAccountsCommand();
 
-  Future<AccountUseResult> use(String idOrName) =>
-      useAccountCommand(idOrName);
+  Future<AccountUseResult> use(String idOrName) => useAccountCommand(idOrName);
 
   Future<AccountSummary> current({String? envAccountId}) =>
       currentAccountCommand(envAccountId: envAccountId);

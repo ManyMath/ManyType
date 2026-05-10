@@ -16,7 +16,9 @@ void main() {
       }
     });
 
-    test('encrypt produces output with correct format: nonce + ciphertext + tag', () async {
+    test(
+        'encrypt produces output with correct format: nonce + ciphertext + tag',
+        () async {
       final plaintext = Uint8List.fromList([1, 2, 3, 4, 5]);
       final encrypted = await aesGcmEncrypt(key, plaintext);
       // Format: 12-byte nonce + plaintext_len + 16-byte GCM tag

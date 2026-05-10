@@ -443,8 +443,7 @@ Future<void> _printSnapshotMetadata(
 
   // relationLinks
   if (snapData.relationLinks.isNotEmpty) {
-    emit(
-        '  Relations: ${snapData.relationLinks.map((l) => l.key).join(', ')}');
+    emit('  Relations: ${snapData.relationLinks.map((l) => l.key).join(', ')}');
   }
 
   // Type/Relation-specific details from snapshot.
@@ -977,8 +976,7 @@ Future<void> _printBlockChanges(
           try {
             final eventMsg = Event_Message.fromBuffer(eventBytes);
             if (eventMsg.hasBlockSetText()) {
-              emit(
-                  '    Text (updated): "${eventMsg.blockSetText.text.value}"');
+              emit('    Text (updated): "${eventMsg.blockSetText.text.value}"');
             }
           } catch (_) {
             continue;

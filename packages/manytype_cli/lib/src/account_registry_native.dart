@@ -20,8 +20,9 @@ class AccountRegistry {
     if (testBaseDirOverride != null) {
       return testBaseDirOverride!;
     }
-    final home =
-        Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
+    final home = Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'] ??
+        '.';
     return p.join(home, '.manytype');
   }
 
@@ -98,7 +99,8 @@ class AccountRegistry {
   /// [resolveActiveAccount] does for the currently-active account : 
   /// respecting [AccountSummary.configPathOverride] for migrated legacy
   /// accounts. Throws [StateError] if no account is registered under [id].
-  static Future<CliConfig> loadConfig(String id, {String? serverOverride}) async {
+  static Future<CliConfig> loadConfig(String id,
+      {String? serverOverride}) async {
     final accounts = await listAccounts();
     AccountSummary? summary;
     for (final account in accounts) {

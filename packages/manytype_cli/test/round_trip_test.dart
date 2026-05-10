@@ -1,4 +1,5 @@
-@TestOn('vm') // shells out via Process.run to the bin/manytype.dart CLI binary against a live server
+@TestOn(
+    'vm') // shells out via Process.run to the bin/manytype.dart CLI binary against a live server
 @Tags(['round_trip'])
 library;
 
@@ -105,8 +106,8 @@ void main() {
     );
     expect(readAfterResult.exitCode, equals(0),
         reason: 'read after sync failed: ${readAfterResult.stderr}');
-    expect(readAfterResult.stdout.toString(),
-        contains('Hello round-trip world'));
+    expect(
+        readAfterResult.stdout.toString(), contains('Hello round-trip world'));
 
     // Step 6: Re-sync to verify store-sync round-trip (server should have
     // our store values from step 4; a second sync pulls them back).

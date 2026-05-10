@@ -45,7 +45,8 @@ void main() {
     });
 
     test('validateMnemonic rejects invalid mnemonic', () {
-      const bad = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon';
+      const bad =
+          'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon';
       expect(validateMnemonic(bad), isFalse);
     });
 

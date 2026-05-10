@@ -1,4 +1,5 @@
-@TestOn('vm') // FFI live-server space pull/bootstrap against the docker oracle stack
+@TestOn(
+    'vm') // FFI live-server space pull/bootstrap against the docker oracle stack
 @Tags(['round_trip'])
 library;
 

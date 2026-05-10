@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
-import 'package:manytype_protocol/manytype_protocol.dart' show RawTreeChange, RootChange;
+import 'package:manytype_protocol/manytype_protocol.dart'
+    show RawTreeChange, RootChange;
 import 'package:manytype_protocol/models.dart';
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart';
 
@@ -173,8 +174,7 @@ Future<Map<String, ResolvedOption>> loadLocalOptionIndex(
       details = const <String, Value>{};
     }
 
-    final name =
-        details['name']?.stringValue ?? details['text']?.stringValue;
+    final name = details['name']?.stringValue ?? details['text']?.stringValue;
     final color = details['relationOptionColor']?.stringValue ??
         details['color']?.stringValue;
     final relationKey = details['relationKey']?.stringValue;

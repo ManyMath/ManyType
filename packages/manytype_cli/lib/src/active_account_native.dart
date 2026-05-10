@@ -31,10 +31,12 @@ Future<({CliConfig config, String dbPath})> resolveActiveAccount({
     );
     final accounts = await AccountRegistry.listAccounts();
     final summary = accounts.firstWhere((a) => a.id == accountId);
-    final configPath =
-        summary.configPathOverride ?? AccountRegistry.accountConfigPath(accountId);
-    final dbPath = summary.dbPathOverride ?? AccountRegistry.accountDbPath(accountId);
-    final config = await CliConfig.loadFrom(configPath, serverOverride: serverOverride);
+    final configPath = summary.configPathOverride ??
+        AccountRegistry.accountConfigPath(accountId);
+    final dbPath =
+        summary.dbPathOverride ?? AccountRegistry.accountDbPath(accountId);
+    final config =
+        await CliConfig.loadFrom(configPath, serverOverride: serverOverride);
     return (config: config, dbPath: dbPath);
   } on NoAccountError {
     if (accountOverride != null || envAccountId != null) {

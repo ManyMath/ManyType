@@ -87,7 +87,8 @@ class AccountRegistry {
   ///: the web counterpart to native's `CliConfig.loadFrom(config.toml)`,
   /// since there is no config.toml on web. Throws [StateError] if no
   /// account is registered under [id].
-  static Future<CliConfig> loadConfig(String id, {String? serverOverride}) async {
+  static Future<CliConfig> loadConfig(String id,
+      {String? serverOverride}) async {
     final mnemonic = _storage.getItem(_mnemonicKey(id));
     if (mnemonic == null) {
       throw StateError('no account registered with id $id');

@@ -1,4 +1,5 @@
-@TestOn('vm') // reads/writes real files under a temp base dir via dart:io — no browser filesystem equivalent used here
+@TestOn(
+    'vm') // reads/writes real files under a temp base dir via dart:io: no browser filesystem equivalent used here
 library;
 
 import 'dart:io';
@@ -18,7 +19,8 @@ void main() {
     late Directory tempBase;
 
     setUp(() async {
-      tempBase = await Directory.systemTemp.createTemp('manytype_account_registry_test_');
+      tempBase = await Directory.systemTemp
+          .createTemp('manytype_account_registry_test_');
       AccountRegistry.testBaseDirOverride = tempBase.path;
     });
 
@@ -29,7 +31,8 @@ void main() {
       }
     });
 
-    test('accountDir/accountConfigPath/accountDbPath are namespaced per id', () {
+    test('accountDir/accountConfigPath/accountDbPath are namespaced per id',
+        () {
       final dirA = AccountRegistry.accountDir('idA');
       final dirB = AccountRegistry.accountDir('idB');
       expect(dirA, isNot(dirB));
@@ -37,7 +40,9 @@ void main() {
       expect(AccountRegistry.accountDbPath('idA'), startsWith(dirA));
     });
 
-    test('createAccount writes a config.toml with the mnemonic under accounts/<id>/', () async {
+    test(
+        'createAccount writes a config.toml with the mnemonic under accounts/<id>/',
+        () async {
       final profile = await AccountRegistry.createAccount(
         mnemonic: mnemonicA,
         displayName: 'work',
@@ -49,7 +54,8 @@ void main() {
       expect(content, contains(mnemonicA));
     });
 
-    test('two accounts created side by side do not cross-contaminate', () async {
+    test('two accounts created side by side do not cross-contaminate',
+        () async {
       final profileA = await AccountRegistry.createAccount(
         mnemonic: mnemonicA,
         displayName: 'work',
@@ -62,16 +68,19 @@ void main() {
       expect(profileA.id, isNot(profileB.id));
 
       final contentA =
-          await File(AccountRegistry.accountConfigPath(profileA.id)).readAsString();
+          await File(AccountRegistry.accountConfigPath(profileA.id))
+              .readAsString();
       final contentB =
-          await File(AccountRegistry.accountConfigPath(profileB.id)).readAsString();
+          await File(AccountRegistry.accountConfigPath(profileB.id))
+              .readAsString();
       expect(contentA, contains(mnemonicA));
       expect(contentA, isNot(contains(mnemonicB)));
       expect(contentB, contains(mnemonicB));
       expect(contentB, isNot(contains(mnemonicA)));
 
       final accounts = await AccountRegistry.listAccounts();
-      expect(accounts.map((a) => a.id), containsAll([profileA.id, profileB.id]));
+      expect(
+          accounts.map((a) => a.id), containsAll([profileA.id, profileB.id]));
     });
 
     test('registerAccount is idempotent for the same id', () async {
@@ -79,14 +88,17 @@ void main() {
         mnemonic: mnemonicA,
         displayName: 'work',
       );
-      await AccountRegistry.createAccount(mnemonic: mnemonicA, displayName: 'work-renamed');
+      await AccountRegistry.createAccount(
+          mnemonic: mnemonicA, displayName: 'work-renamed');
 
       final accounts = await AccountRegistry.listAccounts();
       expect(accounts.where((a) => a.id == profile.id).length, 1);
-      expect(accounts.firstWhere((a) => a.id == profile.id).displayName, 'work-renamed');
+      expect(accounts.firstWhere((a) => a.id == profile.id).displayName,
+          'work-renamed');
     });
 
-    test('current pointer defaults to null, then reflects setCurrentAccountId', () async {
+    test('current pointer defaults to null, then reflects setCurrentAccountId',
+        () async {
       expect(await AccountRegistry.getCurrentAccountId(), isNull);
 
       final profile = await AccountRegistry.createAccount(
@@ -98,21 +110,26 @@ void main() {
       expect(await AccountRegistry.getCurrentAccountId(), profile.id);
     });
 
-    test('removeAccount deletes the on-disk directory and registry entry', () async {
+    test('removeAccount deletes the on-disk directory and registry entry',
+        () async {
       final profile = await AccountRegistry.createAccount(
         mnemonic: mnemonicA,
         displayName: 'work',
       );
-      expect(await Directory(AccountRegistry.accountDir(profile.id)).exists(), isTrue);
+      expect(await Directory(AccountRegistry.accountDir(profile.id)).exists(),
+          isTrue);
 
       await AccountRegistry.removeAccount(profile.id);
 
-      expect(await Directory(AccountRegistry.accountDir(profile.id)).exists(), isFalse);
+      expect(await Directory(AccountRegistry.accountDir(profile.id)).exists(),
+          isFalse);
       final accounts = await AccountRegistry.listAccounts();
       expect(accounts.where((a) => a.id == profile.id), isEmpty);
     });
 
-    test('removeAccount clears the current pointer if it named the removed account', () async {
+    test(
+        'removeAccount clears the current pointer if it named the removed account',
+        () async {
       final profile = await AccountRegistry.createAccount(
         mnemonic: mnemonicA,
         displayName: 'work',
@@ -137,7 +154,8 @@ void main() {
         await legacyDbFile.writeAsString('legacy db bytes');
       });
 
-      test('registers the legacy config/db paths without moving or copying them',
+      test(
+          'registers the legacy config/db paths without moving or copying them',
           () async {
         final profile = await AccountRegistry.migrateLegacyAccount(
           legacyConfigPath: legacyConfigFile.path,
@@ -189,8 +207,10 @@ void main() {
         expect(accounts.length, 1);
       });
 
-      test('is a no-op if an account already exists from account create', () async {
-        await AccountRegistry.createAccount(mnemonic: mnemonicB, displayName: 'work');
+      test('is a no-op if an account already exists from account create',
+          () async {
+        await AccountRegistry.createAccount(
+            mnemonic: mnemonicB, displayName: 'work');
 
         final migrated = await AccountRegistry.migrateLegacyAccount(
           legacyConfigPath: legacyConfigFile.path,

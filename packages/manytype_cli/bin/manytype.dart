@@ -46,8 +46,7 @@ Future<void> _runAccountCommand(
   try {
     switch (sub.name) {
       case 'create':
-        final result =
-            await createAccountCommand(name: sub['name'] as String?);
+        final result = await createAccountCommand(name: sub['name'] as String?);
         print('Created account "${result.displayName}" (${result.id})');
         print('Mnemonic saved to ${result.configPath}');
         if (result.isCurrent) {
@@ -137,7 +136,8 @@ void _printEditResult(EditResult result) {
         '${fileRelationResult.uploaded ? "uploaded" : "existing-blob"}]',
       );
     } else if (result.relationStringValue != null) {
-      print('Set detail: ${result.relationKey} = ${result.relationStringValue}');
+      print(
+          'Set detail: ${result.relationKey} = ${result.relationStringValue}');
     } else if (result.relationStringListValue != null) {
       print(
         'Set detail list: ${result.relationKey} = '
@@ -262,10 +262,10 @@ Future<void> main(List<String> arguments) async {
     ..addOption('server',
         help: 'Server address (overrides config)', defaultsTo: null)
     ..addOption('network-config',
-        help: 'Path to an any-sync client.yml network config',
-        defaultsTo: null)
+        help: 'Path to an any-sync client.yml network config', defaultsTo: null)
     ..addOption('account',
-        help: 'Account id or name to operate against (overrides current selection)',
+        help:
+            'Account id or name to operate against (overrides current selection)',
         defaultsTo: null);
 
   final createParser = ArgParser()
@@ -994,7 +994,8 @@ Future<void> main(List<String> arguments) async {
       );
       if (command['json'] == true) {
         print(
-          const JsonEncoder.withIndent('  ').convert(spaceDeleteReport.toJson()),
+          const JsonEncoder.withIndent('  ')
+              .convert(spaceDeleteReport.toJson()),
         );
       } else {
         _printSpaceDeleteReport(spaceDeleteReport);
@@ -1043,7 +1044,8 @@ Future<void> main(List<String> arguments) async {
       );
       if (command['json'] == true) {
         stdout.writeln(
-          const JsonEncoder.withIndent('  ').convert(aclLifecycleReport.toJson()),
+          const JsonEncoder.withIndent('  ')
+              .convert(aclLifecycleReport.toJson()),
         );
       } else {
         stdout.writeln('Command: acl-lifecycle');

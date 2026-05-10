@@ -16,6 +16,5 @@ String findRepoRoot() {
     if (parent.path == dir.path) break;
     dir = parent;
   }
-  throw StateError(
-      'Could not locate repo root from ${Directory.current.path}');
+  throw StateError('Could not locate repo root from ${Directory.current.path}');
 }

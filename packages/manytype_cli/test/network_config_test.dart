@@ -1,4 +1,5 @@
-@TestOn('vm') // reads/writes real client.yml files via dart:io Directory/File — no browser filesystem equivalent used here
+@TestOn(
+    'vm') // reads/writes real client.yml files via dart:io Directory/File: no browser filesystem equivalent used here
 library;
 
 import 'dart:io';

@@ -13,8 +13,8 @@ String generateMnemonic() {
 /// Parse a mnemonic string and derive a 64-byte seed.
 /// Passphrase defaults to empty string (Anytype uses no passphrase).
 Uint8List mnemonicToSeed(String mnemonic, {String passphrase = ''}) {
-  final m = Mnemonic.fromSentence(mnemonic, Language.english,
-      passphrase: passphrase);
+  final m =
+      Mnemonic.fromSentence(mnemonic, Language.english, passphrase: passphrase);
   return Uint8List.fromList(m.seed);
 }
 

@@ -164,8 +164,7 @@ void main() {
     );
   });
 
-  test('edit rejects fileRelationBytes without fileRelationFileName',
-      () async {
+  test('edit rejects fileRelationBytes without fileRelationFileName', () async {
     await createCommand('File relation object 2', db, config);
     final objectId =
         await _findObjectIdByName(db, config, 'File relation object 2');

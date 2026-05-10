@@ -25,7 +25,8 @@ Future<void> main(List<String> argv) async {
   final config = await CliConfig.load();
   final db = ManytypeDatabase(CliConfig.dbPath);
   try {
-    await seedLiveSpaceForSync(db, config, networkConfigPath: networkConfigPath);
+    await seedLiveSpaceForSync(db, config,
+        networkConfigPath: networkConfigPath);
   } finally {
     await db.close();
   }
@@ -35,4 +36,3 @@ Future<void> main(List<String> argv) async {
     await Future<void>.delayed(Duration(seconds: waitSeconds));
   }
 }
-

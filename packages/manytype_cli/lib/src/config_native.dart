@@ -30,8 +30,9 @@ class CliConfig {
   CliConfig({required this.mnemonic, required this.serverAddress});
 
   static String get configDir {
-    final home =
-        Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
+    final home = Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'] ??
+        '.';
     return p.join(home, '.manytype');
   }
 
@@ -52,7 +53,8 @@ class CliConfig {
   }
 
   /// Load config from a specific file path (for testing).
-  static Future<CliConfig> loadFrom(String path, {String? serverOverride}) async {
+  static Future<CliConfig> loadFrom(String path,
+      {String? serverOverride}) async {
     final file = File(path);
     if (!await file.exists()) {
       throw StateError('Config not found at $path. Run: manytype init');
@@ -78,7 +80,8 @@ class CliConfig {
       await dir.create(recursive: true);
     }
     final mnemonic = generateMnemonic();
-    final config = CliConfig(mnemonic: mnemonic, serverAddress: '127.0.0.1:33020');
+    final config =
+        CliConfig(mnemonic: mnemonic, serverAddress: '127.0.0.1:33020');
 
     final file = File(configPath);
     await file.writeAsString(

@@ -40,8 +40,7 @@ void main() {
     const testMnemonic =
         'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 
-    test('exposes a byte-based file-transfer facade with no CLI I/O',
-        () async {
+    test('exposes a byte-based file-transfer facade with no CLI I/O', () async {
       final identity = await Identity.fromMnemonic(testMnemonic);
       final session = ManytypeSession(
         db: ManytypeDatabase.forTesting(await openDatabaseForTesting()),
@@ -87,7 +86,8 @@ void main() {
         syncService: _FailingSyncService(),
       );
 
-      expect(results.any((meta) => meta.name == 'Session-listed object'), isTrue);
+      expect(
+          results.any((meta) => meta.name == 'Session-listed object'), isTrue);
     });
 
     // M016/scope-item-4: proves create/edit/read are usable end to end
@@ -117,13 +117,13 @@ void main() {
 
       expect(read.detail, isNotNull);
       expect(
-        read.detail!.lines.any((line) => line.contains('Session object (edited)')),
+        read.detail!.lines
+            .any((line) => line.contains('Session object (edited)')),
         isTrue,
       );
     });
 
-    test('session.objects.delete removes an object with no CLI I/O',
-        () async {
+    test('session.objects.delete removes an object with no CLI I/O', () async {
       final identity = await Identity.fromMnemonic(testMnemonic);
       final session = ManytypeSession(
         db: ManytypeDatabase.forTesting(await openDatabaseForTesting()),

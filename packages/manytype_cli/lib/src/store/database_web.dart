@@ -19,7 +19,8 @@ WebStorageDiagnostics webStorageDiagnosticsFromWasmResult(
     WasmDatabaseResult result) {
   return WebStorageDiagnostics(
     implementationName: result.chosenImplementation.name,
-    isDurable: result.chosenImplementation != WasmStorageImplementation.inMemory,
+    isDurable:
+        result.chosenImplementation != WasmStorageImplementation.inMemory,
     isMultiTabSafe:
         _multiTabSafeImplementations.contains(result.chosenImplementation),
     missingFeatures: result.missingFeatures.map((f) => f.name).toList(),
@@ -75,8 +76,7 @@ WasmSqlite3? _testSqlite3;
 Future<QueryExecutor> openDatabaseForTesting({String? name}) async {
   final overrideUri = webTestSqlite3Uri;
   if (overrideUri != null) {
-    final sqlite = _testSqlite3 ??=
-        await WasmSqlite3.loadFromUrl(overrideUri);
+    final sqlite = _testSqlite3 ??= await WasmSqlite3.loadFromUrl(overrideUri);
     sqlite.registerVirtualFileSystem(InMemoryFileSystem(), makeDefault: true);
     return WasmDatabase.inMemory(sqlite);
   }

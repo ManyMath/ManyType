@@ -274,7 +274,8 @@ Future<ConsensusContinueReport> consensusContinueCommand({
       rootId: state.rootId,
       firstRecordId: state.firstRecordId,
       secondRecordId: secondResponse.id,
-      recordIdsBeforeContinue: recordsBefore.map((record) => record.id).toList(),
+      recordIdsBeforeContinue:
+          recordsBefore.map((record) => record.id).toList(),
       recordIdsAfterContinue: recordsAfter.map((record) => record.id).toList(),
       tailAfterFirstIds: tailAfterFirst.map((record) => record.id).toList(),
     );

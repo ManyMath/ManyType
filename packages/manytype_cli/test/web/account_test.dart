@@ -71,7 +71,8 @@ void main() {
       );
     });
 
-    test('two accounts created side by side do not cross-contaminate the registry',
+    test(
+        'two accounts created side by side do not cross-contaminate the registry',
         () async {
       final profileA = await AccountRegistry.createAccount(
         mnemonic: _mnemonicA,
@@ -84,7 +85,8 @@ void main() {
 
       expect(profileA.id, isNot(profileB.id));
       final accounts = await AccountRegistry.listAccounts();
-      expect(accounts.map((a) => a.id), containsAll([profileA.id, profileB.id]));
+      expect(
+          accounts.map((a) => a.id), containsAll([profileA.id, profileB.id]));
     });
 
     test('current pointer defaults to null, then reflects setCurrentAccountId',

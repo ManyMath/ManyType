@@ -80,7 +80,8 @@ class SyncService {
               requireCoordinatorNode(await resolveNetworkConfig(
                 networkConfigPath: networkConfigPath,
                 networkConfigContent: networkConfigContent,
-              )).addresses,
+              ))
+                  .addresses,
             )
           : config.serverAddress,
       networkConfigPath: networkConfigPath,
@@ -512,7 +513,8 @@ class SyncService {
       requireCoordinatorNode(await resolveNetworkConfig(
         networkConfigPath: networkConfigPath,
         networkConfigContent: networkConfigContent,
-      )).addresses,
+      ))
+          .addresses,
     );
     int? coordinatorHandleId;
     final syncHandleIds = <int>[];

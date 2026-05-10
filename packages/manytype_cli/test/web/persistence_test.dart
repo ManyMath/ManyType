@@ -75,8 +75,7 @@ void main() {
           driftWorkerUri: Uri.parse(
               'http://localhost:$_assetServerPort/drift_worker.dart.js'),
         );
-        print(
-            '[M014/S02] chosenImplementation=${result.chosenImplementation}');
+        print('[M014/S02] chosenImplementation=${result.chosenImplementation}');
         print('[M014/S02] missingFeatures=${result.missingFeatures}');
 
         // When the worker fails to load (cross-origin: this test's asset
@@ -91,8 +90,7 @@ void main() {
         //
         // For the true persistence proof, we rely on the round-trip test above
         // which uses IndexedDbFileSystem directly.
-        printOnFailure(
-            'chosenImplementation: ${result.chosenImplementation}');
+        printOnFailure('chosenImplementation: ${result.chosenImplementation}');
         printOnFailure('missingFeatures: ${result.missingFeatures}');
         await result.resolvedExecutor.close();
       });

@@ -49,8 +49,7 @@ void main() {
 
     test('SLIP-0021 spec vector: Master encryption key', () async {
       final seed = Uint8List.fromList(hex.decode(testSlip21SpecSeedHex));
-      final key =
-          await slip21Derive(seed, 'm/SLIP-0021/Master encryption key');
+      final key = await slip21Derive(seed, 'm/SLIP-0021/Master encryption key');
       expect(hex.encode(key), equals(testSlip21MasterEncKeyHex));
     });
 

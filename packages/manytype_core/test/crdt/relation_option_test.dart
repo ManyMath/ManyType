@@ -311,8 +311,7 @@ void main() {
       expect(out, isEmpty);
     });
 
-    test(
-        'STRelationOption with missing details yields isOrphaned=true',
+    test('STRelationOption with missing details yields isOrphaned=true',
         () async {
       final input = OptionIndexInput(
         objectId: 'opt-broken',

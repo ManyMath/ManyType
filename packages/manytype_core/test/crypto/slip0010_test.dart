@@ -38,10 +38,12 @@ void main() {
     test('different indices produce different keys', () async {
       final r0 = await deriveIdentityKey(seed, index: 0);
       final r1 = await deriveIdentityKey(seed, index: 1);
-      expect(hex.encode(r0.privateKey), isNot(equals(hex.encode(r1.privateKey))));
+      expect(
+          hex.encode(r0.privateKey), isNot(equals(hex.encode(r1.privateKey))));
     });
 
-    test('identity key differs from account key (extra derivation level)', () async {
+    test('identity key differs from account key (extra derivation level)',
+        () async {
       final account = await deriveAccountKey(seed, index: 0);
       final identity = await deriveIdentityKey(seed, index: 0);
       expect(
@@ -59,7 +61,8 @@ void main() {
       expect(keyHex, isNot(equals('00' * 32)));
     });
 
-    test('SLIP-0010 test vector: seed 000102030405060708090a0b0c0d0e0f', () async {
+    test('SLIP-0010 test vector: seed 000102030405060708090a0b0c0d0e0f',
+        () async {
       // SLIP-0010 Ed25519 test vector from the spec
       // Seed: 000102030405060708090a0b0c0d0e0f
       // Chain m: private key = 2b4be7f19ee27bbf30c667b642d5f4aa69fd169872f8fc3059c08ebae2eb19e7

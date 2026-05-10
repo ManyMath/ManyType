@@ -1,4 +1,5 @@
-@TestOn('vm') // shells out via Process.start to a bash harness + live docker oracle stack
+@TestOn(
+    'vm') // shells out via Process.start to a bash harness + live docker oracle stack
 @Tags(['round_trip'])
 library;
 

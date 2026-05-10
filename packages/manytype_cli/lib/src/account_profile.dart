@@ -71,7 +71,8 @@ class AccountSummary {
         'id': id,
         'displayName': displayName,
         'createdAt': createdAt.toIso8601String(),
-        if (configPathOverride != null) 'configPathOverride': configPathOverride,
+        if (configPathOverride != null)
+          'configPathOverride': configPathOverride,
         if (dbPathOverride != null) 'dbPathOverride': dbPathOverride,
       };
 

@@ -1,4 +1,5 @@
-@TestOn('vm') // shells out via Process.run to a cargo-build + bash harness against a live server (see file header)
+@TestOn(
+    'vm') // shells out via Process.run to a cargo-build + bash harness against a live server (see file header)
 library;
 
 // Phase 38: STRelationOption trees + status/tag relation values
@@ -71,8 +72,8 @@ String _findRepoRoot() {
   Directory dir = Directory.current;
   for (var i = 0; i < 6; i++) {
     if (File(
-              '${dir.path}/scripts/phase38_relation_option_harness.sh',
-            ).existsSync() &&
+          '${dir.path}/scripts/phase38_relation_option_harness.sh',
+        ).existsSync() &&
         Directory('${dir.path}/packages').existsSync()) {
       return dir.path;
     }

@@ -38,15 +38,13 @@ Future<void> main() async {
           'Error: Failed to download sqlite3.wasm (HTTP ${response.statusCode})');
       exit(1);
     }
-    final bytes = await response.fold<List<int>>(
-        [], (prev, chunk) => prev..addAll(chunk));
+    final bytes = await response
+        .fold<List<int>>([], (prev, chunk) => prev..addAll(chunk));
     wasmFile.writeAsBytesSync(bytes);
     print('sqlite3.wasm downloaded (${bytes.length} bytes)');
 
-    final sha256Result = await Process.run(
-        'sha256sum', [wasmFile.path]);
-    final sha256 =
-        (sha256Result.stdout as String).split(' ').first.trim();
+    final sha256Result = await Process.run('sha256sum', [wasmFile.path]);
+    final sha256 = (sha256Result.stdout as String).split(' ').first.trim();
     print('sha256: $sha256');
 
     print('Compiling drift_worker.dart.js ...');

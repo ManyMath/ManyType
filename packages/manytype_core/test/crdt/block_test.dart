@@ -72,8 +72,8 @@ void main() {
       final layoutBlock = snapshot.blocks[1];
       expect(layoutBlock.id, equals('layout-root-1'));
       expect(layoutBlock.hasLayout(), isTrue);
-      expect(layoutBlock.layout.style,
-          equals(Block_Content_Layout_Style.Column));
+      expect(
+          layoutBlock.layout.style, equals(Block_Content_Layout_Style.Column));
       expect(layoutBlock.childrenIds, equals(['p1', 'p2']));
 
       // Content blocks preserved

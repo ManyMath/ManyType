@@ -72,8 +72,7 @@ AccountDeleteAssessment assessAccountDeleteContract({
   }
 
   final rejectedAsDeleted = secondCallOk == false &&
-      (secondCallError?.toLowerCase().contains('account is deleted') ??
-          false);
+      (secondCallError?.toLowerCase().contains('account is deleted') ?? false);
   if (rejectedAsDeleted) {
     return const AccountDeleteAssessment(
       outcome: 'supported-and-verified',
@@ -214,7 +213,10 @@ Future<AccountDeleteReport> accountDeleteCommand({
     } else {
       secondResponseOk = null;
       secondResponseError = null;
-      secondResponseJson = {'ok': null, 'skipped': 'first call did not succeed'};
+      secondResponseJson = {
+        'ok': null,
+        'skipped': 'first call did not succeed'
+      };
     }
   } finally {
     bridge.freeHandle(handleId);

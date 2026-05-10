@@ -623,4 +623,3 @@ void _insertCollectionIds(
 
   current.insertAll(index + 1, values);
 }
-

@@ -1,4 +1,5 @@
-@TestOn('vm') // shells out via Process.run to a bash harness (cargo build + live server); see file header
+@TestOn(
+    'vm') // shells out via Process.run to a bash harness (cargo build + live server); see file header
 library;
 
 import 'dart:io';

@@ -66,8 +66,8 @@ Future<String> _findAclRootId(ManytypeDatabase db, String spaceId) async {
   for (final object in objects) {
     final changes = await db.getChangesForObject(object.id);
     if (changes.isEmpty) continue;
-    final aclRoot =
-        tryDecodeAclRootFromRawRecordBytes(Uint8List.fromList(changes.first.rawBytes));
+    final aclRoot = tryDecodeAclRootFromRawRecordBytes(
+        Uint8List.fromList(changes.first.rawBytes));
     if (aclRoot != null && aclRoot.spaceId == spaceId) {
       return object.id;
     }
@@ -85,7 +85,8 @@ Future<void> main(List<String> argv) async {
   final results = parser.parse(argv);
   final networkConfigPath = results['network-config'] as String;
   final inviteJsonPath = results['invite-json'] as String;
-  final permissionsRaw = (results['permissions'] as String).toLowerCase().trim();
+  final permissionsRaw =
+      (results['permissions'] as String).toLowerCase().trim();
 
   final permissions = switch (permissionsRaw) {
     'reader' => AclUserPermissions.Reader,
@@ -109,7 +110,8 @@ Future<void> main(List<String> argv) async {
   final networkConfig = await loadNetworkConfig(networkConfigPath);
   final coordinatorAddress =
       chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
-  final fileAddress = chooseBestAddress(requireFileNode(networkConfig).addresses);
+  final fileAddress =
+      chooseBestAddress(requireFileNode(networkConfig).addresses);
 
   final bridge = NativeBridge();
   final coordinatorHandle =
@@ -118,7 +120,8 @@ Future<void> main(List<String> argv) async {
   var uploadedViaCoordinator = false;
   try {
     final aclService = AclSyncService(invoker: bridge.invoke);
-    aclService.spaceMakeShareable(handleId: coordinatorHandle, spaceId: spaceId);
+    aclService.spaceMakeShareable(
+        handleId: coordinatorHandle, spaceId: spaceId);
 
     final inviteRecord = await buildAclRecord(
       prevId: aclRootId,
@@ -180,7 +183,8 @@ Future<void> main(List<String> argv) async {
     return;
   }
 
-  final fileHandle = bridge.connect(fileAddress, identity.seed, identity.accountSeed);
+  final fileHandle =
+      bridge.connect(fileAddress, identity.seed, identity.accountSeed);
   try {
     final cidBytes = cidToBytes(invite.inviteFileCid);
     final checkRequest = filesync.BlocksCheckRequest(

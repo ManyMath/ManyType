@@ -5,7 +5,8 @@ import 'package:stream_channel/stream_channel.dart';
 Future<void> hybridMain(StreamChannel<Object?> channel) async {
   final assetsDir = Directory('test/web_assets');
   if (!await assetsDir.exists()) {
-    throw StateError('test/web_assets/ not found — run tool/fetch_web_test_assets.dart first');
+    throw StateError(
+        'test/web_assets/ not found: run tool/fetch_web_test_assets.dart first');
   }
 
   final server = await HttpServer.bind('localhost', 0);
@@ -39,5 +40,8 @@ Future<void> hybridMain(StreamChannel<Object?> channel) async {
   });
 
   channel.sink.add(server.port);
-  await channel.stream.listen(null).asFuture<void>().then<void>((_) => server.close());
+  await channel.stream
+      .listen(null)
+      .asFuture<void>()
+      .then<void>((_) => server.close());
 }

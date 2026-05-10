@@ -8,8 +8,8 @@ import 'package:manytype_core/manytype_core.dart';
 void main() async {
   final db = ManytypeDatabase('test_db.db');
   final config = CliConfig(
-        mnemonic: generateMnemonic(),
-        serverAddress: '127.0.0.1:33020',
+    mnemonic: generateMnemonic(),
+    serverAddress: '127.0.0.1:33020',
   );
   await createCommand("test text", db, config);
 
