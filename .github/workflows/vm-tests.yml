@@ -14,6 +14,7 @@ jobs:
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
+          cache: true
 
       - name: Verify Rust/cargo toolchain is available
         run: cargo --version
