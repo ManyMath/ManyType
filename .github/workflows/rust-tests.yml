@@ -1,0 +1,29 @@
+name: Rust test suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: cargo test --workspace
+        run: cargo test --workspace
