@@ -65,10 +65,13 @@ impl BlobIndex {
         Ok(Self { db })
     }
 
+    // Reserved read-side API, exercised by tests only so far.
+    #[allow(dead_code)]
     pub fn has_blob(&self, cid: &str) -> Result<bool> {
         Ok(self.get_blob_metadata(cid)?.is_some())
     }
 
+    #[allow(dead_code)]
     pub fn get_blob_metadata(&self, cid: &str) -> Result<Option<BlobMetadata>> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(BLOBS_TABLE)?;
@@ -81,6 +84,7 @@ impl BlobIndex {
         Ok(table.get(space_cid_key(space_id, cid).as_str())?.is_some())
     }
 
+    #[allow(dead_code)]
     pub fn get_file_binding(
         &self,
         space_id: &str,
@@ -97,6 +101,7 @@ impl BlobIndex {
         Ok(decode_optional(table.get(space_id)?)?.unwrap_or_default())
     }
 
+    #[allow(dead_code)]
     pub fn get_global_usage(&self) -> Result<GlobalUsage> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(GLOBAL_USAGE_TABLE)?;

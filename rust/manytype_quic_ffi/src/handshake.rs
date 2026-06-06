@@ -5,6 +5,7 @@
 //! 2. Server -> Client: Credentials
 //! 3. Client -> Server: Ack
 //! 4. Server -> Client: Ack
+//!
 //! Subsequent streams perform Proto (encoding negotiation).
 
 use anyhow::{Result, ensure};

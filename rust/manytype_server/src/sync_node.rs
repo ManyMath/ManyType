@@ -341,20 +341,21 @@ pub fn handle_object_sync_message(
     // Official any-sync nodes send a SpaceSubscription message as the first
     // ObjectSyncStream payload. Manytype_quic_ffi does the same for interop.
     // This server does not maintain subscription state, so treat it as a no-op.
-    if object_id.is_empty() && !msg.payload.is_empty() {
-        if let Ok(sub) = SpaceSubscription::decode(msg.payload.as_slice()) {
-            tracing::info!(
-                "sync: received SpaceSubscription for {} ({} spaceIds)",
-                space_id,
-                sub.space_ids.len()
-            );
-            let response = ObjectSyncMessage {
-                space_id: space_id.clone(),
-                reply_id: msg.request_id.clone(),
-                ..Default::default()
-            };
-            return Ok(response.encode_to_vec());
-        }
+    if object_id.is_empty()
+        && !msg.payload.is_empty()
+        && let Ok(sub) = SpaceSubscription::decode(msg.payload.as_slice())
+    {
+        tracing::info!(
+            "sync: received SpaceSubscription for {} ({} spaceIds)",
+            space_id,
+            sub.space_ids.len()
+        );
+        let response = ObjectSyncMessage {
+            space_id: space_id.clone(),
+            reply_id: msg.request_id.clone(),
+            ..Default::default()
+        };
+        return Ok(response.encode_to_vec());
     }
 
     fn store_change(
@@ -952,6 +953,8 @@ pub fn handle_object_sync_message(
 /// - full `StoreKeyValue` entries to persist
 /// - placeholder messages containing only `keyPeerId` to request entries
 /// - an empty message to terminate the request phase
+// Superseded by the inline StoreElements loop in drpc::router; kept for test coverage.
+#[allow(dead_code)]
 pub fn handle_store_elements_messages(
     messages: &[Vec<u8>],
     sync_state: &SharedSyncState,
@@ -1196,10 +1199,8 @@ mod tests {
                 acl_payload_id: "acl-1".to_string(),
                 space_settings_payload: b"settings".to_vec(),
                 space_settings_payload_id: "settings-1".to_string(),
-                ..Default::default()
             }),
             credential,
-            ..Default::default()
         };
         let response_bytes = handle_space_push(
             &request.encode_to_vec(),
@@ -1236,7 +1237,6 @@ mod tests {
                 ..Default::default()
             }),
             credential,
-            ..Default::default()
         };
         handle_space_push(
             &push_request.encode_to_vec(),
@@ -1274,10 +1274,8 @@ mod tests {
                     acl_payload_id: "acl-root-id".to_string(),
                     space_settings_payload: b"settings".to_vec(),
                     space_settings_payload_id: "settings-id".to_string(),
-                    ..Default::default()
                 }),
                 credential,
-                ..Default::default()
             }
             .encode_to_vec(),
             &sync_state,
@@ -1324,7 +1322,6 @@ mod tests {
                     ..Default::default()
                 }),
                 credential,
-                ..Default::default()
             }
             .encode_to_vec(),
             &sync_state,
@@ -1406,7 +1403,6 @@ mod tests {
                     ..Default::default()
                 }),
                 credential,
-                ..Default::default()
             }
             .encode_to_vec(),
             &sync_state,
@@ -2028,7 +2024,6 @@ mod tests {
                 ..Default::default()
             }),
             credential: Vec::new(),
-            ..Default::default()
         };
 
         let result = handle_space_push(

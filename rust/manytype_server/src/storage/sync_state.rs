@@ -218,6 +218,9 @@ impl SyncStateStorage {
         })
     }
 
+    // Mirrors the SpaceHeader/ACL/settings fields 1:1; bundling into a
+    // struct is a larger refactor than this cleanup warrants.
+    #[allow(clippy::too_many_arguments)]
     fn persist_space_metadata(
         &self,
         space_id: &str,
@@ -388,10 +391,13 @@ impl SharedSyncState {
         self.inner.read()
     }
 
+    // Mirrors `read()`; no caller needs write access yet.
+    #[allow(dead_code)]
     pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, HashMap<String, SpaceState>>> {
         self.inner.write()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn upsert_space_metadata(
         &self,
         space_id: &str,

@@ -33,7 +33,7 @@ const TEST_SLIP21_AUTH_KEY_HEX: &str =
 #[test]
 fn cross_bip39_seed_matches_reference() {
     let seed = bip39::mnemonic_to_seed(TEST_MNEMONIC);
-    assert_eq!(hex::encode(&seed), TEST_SEED_HEX);
+    assert_eq!(hex::encode(seed), TEST_SEED_HEX);
 }
 
 #[test]

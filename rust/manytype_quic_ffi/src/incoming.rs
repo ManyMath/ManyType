@@ -82,10 +82,10 @@ fn cached_tree_from_head_update(
     object_type: i32,
 ) -> CachedTree {
     let mut changes = head_update.changes.clone();
-    if let Some(root) = root_change.as_ref() {
-        if !changes.iter().any(|change| change.id == root.id) {
-            changes.insert(0, root.clone());
-        }
+    if let Some(root) = root_change.as_ref()
+        && !changes.iter().any(|change| change.id == root.id)
+    {
+        changes.insert(0, root.clone());
     }
 
     CachedTree {

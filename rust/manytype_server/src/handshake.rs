@@ -497,8 +497,8 @@ mod tests {
             if should_accept {
                 // Server and client may both error here since the client doesn't finish the handshake
                 // The key assertion: server didn't reject with IncompatibleVersion
-                assert_eq!(
-                    client_accepted, true,
+                assert!(
+                    client_accepted,
                     "version {} should be accepted but was rejected",
                     version
                 );
@@ -508,8 +508,8 @@ mod tests {
                     "version {} should have caused server to return Err, but it returned Ok",
                     version
                 );
-                assert_eq!(
-                    client_accepted, false,
+                assert!(
+                    !client_accepted,
                     "version {} should be rejected but was accepted",
                     version
                 );

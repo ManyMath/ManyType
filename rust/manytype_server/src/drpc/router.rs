@@ -1230,7 +1230,7 @@ mod tests {
         let credential = coordinator::build_signed_space_receipt(
             "sp-1",
             &hex::encode(b"peer"),
-            &vec![2; 32],
+            &[2; 32],
             &state.coordinator_config,
             &state.local_signing_key,
         )
@@ -1257,7 +1257,6 @@ mod tests {
                 ..Default::default()
             }),
             credential,
-            ..Default::default()
         };
         client_stream
             .write_message(0, 0, &request.encode_to_vec())
@@ -1522,7 +1521,6 @@ mod tests {
                 payload: b"root".to_vec(),
                 id: compute_cid(b"root"),
             }),
-            ..Default::default()
         };
         client_stream
             .write_message(0, 0, &request.encode_to_vec())
@@ -1706,7 +1704,7 @@ mod tests {
             let credential = coordinator::build_signed_space_receipt(
                 "integration-space",
                 &hex::encode(b"peer"),
-                &vec![2; 32],
+                &[2; 32],
                 &CoordinatorConfig {
                     network_id: "test".to_string(),
                     peer_id: "p".to_string(),
@@ -1725,7 +1723,6 @@ mod tests {
                     ..Default::default()
                 }),
                 credential,
-                ..Default::default()
             };
             client_stream
                 .write_message(0, 0, &request.encode_to_vec())

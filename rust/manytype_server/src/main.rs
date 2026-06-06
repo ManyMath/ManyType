@@ -194,7 +194,7 @@ async fn handle_stream(
     send: quinn::SendStream,
     recv: quinn::RecvStream,
     remote_tls_peer_id: String,
-    remote_peer_id: Vec<u8>,
+    _remote_peer_id: Vec<u8>,
     state: Arc<drpc::router::ServerState>,
 ) -> Result<()> {
     let mut stream = tokio::io::join(recv, send);
