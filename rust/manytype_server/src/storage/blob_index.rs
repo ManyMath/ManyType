@@ -349,4 +349,20 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn get_blob_metadata_returns_recorded_size_and_none_when_absent() {
+        let temp_dir = TempDir::new().unwrap();
+        let index = BlobIndex::open(temp_dir.path().join("manytype.redb")).unwrap();
+
+        assert_eq!(index.get_blob_metadata("cid-1").unwrap(), None);
+
+        index.bind_blob("space-1", "file-1", "cid-1", 42).unwrap();
+
+        assert_eq!(
+            index.get_blob_metadata("cid-1").unwrap(),
+            Some(BlobMetadata { size_bytes: 42 })
+        );
+        assert_eq!(index.get_blob_metadata("cid-missing").unwrap(), None);
+    }
 }
