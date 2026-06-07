@@ -725,7 +725,13 @@ SyncDiscoveryResult discoverSyncTargetsForSync({
   );
   final preflight = SpaceStatusCheckResponse.fromBuffer(preflightResponseBytes);
   final payload = preflight.payload;
-  if (payload.status != SpaceStatus.SpaceStatusCreated) {
+  // In official-interop mode the space is expected to already be live on the
+  // real oracle by the time we sync. Against our own local server, this
+  // preflight runs before the SpaceSign call below that creates the space,
+  // so a brand-new space legitimately reports NotExists here; only treat a
+  // non-created status as fatal for the official-interop path.
+  if (officialInteropMode &&
+      payload.status != SpaceStatus.SpaceStatusCreated) {
     throw StateError(
       'Space $spaceId is not live: ${_spaceStatusName(payload.status)}',
     );
