@@ -51,6 +51,21 @@ melos:
         concurrency: 1
       packageFilters:
         dirExists: test
+    test:oracle:
+      run: dart test --tags=round_trip -j 1
+      description: |
+        Run only the `round_trip`-tagged VM tests (docker any-sync oracle /
+        live manytype_server integration tests). Requires the self-hosted
+        oracle stack to be up (`docker/any-sync`: `make start`), the release
+        FFI library built (`cargo build -p manytype_quic_ffi --release`),
+        and `LD_LIBRARY_PATH` including `rust/target/release`. See
+        `.github/workflows/oracle-tests.yml`. Scoped to `manytype_cli`: it's
+        the only package with any `round_trip`-tagged tests, and `dart test
+        --tags=` errors out (exit 79) in packages with zero matches.
+      exec:
+        concurrency: 1
+      packageFilters:
+        scope: manytype_cli
     analyze:
       run: dart analyze .
       exec:

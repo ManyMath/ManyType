@@ -1,0 +1,84 @@
+name: Self-hosted oracle test suite
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Nightly only: this job boots the full docker any-sync stack (mongo
+    # replica set, redis, minio, coordinator, 3 sync nodes, consensus node,
+    # filenode, netcheck) from a cold cache, which is much slower than the
+    # other CI jobs and pulls several GB of images. Not run on every push/PR.
+    - cron: '0 7 * * *'
+
+jobs:
+  test-oracle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Build release FFI library and manytype_server
+        working-directory: rust
+        run: cargo build --release -p manytype_quic_ffi -p manytype_server
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+          cache: true
+
+      - name: Activate melos
+        run: dart pub global activate melos
+
+      - name: melos bootstrap
+        run: dart pub global run melos bootstrap
+
+      - name: Start self-hosted any-sync oracle stack
+        working-directory: docker/any-sync
+        run: make -s start
+
+      - name: Wait for oracle netcheck to report healthy
+        run: |
+          for i in $(seq 1 60); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' any-sync-netcheck-1 2>/dev/null || echo starting)"
+            if [ "$status" = "healthy" ]; then
+              echo "netcheck healthy after ${i}0s"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "netcheck did not become healthy in time" >&2
+          docker compose -f docker/any-sync/docker-compose.yml logs --tail=200
+          exit 1
+
+      - name: Self-hosted oracle preflight
+        run: bash scripts/self_hosted_oracle_preflight.sh
+
+      - name: Start manytype_server (required by round_trip_test.dart)
+        working-directory: rust
+        run: |
+          ./target/release/manytype_server manytype_server/test_config.toml &
+          echo $! > /tmp/manytype_server.pid
+          sleep 2
+
+      - name: melos run test:oracle
+        run: dart pub global run melos run test:oracle --no-select
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/rust/target/release
+
+      - name: Stop manytype_server
+        if: always()
+        run: kill "$(cat /tmp/manytype_server.pid)" 2>/dev/null || true
+
+      - name: Oracle stack logs (always, for debugging)
+        if: always()
+        working-directory: docker/any-sync
+        run: docker compose logs --tail=100
+
+      - name: Tear down oracle stack
+        if: always()
+        working-directory: docker/any-sync
+        run: docker compose down --remove-orphans --volumes
