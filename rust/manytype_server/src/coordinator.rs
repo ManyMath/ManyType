@@ -83,6 +83,7 @@ pub fn handle_space_sign(
     config: &CoordinatorConfig,
     signing_key: &ed25519_dalek::SigningKey,
     remote_peer_id: &str,
+    sync_state: &SharedSyncState,
 ) -> Result<Vec<u8>> {
     let request = SpaceSignRequest::decode(request_bytes)?;
     let account_identity = decode_account_identity(&request.header)?;
@@ -92,6 +93,21 @@ pub fn handle_space_sign(
         &account_identity,
         config,
         signing_key,
+    )?;
+    // Registers the space as SpaceStatusCreated for the signing peer so an
+    // immediately-following SpaceStatusCheck preflight (see sync_service.dart
+    // `discoverSyncTargetsForSync`) succeeds on a brand-new space, before any
+    // sync data has been pushed. SpacePush/HeadSync upsert the same entry
+    // later with the real header/ACL payloads once available.
+    sync_state.upsert_space_metadata(
+        &request.space_id,
+        Some(request.header.clone()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some(remote_peer_id.to_string()),
     )?;
     let response = SpaceSignResponse {
         receipt: Some(receipt),
@@ -482,11 +498,13 @@ mod tests {
             ..Default::default()
         };
 
+        let sync_state = new_shared_sync_state();
         let response_bytes = handle_space_sign(
             &request.encode_to_vec(),
             &config,
             &signing_key,
             "remote-peer",
+            &sync_state,
         )
         .unwrap();
         let response = SpaceSignResponse::decode(response_bytes.as_slice()).unwrap();
@@ -500,6 +518,71 @@ mod tests {
             &ed25519::verifying_key(&signing_key),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn space_sign_registers_space_so_status_check_reports_created() {
+        let config = CoordinatorConfig {
+            network_id: "manytype-dev".to_string(),
+            peer_id: "test-peer".to_string(),
+            addresses: vec!["127.0.0.1:4830".to_string()],
+        };
+        let signing_key = test_signing_key();
+        let account_identity = vec![3; 32];
+        let request = SpaceSignRequest {
+            space_id: "space-1".to_string(),
+            header: test_space_header(&account_identity),
+            ..Default::default()
+        };
+        let sync_state = new_shared_sync_state();
+
+        // Before SpaceSign, a brand-new space is unknown to the coordinator.
+        let before = SpaceStatusCheckResponse::decode(
+            handle_space_status_check(
+                &SpaceStatusCheckRequest {
+                    space_id: "space-1".to_string(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+                "remote-peer",
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            before.payload.unwrap().status,
+            SpaceStatus::NotExists as i32
+        );
+
+        handle_space_sign(
+            &request.encode_to_vec(),
+            &config,
+            &signing_key,
+            "remote-peer",
+            &sync_state,
+        )
+        .unwrap();
+
+        // The client's sync preflight (discoverSyncTargetsForSync) issues
+        // SpaceStatusCheck immediately after SpaceSign, before any
+        // SpacePush/HeadSync has happened; this must already report Created.
+        let after = SpaceStatusCheckResponse::decode(
+            handle_space_status_check(
+                &SpaceStatusCheckRequest {
+                    space_id: "space-1".to_string(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+                "remote-peer",
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        let payload = after.payload.unwrap();
+        assert_eq!(payload.status, SpaceStatus::Created as i32);
+        assert_eq!(payload.permissions, SpacePermissions::Owner as i32);
     }
 
     #[test]

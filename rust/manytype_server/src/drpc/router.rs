@@ -254,6 +254,7 @@ where
                 &state.coordinator_config,
                 &state.local_signing_key,
                 remote_peer_id,
+                &state.sync_state,
             )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
