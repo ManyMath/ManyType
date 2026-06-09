@@ -107,7 +107,9 @@ Future<ReadListResult> _listObjects(
     final changes = await db.getChangesForObject(obj.id);
     final heads = await db.getObjectHeads(obj.id);
     final attachments = await db.getAttachmentRefsByObject(obj.id);
-    final textPreview = extractTextPreview(changes);
+    final treeKey =
+        spaceKey == null ? null : await deriveTreeKey(spaceKey, obj.id);
+    final textPreview = await extractTextPreview(changes, treeKey: treeKey);
 
     emit('  ${obj.id}');
     emit('    Created: ${obj.createdAt}');
@@ -320,7 +322,15 @@ void _printAttachmentRefs(
 }
 
 /// Extract text content preview from the most recent non-root change.
-String extractTextPreview(List<Change> changes) {
+///
+/// [treeKey] decrypts changesData when the change's `readKeyId` is set (the
+/// normal case for every locally-created object -- there is no plaintext
+/// path). Pass `null` only when the space key/tree key couldn't be derived;
+/// encrypted changes are then skipped rather than surfaced as empty.
+Future<String> extractTextPreview(
+  List<Change> changes, {
+  Uint8List? treeKey,
+}) async {
   for (final change in changes.reversed) {
     try {
       final rawTreeChange = RawTreeChange.fromBuffer(change.rawBytes);
@@ -328,7 +338,10 @@ String extractTextPreview(List<Change> changes) {
 
       final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
       if (treeChange.changesData.isNotEmpty) {
-        final decoded = _decodeChangesDataForPreview(treeChange);
+        final decoded = await _decodeTreeChangeChangesData(
+          treeChange,
+          treeKey: treeKey,
+        );
         final text = _extractTextFromDecodedChangeBytes(decoded);
         if (text.isNotEmpty) return text;
       }
@@ -339,21 +352,31 @@ String extractTextPreview(List<Change> changes) {
   return '';
 }
 
-Uint8List _decodeChangesDataForPreview(TreeChange treeChange) {
-  if (treeChange.readKeyId.isNotEmpty) {
-    return Uint8List(0);
-  }
-  var data = Uint8List.fromList(treeChange.changesData);
-  if (treeChange.dataType == '1/s') {
-    data = _snappy.decompress(data);
-  }
-  return data;
-}
-
 /// Extract text from Change proto bytes.
+///
+/// Checks the snapshot first: `create` embeds the initial title/text
+/// directly in the root snapshot's details/blocks rather than emitting a
+/// follow-up `BlockCreate` change, so a freshly-created object's only
+/// change is a snapshot with no `content` entries at all.
 String _extractTextFromDecodedChangeBytes(Uint8List decoded) {
   try {
     final change = changes_proto.Change.fromBuffer(decoded);
+    if (change.hasSnapshot()) {
+      final snapData = change.snapshot.data;
+      if (snapData.hasDetails()) {
+        final name = snapData.details.fields['name'];
+        if (name != null && name.hasStringValue()) {
+          final title = name.stringValue.trim();
+          if (title.isNotEmpty) return title;
+        }
+      }
+      for (final block in snapData.blocks) {
+        if (block.hasText()) {
+          final text = block.text.text.trim();
+          if (text.isNotEmpty) return text;
+        }
+      }
+    }
     for (final content in change.content) {
       if (content.hasDetailsSet() &&
           content.detailsSet.key == 'name' &&
