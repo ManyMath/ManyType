@@ -4,6 +4,7 @@
 library;
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:manytype_cli/src/commands/create.dart';
 import 'package:manytype_cli/src/commands/edit.dart';
@@ -17,6 +18,18 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import 'support/repo_root.dart';
+
+/// Derives the per-object tree key so `extractTextPreview` can decrypt --
+/// every locally-created change has `readKeyId` set, there is no plaintext
+/// path (see round_trip_test.dart's read.dart preview fix).
+Future<Uint8List> _treeKeyFor(CliConfig config, String objectId) async {
+  final identity = await Identity.fromMnemonic(config.mnemonic);
+  final accountPrivRaw = Uint8List(64)
+    ..setRange(0, 32, identity.accountSeed)
+    ..setRange(32, 64, identity.accountKeyPair.publicKey);
+  final spaceKey = await deriveSpaceKey(accountPrivRaw);
+  return deriveTreeKey(spaceKey, objectId);
+}
 
 void main() {
   late Directory homeA;
@@ -102,7 +115,8 @@ void main() {
       String? noteObjectId;
       for (final obj in objects) {
         final changes = await dbA2.getChangesForObject(obj.id);
-        final preview = extractTextPreview(changes);
+        final preview = await extractTextPreview(changes,
+            treeKey: await _treeKeyFor(config, obj.id));
         if (preview.contains('oracle edit original text')) {
           noteObjectId = obj.id;
           break;
@@ -147,7 +161,8 @@ void main() {
         foundUpdated = false;
         for (final obj in objectsB) {
           final changes = await dbB.getChangesForObject(obj.id);
-          final preview = extractTextPreview(changes);
+          final preview = await extractTextPreview(changes,
+              treeKey: await _treeKeyFor(config, obj.id));
           if (preview == 'Phase 29: oracle edit UPDATED text') {
             foundUpdated = true;
             break;
@@ -228,7 +243,8 @@ void main() {
       String? noteObjectId;
       for (final obj in objects) {
         final changes = await dbA2.getChangesForObject(obj.id);
-        final preview = extractTextPreview(changes);
+        final preview = await extractTextPreview(changes,
+            treeKey: await _treeKeyFor(config, obj.id));
         if (preview.contains('oracle idempotent original')) {
           noteObjectId = obj.id;
           break;
@@ -280,7 +296,10 @@ void main() {
 
       final dbA3 = ManytypeDatabase(p.join(manytypeDirA.path, 'store.db'));
       final changes = await dbA3.getChangesForObject(noteId);
-      expect(extractTextPreview(changes), equals(updatedText));
+      expect(
+          await extractTextPreview(changes,
+              treeKey: await _treeKeyFor(config, noteId)),
+          equals(updatedText));
       await dbA3.close();
     },
     timeout: const Timeout(Duration(minutes: 3)),
@@ -346,7 +365,8 @@ void main() {
       String? noteObjectId;
       for (final obj in objects) {
         final changes = await dbA2.getChangesForObject(obj.id);
-        final preview = extractTextPreview(changes);
+        final preview = await extractTextPreview(changes,
+            treeKey: await _treeKeyFor(config, obj.id));
         if (preview.contains('oracle sequential edit original')) {
           noteObjectId = obj.id;
           break;
@@ -373,7 +393,8 @@ void main() {
 
       final changes = await dbA2.getChangesForObject(noteId);
       expect(
-        extractTextPreview(changes),
+        await extractTextPreview(changes,
+            treeKey: await _treeKeyFor(config, noteId)),
         equals('second update'),
         reason:
             'Expected only the second update text; data corruption detected if "first update" is returned',
