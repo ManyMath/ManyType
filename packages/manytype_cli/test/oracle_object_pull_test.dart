@@ -40,6 +40,7 @@ void main() {
       await manytypeDirA.create(recursive: true);
       await manytypeDirB.create(recursive: true);
 
+      late final String createdObjectId;
       final mnemonic = generateMnemonic();
       final config = CliConfig(
         mnemonic: mnemonic,
@@ -55,7 +56,9 @@ void main() {
       );
 
       final dbA = ManytypeDatabase(p.join(manytypeDirA.path, 'store.db'));
-      await createCommand('Phase 28: oracle pull reread', dbA, config);
+      final createResult =
+          await createCommand('Phase 28: oracle pull reread', dbA, config);
+      createdObjectId = createResult.objectId;
       await seedLiveSpaceForSync(
         dbA,
         config,
@@ -145,9 +148,14 @@ void main() {
         reason: 'home B re-sync failed: ${syncBAgain.stderr}',
       );
       final syncBAgainOutput = syncBAgain.stdout.toString();
+      // A fresh space bootstraps several mandatory derived objects (ACL root,
+      // settings, Home/Archive/Widgets/Workspace) alongside the object
+      // created above, so the server-side object count is >1 by design --
+      // assert on the specific created object being pulled rather than an
+      // exact total count.
       expect(
-        syncBOutput.contains('pulled 1 objects') ||
-            syncBAgainOutput.contains('pulled 1 objects'),
+        syncBOutput.contains('Pulled: $createdObjectId') ||
+            syncBAgainOutput.contains('Pulled: $createdObjectId'),
         isTrue,
         reason: 'home B never pulled the oracle object.\n'
             'home A sync:\n$syncAOutput\n'
