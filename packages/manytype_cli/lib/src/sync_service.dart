@@ -16,6 +16,7 @@ import 'network_config.dart';
 import 'store/database.dart';
 import 'ffi/native_bridge.dart';
 import 'head_sync_client.dart';
+import 'space_pull_bootstrap.dart';
 import 'sync_capture.dart';
 
 final _snappy = SnappyCodec();
@@ -171,7 +172,8 @@ class SyncService {
       }
 
       // Step 4: SpacePush (ensure server knows about our space)
-      final bootstrap = await _loadSpaceBootstrap(db, spaceId);
+      final bootstrap =
+          await _loadOrPullSpaceBootstrap(db, bridge, syncHandleIds, spaceId);
       if (bootstrap != null) {
         final spacePayload = SpacePayload(
           spaceHeader: identity.spaceHeader,
@@ -547,7 +549,18 @@ class SyncService {
         ),
       );
 
-      final bootstrap = await _loadSpaceBootstrap(db, identity.spaceId);
+      for (final address in syncAddresses) {
+        final handleId =
+            bridge.connect(address, identity.seed, identity.accountSeed);
+        syncHandleIds.add(handleId);
+      }
+
+      final bootstrap = await _loadOrPullSpaceBootstrap(
+        db,
+        bridge,
+        syncHandleIds,
+        identity.spaceId,
+      );
       if (bootstrap == null) {
         throw StateError('Local space bootstrap data is missing');
       }
@@ -565,10 +578,7 @@ class SyncService {
         credential: signResponse.receipt.writeToBuffer(),
       );
       final pushBytes = Uint8List.fromList(pushRequest.writeToBuffer());
-      for (final address in syncAddresses) {
-        final handleId =
-            bridge.connect(address, identity.seed, identity.accountSeed);
-        syncHandleIds.add(handleId);
+      for (final handleId in syncHandleIds) {
         bridge.invoke(
           handleId,
           '/spacesync.SpaceSync/SpacePush',
@@ -730,8 +740,7 @@ SyncDiscoveryResult discoverSyncTargetsForSync({
   // preflight runs before the SpaceSign call below that creates the space,
   // so a brand-new space legitimately reports NotExists here; only treat a
   // non-created status as fatal for the official-interop path.
-  if (officialInteropMode &&
-      payload.status != SpaceStatus.SpaceStatusCreated) {
+  if (officialInteropMode && payload.status != SpaceStatus.SpaceStatusCreated) {
     throw StateError(
       'Space $spaceId is not live: ${_spaceStatusName(payload.status)}',
     );
@@ -799,6 +808,74 @@ Future<_SpaceBootstrap?> _loadSpaceBootstrap(
     spaceSettingsPayloadId: settingsPayloadId,
     spaceSettingsPayload: settingsPayload,
   );
+}
+
+/// Like [_loadSpaceBootstrap], but for a joined space that never ran `create`
+/// locally: the ACL root and space settings root are not retrievable through
+/// the generic per-object HeadSync/ObjectSyncRequestStream pull loop (the
+/// server rejects tree-sync requests for them with "tree not found"/
+/// "unexpected request type"), so a fresh home never accumulates a decodable
+/// bootstrap payload on its own. Falls back to `SpacePull`, which returns
+/// both roots in their original creation-time encoding, and persists them
+/// locally (mirroring how `create` stores them) so this and future calls to
+/// [_loadSpaceBootstrap] succeed without repeating the fallback.
+Future<_SpaceBootstrap?> _loadOrPullSpaceBootstrap(
+  ManytypeDatabase db,
+  NativeBridge bridge,
+  List<int> syncHandleIds,
+  String spaceId,
+) async {
+  final local = await _loadSpaceBootstrap(db, spaceId);
+  if (local != null) {
+    return local;
+  }
+
+  final pullClient = SpacePullBootstrap(
+    invoker: (handleId, method, payload) =>
+        bridge.invoke(handleId, method, payload),
+  );
+
+  for (final handleId in syncHandleIds) {
+    try {
+      final result = pullClient.fetch(handleId: handleId, spaceId: spaceId);
+      final payload = result.payload;
+      if (payload.aclPayload.isEmpty ||
+          payload.spaceSettingsPayload.isEmpty ||
+          payload.aclPayloadId.isEmpty ||
+          payload.spaceSettingsPayloadId.isEmpty) {
+        continue;
+      }
+
+      final aclPayload = Uint8List.fromList(payload.aclPayload);
+      final settingsPayload = Uint8List.fromList(payload.spaceSettingsPayload);
+
+      await db.insertObject(payload.aclPayloadId, spaceId);
+      await db.insertChange(
+        payload.aclPayloadId,
+        payload.aclPayloadId,
+        aclPayload,
+        jsonEncode([]),
+      );
+      await db.insertObject(payload.spaceSettingsPayloadId, spaceId);
+      await db.insertChange(
+        payload.spaceSettingsPayloadId,
+        payload.spaceSettingsPayloadId,
+        settingsPayload,
+        jsonEncode([]),
+      );
+
+      return _SpaceBootstrap(
+        aclPayloadId: payload.aclPayloadId,
+        aclPayload: aclPayload,
+        spaceSettingsPayloadId: payload.spaceSettingsPayloadId,
+        spaceSettingsPayload: settingsPayload,
+      );
+    } catch (_) {
+      continue;
+    }
+  }
+
+  return null;
 }
 
 Uint8List _encodeMessagesForFfi(Iterable<Uint8List> messages) {
