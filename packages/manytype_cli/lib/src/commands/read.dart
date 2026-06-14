@@ -478,23 +478,6 @@ Future<void> _printSnapshotMetadata(
     if (smartBlockType == 521 && fields.containsKey('relationFormat')) {
       emit('  Format: ${_formatName(fields['relationFormat']!.numberValue)}');
     }
-    if (fields.containsKey('targetObjectType')) {
-      final targetTypeId = fields['targetObjectType']!.stringValue;
-      final targetTypeName = await _resolveMemberName(
-        db,
-        targetTypeId,
-        spaceKey: spaceKey,
-        cachedChanges: cachedChangesByObject[targetTypeId],
-      );
-      if (targetTypeName == null) {
-        emit('  Target Type: $targetTypeId');
-      } else {
-        emit('  Target Type: $targetTypeName ($targetTypeId)');
-      }
-    }
-    if (fields.containsKey('sourceObject')) {
-      emit('  Source Template: ${fields['sourceObject']!.stringValue}');
-    }
   }
 
   // Dataview blocks in snapshot.
@@ -632,6 +615,30 @@ Future<void> _printSnapshotMetadata(
   //      Tag: `[<relationKey>] <name1>, <name2>, <name3>`
   //   Orphan: `<unknown:xxxxxxxx>`
   final renderedRelationKeys = <String>{};
+
+  // targetObjectType/sourceObject are read from mergedDetails (not just the
+  // genesis snapshot) because official-client template application sets
+  // sourceObject via a post-creation DetailsSet, not the creation snapshot.
+  if (mergedDetails.containsKey('targetObjectType')) {
+    final targetTypeId = mergedDetails['targetObjectType']!.stringValue;
+    final targetTypeName = await _resolveMemberName(
+      db,
+      targetTypeId,
+      spaceKey: spaceKey,
+      cachedChanges: cachedChangesByObject[targetTypeId],
+    );
+    if (targetTypeName == null) {
+      emit('  Target Type: $targetTypeId');
+    } else {
+      emit('  Target Type: $targetTypeName ($targetTypeId)');
+    }
+    renderedRelationKeys.add('targetObjectType');
+  }
+  if (mergedDetails.containsKey('sourceObject')) {
+    emit('  Source Template: ${mergedDetails['sourceObject']!.stringValue}');
+    renderedRelationKeys.add('sourceObject');
+  }
+
   for (final link in snapData.relationLinks) {
     if (link.format != RelationFormat.status &&
         link.format != RelationFormat.tag) {
