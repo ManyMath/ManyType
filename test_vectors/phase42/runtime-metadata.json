@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-04-13T02:13:37.376014Z",
+  "captured_at": "2026-07-04T03:01:39.811596Z",
   "scenario": "phase42 bidirectional verification against the self-hosted official stack",
   "git": {
     "branch": "main",
-    "commit": "d7570571ca0dcacb63b5454d23d1e0192594822a",
+    "commit": "893f472c2cf3d15bef0dd4789cdad96450a2a92a",
     "dirty": true
   },
   "oracle_lock": {
@@ -38,30 +38,30 @@
   "network_config": {
     "path": "docker/any-sync/etc/client.yml",
     "sha256": "daaae745745dce399c9a12c299202294cb627a33ec7a38e7068810cdbcf33880",
-    "mtime": "2026-04-13T02:05:14.487545Z",
+    "mtime": "2026-07-04T02:40:58.579268Z",
     "network_id": "N9MGQuoafndHijnEJmWGJesLSepBQLXZWqvjejDY4hP7mFt5"
   },
   "binaries": {
     "manytype_quic_ffi": {
       "path": "rust/target/release/libmanytype_quic_ffi.so",
       "exists": true,
-      "sha256": "978fd645384ec251b2393975b3f8afd704ff11472248e8c1983c6ebe911e28f7",
-      "mtime": "2026-04-09T01:49:59.786552Z",
-      "size": 7089088
+      "sha256": "5fa296b7ee5ef9e9c0b21e69912749f6ff7cd564e58107ef6ca7c3cfa8b19fac",
+      "mtime": "2026-07-03T16:24:32.779240Z",
+      "size": 4941568
     },
     "manytype_server_debug": {
       "path": "rust/target/debug/manytype_server",
       "exists": true,
-      "sha256": "22ac879d948fea606d9848cdefb5392af0d62046ee57e95c2783aa304feed871",
-      "mtime": "2026-04-12T03:47:29.329039Z",
-      "size": 109081752
+      "sha256": "8be56fbbc0b6778e4726deb865d1c28e819660887beb9d3c50f33188984eea1e",
+      "mtime": "2026-07-03T16:33:02.355489Z",
+      "size": 109745984
     },
     "official_client_probe": {
-      "path": "/tmp/tmp.ZQz7Lbeydm/official_client_grpc_probe",
+      "path": "/tmp/tmp.KdmUxCxZWd/official_client_grpc_probe",
       "exists": true,
-      "sha256": "9878b155a278a2d512ccf9e7e4234b5caa7f953f17eb8e9d207fc80d5235701a",
-      "mtime": "2026-04-13T02:05:12.578501Z",
-      "size": 41558179
+      "sha256": "2104aa6caf62dbc2d6614267c6d235ec04b7b7ad7e5dfa5060aa24e44ba72ee0",
+      "mtime": "2026-07-04T02:40:53.448150Z",
+      "size": 41589810
     }
   },
   "artifacts": [
@@ -84,112 +84,106 @@
       "size": 1467106
     },
     {
+      "path": "test_vectors/phase42/manytype_to_official_blockupdate_checked-show.json",
+      "sha256": "835dd0755ac5044f26c66476720cf18838d8b52a3923cfc419374aeba8ac11ab",
+      "mtime": "2026-07-04T02:43:34.448828Z",
+      "size": 42554
+    },
+    {
       "path": "test_vectors/phase42/manytype_to_official_blockupdate.json",
-      "sha256": "0544305584a6e30daa6442ff84bdc301a525d9f88043bdb58b372fb96cb80ffa",
-      "mtime": "2026-04-13T02:07:19.459545Z",
+      "sha256": "e691cecaba694219f69e037caec9bd4717da30089fdb84dd6c1607614d073eb6",
+      "mtime": "2026-07-04T02:46:00.260674Z",
       "size": 787
     },
     {
-      "path": "test_vectors/phase42/manytype_to_official_blockupdate_checked-show.json",
-      "sha256": "cf9b2305f46f69bf9a34268df9ee607427c1c003a6ea653ca06e062f51fd22ef",
-      "mtime": "2026-04-13T02:06:33.101345Z",
-      "size": 42584
-    },
-    {
       "path": "test_vectors/phase42/manytype_to_official_blockupdate_style-show.json",
-      "sha256": "4e4eb578d6f07f51b53abbcd1b089ecaff9b283d6ce24ca9706ae6421eb243b5",
-      "mtime": "2026-04-13T02:07:19.398399Z",
-      "size": 42584
-    },
-    {
-      "path": "test_vectors/phase42/manytype_to_official_collection-show.json",
-      "sha256": "673e579457213f749fb61ff4a5db02c21c5b0a70b88dd42634d4f51b1d1852b6",
-      "mtime": "2026-04-13T02:10:58.661340Z",
-      "size": 45680
+      "sha256": "ae787fb688148d835527346a7c619b98b225803922e8f160df6fc3f959587bb1",
+      "mtime": "2026-07-04T02:46:00.220157Z",
+      "size": 42554
     },
     {
       "path": "test_vectors/phase42/manytype_to_official_collection.json",
-      "sha256": "7794d760b2b7fd2456f411a538fd1b8048419ea92a91250bc047d0ee1e64daa4",
-      "mtime": "2026-04-13T02:10:58.714384Z",
+      "sha256": "c05de3429184d1cc04e10181e8e6419007cce1461a5ea1c861e83b3182ef8ae1",
+      "mtime": "2026-07-04T02:56:13.331957Z",
       "size": 729
     },
     {
-      "path": "test_vectors/phase42/manytype_to_official_file_relation.json",
-      "sha256": "4abfc69ed5fe2095df8bcdc891fb08d1d74c7dde7d218f3d5d3b9e139ebaa7a8",
-      "mtime": "2026-04-13T02:11:36.667412Z",
-      "size": 770
+      "path": "test_vectors/phase42/manytype_to_official_collection-show.json",
+      "sha256": "c69c3b5b26246e90fa81808630a05d45306ebe9ab8b8c5ecedfb8d329981b0c7",
+      "mtime": "2026-07-04T02:56:13.285159Z",
+      "size": 45648
     },
     {
       "path": "test_vectors/phase42/manytype_to_official_file_relation_file-show.json",
-      "sha256": "b7bb2daaf2b1e0e912adf3041dcca1f9d0fabe71eaa8792b48790c6e55b3a710",
-      "mtime": "2026-04-13T02:11:36.610188Z",
-      "size": 2952
+      "sha256": "01bf4416e3e2cec0d9bf24cd692e32f606a897396b92dfd5ecf196c3bc52a347",
+      "mtime": "2026-07-04T02:57:43.982231Z",
+      "size": 15038
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_file_relation.json",
+      "sha256": "2d93c5edda93bae307cb0c4c80ca41f11ac991dbc112b5b62975a8cd78672c61",
+      "mtime": "2026-07-04T02:57:44.043056Z",
+      "size": 770
     },
     {
       "path": "test_vectors/phase42/manytype_to_official_file_relation_target-show.json",
-      "sha256": "a864327769b8e68250138b32ed5e00438c4e570335a0c3d7d29cd7b6a90aed13",
-      "mtime": "2026-04-13T02:11:36.571187Z",
-      "size": 42514
+      "sha256": "0da9f190e5c446e51cb5add6caf5fc290a01eb7312580379c0b9c4f416373654",
+      "mtime": "2026-07-04T02:57:43.924229Z",
+      "size": 42484
     },
     {
       "path": "test_vectors/phase42/manytype_to_official_status_tag.json",
-      "sha256": "e149a6a04d37090110a805a235c601f2a8e34ed342d76ffe72f6a365f4e3f522",
-      "mtime": "2026-04-13T02:08:53.705695Z",
+      "sha256": "0e0133e2892d55390b5e36051808dcac7203c7c7228dc035d8398bad6c85a756",
+      "mtime": "2026-07-04T02:51:12.107188Z",
       "size": 1301
     },
     {
       "path": "test_vectors/phase42/manytype_to_official_status_tag_status-option-show.json",
-      "sha256": "1a24df8d7a22fbd311518247a7836fd266abd4c255cc0f2f25df6b7a144585d5",
-      "mtime": "2026-04-13T02:08:53.554530Z",
-      "size": 44392
+      "sha256": "38b1e983c86c8511407392aedcfcb853491d135c25fe6a9cb3a92bf6b2d8e8f3",
+      "mtime": "2026-07-04T02:51:11.980278Z",
+      "size": 44358
     },
     {
       "path": "test_vectors/phase42/manytype_to_official_status_tag_tag-option-a-show.json",
-      "sha256": "7796c3a42ae2490df3c758da5d66868466c71f8b627cda5b589a6a51de7b3c04",
-      "mtime": "2026-04-13T02:08:53.608532Z",
-      "size": 42713
+      "sha256": "ca4d22cc25e42c5064ad8566ecd3770169026f76d05d4a79ffd74b4b4424773a",
+      "mtime": "2026-07-04T02:51:12.022279Z",
+      "size": 42682
     },
     {
       "path": "test_vectors/phase42/manytype_to_official_status_tag_tag-option-b-show.json",
-      "sha256": "e8edda90345002952aa816a19b80247accef09e5bf0dfed8e235cc7a1e2a7850",
-      "mtime": "2026-04-13T02:08:53.649533Z",
-      "size": 42712
+      "sha256": "0ef48c365b7add34c69336b03f6e4c2114935a4641c54e41f178b465adbc1c1c",
+      "mtime": "2026-07-04T02:51:12.063279Z",
+      "size": 42681
     },
     {
       "path": "test_vectors/phase42/manytype_to_official_status_tag_target-show.json",
-      "sha256": "2673b766f4a92de1a150379164b124a22e0367a9e3ff8bba877df37b6a423c5e",
-      "mtime": "2026-04-13T02:08:53.509529Z",
-      "size": 45534
-    },
-    {
-      "path": "test_vectors/phase42/manytype_to_official_template.json",
-      "sha256": "a37c7599e83ec9d43ff643a5f5dcac194b95b2ffdcb979549c6e97226555ca02",
-      "mtime": "2026-04-13T02:12:27.747556Z",
-      "size": 901
+      "sha256": "75de88617c10d296926d08b475433c3747718887e1021ed91959bcb0434eccf8",
+      "mtime": "2026-07-04T02:51:11.941277Z",
+      "size": 45498
     },
     {
       "path": "test_vectors/phase42/manytype_to_official_template_applied-show.json",
-      "sha256": "6770f72c40eaadd97d7089e08f1bb9ced421d9441effc1e1bd34758d1957f8f1",
-      "mtime": "2026-04-13T02:12:15.161047Z",
-      "size": 43707
+      "sha256": "6bf9356a6525547cf9a00e2730be8993580693ad8426e073699e356132c22150",
+      "mtime": "2026-07-04T02:58:48.855712Z",
+      "size": 43445
+    },
+    {
+      "path": "test_vectors/phase42/manytype_to_official_template.json",
+      "sha256": "41d72a737b98a3059ed4d9cdc3acfaef8a8abbdf154e8103dd1ce2188bb58e65",
+      "mtime": "2026-07-04T02:59:09.900868Z",
+      "size": 901
     },
     {
       "path": "test_vectors/phase42/manytype_to_official_template_list.txt",
-      "sha256": "6ba33d089b49c37ef76c0855fc89d0a14cd8590a389d79c323fbfabf9969b535",
-      "mtime": "2026-04-13T02:12:27.686327Z",
-      "size": 68235
+      "sha256": "6337650932a5ff19a670d586715493eb69ec3f1c79c8e4c20abcc0121944aa81",
+      "mtime": "2026-07-04T02:59:09.830191Z",
+      "size": 82051
     },
     {
       "path": "test_vectors/phase42/manytype_to_official_template_template-show.json",
-      "sha256": "2a115f76ecf073ddf9cd3e37b71aa2521fb2620293cf0f288c3f32d40f27ea90",
-      "mtime": "2026-04-13T02:12:15.124047Z",
-      "size": 47673
-    },
-    {
-      "path": "test_vectors/phase42/official-join.json",
-      "sha256": "d44889e90707382e59121eea6019ff3acecef4845e8a1cd6181474bd30cf1377",
-      "mtime": "2026-04-13T02:05:53.578934Z",
-      "size": 336
+      "sha256": "485011d2bc414d93cca42989138917b99d3f16a2b31207640cd671e6dca9f30d",
+      "mtime": "2026-07-04T02:58:48.813711Z",
+      "size": 47332
     },
     {
       "path": "test_vectors/phase42/official_collection_debug_capture.json",
@@ -198,70 +192,70 @@
       "size": 1838259
     },
     {
-      "path": "test_vectors/phase42/official_to_manytype_blockupdate.json",
-      "sha256": "ee5de629fcc90e50a7a6130f8ed1c5328880e8b0d9751280116fbcb974701945",
-      "mtime": "2026-04-13T02:12:40.072602Z",
-      "size": 517
+      "path": "test_vectors/phase42/official-join.json",
+      "sha256": "3194155f09f2b1f5f6d4ad39e37a0be80e8d9b7d62d86f6bd6a3215a2bac3234",
+      "mtime": "2026-07-04T02:41:40.195218Z",
+      "size": 335
     },
     {
       "path": "test_vectors/phase42/official_to_manytype_blockupdate_edit.json",
-      "sha256": "e032b7764810074cba4b88e5e0cd2bef400850511881e51055813cea7f784dd6",
-      "mtime": "2026-04-13T02:12:27.808329Z",
+      "sha256": "f3eace45bd1450b67d5d96d9c97d61da410b77f67e2ffa9e9b74718360371beb",
+      "mtime": "2026-07-04T02:59:10.017195Z",
       "size": 217
     },
     {
+      "path": "test_vectors/phase42/official_to_manytype_blockupdate.json",
+      "sha256": "ead0a6a94c788f022db3d47d1708b9f231c7ba1cf9fb5506c82b84b6de9461f9",
+      "mtime": "2026-07-04T02:59:31.182415Z",
+      "size": 517
+    },
+    {
       "path": "test_vectors/phase42/official_to_manytype_blockupdate_read.txt",
-      "sha256": "500c765db2e42f2337abb4674ce03e604f142e325a6af208a30f6a8d154d5526",
-      "mtime": "2026-04-13T02:12:40.013601Z",
-      "size": 69139
+      "sha256": "619e10016f6b97e9df1e37f343426be7f22fdf648b93b35ad41014335c0ed77a",
+      "mtime": "2026-07-04T02:59:31.118677Z",
+      "size": 82999
     },
     {
       "path": "test_vectors/phase42/official_to_manytype_collection.json",
-      "sha256": "3607d6556778c41b819d5f3211e95709e1a1902b59921f243ac91a7898e495c3",
-      "mtime": "2026-04-13T02:13:02.614712Z",
+      "sha256": "cea12374478c3252f4ff038dc62cf7fb031a190fe0c3fd90ce0691f361e7532d",
+      "mtime": "2026-07-04T03:00:17.860776Z",
       "size": 728
     },
     {
       "path": "test_vectors/phase42/official_to_manytype_collection_read.txt",
-      "sha256": "81163749dc70018e4aed633f12c2d984b485b52f2842a4bf13c1ec78e34a67d4",
-      "mtime": "2026-04-13T02:13:02.560102Z",
-      "size": 72928
+      "sha256": "a27c19da172821e4a56b3ccc8a4ee8af97dec500be1388fdd3ddaca4c5e3da57",
+      "mtime": "2026-07-04T03:00:17.802744Z",
+      "size": 87404
     },
     {
       "path": "test_vectors/phase42/official_to_manytype_file_relation.json",
-      "sha256": "0188bb5dc3231e5c0b9516e2dc28d04eb53907eeac46240c59bb73f7be1a600e",
-      "mtime": "2026-04-13T02:13:14.496779Z",
+      "sha256": "62052199a68e50f873eb07f2533caa314b803b1a3b4e0858c282dacbef68f92b",
+      "mtime": "2026-07-04T03:00:42.958153Z",
       "size": 602
     },
     {
       "path": "test_vectors/phase42/official_to_manytype_file_relation_read.txt",
-      "sha256": "ddbe28e7d2a4424aabef76e4efd932df58fcd9d457b469e5e673e67ce8ef2e6f",
-      "mtime": "2026-04-13T02:13:14.431366Z",
-      "size": 74252
+      "sha256": "4920b9adf0c11840d2874c073bbd6813a79988a4d3ab2c73af44185039e95538",
+      "mtime": "2026-07-04T03:00:42.884316Z",
+      "size": 89071
     },
     {
       "path": "test_vectors/phase42/official_to_manytype_status_tag.json",
-      "sha256": "87dca28e4eb543d5625a36ff02aedcef6e8154207c9587ac1cdf61f718e48826",
-      "mtime": "2026-04-13T02:12:51.068397Z",
+      "sha256": "4b97e0755266473a3fccbaa0697f0d509a31fb1e1dc443f0eaeb3a6558d62413",
+      "mtime": "2026-07-04T02:59:53.570558Z",
       "size": 829
     },
     {
       "path": "test_vectors/phase42/official_to_manytype_status_tag_read.txt",
-      "sha256": "bbc4ce9237c462a6a5a8004b756831adb7e4f9d6d1af2474e4f9cdfcf25e2153",
-      "mtime": "2026-04-13T02:12:50.983845Z",
-      "size": 70602
-    },
-    {
-      "path": "test_vectors/phase42/official_to_manytype_template.json",
-      "sha256": "7ae76bd60690e193a9a9a08460f009f30476ff51576122d589252de59d78300c",
-      "mtime": "2026-04-13T02:13:37.331685Z",
-      "size": 671
+      "sha256": "2c236b9b0896833e5470c6caf1b5fd3e48ddc442b2bfa6b3863ff1f5b6a8d2c1",
+      "mtime": "2026-07-04T02:59:53.510189Z",
+      "size": 84692
     },
     {
       "path": "test_vectors/phase42/official_to_manytype_template_applied-read.txt",
-      "sha256": "46c8af40b4ede7f17a94c0104479a488a2af0d3498a3bda7af7b953a769bdb14",
-      "mtime": "2026-04-13T02:13:37.263873Z",
-      "size": 76775
+      "sha256": "347f24def6afbf8adf60189c16c9dbabd2c565e19ba869d431938afae27e6157",
+      "mtime": "2026-07-04T03:01:39.697614Z",
+      "size": 92289
     },
     {
       "path": "test_vectors/phase42/official_to_manytype_template_clone-read.txt",
@@ -270,10 +264,16 @@
       "size": 34
     },
     {
+      "path": "test_vectors/phase42/official_to_manytype_template.json",
+      "sha256": "1851716a803d113f64ad7a9858e4877ca9f5b1f848c6e2aa5bc4bd3d480f8671",
+      "mtime": "2026-07-04T03:01:39.770159Z",
+      "size": 671
+    },
+    {
       "path": "test_vectors/phase42/official_to_manytype_template_template-read.txt",
-      "sha256": "a7cb901a70c16584cbec68e4a7e0f895e633a27803337d115286f81be6bddb30",
-      "mtime": "2026-04-13T02:13:25.959622Z",
-      "size": 75618
+      "sha256": "1067585654cef88db10fc643c1d0fd3a5e0d91c9028f7368033e12eb5da163da",
+      "mtime": "2026-07-04T03:01:11.433969Z",
+      "size": 90684
     }
   ]
 }

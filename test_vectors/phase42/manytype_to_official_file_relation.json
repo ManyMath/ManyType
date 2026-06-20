@@ -1,11 +1,11 @@
 {
-  "captured_at": "2026-04-13T02:11:36.667332Z",
+  "captured_at": "2026-07-04T02:57:44.042941Z",
   "scenario": "manytype-authored file relation observed by official",
-  "relation_id": "bafyreidqz7ar333elpoxdigrp2pdsxe3s2mtrxed4v5za7zaq7syfcbfde",
-  "relation_key": "phase42-1776045916711036514-manytype-attachment",
-  "target_id": "bafyreidrpnbnzysefe7wteyckw55d7a7nohcxi6re7qag3fw32hzvozgbq",
-  "file_object_id": "bafyreihbigzdgkrdmtaer5cik3k5b77k233wzkd4rr4u5hdpsdxriavp2e",
-  "payload_name": "phase42-1776045916711036514-manytype.pdf",
+  "relation_id": "bafyreihfzsfmtvma2efyzcnj7h3agdx3g6p34t7rkxkrv65xx64spr2mcu",
+  "relation_key": "phase42-1783132861010102009-manytype-attachment",
+  "target_id": "bafyreihy4djopfsdcgr2vxtiy6d34ynjcesj5jfeyziwupnccnf6qnhtky",
+  "file_object_id": "bafyreidfmcuzmp6b7x4qwrnaa4hvmlobavcgxnnamsfxlwgkabwo7ftehi",
+  "payload_name": "phase42-1783132861010102009-manytype.pdf",
   "target_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_file_relation_target-show.json",
   "file_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_file_relation_file-show.json",
   "success": true
