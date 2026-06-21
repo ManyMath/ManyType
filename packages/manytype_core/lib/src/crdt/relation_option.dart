@@ -174,9 +174,16 @@ Future<Map<String, ResolvedOption>> loadLocalOptionIndex(
       details = const <String, Value>{};
     }
 
+    // `color` (not `relationOptionColor`) is the official-client canonical
+    // detail key: confirmed via the official self-hosted oracle's own
+    // ObjectCreateRelationOption/object-show, which only ever reads/writes
+    // `color`. `relationOptionColor` is a Manytype-only defensive dual-write
+    // (see buildRelationOptionDetails above) set once at creation time and
+    // never touched again by a plain color edit, so it must not shadow a
+    // later `color`-only update from either implementation.
     final name = details['name']?.stringValue ?? details['text']?.stringValue;
-    final color = details['relationOptionColor']?.stringValue ??
-        details['color']?.stringValue;
+    final color = details['color']?.stringValue ??
+        details['relationOptionColor']?.stringValue;
     final relationKey = details['relationKey']?.stringValue;
 
     result[input.objectId] = ResolvedOption(

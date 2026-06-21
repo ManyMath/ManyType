@@ -31,6 +31,25 @@ Uint8List _rootRawTreeChangeWithSbType(int sbType) {
   return Uint8List.fromList(raw.writeToBuffer());
 }
 
+/// Build a [RawTreeChange] blob wrapping a single `Change_DetailsSet`
+/// content entry: a post-snapshot edit to one detail key, as produced by
+/// `manytype edit --relation <key> --string <value>` or the official
+/// client's `object-set-detail`.
+Uint8List _detailsSetRawTreeChange(String key, Value value) {
+  final change = changes_proto.Change()
+    ..content.add(
+      changes_proto.Change_Content(
+        detailsSet: changes_proto.Change_DetailsSet(key: key, value: value),
+      ),
+    );
+  final tc = TreeChange()
+    ..changesData = change.writeToBuffer()
+    ..readKeyId = ''
+    ..dataType = '';
+  final raw = RawTreeChange()..payload = tc.writeToBuffer();
+  return Uint8List.fromList(raw.writeToBuffer());
+}
+
 /// Build a [RawTreeChange] blob whose payload is a plaintext
 /// (un-encrypted, un-compressed) [TreeChange] wrapping a [Change] with a
 /// single snapshot carrying the given [details]. Matches the test helper
@@ -360,6 +379,36 @@ void main() {
       expect(out['opt-a']!.name, 'A');
       expect(out['opt-a']!.color, 'blue');
       expect(out['opt-a']!.relationKey, 'tag');
+    });
+
+    test(
+        'a post-creation `color`-only edit is not shadowed by the stale '
+        'creation-time `relationOptionColor` (BREADTH-05 regression: '
+        '`color` is the official-client canonical key and must win)',
+        () async {
+      final input = OptionIndexInput(
+        objectId: 'opt-recolor',
+        rawTreeChanges: <Uint8List>[
+          _rootRawTreeChangeWithSbType(smartBlockTypeRelationOption),
+          // Creation dual-writes both keys to the same value, as
+          // buildRelationOptionDetails does.
+          _snapshotRawTreeChange(<String, Value>{
+            'name': Value(stringValue: 'Done'),
+            'text': Value(stringValue: 'Done'),
+            'relationOptionColor': Value(stringValue: 'red'),
+            'color': Value(stringValue: 'red'),
+            'relationKey': Value(stringValue: 'status'),
+          }),
+          // A later recolor only ever touches `color`: matching both
+          // `manytype edit --relation color --string blue` and the
+          // official client's `object-set-detail --detail-key color`.
+          _detailsSetRawTreeChange('color', Value(stringValue: 'blue')),
+        ],
+        treeKey: emptyKey,
+      );
+
+      final out = await loadLocalOptionIndex(<OptionIndexInput>[input]);
+      expect(out['opt-recolor']!.color, 'blue');
     });
   });
 }
