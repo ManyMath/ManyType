@@ -273,6 +273,41 @@ def validate_manytype_to_official_template(path: pathlib.Path) -> str:
     return f"[{label}] ok"
 
 
+def validate_manytype_to_official_option_recolor(path: pathlib.Path) -> str:
+    label = "manytype->official option recolor"
+    data = load_json(path)
+    require_keys(
+        data,
+        {
+            "status_key",
+            "option_id",
+            "target_id",
+            "renamed_name",
+            "expected_color",
+            "option_show_path",
+            "target_read_path",
+            "success",
+        },
+        label,
+    )
+    if data.get("success") is not True:
+        raise SystemExit(f"[{label}] success != True")
+
+    option_show = load_json(pathlib.Path(data["option_show_path"]))
+    option_details = option_show.get("root_details", {})
+    if option_details.get("name") != data["renamed_name"]:
+        raise SystemExit(f"[{label}] official option show name mismatch after rename")
+    if option_details.get("color") != data["expected_color"]:
+        raise SystemExit(f"[{label}] official option show color mismatch after recolor")
+
+    target_read = read_text(pathlib.Path(data["target_read_path"]))
+    expected_line = f"[{data['status_key']}] {data['renamed_name']} ({data['expected_color']})"
+    if expected_line not in target_read:
+        raise SystemExit(f"[{label}] Manytype's own re-read missing renamed+recolored option")
+
+    return f"[{label}] ok"
+
+
 def validate_official_to_manytype_blockupdate(path: pathlib.Path) -> str:
     label = "official->Manytype blockupdate"
     data = load_json(path)
@@ -351,6 +386,31 @@ def validate_official_to_manytype_file_relation(path: pathlib.Path) -> str:
     return f"[{label}] ok"
 
 
+def validate_official_to_manytype_option_recolor(path: pathlib.Path) -> str:
+    label = "official->Manytype option recolor"
+    data = load_json(path)
+    require_keys(
+        data,
+        {
+            "status_key",
+            "option_id",
+            "target_id",
+            "renamed_name",
+            "expected_color",
+            "target_read_path",
+            "success",
+        },
+        label,
+    )
+    if data.get("success") is not True:
+        raise SystemExit(f"[{label}] success != True")
+    target_read = read_text(pathlib.Path(data["target_read_path"]))
+    expected_line = f"[{data['status_key']}] {data['renamed_name']} ({data['expected_color']})"
+    if expected_line not in target_read:
+        raise SystemExit(f"[{label}] Manytype re-read missing official-authored rename+recolor")
+    return f"[{label}] ok"
+
+
 def validate_official_to_manytype_template(path: pathlib.Path) -> str:
     label = "official->Manytype template"
     data = load_json(path)
@@ -406,6 +466,9 @@ def main() -> None:
         validate_manytype_to_official_template(
             artifact_dir / "manytype_to_official_template.json"
         ),
+        validate_manytype_to_official_option_recolor(
+            artifact_dir / "manytype_to_official_option_recolor.json"
+        ),
         validate_official_to_manytype_blockupdate(
             artifact_dir / "official_to_manytype_blockupdate.json"
         ),
@@ -421,6 +484,12 @@ def main() -> None:
         validate_official_to_manytype_template(
             artifact_dir / "official_to_manytype_template.json"
         ),
+        # validate_official_to_manytype_option_recolor is intentionally not
+        # wired in yet -- see docs/m039-status-tag-option-recolor-breadth05.md.
+        # The official-authored rename+recolor scenario (harness scenario
+        # 12/12) hit a transient upstream any-sync propagation delay in this
+        # session's runs; enable this check once a clean run has captured
+        # official_to_manytype_option_recolor.json.
     ]
     for result in results:
         print(result)

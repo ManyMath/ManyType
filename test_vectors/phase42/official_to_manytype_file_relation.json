@@ -1,11 +1,11 @@
 {
-  "captured_at": "2026-07-04T03:00:42.958032Z",
+  "captured_at": "2026-07-04T07:29:58.305722Z",
   "scenario": "official-authored file relation observed by Manytype",
-  "relation_id": "bafyreie23yjuxgvfxurg7brgyehaehb3fdh5qhabmny3a74g566qhwuvcu",
-  "relation_key": "6a4877414f415800017b2554",
-  "target_id": "bafyreichu4fudywyz4hy4zylnmh3mfcij6xoxfucv3j56qx67qprr56koe",
-  "file_object_id": "bafyreifxabcoff2zpl5p7x7bestnxzogp4tqyrcegvdg2yirtcriawqudq",
-  "file_name": "phase42-1783132861010102009-official.pdf",
+  "relation_id": "bafyreie56aqvbavagkloh7fkivcflkf2f7wtgu2xcnnsshuci2z3i3jeda",
+  "relation_key": "6a48b65a4f41580001090d73",
+  "target_id": "bafyreibmeat3f5i7zx4mtgoelj6eq4yryxmyg5w2oi6iqiucpdlky3hetu",
+  "file_object_id": "bafyreiapq6c4m7mnvp6pqrkzizinmwjkfa5vx2hh7un5otp4enb7n4qfiu",
+  "file_name": "phase42-1783148882089510616-official.pdf",
   "read_path": "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_file_relation_read.txt",
   "success": true
 }

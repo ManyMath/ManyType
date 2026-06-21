@@ -1,16 +1,16 @@
 {
-  "captured_at": "2026-07-04T02:59:53.570480Z",
+  "captured_at": "2026-07-04T07:29:02.669000Z",
   "scenario": "official-authored status/tag observed by Manytype",
-  "status_relation_id": "bafyreie3vxptw7vnclxysm2ojajezrkgxpmzskjiya6lqtivj7a2vezwma",
-  "status_key": "6a4877134f415800017b254d",
-  "status_option_id": "bafyreifi2izsx6s7hnxwfac3e76eosf6ogx7gxm3xibg7s7ksmejs3wbnq",
-  "tag_relation_id": "bafyreicbreveyl3ucfpycsnb4mgoezpkmqujzid4n7a434iu253nl65s7i",
-  "tag_key": "6a4877134f415800017b254e",
+  "status_relation_id": "bafyreifgcdvvndbl56ff4uwfxj6c65blmy364zl3joqizblvjyt47n4xq4",
+  "status_key": "6a48b6234f41580001090d6d",
+  "status_option_id": "bafyreic6uskommxnu33g5jb3kpbr5n5hf6jf66x37b726twe5533tz4xn4",
+  "tag_relation_id": "bafyreiho52rz24rlpnqv4npqulbk3lrc6s7etcnlz2evreqdafeim6kjxe",
+  "tag_key": "6a48b6234f41580001090d6e",
   "tag_option_ids": [
-    "bafyreib5rpkjyqndrjckbwoqguc5dcv2d3gb7p26s237kob7bgwr3ntjlq",
-    "bafyreiebz5jfphnxpjumhtnvo474hfm2ofapt3ux3wqvkffawcpozlytae"
+    "bafyreiay6y2tok5pyqpzeo442yzjmqfnqvuerlgpesy2besloflclellpq",
+    "bafyreiekyfj74kchvjznrcrhqrxwvm4xu335fepny4xyhsgs3ep7dlwvvm"
   ],
-  "object_id": "bafyreigaztxgkb5nz2tzxik272vzxcogttgu56env2ae7nve3jex25o3ti",
+  "object_id": "bafyreig7uzxbqk5j6u5fdv3xfelyqpx5ewb7zehdxwyg36f7cztvkuqewq",
   "read_path": "/home/user/src/manytype/manytype/test_vectors/phase42/official_to_manytype_status_tag_read.txt",
   "success": true
 }

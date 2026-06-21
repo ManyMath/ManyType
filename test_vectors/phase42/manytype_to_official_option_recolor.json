@@ -1,0 +1,13 @@
+{
+  "captured_at": "2026-07-04T07:28:10.253983Z",
+  "scenario": "manytype-authored status option rename+recolor observed by official and Manytype's own re-read",
+  "status_relation_id": "bafyreihrhx6mtqvkbwmhxxeef6haiy4v3qoidvg3b4bxpov6fgpqimbox4",
+  "status_key": "phase42-1783148882089510616-manytype-recolor-status",
+  "option_id": "bafyreicscb4qi3tiq4usocic27fvrbprcgilxpuvtt3hytpb67pmiprpeq",
+  "target_id": "bafyreidetzkhgej3l333lggietnjyqfdowqrrzqabjg4tbj2fnhgg3uhqi",
+  "renamed_name": "phase42-1783148882089510616 manytype recolor renamed",
+  "expected_color": "blue",
+  "option_show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_option_recolor_option-show.json",
+  "target_read_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_option_recolor_target-read.txt",
+  "success": true
+}

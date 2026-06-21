@@ -1,15 +1,15 @@
 {
-  "captured_at": "2026-07-04T02:56:13.331867Z",
+  "captured_at": "2026-07-04T07:20:50.006126Z",
   "scenario": "manytype-authored collection observed by official",
-  "collection_id": "bafyreidkeduucbynhiky3jrutfbw5rkwuhyv5lrj2q72zedc5rcn2nknym",
+  "collection_id": "bafyreibbgqylpqlaesomkvufp6nfb6v3cp2npdvqhu3erjfxbmih62m2y4",
   "member_ids_created": [
-    "bafyreid64un6nvqxyvvucltjuzehzwwkagf7773ajuqqywexxgq2himrkm",
-    "bafyreibjtqf7slonhfhjuzdy6kmjtdue2eolpxyq2f6eqoffqkt3c5yrly",
-    "bafyreidemgppzdofhm3iscgeudj6my7fokb2ntkb727itlndj2mhnlfjve"
+    "bafyreihvzbc5wwas3hfzsooexsfebqigb6pz7ihd6ucmncempjozabk6ji",
+    "bafyreicyzcl6ozixyqbvpu4phk6mn3o6g2g4zd5epdswwgifu3kumjq3yy",
+    "bafyreifdmhszibk2awdqfapwgtlcflltwlkaqtesrzmfikkrbt6o6hcjdy"
   ],
   "expected_member_ids": [
-    "bafyreidemgppzdofhm3iscgeudj6my7fokb2ntkb727itlndj2mhnlfjve",
-    "bafyreibjtqf7slonhfhjuzdy6kmjtdue2eolpxyq2f6eqoffqkt3c5yrly"
+    "bafyreifdmhszibk2awdqfapwgtlcflltwlkaqtesrzmfikkrbt6o6hcjdy",
+    "bafyreicyzcl6ozixyqbvpu4phk6mn3o6g2g4zd5epdswwgifu3kumjq3yy"
   ],
   "show_path": "/home/user/src/manytype/manytype/test_vectors/phase42/manytype_to_official_collection-show.json",
   "success": true

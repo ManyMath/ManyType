@@ -6,9 +6,11 @@ set -euo pipefail
 #
 # Produces replayable artifacts for:
 #   - Manytype-authored -> official-observed:
-#       blockupdate, status/tag, collection, file relation, template
+#       blockupdate, status/tag, collection, file relation, template,
+#       status/tag option rename+recolor
 #   - official-authored -> Manytype-observed:
-#       blockupdate, status/tag, collection, file relation, template
+#       blockupdate, status/tag, collection, file relation, template,
+#       status/tag option rename+recolor
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck disable=SC1091
@@ -289,7 +291,7 @@ fi
 
 sleep 5
 
-printf 'Scenario 1/10: Manytype-authored blockupdate -> official observation...\n'
+printf 'Scenario 1/12: Manytype-authored blockupdate -> official observation...\n'
 BLOCK_CHECK_TITLE="$PREFIX manytype block check"
 BLOCK_STYLE_TITLE="$PREFIX manytype block style"
 BLOCK_STYLE_TEXT="$PREFIX manytype style final"
@@ -369,7 +371,7 @@ artifact = {
 pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
 
-printf 'Scenario 2/10: Manytype-authored status/tag -> official observation...\n'
+printf 'Scenario 2/12: Manytype-authored status/tag -> official observation...\n'
 MT_STATUS_NAME="$PREFIX manytype status"
 MT_TAG_NAME="$PREFIX manytype tag"
 MT_STATUS_KEY="$(derive_unique_key "$MT_STATUS_NAME")"
@@ -487,7 +489,7 @@ artifact = {
 pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
 
-printf 'Scenario 3/10: Manytype-authored collection -> official observation...\n'
+printf 'Scenario 3/12: Manytype-authored collection -> official observation...\n'
 run_cli "$MANYTYPE_HOME" --network-config "$NETWORK_CONFIG_SRC" create --sync \
   --as-collection --name "$PREFIX manytype collection" >"$TMPDIR/manytype-collection-create.txt"
 MT_COLLECTION_ID="$(extract_created_id "$TMPDIR/manytype-collection-create.txt")"
@@ -539,7 +541,7 @@ artifact = {
 pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
 
-printf 'Scenario 4/10: Manytype-authored file relation -> official observation...\n'
+printf 'Scenario 4/12: Manytype-authored file relation -> official observation...\n'
 MT_FILE_RELATION_NAME="$PREFIX manytype attachment"
 MT_FILE_RELATION_KEY="$(derive_unique_key "$MT_FILE_RELATION_NAME")"
 
@@ -609,7 +611,7 @@ artifact = {
 pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
 
-printf 'Scenario 5/10: Manytype-authored template -> official observation + local list filter...\n'
+printf 'Scenario 5/12: Manytype-authored template -> official observation + local list filter...\n'
 MT_TYPE_NAME="$PREFIX manytype template type"
 MT_TEMPLATE_NAME="$PREFIX manytype template"
 MT_APPLIED_NAME="$PREFIX manytype applied"
@@ -690,7 +692,94 @@ artifact = {
 pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
 
-printf 'Scenario 6/10: official-authored blockupdate -> Manytype observation...\n'
+printf 'Scenario 6/12: Manytype-authored status/tag option rename+recolor -> official + local observation...\n'
+MT_RECOLOR_STATUS_NAME="$PREFIX manytype recolor status"
+MT_RECOLOR_STATUS_KEY="$(derive_unique_key "$MT_RECOLOR_STATUS_NAME")"
+MT_RECOLOR_OPTION_INITIAL_NAME="$PREFIX manytype recolor initial"
+MT_RECOLOR_OPTION_RENAMED_NAME="$PREFIX manytype recolor renamed"
+
+run_cli "$MANYTYPE_HOME" --network-config "$NETWORK_CONFIG_SRC" create --sync \
+  --as-relation --name "$MT_RECOLOR_STATUS_NAME" --format status >"$TMPDIR/manytype-recolor-status-relation.txt"
+MT_RECOLOR_STATUS_RELATION_ID="$(extract_created_id "$TMPDIR/manytype-recolor-status-relation.txt")"
+
+run_cli "$MANYTYPE_HOME" --network-config "$NETWORK_CONFIG_SRC" create --sync \
+  --as-relation-option --name "$MT_RECOLOR_OPTION_INITIAL_NAME" --for-relation "$MT_RECOLOR_STATUS_KEY" --color orange >"$TMPDIR/manytype-recolor-option.txt"
+MT_RECOLOR_OPTION_ID="$(extract_created_id "$TMPDIR/manytype-recolor-option.txt")"
+
+run_cli "$MANYTYPE_HOME" --network-config "$NETWORK_CONFIG_SRC" create --sync \
+  "$PREFIX manytype recolor target" >"$TMPDIR/manytype-recolor-target.txt"
+MT_RECOLOR_TARGET_ID="$(extract_created_id "$TMPDIR/manytype-recolor-target.txt")"
+
+run_cli "$MANYTYPE_HOME" --network-config "$NETWORK_CONFIG_SRC" \
+  edit --id "$MT_RECOLOR_TARGET_ID" --relation "$MT_RECOLOR_STATUS_KEY" --status "$MT_RECOLOR_OPTION_ID" >/dev/null
+
+STATUS_KEY="$MT_RECOLOR_STATUS_KEY" OPTION_ID="$MT_RECOLOR_OPTION_ID" \
+wait_for_official_show \
+  "$MT_RECOLOR_TARGET_ID" \
+  "$ARTIFACT_DIR/manytype_to_official_option_recolor_target-show-initial.json" \
+  'data.get("root_details", {}).get(env["STATUS_KEY"]) == env["OPTION_ID"]' \
+  'official client did not observe Manytype-authored status detail before recolor'
+
+run_cli "$MANYTYPE_HOME" --network-config "$NETWORK_CONFIG_SRC" \
+  edit --id "$MT_RECOLOR_OPTION_ID" --relation name --string "$MT_RECOLOR_OPTION_RENAMED_NAME" >/dev/null
+run_cli "$MANYTYPE_HOME" --network-config "$NETWORK_CONFIG_SRC" \
+  edit --id "$MT_RECOLOR_OPTION_ID" --relation color --string blue >/dev/null
+
+EXPECTED_NAME="$MT_RECOLOR_OPTION_RENAMED_NAME" EXPECTED_COLOR="blue" \
+wait_for_official_show \
+  "$MT_RECOLOR_OPTION_ID" \
+  "$ARTIFACT_DIR/manytype_to_official_option_recolor_option-show.json" \
+  'data.get("root_details", {}).get("name") == env["EXPECTED_NAME"] and data.get("root_details", {}).get("color") == env["EXPECTED_COLOR"]' \
+  'official client did not observe Manytype-authored option rename+recolor'
+
+RECOLOR_LINE="[$MT_RECOLOR_STATUS_KEY] $MT_RECOLOR_OPTION_RENAMED_NAME (blue)" \
+wait_for_manytype_read \
+  "$MT_RECOLOR_TARGET_ID" \
+  "$ARTIFACT_DIR/manytype_to_official_option_recolor_target-read.txt" \
+  'env["RECOLOR_LINE"] in text' \
+  'Manytype own read did not resolve its own status option rename+recolor'
+
+python3 - "$ARTIFACT_DIR/manytype_to_official_option_recolor.json" \
+  "$MT_RECOLOR_STATUS_RELATION_ID" \
+  "$MT_RECOLOR_STATUS_KEY" \
+  "$MT_RECOLOR_OPTION_ID" \
+  "$MT_RECOLOR_TARGET_ID" \
+  "$MT_RECOLOR_OPTION_RENAMED_NAME" \
+  "$ARTIFACT_DIR/manytype_to_official_option_recolor_option-show.json" \
+  "$ARTIFACT_DIR/manytype_to_official_option_recolor_target-read.txt" <<'PY'
+import datetime as dt
+import json
+import pathlib
+import sys
+
+(
+    artifact_path,
+    status_relation_id,
+    status_key,
+    option_id,
+    target_id,
+    renamed_name,
+    option_show_path,
+    target_read_path,
+) = sys.argv[1:]
+
+artifact = {
+    "captured_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+    "scenario": "manytype-authored status option rename+recolor observed by official and Manytype's own re-read",
+    "status_relation_id": status_relation_id,
+    "status_key": status_key,
+    "option_id": option_id,
+    "target_id": target_id,
+    "renamed_name": renamed_name,
+    "expected_color": "blue",
+    "option_show_path": option_show_path,
+    "target_read_path": target_read_path,
+    "success": True,
+}
+pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
+PY
+
+printf 'Scenario 7/12: official-authored blockupdate -> Manytype observation...\n'
 run_probe object-create --space-id "$OFFICIAL_SPACE_ID" --name "$PREFIX official block seed" >"$TMPDIR/official-block-create.json"
 OFFICIAL_BLOCK_OBJECT_ID="$(json_get "$TMPDIR/official-block-create.json" object_id)"
 [[ -n "$OFFICIAL_BLOCK_OBJECT_ID" ]] || fail 'could not parse official blockupdate object id'
@@ -730,7 +819,7 @@ artifact = {
 pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
 
-printf 'Scenario 7/10: official-authored status/tag -> Manytype observation...\n'
+printf 'Scenario 8/12: official-authored status/tag -> Manytype observation...\n'
 run_probe object-create-relation --space-id "$OFFICIAL_SPACE_ID" --name "$PREFIX official status" --format status >"$TMPDIR/official-status-relation.json"
 OFFICIAL_STATUS_RELATION_ID="$(json_get "$TMPDIR/official-status-relation.json" object_id)"
 OFFICIAL_STATUS_KEY="$(json_get "$TMPDIR/official-status-relation.json" relation_key)"
@@ -803,7 +892,7 @@ artifact = {
 pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
 
-printf 'Scenario 8/10: official-authored collection -> Manytype observation...\n'
+printf 'Scenario 9/12: official-authored collection -> Manytype observation...\n'
 run_probe object-create --space-id "$OFFICIAL_SPACE_ID" --name "$PREFIX official collection" >"$TMPDIR/official-collection-base.json"
 OFFICIAL_COLLECTION_ID="$(json_get "$TMPDIR/official-collection-base.json" object_id)"
 run_probe object-to-collection --space-id "$OFFICIAL_SPACE_ID" --object-id "$OFFICIAL_COLLECTION_ID" >"$TMPDIR/official-collection-convert.json"
@@ -850,7 +939,7 @@ artifact = {
 pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
 
-printf 'Scenario 9/10: official-authored file relation -> Manytype observation...\n'
+printf 'Scenario 10/12: official-authored file relation -> Manytype observation...\n'
 run_probe object-create-relation --space-id "$OFFICIAL_SPACE_ID" --name "$PREFIX official attachment" --format file >"$TMPDIR/official-file-relation.json"
 OFFICIAL_FILE_RELATION_ID="$(json_get "$TMPDIR/official-file-relation.json" object_id)"
 OFFICIAL_FILE_RELATION_KEY="$(json_get "$TMPDIR/official-file-relation.json" relation_key)"
@@ -920,7 +1009,7 @@ artifact = {
 pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
 
-printf 'Scenario 10/10: official-authored template -> Manytype observation...\n'
+printf 'Scenario 11/12: official-authored template -> Manytype observation...\n'
 run_probe object-create-type --space-id "$OFFICIAL_SPACE_ID" --name "$PREFIX official type" >"$TMPDIR/official-type.json"
 OFFICIAL_TYPE_ID="$(json_get "$TMPDIR/official-type.json" object_id)"
 OFFICIAL_TYPE_KEY="$(json_get "$TMPDIR/official-type.json" unique_key)"
@@ -981,6 +1070,86 @@ artifact = {
     "applied_id": applied_id,
     "template_read_path": template_read_path,
     "applied_read_path": applied_read_path,
+    "success": True,
+}
+pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
+PY
+
+printf 'Scenario 12/12: official-authored status option rename+recolor -> Manytype observation...\n'
+run_probe object-create-relation --space-id "$OFFICIAL_SPACE_ID" --name "$PREFIX official recolor status" --format status >"$TMPDIR/official-recolor-status-relation.json"
+OFFICIAL_RECOLOR_STATUS_RELATION_ID="$(json_get "$TMPDIR/official-recolor-status-relation.json" object_id)"
+OFFICIAL_RECOLOR_STATUS_KEY="$(json_get "$TMPDIR/official-recolor-status-relation.json" relation_key)"
+
+run_probe object-create-relation-option --space-id "$OFFICIAL_SPACE_ID" --name "$PREFIX official recolor initial" --relation-key "$OFFICIAL_RECOLOR_STATUS_KEY" --color orange >"$TMPDIR/official-recolor-option.json"
+OFFICIAL_RECOLOR_OPTION_ID="$(json_get "$TMPDIR/official-recolor-option.json" object_id)"
+
+run_probe object-create --space-id "$OFFICIAL_SPACE_ID" --name "$PREFIX official recolor target" >"$TMPDIR/official-recolor-target.json"
+OFFICIAL_RECOLOR_TARGET_ID="$(json_get "$TMPDIR/official-recolor-target.json" object_id)"
+
+run_probe object-add-relation --space-id "$OFFICIAL_SPACE_ID" --object-id "$OFFICIAL_RECOLOR_TARGET_ID" --relation-keys "$OFFICIAL_RECOLOR_STATUS_KEY" >"$TMPDIR/official-recolor-add-relation.json"
+run_probe object-set-detail --space-id "$OFFICIAL_SPACE_ID" --object-id "$OFFICIAL_RECOLOR_TARGET_ID" --detail-key "$OFFICIAL_RECOLOR_STATUS_KEY" --detail-kind string --detail-value "$OFFICIAL_RECOLOR_OPTION_ID" >"$TMPDIR/official-recolor-set.json"
+
+INITIAL_LINE="[$OFFICIAL_RECOLOR_STATUS_KEY] $PREFIX official recolor initial (orange)" \
+wait_for_manytype_read \
+  "$OFFICIAL_RECOLOR_TARGET_ID" \
+  "$ARTIFACT_DIR/official_to_manytype_option_recolor_target-read-initial.txt" \
+  'env["INITIAL_LINE"] in text' \
+  'Manytype did not resolve official-authored status option before recolor'
+
+OFFICIAL_RECOLOR_OPTION_RENAMED_NAME="$PREFIX official recolor renamed"
+run_probe object-set-detail --space-id "$OFFICIAL_SPACE_ID" --object-id "$OFFICIAL_RECOLOR_OPTION_ID" --detail-key name --detail-kind string --detail-value "$OFFICIAL_RECOLOR_OPTION_RENAMED_NAME" >"$TMPDIR/official-recolor-rename.json"
+run_probe object-set-detail --space-id "$OFFICIAL_SPACE_ID" --object-id "$OFFICIAL_RECOLOR_OPTION_ID" --detail-key color --detail-kind string --detail-value blue >"$TMPDIR/official-recolor-color.json"
+
+# Confirm the official side's own canonical state (source of truth) has
+# both edits applied before polling Manytype's propagated view: this
+# isolates official-side write latency from any-sync/Manytype-side pull
+# latency if the next wait ever needs debugging.
+EXPECTED_NAME="$OFFICIAL_RECOLOR_OPTION_RENAMED_NAME" EXPECTED_COLOR="blue" \
+wait_for_official_show \
+  "$OFFICIAL_RECOLOR_OPTION_ID" \
+  "$ARTIFACT_DIR/official_to_manytype_option_recolor_option-show.json" \
+  'data.get("root_details", {}).get("name") == env["EXPECTED_NAME"] and data.get("root_details", {}).get("color") == env["EXPECTED_COLOR"]' \
+  'official client did not observe its own option rename+recolor'
+
+RECOLOR_LINE="[$OFFICIAL_RECOLOR_STATUS_KEY] $OFFICIAL_RECOLOR_OPTION_RENAMED_NAME (blue)" \
+wait_for_manytype_read \
+  "$OFFICIAL_RECOLOR_TARGET_ID" \
+  "$ARTIFACT_DIR/official_to_manytype_option_recolor_target-read.txt" \
+  'env["RECOLOR_LINE"] in text' \
+  'Manytype did not resolve official-authored status option rename+recolor'
+
+python3 - "$ARTIFACT_DIR/official_to_manytype_option_recolor.json" \
+  "$OFFICIAL_RECOLOR_STATUS_RELATION_ID" \
+  "$OFFICIAL_RECOLOR_STATUS_KEY" \
+  "$OFFICIAL_RECOLOR_OPTION_ID" \
+  "$OFFICIAL_RECOLOR_TARGET_ID" \
+  "$OFFICIAL_RECOLOR_OPTION_RENAMED_NAME" \
+  "$ARTIFACT_DIR/official_to_manytype_option_recolor_target-read.txt" <<'PY'
+import datetime as dt
+import json
+import pathlib
+import sys
+
+(
+    artifact_path,
+    status_relation_id,
+    status_key,
+    option_id,
+    target_id,
+    renamed_name,
+    target_read_path,
+) = sys.argv[1:]
+
+artifact = {
+    "captured_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+    "scenario": "official-authored status option rename+recolor observed by Manytype",
+    "status_relation_id": status_relation_id,
+    "status_key": status_key,
+    "option_id": option_id,
+    "target_id": target_id,
+    "renamed_name": renamed_name,
+    "expected_color": "blue",
+    "target_read_path": target_read_path,
     "success": True,
 }
 pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
