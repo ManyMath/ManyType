@@ -9,6 +9,7 @@ import '../state/objects_providers.dart';
 import '../state/session_provider.dart';
 import '../theme.dart';
 import 'account_page.dart';
+import 'delete_object.dart';
 import 'object_detail.dart';
 
 /// Main workspace: personal space card, object list, inline create, and a
@@ -91,6 +92,7 @@ class HomePage extends HookConsumerWidget {
                 spaceId: spaceId,
                 selectedObjectId: selectedObjectId.value,
                 onSelect: (id) => selectedObjectId.value = id,
+                onClearSelection: () => selectedObjectId.value = null,
               );
               final accountView = AccountView(
                 spaceId: spaceId,
@@ -110,6 +112,7 @@ class HomePage extends HookConsumerWidget {
                           : ObjectDetailView(
                               objectId: selectedObjectId.value!,
                               spaceId: spaceId,
+                              onDeleted: () => selectedObjectId.value = null,
                             ),
                     ),
                   ],
@@ -123,6 +126,7 @@ class HomePage extends HookConsumerWidget {
                   objectId: selectedObjectId.value!,
                   spaceId: spaceId,
                   onBack: () => selectedObjectId.value = null,
+                  onDeleted: () => selectedObjectId.value = null,
                 );
               }
               return listPane;
@@ -154,11 +158,13 @@ class _ListPane extends ConsumerWidget {
     required this.spaceId,
     required this.selectedObjectId,
     required this.onSelect,
+    required this.onClearSelection,
   });
 
   final String spaceId;
   final String? selectedObjectId;
   final ValueChanged<String> onSelect;
+  final VoidCallback onClearSelection;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -203,8 +209,14 @@ class _ListPane extends ConsumerWidget {
                   for (final meta in metas) ...<Widget>[
                     _ObjectTile(
                       meta: meta,
+                      spaceId: spaceId,
                       selected: meta.id == selectedObjectId,
                       onTap: () => onSelect(meta.id),
+                      onDeleted: () {
+                        if (meta.id == selectedObjectId) {
+                          onClearSelection();
+                        }
+                      },
                     ),
                     const SizedBox(height: 8),
                   ],
@@ -338,19 +350,23 @@ class _NewObjectCard extends HookConsumerWidget {
   }
 }
 
-class _ObjectTile extends StatelessWidget {
+class _ObjectTile extends ConsumerWidget {
   const _ObjectTile({
     required this.meta,
+    required this.spaceId,
     required this.selected,
     required this.onTap,
+    required this.onDeleted,
   });
 
   final ObjectMeta meta;
+  final String spaceId;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onDeleted;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = MTheme.of(context);
     final createdDate = meta.details['createdDate'];
     return GestureDetector(
@@ -389,6 +405,25 @@ class _ObjectTile extends StatelessWidget {
               MBadge(
                 variant: MBadgeVariant.secondary,
                 child: Text(meta.displayType, style: theme.typography.caption),
+              ),
+              const SizedBox(width: 4),
+              MButton(
+                variant: MButtonVariant.ghost,
+                size: MButtonSize.sm,
+                semanticLabel: 'Delete ${meta.displayName}',
+                onPressed: () async {
+                  final deleted = await confirmDeleteObject(
+                    context,
+                    ref,
+                    objectId: meta.id,
+                    spaceId: spaceId,
+                    displayName: meta.displayName,
+                  );
+                  if (deleted) {
+                    onDeleted();
+                  }
+                },
+                child: MIcon(MIconData.close),
               ),
             ],
           ),

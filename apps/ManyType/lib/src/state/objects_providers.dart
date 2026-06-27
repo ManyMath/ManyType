@@ -92,6 +92,24 @@ class ObjectsController {
   // TODO(manytype): phase 2 editing. `editCommand` requires a network
   // config today; offline edits need a tree_builder wrapper (or a core
   // change relaxing that requirement). Phase 1 is create + list + read.
+
+  /// Deletes [objectId] in [spaceId] and refreshes the list. Uses
+  /// `deleteOffline` (not `deleteCommand`) -- `deleteCommand` brackets its
+  /// local writes with two `SyncService.sync()` calls that require a live
+  /// coordinator connection and throw when offline, the same network
+  /// dependency already worked around for create/list/read. This only
+  /// performs the local archive + delete-flag write; the corresponding
+  /// `ObjectDelete` settings change reaches other devices/peers on the next
+  /// successful `manytype sync`. Returns null when no session is open.
+  Future<DeleteResult?> delete(String objectId, String spaceId) async {
+    final session = await _ref.read(sessionProvider.future);
+    if (session == null) {
+      return null;
+    }
+    final result = await deleteOffline(objectId, session.db, session.config);
+    _ref.invalidate(objectsProvider(spaceId));
+    return result;
+  }
 }
 
 final objectsControllerProvider = Provider<ObjectsController>(

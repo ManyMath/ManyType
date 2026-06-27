@@ -80,5 +80,18 @@ void main() {
     expect(detail, isNotNull);
     expect(detail!.notFound, isFalse);
     expect(detail.lines.join('\n'), contains('Hello from ManyType'));
+
+    // Delete offline through the controller (real deleteOffline, no
+    // network): the object drops out of the list.
+    final deleteResult = await container
+        .read(objectsControllerProvider)
+        .delete(created.objectId, spaceId);
+    expect(deleteResult, isNotNull);
+    expect(deleteResult!.objectId, created.objectId);
+
+    final metasAfterDelete = await container.read(
+      objectsProvider(spaceId).future,
+    );
+    expect(metasAfterDelete.map((m) => m.id), isNot(contains(created.objectId)));
   });
 }

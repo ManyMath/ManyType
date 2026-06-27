@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manyui/manyui.dart';
 
 import '../state/objects_providers.dart';
+import 'delete_object.dart';
 
 /// Detail pane: renders the replayed object state from `readCommand`.
 ///
@@ -19,11 +20,16 @@ class ObjectDetailView extends ConsumerWidget {
     required this.objectId,
     required this.spaceId,
     this.onBack,
+    this.onDeleted,
   });
 
   final String objectId;
   final String spaceId;
   final VoidCallback? onBack;
+
+  /// Called after the object is deleted (confirmed + committed). Callers
+  /// typically clear their selection / navigate back in response.
+  final VoidCallback? onDeleted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -63,6 +69,24 @@ class ObjectDetailView extends ConsumerWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                ),
+                const SizedBox(width: 8),
+                MButton(
+                  variant: MButtonVariant.destructive,
+                  size: MButtonSize.sm,
+                  onPressed: () async {
+                    final deleted = await confirmDeleteObject(
+                      context,
+                      ref,
+                      objectId: objectId,
+                      spaceId: spaceId,
+                      displayName: title,
+                    );
+                    if (deleted) {
+                      onDeleted?.call();
+                    }
+                  },
+                  child: const Text('Delete'),
                 ),
               ],
             ),
