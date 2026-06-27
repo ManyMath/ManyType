@@ -12,6 +12,11 @@ import 'account_page.dart';
 import 'delete_object.dart';
 import 'object_detail.dart';
 
+/// Client-side search query over the object list. Filtering happens in Dart
+/// against the already-loaded [objectsProvider] results (no library-level
+/// search/filter function exists yet -- see ROADMAP.md's ManyType section).
+final _objectSearchQueryProvider = StateProvider<String>((ref) => '');
+
 /// Main workspace: personal space card, object list, inline create, and a
 /// detail pane (side-by-side when wide, drill-in when narrow).
 class HomePage extends HookConsumerWidget {
@@ -170,6 +175,7 @@ class _ListPane extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = MTheme.of(context);
     final objects = ref.watch(objectsProvider(spaceId));
+    final query = ref.watch(_objectSearchQueryProvider);
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -177,6 +183,8 @@ class _ListPane extends ConsumerWidget {
         _SpaceCard(spaceId: spaceId),
         const SizedBox(height: 12),
         _NewObjectCard(spaceId: spaceId, onCreated: onSelect),
+        const SizedBox(height: 12),
+        _SearchField(query: query),
         const SizedBox(height: 12),
         ...objects.when(
           loading: () => const <Widget>[
@@ -193,36 +201,102 @@ class _ListPane extends ConsumerWidget {
               ),
             ),
           ],
-          data: (metas) => metas.isEmpty
-              ? <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'No objects yet. Create your first one above.',
-                      style: theme.typography.bodySmall.copyWith(
-                        color: theme.colors.mutedForeground,
-                      ),
+          data: (metas) {
+            final filtered = filterObjectsForSearch(metas, query);
+            if (metas.isEmpty) {
+              return <Widget>[
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'No objects yet. Create your first one above.',
+                    style: theme.typography.bodySmall.copyWith(
+                      color: theme.colors.mutedForeground,
                     ),
                   ),
-                ]
-              : <Widget>[
-                  for (final meta in metas) ...<Widget>[
-                    _ObjectTile(
-                      meta: meta,
-                      spaceId: spaceId,
-                      selected: meta.id == selectedObjectId,
-                      onTap: () => onSelect(meta.id),
-                      onDeleted: () {
-                        if (meta.id == selectedObjectId) {
-                          onClearSelection();
-                        }
-                      },
+                ),
+              ];
+            }
+            if (filtered.isEmpty) {
+              return <Widget>[
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'No objects match "$query".',
+                    style: theme.typography.bodySmall.copyWith(
+                      color: theme.colors.mutedForeground,
                     ),
-                    const SizedBox(height: 8),
-                  ],
-                ],
+                  ),
+                ),
+              ];
+            }
+            return <Widget>[
+              for (final meta in filtered) ...<Widget>[
+                _ObjectTile(
+                  meta: meta,
+                  spaceId: spaceId,
+                  selected: meta.id == selectedObjectId,
+                  onTap: () => onSelect(meta.id),
+                  onDeleted: () {
+                    if (meta.id == selectedObjectId) {
+                      onClearSelection();
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ];
+          },
         ),
       ],
+    );
+  }
+}
+
+/// Filters [metas] by [query] (case-insensitive substring match against
+/// display name, type, and detail values -- the text content already
+/// surfaced by `listCommand`). Empty query returns [metas] unchanged.
+@visibleForTesting
+List<ObjectMeta> filterObjectsForSearch(List<ObjectMeta> metas, String query) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) {
+    return metas;
+  }
+  return metas.where((meta) {
+    if (meta.displayName.toLowerCase().contains(q)) {
+      return true;
+    }
+    if (meta.displayType.toLowerCase().contains(q)) {
+      return true;
+    }
+    for (final type in meta.types) {
+      if (type.toLowerCase().contains(q)) {
+        return true;
+      }
+    }
+    for (final value in meta.details.values) {
+      if (value.toLowerCase().contains(q)) {
+        return true;
+      }
+    }
+    return false;
+  }).toList();
+}
+
+class _SearchField extends HookConsumerWidget {
+  const _SearchField({required this.query});
+
+  final String query;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = useMemoized(() => MController<String>(query), const []);
+    useEffect(() => controller.dispose, const []);
+    return MTextField(
+      controller: controller,
+      placeholder: 'Search objects...',
+      semanticLabel: 'Search objects',
+      onChanged: (value) =>
+          ref.read(_objectSearchQueryProvider.notifier).state = value,
     );
   }
 }
