@@ -38,10 +38,22 @@ class ManytypeSession {
   /// session against its config/db. Native/vm only: [resolveActiveAccount]
   /// reads `~/.manytype`, which has no web equivalent; web callers use
   /// [openWeb] instead.
+  ///
+  /// [dbOverride], if given, is used instead of opening
+  /// [ManytypeDatabase]'s real on-disk file at [active.dbPath] --
+  /// [ManytypeDatabase]'s default constructor opens the database on a real
+  /// background isolate (`NativeDatabase.createInBackground`), which never
+  /// completes under Flutter's `testWidgets()` zone (confirmed: identical
+  /// code opens instantly in a plain `test()`, hangs indefinitely in
+  /// `testWidgets()`, with no Riverpod/UI involved). Widget tests that need
+  /// a real session should pass `ManytypeDatabase.forTesting(await
+  /// openDatabaseForTesting())` here instead, mirroring the seam
+  /// `manytype_cli`'s own package tests already use.
   static Future<ManytypeSession> open({
     String? accountOverride,
     String? envAccountId,
     String? serverOverride,
+    ManytypeDatabase? dbOverride,
   }) async {
     final active = await resolveActiveAccount(
       accountOverride: accountOverride,
@@ -50,7 +62,7 @@ class ManytypeSession {
     );
     final identity = await Identity.fromMnemonic(active.config.mnemonic);
     return ManytypeSession(
-      db: ManytypeDatabase(active.dbPath),
+      db: dbOverride ?? ManytypeDatabase(active.dbPath),
       config: active.config,
       identity: identity,
     );

@@ -4,6 +4,17 @@ import 'package:manytype_cli/manytype_cli.dart';
 
 import 'accounts_providers.dart';
 
+/// Test-only override point for [sessionProvider]'s native database.
+///
+/// Null in production, which keeps [ManytypeSession.open]'s normal
+/// `ManytypeDatabase(active.dbPath)` (real on-disk file, opened on a
+/// background isolate). Widget tests override this with
+/// `ManytypeDatabase.forTesting(await openDatabaseForTesting())` --
+/// see [ManytypeSession.open]'s dbOverride doc comment for why the
+/// real background-isolate constructor never completes under
+/// `testWidgets()`.
+final sessionTestDbOverrideProvider = Provider<ManytypeDatabase?>((ref) => null);
+
 /// Open [ManytypeSession] for the current account, or null before
 /// onboarding completes.
 ///
@@ -20,7 +31,10 @@ final sessionProvider = FutureProvider<ManytypeSession?>((ref) async {
   }
   final session = kIsWeb
       ? await ManytypeSession.openWeb(accountId: accountId)
-      : await ManytypeSession.open(accountOverride: accountId);
+      : await ManytypeSession.open(
+          accountOverride: accountId,
+          dbOverride: ref.watch(sessionTestDbOverrideProvider),
+        );
   ref.onDispose(session.close);
   return session;
 });
