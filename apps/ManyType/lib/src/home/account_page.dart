@@ -4,6 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manyui/manyui.dart';
 
+import '../accounts/edit_account_field.dart';
 import '../accounts/forget_account.dart';
 import '../state/accounts_providers.dart';
 import '../state/session_provider.dart';
@@ -12,8 +13,6 @@ import '../state/session_provider.dart';
 /// the picker. Swaps into the same slot as the object detail (side pane
 /// when wide, drill-in when narrow), so it takes an [onBack] like
 /// `ObjectDetailView`.
-// TODO(manytype): account management — rename, remove account, and edit
-// the server address.
 class AccountView extends ConsumerWidget {
   const AccountView({super.key, required this.spaceId, required this.onBack});
 
@@ -46,19 +45,50 @@ class AccountView extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 16),
-            Text('Display name', style: theme.typography.label),
-            const SizedBox(height: 4),
-            Text(account?.displayName ?? '—', style: theme.typography.body),
+            _EditableFact(
+              label: 'Display name',
+              value: account?.displayName,
+              style: theme.typography.body,
+              onEdit: account == null
+                  ? null
+                  : () async {
+                      final name = await promptEditAccountField(
+                        context,
+                        title: 'Rename account',
+                        label: 'Display name',
+                        initialValue: account.displayName,
+                      );
+                      if (name != null && name != account.displayName) {
+                        await ref
+                            .read(accountsControllerProvider)
+                            .rename(account.id, name);
+                      }
+                    },
+            ),
             const SizedBox(height: 16),
             _CopyableFact(label: 'Account id', value: account?.id),
             const SizedBox(height: 16),
             _CopyableFact(label: 'Personal space id', value: spaceId),
             const SizedBox(height: 16),
-            Text('Server address', style: theme.typography.label),
-            const SizedBox(height: 4),
-            Text(
-              server ?? '—',
+            _EditableFact(
+              label: 'Server address',
+              value: server,
               style: theme.typography.code.copyWith(fontSize: 12),
+              onEdit: account == null
+                  ? null
+                  : () async {
+                      final address = await promptEditAccountField(
+                        context,
+                        title: 'Edit server address',
+                        label: 'Server address',
+                        initialValue: server,
+                      );
+                      if (address != null && address != server) {
+                        await ref
+                            .read(accountsControllerProvider)
+                            .updateServerAddress(account.id, address);
+                      }
+                    },
             ),
             const SizedBox(height: 24),
             MButton(
@@ -82,6 +112,46 @@ class AccountView extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Label over a value with a small "Edit" button that prompts for a new
+/// value via [promptEditAccountField] and hands it to [onEdit].
+class _EditableFact extends StatelessWidget {
+  const _EditableFact({
+    required this.label,
+    required this.value,
+    required this.style,
+    required this.onEdit,
+  });
+
+  final String label;
+  final String? value;
+  final TextStyle style;
+  final Future<void> Function()? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = MTheme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(label, style: theme.typography.label),
+        const SizedBox(height: 4),
+        Row(
+          children: <Widget>[
+            Expanded(child: Text(value ?? '—', style: style)),
+            const SizedBox(width: 8),
+            MButton(
+              variant: MButtonVariant.outline,
+              size: MButtonSize.xs,
+              onPressed: onEdit == null ? null : () => onEdit!(),
+              child: const Text('Edit'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

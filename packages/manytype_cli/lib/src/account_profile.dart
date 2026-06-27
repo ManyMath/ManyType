@@ -67,6 +67,14 @@ class AccountSummary {
     this.dbPathOverride,
   });
 
+  AccountSummary copyWith({String? displayName}) => AccountSummary(
+        id: id,
+        displayName: displayName ?? this.displayName,
+        createdAt: createdAt,
+        configPathOverride: configPathOverride,
+        dbPathOverride: dbPathOverride,
+      );
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'displayName': displayName,

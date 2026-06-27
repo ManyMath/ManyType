@@ -141,6 +141,49 @@ void main() {
       expect(await AccountRegistry.getCurrentAccountId(), isNull);
     });
 
+    test('renameAccount updates the registered display name', () async {
+      final profile = await AccountRegistry.createAccount(
+        mnemonic: mnemonicA,
+        displayName: 'work',
+      );
+
+      await AccountRegistry.renameAccount(profile.id, 'personal');
+
+      final accounts = await AccountRegistry.listAccounts();
+      expect(
+          accounts.firstWhere((a) => a.id == profile.id).displayName,
+          'personal');
+    });
+
+    test('renameAccount throws for an unknown id', () async {
+      expect(
+        () => AccountRegistry.renameAccount('does-not-exist', 'x'),
+        throwsStateError,
+      );
+    });
+
+    test('updateServerAddress rewrites config.toml, preserving the mnemonic',
+        () async {
+      final profile = await AccountRegistry.createAccount(
+        mnemonic: mnemonicA,
+        displayName: 'work',
+      );
+
+      await AccountRegistry.updateServerAddress(
+          profile.id, '10.0.0.5:33020');
+
+      final config = await AccountRegistry.loadConfig(profile.id);
+      expect(config.serverAddress, '10.0.0.5:33020');
+      expect(config.mnemonic, mnemonicA);
+    });
+
+    test('updateServerAddress throws for an unknown id', () async {
+      expect(
+        () => AccountRegistry.updateServerAddress('does-not-exist', 'x'),
+        throwsStateError,
+      );
+    });
+
     group('migrateLegacyAccount', () {
       late File legacyConfigFile;
       late File legacyDbFile;

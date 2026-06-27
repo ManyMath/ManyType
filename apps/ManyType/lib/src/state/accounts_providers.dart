@@ -6,6 +6,8 @@ import 'package:manytype_cli/src/account_profile.dart';
 // ignore: implementation_imports
 import 'package:manytype_cli/src/account_registry.dart';
 
+import 'session_provider.dart';
+
 /// All account profiles known to this install (registry summaries only:
 /// mnemonics never leave each account's own config).
 final accountsProvider = FutureProvider<List<AccountSummary>>((ref) {
@@ -68,6 +70,19 @@ class AccountsController {
   Future<void> deselect() async {
     await AccountRegistry.setCurrentAccountId('');
     _invalidate();
+  }
+
+  /// Renames [id]'s display name.
+  Future<void> rename(String id, String displayName) async {
+    await AccountRegistry.renameAccount(id, displayName);
+    _invalidate();
+  }
+
+  /// Updates [id]'s server address. Reopens the session (if it's the
+  /// current account) so subsequent calls use the new address.
+  Future<void> updateServerAddress(String id, String serverAddress) async {
+    await AccountRegistry.updateServerAddress(id, serverAddress);
+    _ref.invalidate(sessionProvider);
   }
 
   /// Forgets [id]: removes the profile from the registry on this device.

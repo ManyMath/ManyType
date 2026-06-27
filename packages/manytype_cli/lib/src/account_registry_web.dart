@@ -83,6 +83,28 @@ class AccountRegistry {
     }
   }
 
+  /// Rename an already-registered account's display name. Throws
+  /// [StateError] if no account is registered under [id].
+  static Future<void> renameAccount(String id, String displayName) async {
+    final accounts = await listAccounts();
+    final index = accounts.indexWhere((a) => a.id == id);
+    if (index < 0) {
+      throw StateError('no account registered with id $id');
+    }
+    final updated = List<AccountSummary>.of(accounts);
+    updated[index] = accounts[index].copyWith(displayName: displayName);
+    _writeAccounts(updated);
+  }
+
+  /// Update an account's stored server address. Throws [StateError] if no
+  /// account is registered under [id].
+  static Future<void> updateServerAddress(String id, String serverAddress) async {
+    if (_storage.getItem(_mnemonicKey(id)) == null) {
+      throw StateError('no account registered with id $id');
+    }
+    _storage.setItem(_serverKey(id), serverAddress);
+  }
+
   /// Load an account's config (mnemonic + server address) from localStorage
   ///: the web counterpart to native's `CliConfig.loadFrom(config.toml)`,
   /// since there is no config.toml on web. Throws [StateError] if no

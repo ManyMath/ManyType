@@ -95,6 +95,42 @@ class AccountRegistry {
     }
   }
 
+  /// Rename an already-registered account's display name. Throws
+  /// [StateError] if no account is registered under [id].
+  static Future<void> renameAccount(String id, String displayName) async {
+    final accounts = await listAccounts();
+    final index = accounts.indexWhere((a) => a.id == id);
+    if (index < 0) {
+      throw StateError('no account registered with id $id');
+    }
+    final updated = List<AccountSummary>.of(accounts);
+    updated[index] = accounts[index].copyWith(displayName: displayName);
+    await _writeAccounts(updated);
+  }
+
+  /// Update an account's server address in its own config.toml, preserving
+  /// its mnemonic. Throws [StateError] if no account is registered under
+  /// [id].
+  static Future<void> updateServerAddress(String id, String serverAddress) async {
+    final accounts = await listAccounts();
+    AccountSummary? summary;
+    for (final account in accounts) {
+      if (account.id == id) {
+        summary = account;
+        break;
+      }
+    }
+    if (summary == null) {
+      throw StateError('no account registered with id $id');
+    }
+    final configPath = summary.configPathOverride ?? accountConfigPath(id);
+    final config = await CliConfig.loadFrom(configPath);
+    final configFile = File(configPath);
+    await configFile.writeAsString(
+      'mnemonic = "${config.mnemonic}"\nserver_address = "$serverAddress"\n',
+    );
+  }
+
   /// Load an account's config (mnemonic + server address), the same way
   /// [resolveActiveAccount] does for the currently-active account : 
   /// respecting [AccountSummary.configPathOverride] for migrated legacy
