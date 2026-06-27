@@ -443,65 +443,51 @@ class _ObjectTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = MTheme.of(context);
     final createdDate = meta.details['createdDate'];
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: MCard(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      meta.displayName,
-                      style: theme.typography.body.copyWith(
-                        color: selected ? theme.colors.primary : null,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (createdDate != null) ...<Widget>[
-                      const SizedBox(height: 2),
-                      Text(
-                        createdDate,
-                        style: theme.typography.caption.copyWith(
-                          color: theme.colors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              MBadge(
-                variant: MBadgeVariant.secondary,
-                child: Text(meta.displayType, style: theme.typography.caption),
-              ),
-              const SizedBox(width: 4),
-              MButton(
-                variant: MButtonVariant.ghost,
-                size: MButtonSize.sm,
-                semanticLabel: 'Delete ${meta.displayName}',
-                onPressed: () async {
-                  final deleted = await confirmDeleteObject(
-                    context,
-                    ref,
-                    objectId: meta.id,
-                    spaceId: spaceId,
-                    displayName: meta.displayName,
-                  );
-                  if (deleted) {
-                    onDeleted();
-                  }
-                },
-                child: MIcon(MIconData.close),
-              ),
-            ],
+    return MCard(
+      style: const MCardStyleDelta(padding: EdgeInsets.zero),
+      child: MListTile(
+        title: Text(
+          meta.displayName,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: theme.typography.body.copyWith(
+            color: selected ? theme.colors.primary : null,
           ),
         ),
+        subtitle: createdDate != null
+            ? Text(createdDate, style: theme.typography.caption)
+            : null,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            MBadge(
+              variant: MBadgeVariant.secondary,
+              child: Text(meta.displayType, style: theme.typography.caption),
+            ),
+            const SizedBox(width: 4),
+            MButton(
+              variant: MButtonVariant.ghost,
+              size: MButtonSize.sm,
+              semanticLabel: 'Delete ${meta.displayName}',
+              onPressed: () async {
+                final deleted = await confirmDeleteObject(
+                  context,
+                  ref,
+                  objectId: meta.id,
+                  spaceId: spaceId,
+                  displayName: meta.displayName,
+                );
+                if (deleted) {
+                  onDeleted();
+                }
+              },
+              child: MIcon(MIconData.close),
+            ),
+          ],
+        ),
+        selected: selected,
+        onTap: onTap,
+        semanticLabel: 'Open object ${meta.displayName}',
       ),
     );
   }
