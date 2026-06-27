@@ -29,5 +29,6 @@ export 'src/peer_id.dart';
 export 'src/session.dart';
 export 'src/space_pull_bootstrap.dart';
 export 'src/store/database.dart';
+export 'src/structured_replay.dart';
 
 void main() {}

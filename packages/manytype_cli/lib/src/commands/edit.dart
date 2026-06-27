@@ -18,6 +18,7 @@ import '../config.dart';
 import '../identity.dart';
 import '../store/database.dart';
 import '../sync_service.dart';
+import '../tree_write_metadata.dart';
 import 'file_relation_source.dart';
 import 'file_transfer.dart';
 
@@ -606,6 +607,128 @@ Future<EditResult> editCommand(
     blockUpdateDescription: blockUpdateDescription,
     collectionChangeId: collectionChangeId,
     collectionChangeDescription: collectionChangeDescription,
+  );
+}
+
+/// Result of [editOffline].
+class EditOfflineResult {
+  const EditOfflineResult({
+    required this.objectId,
+    required this.blockId,
+    required this.changeId,
+    required this.description,
+  });
+
+  final String objectId;
+  final String blockId;
+  final String changeId;
+  final String description;
+}
+
+/// Offline variant of [editCommand]'s BlockUpdate write path (branch D):
+/// mutates one existing block's text/checked/style in place via a signed
+/// `BlockUpdate(blockSetText)` change, without the two `SyncService.sync()`
+/// calls `editCommand` brackets its write with (those require a live QUIC
+/// connection to a coordinator and throw when offline). Mirrors
+/// `create`/`list`/`read`/`deleteOffline`'s offline-only pattern -- a new
+/// function, not a skip-sync flag, so `editCommand`'s existing online
+/// behavior (sync + post-write verify) stays untouched.
+///
+/// Phase 1 scope: mutation only, exactly like `editCommand`'s own
+/// `--block-id` branch -- inserting new typed blocks is `create.dart`'s
+/// block-factory territory instead and is deliberately out of scope here.
+/// Exactly one of [setText]/[setChecked]/[setStyle] must be non-null.
+Future<EditOfflineResult> editOffline(
+  String objectId,
+  ManytypeDatabase db,
+  CliConfig config, {
+  required String blockId,
+  String? setText,
+  bool? setChecked,
+  Block_Content_Text_Style? setStyle,
+}) async {
+  final changes = await db.getChangesForObject(objectId);
+  if (changes.isEmpty) {
+    throw StateError('Object not found locally: run `manytype sync` first');
+  }
+
+  final currentHeads = await db.getObjectHeads(objectId);
+  if (currentHeads.isEmpty) {
+    throw StateError('No heads found for object $objectId');
+  }
+
+  String? snapshotBaseId;
+  for (final c in changes) {
+    final parents = jsonDecode(c.parentHeads) as List;
+    if (parents.isEmpty) {
+      snapshotBaseId = c.id;
+      break;
+    }
+  }
+  if (snapshotBaseId == null) {
+    throw StateError('Could not find root change for object $objectId');
+  }
+
+  final identity = await Identity.fromMnemonic(config.mnemonic);
+  final spaceId = identity.spaceId;
+  final allObjects = await db.getObjectsBySpace(spaceId);
+  final fallbackAclHeadId = await findAclRootId(db, allObjects, spaceId);
+
+  final accountPrivRaw = Uint8List(64)
+    ..setRange(0, 32, identity.accountSeed)
+    ..setRange(32, 64, identity.accountKeyPair.publicKey);
+  final spaceKey = await deriveSpaceKey(accountPrivRaw);
+  final treeKey = await deriveTreeKey(spaceKey, objectId);
+  final treeWriteMetadata = resolveTreeWriteMetadata(
+    changes,
+    currentHeads,
+    fallbackAclHeadId: fallbackAclHeadId,
+    fallbackSnapshotBaseId: snapshotBaseId,
+  );
+
+  final Uint8List eventBytes;
+  final String description;
+  if (setText != null) {
+    eventBytes = buildBlockSetTextEvent(blockId, setText);
+    description = 'set-text';
+  } else if (setChecked != null) {
+    eventBytes = buildBlockSetCheckedEvent(blockId, setChecked);
+    description = 'set-checked=$setChecked';
+  } else if (setStyle != null) {
+    eventBytes = buildBlockSetStyleEvent(blockId, setStyle);
+    description = 'set-style=${setStyle.name}';
+  } else {
+    throw StateError(
+      'editOffline requires setText, setChecked, or setStyle',
+    );
+  }
+
+  final updateContent = changes_proto.Change_Content(
+    blockUpdate: changes_proto.Change_BlockUpdate(events: [eventBytes]),
+  );
+  final updateData = marshalChangeContent([updateContent]);
+
+  final updateTreeChange = await buildTreeChange(
+    currentHeads: currentHeads,
+    aclHeadId: treeWriteMetadata.aclHeadId,
+    snapshotBaseId: treeWriteMetadata.snapshotBaseId,
+    changesData: await aesGcmEncrypt(treeKey, updateData),
+    identityPrivateKey: identity.accountSeed,
+    readKeyId: treeWriteMetadata.readKeyId,
+  );
+
+  await db.insertChange(
+    updateTreeChange.id,
+    objectId,
+    updateTreeChange.rawChange,
+    jsonEncode(currentHeads),
+  );
+
+  return EditOfflineResult(
+    objectId: objectId,
+    blockId: blockId,
+    changeId: updateTreeChange.id,
+    description: description,
   );
 }
 
