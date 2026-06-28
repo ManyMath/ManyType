@@ -346,6 +346,7 @@ class _NewObjectCard extends HookConsumerWidget {
     useEffect(() => controller.dispose, const []);
     final kind = useState(NewObjectKind.text);
     final assignedType = useState<String?>(null);
+    final relationFormat = useState(NewRelationFormat.text);
     final busy = useState(false);
     final error = useState<String?>(null);
     final types = ref.watch(spaceTypesProvider(spaceId)).valueOrNull ??
@@ -363,6 +364,7 @@ class _NewObjectCard extends HookConsumerWidget {
               text,
               kind: kind.value,
               assignedType: assignedType.value,
+              relationFormat: relationFormat.value,
             );
         controller.value = '';
         if (result != null) {
@@ -424,6 +426,20 @@ class _NewObjectCard extends HookConsumerWidget {
                 initialValue: null,
                 onChanged: (value) => assignedType.value = value,
                 semanticLabel: 'Object type',
+                enabled: !busy.value,
+              ),
+            ],
+            if (kind.value == NewObjectKind.relation) ...<Widget>[
+              const SizedBox(height: 8),
+              MSelect<NewRelationFormat>(
+                items: <MSelectItem<NewRelationFormat>>[
+                  for (final format in NewRelationFormat.values)
+                    MSelectItem(value: format, label: format.label),
+                ],
+                initialValue: NewRelationFormat.text,
+                onChanged: (value) =>
+                    relationFormat.value = value ?? NewRelationFormat.text,
+                semanticLabel: 'Relation value format',
                 enabled: !busy.value,
               ),
             ],

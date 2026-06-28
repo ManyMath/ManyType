@@ -71,12 +71,39 @@ final spaceTypesProvider = FutureProvider.family<List<ObjectMeta>, String>((
   return metas.where((m) => m.types.contains('ot-objectType')).toList();
 });
 
+/// Existing STRelation objects in [spaceId], for a relation-key picker.
+/// Same shape as [spaceTypesProvider]: filters `objectsProvider`'s
+/// already-fetched metas for the `ot-relation` marker `createCommand`'s
+/// `asRelation` branch adds -- confirmed via a real create+list round trip
+/// that `listCommand` already surfaces both the marker and the relation's
+/// own `relationFormat`/`uniqueKey` details with no new core call needed
+/// (relation objects get a random object id, not an `ot-`/`rel-` prefix, so
+/// they aren't caught by `_extractObjectMeta`'s bundled-object filter).
+final spaceRelationsProvider = FutureProvider.family<List<ObjectMeta>, String>(
+  (ref, spaceId) async {
+    final metas = await ref.watch(objectsProvider(spaceId).future);
+    return metas.where((m) => m.types.contains('ot-relation')).toList();
+  },
+);
+
 /// Text-block styles `createCommand` can produce offline, plus `type`: an
 /// STType object (`createCommand`'s `asType` flag) so a type-picker on
 /// create has something to populate itself with -- without this, the
 /// "assign an existing type" dropdown would only ever be reachable in
-/// theory, with no in-app way to create the type it assigns.
-enum NewObjectKind { text, checkbox, numbered, toggle, quote, callout, type }
+/// theory, with no in-app way to create the type it assigns. Same
+/// reasoning for `relation`: an STRelation object (`asRelation`), so the
+/// relation editor's relation-key picker has something to populate itself
+/// with.
+enum NewObjectKind {
+  text,
+  checkbox,
+  numbered,
+  toggle,
+  quote,
+  callout,
+  type,
+  relation,
+}
 
 extension NewObjectKindLabel on NewObjectKind {
   String get label => switch (this) {
@@ -87,6 +114,31 @@ extension NewObjectKindLabel on NewObjectKind {
     NewObjectKind.quote => 'Quote',
     NewObjectKind.callout => 'Callout',
     NewObjectKind.type => 'Type',
+    NewObjectKind.relation => 'Relation',
+  };
+}
+
+/// Relation value formats `createCommand`'s `format` param understands for
+/// `asRelation: true` (mirrors `create.dart`'s `_parseRelationFormat`, which
+/// only accepts these lowercase names -- anything else silently falls back
+/// to `longtext`).
+enum NewRelationFormat { text, status, tag, date, checkbox }
+
+extension NewRelationFormatLabel on NewRelationFormat {
+  String get label => switch (this) {
+    NewRelationFormat.text => 'Text',
+    NewRelationFormat.status => 'Status',
+    NewRelationFormat.tag => 'Tag',
+    NewRelationFormat.date => 'Date',
+    NewRelationFormat.checkbox => 'Checkbox',
+  };
+
+  String get wireName => switch (this) {
+    NewRelationFormat.text => 'text',
+    NewRelationFormat.status => 'status',
+    NewRelationFormat.tag => 'tag',
+    NewRelationFormat.date => 'date',
+    NewRelationFormat.checkbox => 'checkbox',
   };
 }
 
@@ -109,18 +161,22 @@ class ObjectsController {
 
   final Ref _ref;
 
-  /// Creates a text object (or, with `kind: NewObjectKind.type`, a new
-  /// STType named [text]) in the personal space and refreshes the list.
-  /// Returns null when no session is open (pre-onboarding). [assignedType]
-  /// optionally assigns an existing STType object's id to a non-type
-  /// object, baked into the initial snapshot's `objectTypes` + `type`
-  /// detail together (see `createCommand`'s `assignedType` param) --
-  /// there is no incremental retyping path for an object already created
-  /// without one.
+  /// Creates a text object (or, with `kind: NewObjectKind.type`/`.relation`,
+  /// a new STType/STRelation named [text]) in the personal space and
+  /// refreshes the list. Returns null when no session is open
+  /// (pre-onboarding). [assignedType] optionally assigns an existing
+  /// STType object's id to a non-type object, baked into the initial
+  /// snapshot's `objectTypes` + `type` detail together (see
+  /// `createCommand`'s `assignedType` param) -- there is no incremental
+  /// retyping path for an object already created without one.
+  /// [relationFormat] only applies when `kind == NewObjectKind.relation`;
+  /// defaults to `NewRelationFormat.text` (matches `createCommand`'s own
+  /// `format: null` default).
   Future<CreateResult?> create(
     String text, {
     NewObjectKind kind = NewObjectKind.text,
     String? assignedType,
+    NewRelationFormat? relationFormat,
   }) async {
     final session = await _ref.read(sessionProvider.future);
     if (session == null) {
@@ -136,7 +192,13 @@ class ObjectsController {
       quote: kind == NewObjectKind.quote,
       callout: kind == NewObjectKind.callout,
       asType: kind == NewObjectKind.type,
-      name: kind == NewObjectKind.type ? text : null,
+      asRelation: kind == NewObjectKind.relation,
+      name: kind == NewObjectKind.type || kind == NewObjectKind.relation
+          ? text
+          : null,
+      format: kind == NewObjectKind.relation
+          ? (relationFormat ?? NewRelationFormat.text).wireName
+          : null,
       assignedType: assignedType,
     );
     _ref.invalidate(objectsProvider(result.spaceId));

@@ -2,8 +2,9 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manytype_cli/manytype_cli.dart'
-    show NewBlockKind, ReplayedBlockView;
-import 'package:manytype_protocol/models.dart' show Block_Content_Text_Style;
+    show NewBlockKind, ObjectMeta, ReplayedBlockView;
+import 'package:manytype_protocol/models.dart'
+    show Block_Content_Text_Style, RelationFormat;
 import 'package:manyui/manyui.dart';
 
 import '../state/objects_providers.dart';
@@ -136,7 +137,7 @@ class ObjectDetailView extends ConsumerWidget {
                       const SizedBox(height: 8),
                       const MDivider(),
                       const SizedBox(height: 8),
-                      _RelationEditorCard(objectId: objectId),
+                      _RelationEditorCard(objectId: objectId, spaceId: spaceId),
                       if (metadataLines.isNotEmpty) ...<Widget>[
                         const SizedBox(height: 8),
                         const MDivider(),
@@ -315,23 +316,46 @@ class _AddBlockCard extends HookConsumerWidget {
 }
 
 /// Relation value kinds `_RelationEditorCard` can write, mirroring
-/// `editRelationOffline`'s scoped value parameters. Date/tag-delta/file
-/// relations are deliberately out of scope for this first pass -- see the
-/// roadmap for the follow-up that adds richer per-format value widgets
-/// (status/tag pickers, a date field) once a relation-format lookup
-/// (reading the parent STRelation's `relationFormat`) exists to pick the
-/// right widget automatically.
-enum _RelationValueKind { text, checkbox }
+/// `editRelationOffline`'s scoped value parameters (everything except
+/// file-relation and tag-delta, which need a network upload or an extra
+/// replay read respectively and still only go through the online
+/// `editCommand`). `status`/`tag`/`date` round out the phase-1 text/
+/// checkbox pair now that a relation-format lookup exists (below) to
+/// auto-select the right one when a known relation is picked.
+enum _RelationValueKind { text, checkbox, status, tag, date }
+
+/// Maps a `RelationFormat` enum value (as surfaced in
+/// `ObjectMeta.details['relationFormat']`, a stringified double -- see
+/// `create.dart`'s `_parseRelationFormat`/`read.dart`'s `_formatName`) to
+/// the [_RelationValueKind] widget that best fits it. Formats with no
+/// dedicated widget yet (object/file/number/url/email/phone/emoji) fall
+/// back to plain text, matching what `editRelationOffline` can construct
+/// for them today (a string-shaped write, e.g. `objectIdValue`).
+_RelationValueKind? _kindForFormat(String? relationFormat) {
+  final numberValue = double.tryParse(relationFormat ?? '');
+  if (numberValue == null) {
+    return null;
+  }
+  return switch (RelationFormat.valueOf(numberValue.toInt())) {
+    RelationFormat.checkbox => _RelationValueKind.checkbox,
+    RelationFormat.status => _RelationValueKind.status,
+    RelationFormat.tag => _RelationValueKind.tag,
+    RelationFormat.date => _RelationValueKind.date,
+    _ => _RelationValueKind.text,
+  };
+}
 
 /// A key + typed value form to write one relation `DetailsSet` via
 /// `editRelation`, mirroring `_AddBlockCard`'s shape (inputs + kind picker
-/// + submit button, busy/error state). Phase 1 scope: a relation key
-/// (freeform, since there's no relation-key picker/lookup yet -- see the
-/// roadmap's "type + relation UI" item) and either a string or bool value.
+/// + submit button, busy/error state). The relation key can be picked from
+/// `spaceRelationsProvider` (an existing STRelation's `uniqueKey`, which
+/// auto-selects the matching value widget via its `relationFormat`) or
+/// typed freeform for a relation that doesn't exist as an object yet.
 class _RelationEditorCard extends HookConsumerWidget {
-  const _RelationEditorCard({required this.objectId});
+  const _RelationEditorCard({required this.objectId, required this.spaceId});
 
   final String objectId;
+  final String spaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -339,12 +363,33 @@ class _RelationEditorCard extends HookConsumerWidget {
     final keyController = useMemoized(() => MController<String>(''), const []);
     final valueController =
         useMemoized(() => MController<String>(''), const []);
+    final kindController =
+        useMemoized(() => MController<_RelationValueKind?>(
+              _RelationValueKind.text,
+            ), const []);
     useEffect(() => keyController.dispose, const []);
     useEffect(() => valueController.dispose, const []);
-    final kind = useState(_RelationValueKind.text);
+    useEffect(() => kindController.dispose, const []);
+    final kind = useValueListenable(kindController) ?? _RelationValueKind.text;
     final checked = useState(false);
     final busy = useState(false);
     final error = useState<String?>(null);
+    final relations = ref.watch(spaceRelationsProvider(spaceId)).valueOrNull ??
+        const <ObjectMeta>[];
+
+    void pickRelation(ObjectMeta? relation) {
+      if (relation == null) {
+        return;
+      }
+      final uniqueKey = relation.details['uniqueKey'];
+      if (uniqueKey != null) {
+        keyController.value = uniqueKey;
+      }
+      final matchedKind = _kindForFormat(relation.details['relationFormat']);
+      if (matchedKind != null) {
+        kindController.value = matchedKind;
+      }
+    }
 
     Future<void> submit() async {
       final key = keyController.value.trim();
@@ -357,11 +402,25 @@ class _RelationEditorCard extends HookConsumerWidget {
         await ref.read(objectsControllerProvider).editRelation(
               objectId,
               relationKey: key,
-              stringValue: kind.value == _RelationValueKind.text
+              stringValue: kind == _RelationValueKind.text ||
+                      kind == _RelationValueKind.status
                   ? valueController.value.trim()
                   : null,
-              boolValue: kind.value == _RelationValueKind.checkbox
+              boolValue: kind == _RelationValueKind.checkbox
                   ? checked.value.toString()
+                  : null,
+              stringListValue: kind == _RelationValueKind.tag
+                  ? valueController.value
+                      .split(',')
+                      .map((tag) => tag.trim())
+                      .where((tag) => tag.isNotEmpty)
+                      .toList()
+                  : null,
+              dateValue: kind == _RelationValueKind.date
+                  ? valueController.value.trim()
+                  : null,
+              status: kind == _RelationValueKind.status
+                  ? valueController.value.trim()
                   : null,
             );
       } catch (e) {
@@ -376,6 +435,20 @@ class _RelationEditorCard extends HookConsumerWidget {
       children: <Widget>[
         Text('Set a relation', style: theme.typography.label),
         const SizedBox(height: 8),
+        if (relations.isNotEmpty) ...<Widget>[
+          MSelect<ObjectMeta?>(
+            items: <MSelectItem<ObjectMeta?>>[
+              const MSelectItem(value: null, label: 'Freeform key'),
+              for (final relation in relations)
+                MSelectItem(value: relation, label: relation.displayName),
+            ],
+            initialValue: null,
+            onChanged: pickRelation,
+            semanticLabel: 'Existing relation',
+            enabled: !busy.value,
+          ),
+          const SizedBox(height: 8),
+        ],
         MTextField(
           controller: keyController,
           placeholder: 'Relation key (e.g. description)',
@@ -386,35 +459,46 @@ class _RelationEditorCard extends HookConsumerWidget {
         Row(
           children: <Widget>[
             Expanded(
-              child: MSelect<_RelationValueKind>(
-                items: const <MSelectItem<_RelationValueKind>>[
+              child: MSelect<_RelationValueKind?>(
+                items: const <MSelectItem<_RelationValueKind?>>[
                   MSelectItem(value: _RelationValueKind.text, label: 'Text'),
                   MSelectItem(
                     value: _RelationValueKind.checkbox,
                     label: 'Checkbox',
                   ),
+                  MSelectItem(
+                    value: _RelationValueKind.status,
+                    label: 'Status',
+                  ),
+                  MSelectItem(value: _RelationValueKind.tag, label: 'Tag'),
+                  MSelectItem(value: _RelationValueKind.date, label: 'Date'),
                 ],
-                initialValue: _RelationValueKind.text,
+                controller: kindController,
                 onChanged: (value) =>
-                    kind.value = value ?? _RelationValueKind.text,
+                    kindController.value = value ?? _RelationValueKind.text,
                 semanticLabel: 'Relation value type',
                 enabled: !busy.value,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: kind.value == _RelationValueKind.text
-                  ? MTextField(
-                      controller: valueController,
-                      placeholder: 'Value',
-                      semanticLabel: 'Relation value',
-                      enabled: !busy.value,
-                      onSubmitted: (_) => submit(),
-                    )
-                  : MCheckbox(
+              child: kind == _RelationValueKind.checkbox
+                  ? MCheckbox(
                       initialValue: checked.value,
                       onChanged: (value) => checked.value = value,
                       semanticLabel: 'Relation value',
+                    )
+                  : MTextField(
+                      controller: valueController,
+                      placeholder: switch (kind) {
+                        _RelationValueKind.tag => 'Tags, comma-separated',
+                        _RelationValueKind.date => 'Unix seconds',
+                        _RelationValueKind.status => 'Status',
+                        _ => 'Value',
+                      },
+                      semanticLabel: 'Relation value',
+                      enabled: !busy.value,
+                      onSubmitted: (_) => submit(),
                     ),
             ),
             const SizedBox(width: 8),
