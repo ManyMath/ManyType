@@ -6,6 +6,7 @@ import 'package:manytype_cli/manytype_cli.dart'
 import 'package:manytype_protocol/models.dart'
     show Block_Content_Text_Style, RelationFormat;
 import 'package:manyui/manyui.dart';
+import 'package:manyui_hooks/manyui_hooks.dart';
 
 import '../state/objects_providers.dart';
 import 'delete_object.dart';
@@ -128,10 +129,7 @@ class ObjectDetailView extends ConsumerWidget {
                       for (final block in result.blocks)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
-                          child: _BlockEditor(
-                            objectId: objectId,
-                            block: block,
-                          ),
+                          child: _BlockEditor(objectId: objectId, block: block),
                         ),
                       _AddBlockCard(objectId: objectId),
                       const SizedBox(height: 8),
@@ -177,11 +175,9 @@ class _BlockEditor extends HookConsumerWidget {
           MCheckbox(
             initialValue: block.checked ?? false,
             onChanged: (value) {
-              ref.read(objectsControllerProvider).editBlock(
-                    objectId,
-                    blockId: block.id,
-                    setChecked: value,
-                  );
+              ref
+                  .read(objectsControllerProvider)
+                  .editBlock(objectId, blockId: block.id, setChecked: value);
             },
             semanticLabel: block.text,
           ),
@@ -242,8 +238,7 @@ class _AddBlockCard extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = MTheme.of(context);
-    final controller = useMemoized(() => MController<String>(''), const []);
-    useEffect(() => controller.dispose, const []);
+    final controller = useMController<String>('');
     final kind = useState(NewBlockKind.text);
     final busy = useState(false);
     final error = useState<String?>(null);
@@ -289,8 +284,7 @@ class _AddBlockCard extends HookConsumerWidget {
                       MSelectItem(value: k, label: k.label),
                   ],
                   initialValue: NewBlockKind.text,
-                  onChanged: (value) =>
-                      kind.value = value ?? NewBlockKind.text,
+                  onChanged: (value) => kind.value = value ?? NewBlockKind.text,
                   semanticLabel: 'Block kind',
                   enabled: !busy.value,
                 ),
@@ -367,8 +361,11 @@ String _formatRelationValue(ReplayedRelationView view) {
           : '$name (${view.statusColor ?? 'default'})';
     case RelationFormat.tag:
       return view.tagOptions
-          .map((o) => o.name ??
-              '<unsynced:${o.optionId.length <= 8 ? o.optionId : o.optionId.substring(0, 8)}>')
+          .map(
+            (o) =>
+                o.name ??
+                '<unsynced:${o.optionId.length <= 8 ? o.optionId : o.optionId.substring(0, 8)}>',
+          )
           .join(', ');
     case RelationFormat.object:
       return view.objectIdValue ?? '';
@@ -394,7 +391,7 @@ class _CurrentRelationsList extends ConsumerWidget {
     final theme = MTheme.of(context);
     final relations =
         ref.watch(objectRelationsProvider(objectId)).valueOrNull?.relations ??
-            const <ReplayedRelationView>[];
+        const <ReplayedRelationView>[];
     if (relations.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -430,21 +427,17 @@ class _RelationEditorCard extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = MTheme.of(context);
-    final keyController = useMemoized(() => MController<String>(''), const []);
-    final valueController =
-        useMemoized(() => MController<String>(''), const []);
-    final kindController =
-        useMemoized(() => MController<_RelationValueKind?>(
-              _RelationValueKind.text,
-            ), const []);
-    useEffect(() => keyController.dispose, const []);
-    useEffect(() => valueController.dispose, const []);
-    useEffect(() => kindController.dispose, const []);
+    final keyController = useMController<String>('');
+    final valueController = useMController<String>('');
+    final kindController = useMController<_RelationValueKind?>(
+      _RelationValueKind.text,
+    );
     final kind = useValueListenable(kindController) ?? _RelationValueKind.text;
     final checked = useState(false);
     final busy = useState(false);
     final error = useState<String?>(null);
-    final relations = ref.watch(spaceRelationsProvider(spaceId)).valueOrNull ??
+    final relations =
+        ref.watch(spaceRelationsProvider(spaceId)).valueOrNull ??
         const <ObjectMeta>[];
 
     void pickRelation(ObjectMeta? relation) {
@@ -469,10 +462,13 @@ class _RelationEditorCard extends HookConsumerWidget {
       busy.value = true;
       error.value = null;
       try {
-        await ref.read(objectsControllerProvider).editRelation(
+        await ref
+            .read(objectsControllerProvider)
+            .editRelation(
               objectId,
               relationKey: key,
-              stringValue: kind == _RelationValueKind.text ||
+              stringValue:
+                  kind == _RelationValueKind.text ||
                       kind == _RelationValueKind.status
                   ? valueController.value.trim()
                   : null,
@@ -481,10 +477,10 @@ class _RelationEditorCard extends HookConsumerWidget {
                   : null,
               stringListValue: kind == _RelationValueKind.tag
                   ? valueController.value
-                      .split(',')
-                      .map((tag) => tag.trim())
-                      .where((tag) => tag.isNotEmpty)
-                      .toList()
+                        .split(',')
+                        .map((tag) => tag.trim())
+                        .where((tag) => tag.isNotEmpty)
+                        .toList()
                   : null,
               dateValue: kind == _RelationValueKind.date
                   ? valueController.value.trim()

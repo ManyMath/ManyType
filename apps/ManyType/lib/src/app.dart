@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manyui/manyui.dart';
+import 'package:manyui_riverpod/manyui_riverpod.dart';
 
 import 'home/home_page.dart';
 import 'onboarding/onboarding_page.dart';
@@ -12,7 +13,7 @@ class ManyTypeApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final mode = ref.watch(themeModeProvider);
+    final mode = ref.watchMThemeMode(themeModeProvider);
     return MWidgetsApp(
       title: 'ManyType',
       theme: MThemeData.light(),

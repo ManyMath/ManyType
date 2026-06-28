@@ -7,6 +7,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manytype_cli/src/account_profile.dart' show AccountSummary;
 import 'package:manytype_core/manytype_core.dart' show generateMnemonic;
 import 'package:manyui/manyui.dart';
+import 'package:manyui_riverpod/manyui_riverpod.dart';
 
 import '../accounts/forget_account.dart';
 import '../state/accounts_providers.dart';
@@ -137,16 +138,13 @@ class _ThemeToggle extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return MButton(
       variant: MButtonVariant.ghost,
-      onPressed: () {
-        final mode = ref.read(themeModeProvider);
-        ref.read(themeModeProvider.notifier).state = mode == MThemeMode.dark
-            ? MThemeMode.light
-            : MThemeMode.dark;
-      },
+      onPressed: () => ref.toggleMThemeMode(themeModeProvider),
       semanticLabel: 'Toggle theme',
-            child: MIcon(ref.watch(themeModeProvider) == MThemeMode.dark
-                ? MIconData.sun
-                : MIconData.moon),
+      child: MIcon(
+        ref.watchMThemeMode(themeModeProvider) == MThemeMode.dark
+            ? MIconData.sun
+            : MIconData.moon,
+      ),
     );
   }
 }
@@ -310,6 +308,7 @@ class _CreateAccountCard extends HookWidget {
         copied.value = false;
       }
     }
+
     return MCard(
       child: Padding(
         padding: const EdgeInsets.all(24),

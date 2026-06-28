@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:manyui/manyui.dart';
+import 'package:manyui_hooks/manyui_hooks.dart';
 
 /// Prompts for a single-line text value, seeded with [initialValue].
 /// Returns the trimmed new value, or null if cancelled or unchanged.
@@ -37,8 +38,7 @@ class _EditFieldDialog extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = useMemoized(() => MController<String>(initialValue));
-    useEffect(() => controller.dispose, <Object?>[controller]);
+    final controller = useMController<String>(initialValue);
     final value = useState(initialValue);
 
     final bool valid = value.value.trim().isNotEmpty;

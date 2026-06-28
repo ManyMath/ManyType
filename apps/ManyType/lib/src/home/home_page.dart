@@ -3,6 +3,8 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manytype_cli/manytype_cli.dart' show ObjectMeta;
 import 'package:manyui/manyui.dart';
+import 'package:manyui_hooks/manyui_hooks.dart';
+import 'package:manyui_riverpod/manyui_riverpod.dart';
 
 import '../state/accounts_providers.dart';
 import '../state/objects_providers.dart';
@@ -62,15 +64,13 @@ class HomePage extends HookConsumerWidget {
           const SizedBox(width: 8),
           MButton(
             variant: MButtonVariant.ghost,
-            onPressed: () {
-              final mode = ref.read(themeModeProvider);
-              ref.read(themeModeProvider.notifier).state =
-                  mode == MThemeMode.dark ? MThemeMode.light : MThemeMode.dark;
-            },
+            onPressed: () => ref.toggleMThemeMode(themeModeProvider),
             semanticLabel: 'Toggle theme',
-            child: MIcon(ref.watch(themeModeProvider) == MThemeMode.dark
-                ? MIconData.sun
-                : MIconData.moon),
+            child: MIcon(
+              ref.watchMThemeMode(themeModeProvider) == MThemeMode.dark
+                  ? MIconData.sun
+                  : MIconData.moon,
+            ),
           ),
         ],
       ),
@@ -289,8 +289,7 @@ class _SearchField extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = useMemoized(() => MController<String>(query), const []);
-    useEffect(() => controller.dispose, const []);
+    final controller = useMController<String>(query);
     return MTextField(
       controller: controller,
       placeholder: 'Search objects...',
@@ -342,14 +341,14 @@ class _NewObjectCard extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = MTheme.of(context);
-    final controller = useMemoized(() => MController<String>(''), const []);
-    useEffect(() => controller.dispose, const []);
+    final controller = useMController<String>('');
     final kind = useState(NewObjectKind.text);
     final assignedType = useState<String?>(null);
     final relationFormat = useState(NewRelationFormat.text);
     final busy = useState(false);
     final error = useState<String?>(null);
-    final types = ref.watch(spaceTypesProvider(spaceId)).valueOrNull ??
+    final types =
+        ref.watch(spaceTypesProvider(spaceId)).valueOrNull ??
         const <ObjectMeta>[];
 
     Future<void> create() async {
@@ -360,7 +359,9 @@ class _NewObjectCard extends HookConsumerWidget {
       busy.value = true;
       error.value = null;
       try {
-        final result = await ref.read(objectsControllerProvider).create(
+        final result = await ref
+            .read(objectsControllerProvider)
+            .create(
               text,
               kind: kind.value,
               assignedType: assignedType.value,
