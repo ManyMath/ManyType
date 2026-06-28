@@ -1,19 +1,17 @@
 import 'package:flutter/widgets.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:manytype_cli/manytype_cli.dart' show ReplayedBlockView;
+import 'package:manytype_protocol/models.dart' show Block_Content_Text_Style;
 import 'package:manyui/manyui.dart';
 
 import '../state/objects_providers.dart';
 import 'delete_object.dart';
 
-/// Detail pane: renders the replayed object state from `readCommand`.
-///
-/// The core exposes the replay as rendered report lines (there is no
-/// structured block model on the read path yet), so this parses the known
-/// line shapes: `[id] Text: "..."`, `[id] [Checkbox|Numbered|Toggle|Quote|
-/// Callout] ...`, `Text (updated): "..."` — into styled paragraphs and
-/// leaves everything else as muted metadata. Deliberately shallow; a
-/// structured block renderer is phase 2.
-/// TODO(manytype): replace line parsing with a structured replay API.
+/// Detail pane: an editable per-block view built on `replayObjectBlocks`'s
+/// structured replay (stable block id/style/text/checked), plus the
+/// existing text-report metadata (relations, dataview, etc. that the
+/// structured API doesn't cover yet) rendered below it.
 class ObjectDetailView extends ConsumerWidget {
   const ObjectDetailView({
     super.key,
@@ -34,6 +32,7 @@ class ObjectDetailView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = MTheme.of(context);
+    final blocks = ref.watch(objectBlocksProvider(objectId));
     final detail = ref.watch(objectDetailProvider(objectId));
     final metas = ref.watch(objectsProvider(spaceId)).valueOrNull;
     String title = objectId;
@@ -104,7 +103,7 @@ class ObjectDetailView extends ConsumerWidget {
             const MDivider(),
             const SizedBox(height: 12),
             Expanded(
-              child: detail.when(
+              child: blocks.when(
                 loading: () => const Center(child: MProgress.indeterminate()),
                 error: (e, _) => Text(
                   'Could not read object: $e',
@@ -113,7 +112,7 @@ class ObjectDetailView extends ConsumerWidget {
                   ),
                 ),
                 data: (result) {
-                  if (result == null || result.notFound) {
+                  if (result == null) {
                     return Text(
                       'Object not found in the local store.',
                       style: theme.typography.bodySmall.copyWith(
@@ -121,12 +120,28 @@ class ObjectDetailView extends ConsumerWidget {
                       ),
                     );
                   }
-                  return ListView(children: _renderLines(theme, result.lines));
+                  final metadataLines = detail.valueOrNull?.lines ?? const [];
+                  return ListView(
+                    children: <Widget>[
+                      for (final block in result.blocks)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _BlockEditor(
+                            objectId: objectId,
+                            block: block,
+                          ),
+                        ),
+                      if (metadataLines.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: 8),
+                        const MDivider(),
+                        const SizedBox(height: 8),
+                        ..._renderMetadataLines(theme, metadataLines),
+                      ],
+                    ],
+                  );
                 },
               ),
             ),
-            // TODO(manytype): phase 2 editing (editCommand requires a
-            // network config; offline edits need a tree_builder wrapper).
           ],
         ),
       ),
@@ -134,76 +149,101 @@ class ObjectDetailView extends ConsumerWidget {
   }
 }
 
-final _textBlock = RegExp(r'^\[[^\]]+\] Text: "(.*)"$');
-final _updatedText = RegExp(r'^Text \(updated\): "(.*)"$');
-final _taggedBlock = RegExp(
-  r'^\[[^\]]+\] (\[[x ]\] )?\[(Checkbox|Numbered|Toggle|Quote|'
-  r'Callout)\] (.*)$',
+/// One editable block: a plain-text/quote/toggle-etc. `MTextField` bound to
+/// `editBlock`'s set-text path, or an `MCheckbox` bound to its
+/// set-checked path. Commits on submit/blur, not per-keystroke, so typing
+/// doesn't spam one CRDT change per character.
+class _BlockEditor extends HookConsumerWidget {
+  const _BlockEditor({required this.objectId, required this.block});
+
+  final String objectId;
+  final ReplayedBlockView block;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (block.style == Block_Content_Text_Style.Checkbox) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          MCheckbox(
+            initialValue: block.checked ?? false,
+            onChanged: (value) {
+              ref.read(objectsControllerProvider).editBlock(
+                    objectId,
+                    blockId: block.id,
+                    setChecked: value,
+                  );
+            },
+            semanticLabel: block.text,
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: _textField(ref)),
+        ],
+      );
+    }
+
+    if (block.style == Block_Content_Text_Style.Toggle) {
+      final expanded = useState(false);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          MTreeListTile(
+            title: Text(block.text.isEmpty ? '(empty toggle)' : block.text),
+            depth: 0,
+            expanded: expanded.value,
+            semanticLabel: block.text,
+            onToggle: () => expanded.value = !expanded.value,
+          ),
+          if (expanded.value)
+            Padding(
+              padding: const EdgeInsets.only(left: 24, top: 4),
+              child: _textField(ref),
+            ),
+        ],
+      );
+    }
+
+    return _textField(ref);
+  }
+
+  Widget _textField(WidgetRef ref) {
+    return MTextField(
+      key: ValueKey(block.id),
+      initialValue: block.text,
+      onSubmitted: (value) {
+        if (value == block.text) return;
+        ref
+            .read(objectsControllerProvider)
+            .editBlock(objectId, blockId: block.id, setText: value);
+      },
+    );
+  }
+}
+
+/// Per-block text/tagged-block lines that `_BlockEditor` already renders
+/// structurally above -- skipped here so nothing shows up twice.
+final _perBlockLine = RegExp(
+  r'^\[[^\]]+\] (\[[x ]\] )?(\[(Checkbox|Numbered|Toggle|Quote|Callout|'
+  r'Paragraph|Header1|Header2|Header3)\] )?.*$|'
+  r'^Text \(updated\): ".*"$',
 );
 
-List<Widget> _renderLines(MThemeData theme, List<String> lines) {
+/// Everything `readCommand`'s text report emits that the structured block
+/// editor above doesn't cover yet: object kind/type/relations/attachments/
+/// collection members/dataview summaries. Rendered as muted metadata below
+/// the editable blocks.
+List<Widget> _renderMetadataLines(MThemeData theme, List<String> lines) {
   final widgets = <Widget>[];
   for (final raw in lines) {
     final line = raw.trim();
+    if (_perBlockLine.hasMatch(line)) {
+      continue;
+    }
     if (line.isEmpty) {
       widgets.add(const SizedBox(height: 8));
       continue;
     }
 
-    final text = _textBlock.firstMatch(line) ?? _updatedText.firstMatch(line);
-    if (text != null) {
-      widgets.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(text.group(1)!, style: theme.typography.body),
-        ),
-      );
-      continue;
-    }
-
-    final tagged = _taggedBlock.firstMatch(line);
-    if (tagged != null) {
-      final checkMark = tagged.group(1);
-      final tag = tagged.group(2)!;
-      final content = tagged.group(3)!;
-      widgets.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: switch (tag) {
-            'Quote' => Text(
-              content,
-              style: theme.typography.body.copyWith(
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-            'Checkbox' => Text(
-              '${checkMark == '[x] ' ? '☑' : '☐'} $content',
-              style: theme.typography.body,
-            ),
-            'Numbered' => Text('•  $content', style: theme.typography.body),
-            _ => Text('$content  ($tag)', style: theme.typography.body),
-          },
-        ),
-      );
-      continue;
-    }
-
-    if (line.contains('[Dataview]') || line.startsWith('(could not decode')) {
-      widgets.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            '[unsupported block]',
-            style: theme.typography.bodySmall.copyWith(
-              color: theme.colors.mutedForeground,
-            ),
-          ),
-        ),
-      );
-      continue;
-    }
-
-    // Metadata / replay diagnostics (object id, change ids, details).
     widgets.add(
       Text(
         line,

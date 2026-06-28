@@ -1,5 +1,6 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manytype_cli/manytype_cli.dart';
+import 'package:manytype_protocol/models.dart' show Block_Content_Text_Style;
 
 import 'session_provider.dart';
 
@@ -41,6 +42,21 @@ final objectDetailProvider = FutureProvider.family<ReadDetailResult?, String>((
     objectId: objectId,
   );
   return result.detail;
+});
+
+/// Structured, editable block replay for one object -- the data-shaped
+/// counterpart to [objectDetailProvider]'s pre-rendered text report. Backs
+/// `ObjectDetailView`'s per-block TextField/Checkbox/Toggle editor.
+final objectBlocksProvider =
+    FutureProvider.family<ReplayedObjectBlocks?, String>((
+  ref,
+  objectId,
+) async {
+  final session = await ref.watch(sessionProvider.future);
+  if (session == null) {
+    return null;
+  }
+  return replayObjectBlocks(session.db, session.config, objectId);
 });
 
 /// Text-block styles `createCommand` can produce offline.
@@ -89,9 +105,35 @@ class ObjectsController {
     return result;
   }
 
-  // TODO(manytype): phase 2 editing. `editCommand` requires a network
-  // config today; offline edits need a tree_builder wrapper (or a core
-  // change relaxing that requirement). Phase 1 is create + list + read.
+  /// Mutates one block's text/checked/style in place via `editOffline` and
+  /// refreshes both the structured and text-report detail views for
+  /// [objectId]. Returns null when no session is open. Exactly one of
+  /// [setText]/[setChecked]/[setStyle] should be passed per call, matching
+  /// `editOffline`'s own contract.
+  Future<EditOfflineResult?> editBlock(
+    String objectId, {
+    required String blockId,
+    String? setText,
+    bool? setChecked,
+    Block_Content_Text_Style? setStyle,
+  }) async {
+    final session = await _ref.read(sessionProvider.future);
+    if (session == null) {
+      return null;
+    }
+    final result = await editOffline(
+      objectId,
+      session.db,
+      session.config,
+      blockId: blockId,
+      setText: setText,
+      setChecked: setChecked,
+      setStyle: setStyle,
+    );
+    _ref.invalidate(objectBlocksProvider(objectId));
+    _ref.invalidate(objectDetailProvider(objectId));
+    return result;
+  }
 
   /// Deletes [objectId] in [spaceId] and refreshes the list. Uses
   /// `deleteOffline` (not `deleteCommand`) -- `deleteCommand` brackets its

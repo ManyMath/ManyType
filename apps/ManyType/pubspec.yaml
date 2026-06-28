@@ -18,6 +18,8 @@ dependencies:
     path: ../../packages/manytype_cli
   manytype_core:
     path: ../../packages/manytype_core
+  manytype_protocol:
+    path: ../../packages/manytype_protocol
   manyui:
     path: ../../../ManyUI/manyui
   manyui_hooks:
