@@ -146,6 +146,25 @@ void main() {
     );
   });
 
+  test('objectRelationsProvider exposes a string relation value written via editRelation',
+      () async {
+    final created = await container
+        .read(objectsControllerProvider)
+        .create('Original title');
+    expect(created, isNotNull);
+
+    await container.read(objectsControllerProvider).editRelation(
+          created!.objectId,
+          relationKey: 'description',
+          stringValue: 'A relation value',
+        );
+
+    final relations =
+        await container.read(objectRelationsProvider(created.objectId).future);
+    final view = relations!.relations.singleWhere((r) => r.key == 'description');
+    expect(view.stringValue, 'A relation value');
+  });
+
   test('editRelation returns null when no session is open', () async {
     container.dispose();
     final freshBase = await Directory.systemTemp.createTemp(

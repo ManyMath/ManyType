@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manytype_cli/manytype_cli.dart'
-    show NewBlockKind, ObjectMeta, ReplayedBlockView;
+    show NewBlockKind, ObjectMeta, ReplayedBlockView, ReplayedRelationView;
 import 'package:manytype_protocol/models.dart'
     show Block_Content_Text_Style, RelationFormat;
 import 'package:manyui/manyui.dart';
@@ -136,6 +136,8 @@ class ObjectDetailView extends ConsumerWidget {
                       _AddBlockCard(objectId: objectId),
                       const SizedBox(height: 8),
                       const MDivider(),
+                      const SizedBox(height: 8),
+                      _CurrentRelationsList(objectId: objectId),
                       const SizedBox(height: 8),
                       _RelationEditorCard(objectId: objectId, spaceId: spaceId),
                       if (metadataLines.isNotEmpty) ...<Widget>[
@@ -343,6 +345,74 @@ _RelationValueKind? _kindForFormat(String? relationFormat) {
     RelationFormat.date => _RelationValueKind.date,
     _ => _RelationValueKind.text,
   };
+}
+
+/// Renders [ReplayedRelationView]'s current value in the same one-line
+/// shape `_RelationEditorCard`'s Status/Tag widgets accept as input, so a
+/// user can see what's set before overwriting it -- the structured
+/// counterpart to the text-report's `[key] value` metadata lines above
+/// (`objectDetailProvider`), replaced here per relation now that
+/// `replayObjectRelations` exists rather than only ever writing blind.
+String _formatRelationValue(ReplayedRelationView view) {
+  switch (view.format) {
+    case RelationFormat.checkbox:
+      return view.boolValue == true ? 'true' : 'false';
+    case RelationFormat.date:
+      return view.dateValue?.toString() ?? '';
+    case RelationFormat.status:
+      final id = view.statusOptionId ?? '';
+      final name = view.statusName;
+      return name == null
+          ? '<unsynced:${id.length <= 8 ? id : id.substring(0, 8)}>'
+          : '$name (${view.statusColor ?? 'default'})';
+    case RelationFormat.tag:
+      return view.tagOptions
+          .map((o) => o.name ??
+              '<unsynced:${o.optionId.length <= 8 ? o.optionId : o.optionId.substring(0, 8)}>')
+          .join(', ');
+    case RelationFormat.object:
+      return view.objectIdValue ?? '';
+    default:
+      return view.stringValue ??
+          view.stringListValue?.join(', ') ??
+          (view.boolValue != null ? view.boolValue.toString() : '');
+  }
+}
+
+/// Structured, editable-before-you-overwrite list of an object's current
+/// relation values -- the data-shaped counterpart to
+/// `objectDetailProvider`'s pre-rendered `[key] value` metadata lines,
+/// rendered above `_RelationEditorCard` so a user can see what's already
+/// set before writing a new value via the form below.
+class _CurrentRelationsList extends ConsumerWidget {
+  const _CurrentRelationsList({required this.objectId});
+
+  final String objectId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = MTheme.of(context);
+    final relations =
+        ref.watch(objectRelationsProvider(objectId)).valueOrNull?.relations ??
+            const <ReplayedRelationView>[];
+    if (relations.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text('Relations', style: theme.typography.label),
+        const SizedBox(height: 4),
+        for (final view in relations)
+          Text(
+            '${view.key}: ${_formatRelationValue(view)}',
+            style: theme.typography.bodySmall.copyWith(
+              color: theme.colors.mutedForeground,
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// A key + typed value form to write one relation `DetailsSet` via

@@ -59,6 +59,23 @@ final objectBlocksProvider =
   return replayObjectBlocks(session.db, session.config, objectId);
 });
 
+/// Structured relation-value replay for one object -- the data-shaped
+/// counterpart to [objectDetailProvider]'s pre-rendered text-report
+/// metadata lines. Backs `ObjectDetailView`'s inline "current value"
+/// display so the relation editor shows what's already set instead of
+/// only writing blind.
+final objectRelationsProvider =
+    FutureProvider.family<ReplayedObjectRelations?, String>((
+  ref,
+  objectId,
+) async {
+  final session = await ref.watch(sessionProvider.future);
+  if (session == null) {
+    return null;
+  }
+  return replayObjectRelations(session.db, session.config, objectId);
+});
+
 /// Existing STType objects in [spaceId], for a type-picker dropdown.
 /// Filters `objectsProvider`'s already-fetched metas for the
 /// `ot-objectType` marker `createCommand`'s `asType` branch adds -- no new
@@ -278,12 +295,10 @@ class ObjectsController {
   }
 
   /// Writes one typed relation value on [objectId] via
-  /// `editRelationOffline` and refreshes the text-report detail view
-  /// (the only view relation details currently render in, until a
-  /// structured relation replay/editor grows richer field-level widgets).
-  /// Exactly one of the typed value parameters should be passed, matching
-  /// `editRelationOffline`'s own contract. Returns null when no session is
-  /// open.
+  /// `editRelationOffline` and refreshes both the structured relation view
+  /// and the text-report detail view. Exactly one of the typed value
+  /// parameters should be passed, matching `editRelationOffline`'s own
+  /// contract. Returns null when no session is open.
   Future<EditRelationOfflineResult?> editRelation(
     String objectId, {
     required String relationKey,
@@ -310,6 +325,7 @@ class ObjectsController {
       objectIdValue: objectIdValue,
       status: status,
     );
+    _ref.invalidate(objectRelationsProvider(objectId));
     _ref.invalidate(objectDetailProvider(objectId));
     return result;
   }
