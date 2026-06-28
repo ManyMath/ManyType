@@ -183,6 +183,45 @@ void main() {
       );
     });
 
+    test('assigns an existing STType to a plain object via assignedType',
+        () async {
+      final typeResult = await createCommand(
+        'ignored',
+        db,
+        config,
+        asType: true,
+        name: 'Project',
+      );
+      final typeId = typeResult.objectId;
+
+      final objectResult = await createCommand(
+        'My project',
+        db,
+        config,
+        assignedType: typeId,
+      );
+
+      final replayed = await _replayObject(db, config, objectResult.objectId);
+      expect(replayed.smartBlockType, SmartBlockType.Page.value);
+      expect(replayed.snapshot.objectTypes, ['project']);
+      expect(
+        replayed.snapshot.details.fields['type']?.stringValue,
+        typeId,
+      );
+      expect(
+        replayed.snapshot.details.fields['name']?.stringValue,
+        'My project',
+      );
+    });
+
+    test('createCommand without assignedType keeps the default ot-page type',
+        () async {
+      final objectResult = await createCommand('Plain object', db, config);
+      final replayed = await _replayObject(db, config, objectResult.objectId);
+      expect(replayed.snapshot.objectTypes, ['ot-page']);
+      expect(replayed.snapshot.details.fields.containsKey('type'), isFalse);
+    });
+
     test('creates normal objects by cloning template state', () async {
       final typeResult = await createCommand(
         'ignored',

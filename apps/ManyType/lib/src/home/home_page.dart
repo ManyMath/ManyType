@@ -345,8 +345,11 @@ class _NewObjectCard extends HookConsumerWidget {
     final controller = useMemoized(() => MController<String>(''), const []);
     useEffect(() => controller.dispose, const []);
     final kind = useState(NewObjectKind.text);
+    final assignedType = useState<String?>(null);
     final busy = useState(false);
     final error = useState<String?>(null);
+    final types = ref.watch(spaceTypesProvider(spaceId)).valueOrNull ??
+        const <ObjectMeta>[];
 
     Future<void> create() async {
       final text = controller.value.trim();
@@ -356,9 +359,11 @@ class _NewObjectCard extends HookConsumerWidget {
       busy.value = true;
       error.value = null;
       try {
-        final result = await ref
-            .read(objectsControllerProvider)
-            .create(text, kind: kind.value);
+        final result = await ref.read(objectsControllerProvider).create(
+              text,
+              kind: kind.value,
+              assignedType: assignedType.value,
+            );
         controller.value = '';
         if (result != null) {
           onCreated(result.objectId);
@@ -408,6 +413,20 @@ class _NewObjectCard extends HookConsumerWidget {
                 ),
               ],
             ),
+            if (types.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 8),
+              MSelect<String?>(
+                items: <MSelectItem<String?>>[
+                  const MSelectItem(value: null, label: 'No type'),
+                  for (final type in types)
+                    MSelectItem(value: type.id, label: type.displayName),
+                ],
+                initialValue: null,
+                onChanged: (value) => assignedType.value = value,
+                semanticLabel: 'Object type',
+                enabled: !busy.value,
+              ),
+            ],
             if (error.value != null) ...<Widget>[
               const SizedBox(height: 8),
               Text(

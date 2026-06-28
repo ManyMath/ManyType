@@ -59,8 +59,24 @@ final objectBlocksProvider =
   return replayObjectBlocks(session.db, session.config, objectId);
 });
 
-/// Text-block styles `createCommand` can produce offline.
-enum NewObjectKind { text, checkbox, numbered, toggle, quote, callout }
+/// Existing STType objects in [spaceId], for a type-picker dropdown.
+/// Filters `objectsProvider`'s already-fetched metas for the
+/// `ot-objectType` marker `createCommand`'s `asType` branch adds -- no new
+/// core call needed, `listCommand` already surfaces this via `types`.
+final spaceTypesProvider = FutureProvider.family<List<ObjectMeta>, String>((
+  ref,
+  spaceId,
+) async {
+  final metas = await ref.watch(objectsProvider(spaceId).future);
+  return metas.where((m) => m.types.contains('ot-objectType')).toList();
+});
+
+/// Text-block styles `createCommand` can produce offline, plus `type`: an
+/// STType object (`createCommand`'s `asType` flag) so a type-picker on
+/// create has something to populate itself with -- without this, the
+/// "assign an existing type" dropdown would only ever be reachable in
+/// theory, with no in-app way to create the type it assigns.
+enum NewObjectKind { text, checkbox, numbered, toggle, quote, callout, type }
 
 extension NewObjectKindLabel on NewObjectKind {
   String get label => switch (this) {
@@ -70,6 +86,7 @@ extension NewObjectKindLabel on NewObjectKind {
     NewObjectKind.toggle => 'Toggle',
     NewObjectKind.quote => 'Quote',
     NewObjectKind.callout => 'Callout',
+    NewObjectKind.type => 'Type',
   };
 }
 
@@ -92,11 +109,18 @@ class ObjectsController {
 
   final Ref _ref;
 
-  /// Creates a text object in the personal space and refreshes the list.
-  /// Returns null when no session is open (pre-onboarding).
+  /// Creates a text object (or, with `kind: NewObjectKind.type`, a new
+  /// STType named [text]) in the personal space and refreshes the list.
+  /// Returns null when no session is open (pre-onboarding). [assignedType]
+  /// optionally assigns an existing STType object's id to a non-type
+  /// object, baked into the initial snapshot's `objectTypes` + `type`
+  /// detail together (see `createCommand`'s `assignedType` param) --
+  /// there is no incremental retyping path for an object already created
+  /// without one.
   Future<CreateResult?> create(
     String text, {
     NewObjectKind kind = NewObjectKind.text,
+    String? assignedType,
   }) async {
     final session = await _ref.read(sessionProvider.future);
     if (session == null) {
@@ -111,6 +135,9 @@ class ObjectsController {
       toggle: kind == NewObjectKind.toggle,
       quote: kind == NewObjectKind.quote,
       callout: kind == NewObjectKind.callout,
+      asType: kind == NewObjectKind.type,
+      name: kind == NewObjectKind.type ? text : null,
+      assignedType: assignedType,
     );
     _ref.invalidate(objectsProvider(result.spaceId));
     return result;

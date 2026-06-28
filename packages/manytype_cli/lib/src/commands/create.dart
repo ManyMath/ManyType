@@ -137,6 +137,7 @@ Future<CreateResult> createCommand(
   String? templateId,
   String? color,
   bool textProvided = true,
+  String? assignedType,
 }) async {
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final spaceId = identity.spaceId;
@@ -407,6 +408,26 @@ Future<CreateResult> createCommand(
         ..fields['name'] = Value(stringValue: text)
         ..fields['tag'] = Value(listValue: ListValue())
         ..fields['internalFlags'] = Value(listValue: ListValue());
+
+      // Assign an existing STType to this plain object, if requested.
+      // Mirrors `_finalizeTemplateObject`'s pairing of `objectTypes` +
+      // the `type` detail -- both are set together here, once, at
+      // snapshot-construction time, since there is no incremental
+      // `Change_ObjectTypeAdd` writer for retyping an object after
+      // creation (official clients derive `meta.types`/`displayType`
+      // from `objectTypes`, not from the `type` detail alone).
+      if (assignedType != null) {
+        final resolvedType = await _resolveTargetObjectType(
+          db,
+          spaceKey: spaceKey,
+          objectId: assignedType,
+        );
+        snapshotBase.objectTypes
+          ..clear()
+          ..add(resolvedType.uniqueKey);
+        snapshotBase.details.fields['type'] =
+            Value(stringValue: resolvedType.objectId);
+      }
     }
   }
 
