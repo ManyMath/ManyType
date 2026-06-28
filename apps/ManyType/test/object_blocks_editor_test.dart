@@ -123,6 +123,52 @@ void main() {
     expect(newBlock.checked, isFalse);
   });
 
+  test('editRelation writes a string relation value visible in the detail report',
+      () async {
+    final created = await container
+        .read(objectsControllerProvider)
+        .create('Original title');
+    expect(created, isNotNull);
+
+    final result = await container.read(objectsControllerProvider).editRelation(
+          created!.objectId,
+          relationKey: 'description',
+          stringValue: 'A relation value',
+        );
+    expect(result, isNotNull);
+    expect(result!.relationKey, 'description');
+
+    final detail =
+        await container.read(objectDetailProvider(created.objectId).future);
+    expect(
+      detail!.lines.any((line) => line.contains('A relation value')),
+      isTrue,
+    );
+  });
+
+  test('editRelation returns null when no session is open', () async {
+    container.dispose();
+    final freshBase = await Directory.systemTemp.createTemp(
+      'manytype_app_test_nosession_relation',
+    );
+    AccountRegistry.testBaseDirOverride = freshBase.path;
+    final freshContainer = ProviderContainer();
+    try {
+      final result = await freshContainer
+          .read(objectsControllerProvider)
+          .editRelation(
+            'missing-object',
+            relationKey: 'description',
+            stringValue: 'x',
+          );
+      expect(result, isNull);
+    } finally {
+      freshContainer.dispose();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await freshBase.delete(recursive: true);
+    }
+  });
+
   test('insertBlock returns null when no session is open', () async {
     container.dispose();
     final freshBase = await Directory.systemTemp.createTemp(

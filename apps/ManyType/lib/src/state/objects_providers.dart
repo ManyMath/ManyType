@@ -187,6 +187,43 @@ class ObjectsController {
     _ref.invalidate(objectDetailProvider(objectId));
     return result;
   }
+
+  /// Writes one typed relation value on [objectId] via
+  /// `editRelationOffline` and refreshes the text-report detail view
+  /// (the only view relation details currently render in, until a
+  /// structured relation replay/editor grows richer field-level widgets).
+  /// Exactly one of the typed value parameters should be passed, matching
+  /// `editRelationOffline`'s own contract. Returns null when no session is
+  /// open.
+  Future<EditRelationOfflineResult?> editRelation(
+    String objectId, {
+    required String relationKey,
+    String? stringValue,
+    List<String>? stringListValue,
+    String? boolValue,
+    String? dateValue,
+    String? objectIdValue,
+    String? status,
+  }) async {
+    final session = await _ref.read(sessionProvider.future);
+    if (session == null) {
+      return null;
+    }
+    final result = await editRelationOffline(
+      objectId,
+      session.db,
+      session.config,
+      relationKey: relationKey,
+      stringValue: stringValue,
+      stringListValue: stringListValue,
+      boolValue: boolValue,
+      dateValue: dateValue,
+      objectIdValue: objectIdValue,
+      status: status,
+    );
+    _ref.invalidate(objectDetailProvider(objectId));
+    return result;
+  }
 }
 
 final objectsControllerProvider = Provider<ObjectsController>(

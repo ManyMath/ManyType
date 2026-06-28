@@ -858,6 +858,143 @@ Future<InsertBlockResult> insertBlockOffline(
   );
 }
 
+/// Result of [editRelationOffline].
+class EditRelationOfflineResult {
+  const EditRelationOfflineResult({
+    required this.objectId,
+    required this.relationKey,
+    required this.changeId,
+  });
+
+  final String objectId;
+  final String relationKey;
+  final String changeId;
+}
+
+/// Offline variant of [editCommand]'s relation `DetailsSet` write path:
+/// writes a single typed [Value] for [relationKey] via a signed
+/// `DetailsSet` change, without the two `SyncService.sync()` calls
+/// `editCommand` brackets its write with. Mirrors `editOffline`/
+/// `insertBlockOffline`'s offline-only pattern -- a new function, not a
+/// skip-sync flag, so `editCommand`'s existing online behavior (sync +
+/// post-write verify, plus its file-relation and tag-delta read-modify-
+/// write branches) stays untouched.
+///
+/// Scope: the value kinds constructible without an extra replay read --
+/// [stringValue], [stringListValue] (full replace, e.g. tag lists),
+/// [boolValue], [dateValue] (unix seconds), [objectIdValue], and [status]
+/// (single-value status write). File-relation values and tag-delta
+/// (add/remove against the existing list) are deliberately out of scope
+/// here, same as they'd need a network round-trip or an extra replay read
+/// respectively -- callers needing those still go through `editCommand`.
+/// Exactly one of the typed value parameters must be non-null.
+Future<EditRelationOfflineResult> editRelationOffline(
+  String objectId,
+  ManytypeDatabase db,
+  CliConfig config, {
+  required String relationKey,
+  String? stringValue,
+  List<String>? stringListValue,
+  String? boolValue,
+  String? dateValue,
+  String? objectIdValue,
+  String? status,
+}) async {
+  final changes = await db.getChangesForObject(objectId);
+  if (changes.isEmpty) {
+    throw StateError('Object not found locally: run `manytype sync` first');
+  }
+
+  final currentHeads = await db.getObjectHeads(objectId);
+  if (currentHeads.isEmpty) {
+    throw StateError('No heads found for object $objectId');
+  }
+
+  String? snapshotBaseId;
+  for (final c in changes) {
+    final parents = jsonDecode(c.parentHeads) as List;
+    if (parents.isEmpty) {
+      snapshotBaseId = c.id;
+      break;
+    }
+  }
+  if (snapshotBaseId == null) {
+    throw StateError('Could not find root change for object $objectId');
+  }
+
+  final identity = await Identity.fromMnemonic(config.mnemonic);
+  final spaceId = identity.spaceId;
+  final allObjects = await db.getObjectsBySpace(spaceId);
+  final fallbackAclHeadId = await findAclRootId(db, allObjects, spaceId);
+
+  final accountPrivRaw = Uint8List(64)
+    ..setRange(0, 32, identity.accountSeed)
+    ..setRange(32, 64, identity.accountKeyPair.publicKey);
+  final spaceKey = await deriveSpaceKey(accountPrivRaw);
+  final treeKey = await deriveTreeKey(spaceKey, objectId);
+  final treeWriteMetadata = resolveTreeWriteMetadata(
+    changes,
+    currentHeads,
+    fallbackAclHeadId: fallbackAclHeadId,
+    fallbackSnapshotBaseId: snapshotBaseId,
+  );
+
+  final Value relationValue;
+  if (stringValue != null) {
+    relationValue = Value(stringValue: stringValue);
+  } else if (stringListValue != null) {
+    relationValue = Value(
+      listValue: ListValue(
+        values:
+            stringListValue.map((value) => Value(stringValue: value)).toList(),
+      ),
+    );
+  } else if (boolValue != null) {
+    relationValue = Value(boolValue: boolValue == 'true');
+  } else if (dateValue != null) {
+    relationValue = Value(numberValue: int.parse(dateValue).toDouble());
+  } else if (objectIdValue != null) {
+    relationValue = Value(stringValue: objectIdValue);
+  } else if (status != null) {
+    relationValue = Value(stringValue: status);
+  } else {
+    throw StateError(
+      'editRelationOffline requires stringValue, stringListValue, '
+      'boolValue, dateValue, objectIdValue, or status',
+    );
+  }
+
+  final relationContent = changes_proto.Change_Content(
+    detailsSet: changes_proto.Change_DetailsSet(
+      key: relationKey,
+      value: relationValue,
+    ),
+  );
+  final relationData = marshalChangeContent([relationContent]);
+
+  final relationTreeChange = await buildTreeChange(
+    currentHeads: currentHeads,
+    aclHeadId: treeWriteMetadata.aclHeadId,
+    snapshotBaseId: treeWriteMetadata.snapshotBaseId,
+    changesData: await aesGcmEncrypt(treeKey, relationData),
+    identityPrivateKey: identity.accountSeed,
+    readKeyId: treeWriteMetadata.readKeyId,
+  );
+
+  await db.insertChange(
+    relationTreeChange.id,
+    objectId,
+    relationTreeChange.rawChange,
+    jsonEncode(currentHeads),
+  );
+
+  return EditRelationOfflineResult(
+    objectId: objectId,
+    relationKey: relationKey,
+    changeId: relationTreeChange.id,
+  );
+}
+
 Future<({String storeKey, List<String> memberIds})?> _loadCollectionState(
   List<Change> changes,
   Uint8List treeKey,
