@@ -732,6 +732,132 @@ Future<EditOfflineResult> editOffline(
   );
 }
 
+/// Text-block kinds [insertBlockOffline] can produce, mirroring
+/// `createCommand`'s existing checkbox/numberedList/toggle/quote/callout
+/// flags for new standalone objects but scoped to a block appended to an
+/// *existing* object.
+enum NewBlockKind { text, checkbox, numbered, toggle, quote, callout }
+
+/// Result of [insertBlockOffline].
+class InsertBlockResult {
+  const InsertBlockResult({
+    required this.objectId,
+    required this.blockId,
+    required this.changeId,
+  });
+
+  final String objectId;
+  final String blockId;
+  final String changeId;
+}
+
+/// Offline phase-2 follow-on to [editOffline]: appends one new typed block
+/// (text/checkbox/numbered/toggle/quote/callout, via `manytype_core`'s
+/// existing block-factory functions) to [objectId] via a signed
+/// `BlockCreate` change targeting `'header'` with `Block_Position.Inner` --
+/// the same target/position `editCommand`'s own `checkbox` flag already
+/// uses to append a checkbox block, generalized to every block kind
+/// `createCommand` supports for new objects. Offline like [editOffline]:
+/// no `SyncService.sync()` calls, since those require a live coordinator
+/// connection.
+Future<InsertBlockResult> insertBlockOffline(
+  String objectId,
+  ManytypeDatabase db,
+  CliConfig config, {
+  required String text,
+  NewBlockKind kind = NewBlockKind.text,
+}) async {
+  final changes = await db.getChangesForObject(objectId);
+  if (changes.isEmpty) {
+    throw StateError('Object not found locally: run `manytype sync` first');
+  }
+
+  final currentHeads = await db.getObjectHeads(objectId);
+  if (currentHeads.isEmpty) {
+    throw StateError('No heads found for object $objectId');
+  }
+
+  String? snapshotBaseId;
+  for (final c in changes) {
+    final parents = jsonDecode(c.parentHeads) as List;
+    if (parents.isEmpty) {
+      snapshotBaseId = c.id;
+      break;
+    }
+  }
+  if (snapshotBaseId == null) {
+    throw StateError('Could not find root change for object $objectId');
+  }
+
+  final identity = await Identity.fromMnemonic(config.mnemonic);
+  final spaceId = identity.spaceId;
+  final allObjects = await db.getObjectsBySpace(spaceId);
+  final fallbackAclHeadId = await findAclRootId(db, allObjects, spaceId);
+
+  final accountPrivRaw = Uint8List(64)
+    ..setRange(0, 32, identity.accountSeed)
+    ..setRange(32, 64, identity.accountKeyPair.publicKey);
+  final spaceKey = await deriveSpaceKey(accountPrivRaw);
+  final treeKey = await deriveTreeKey(spaceKey, objectId);
+  final treeWriteMetadata = resolveTreeWriteMetadata(
+    changes,
+    currentHeads,
+    fallbackAclHeadId: fallbackAclHeadId,
+    fallbackSnapshotBaseId: snapshotBaseId,
+  );
+
+  final rng = Random.secure();
+  final blockId = switch (kind) {
+    NewBlockKind.checkbox => 'cb-${rng.nextInt(0xFFFFFF).toRadixString(16)}',
+    NewBlockKind.numbered => 'num-${rng.nextInt(0xFFFFFF).toRadixString(16)}',
+    NewBlockKind.toggle => 'tog-${rng.nextInt(0xFFFFFF).toRadixString(16)}',
+    NewBlockKind.quote => 'qt-${rng.nextInt(0xFFFFFF).toRadixString(16)}',
+    NewBlockKind.callout => 'co-${rng.nextInt(0xFFFFFF).toRadixString(16)}',
+    NewBlockKind.text => 'txt-${rng.nextInt(0xFFFFFF).toRadixString(16)}',
+  };
+  final newBlock = switch (kind) {
+    NewBlockKind.checkbox =>
+      createListBlock(blockId, text, checkbox: true),
+    NewBlockKind.numbered =>
+      createListBlock(blockId, text, numbered: true),
+    NewBlockKind.toggle => createToggleBlock(blockId, text),
+    NewBlockKind.quote => createQuoteBlock(blockId, text),
+    NewBlockKind.callout => createCalloutBlock(blockId, text),
+    NewBlockKind.text => createTextBlock(blockId, text),
+  };
+
+  final blockOp = changes_proto.Change_Content(
+    blockCreate: changes_proto.Change_BlockCreate(
+      targetId: 'header',
+      position: Block_Position.Inner,
+      blocks: [newBlock],
+    ),
+  );
+  final blockChangeData = marshalChangeContent([blockOp]);
+
+  final blockTreeChange = await buildTreeChange(
+    currentHeads: currentHeads,
+    aclHeadId: treeWriteMetadata.aclHeadId,
+    snapshotBaseId: treeWriteMetadata.snapshotBaseId,
+    changesData: await aesGcmEncrypt(treeKey, blockChangeData),
+    identityPrivateKey: identity.accountSeed,
+    readKeyId: treeWriteMetadata.readKeyId,
+  );
+
+  await db.insertChange(
+    blockTreeChange.id,
+    objectId,
+    blockTreeChange.rawChange,
+    jsonEncode(currentHeads),
+  );
+
+  return InsertBlockResult(
+    objectId: objectId,
+    blockId: blockId,
+    changeId: blockTreeChange.id,
+  );
+}
+
 Future<({String storeKey, List<String> memberIds})?> _loadCollectionState(
   List<Change> changes,
   Uint8List treeKey,

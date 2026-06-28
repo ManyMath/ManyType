@@ -73,6 +73,17 @@ extension NewObjectKindLabel on NewObjectKind {
   };
 }
 
+extension NewBlockKindLabel on NewBlockKind {
+  String get label => switch (this) {
+    NewBlockKind.text => 'Text',
+    NewBlockKind.checkbox => 'Checkbox',
+    NewBlockKind.numbered => 'Numbered list',
+    NewBlockKind.toggle => 'Toggle',
+    NewBlockKind.quote => 'Quote',
+    NewBlockKind.callout => 'Callout',
+  };
+}
+
 /// Object mutations. Create is fully offline (signed changes persisted to
 /// the local Drift store); the list provider is invalidated afterwards so
 /// the GUI re-queries.
@@ -150,6 +161,30 @@ class ObjectsController {
     }
     final result = await deleteOffline(objectId, session.db, session.config);
     _ref.invalidate(objectsProvider(spaceId));
+    return result;
+  }
+
+  /// Appends a new typed block to [objectId] via `insertBlockOffline` and
+  /// refreshes both the structured and text-report detail views. Returns
+  /// null when no session is open.
+  Future<InsertBlockResult?> insertBlock(
+    String objectId, {
+    required String text,
+    NewBlockKind kind = NewBlockKind.text,
+  }) async {
+    final session = await _ref.read(sessionProvider.future);
+    if (session == null) {
+      return null;
+    }
+    final result = await insertBlockOffline(
+      objectId,
+      session.db,
+      session.config,
+      text: text,
+      kind: kind,
+    );
+    _ref.invalidate(objectBlocksProvider(objectId));
+    _ref.invalidate(objectDetailProvider(objectId));
     return result;
   }
 }

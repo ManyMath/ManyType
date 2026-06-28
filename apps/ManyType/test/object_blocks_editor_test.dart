@@ -12,6 +12,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manytype_cli/src/account_registry.dart';
+import 'package:manytype_cli/manytype_cli.dart' show NewBlockKind;
 import 'package:manytype_protocol/models.dart' show Block_Content_Text_Style;
 
 import 'package:manytype/src/state/accounts_providers.dart';
@@ -93,6 +94,52 @@ void main() {
       after!.blocks.singleWhere((b) => b.id == checkboxId).checked,
       isTrue,
     );
+  });
+
+  test('insertBlock appends a new checkbox block after existing content',
+      () async {
+    final created = await container
+        .read(objectsControllerProvider)
+        .create('Original title');
+    expect(created, isNotNull);
+
+    final before =
+        await container.read(objectBlocksProvider(created!.objectId).future);
+    final beforeCount = before!.blocks.length;
+
+    final inserted = await container.read(objectsControllerProvider).insertBlock(
+          created.objectId,
+          text: 'Buy milk',
+          kind: NewBlockKind.checkbox,
+        );
+    expect(inserted, isNotNull);
+
+    final after =
+        await container.read(objectBlocksProvider(created.objectId).future);
+    expect(after!.blocks.length, beforeCount + 1);
+    final newBlock = after.blocks.singleWhere((b) => b.id == inserted!.blockId);
+    expect(newBlock.style, Block_Content_Text_Style.Checkbox);
+    expect(newBlock.text, 'Buy milk');
+    expect(newBlock.checked, isFalse);
+  });
+
+  test('insertBlock returns null when no session is open', () async {
+    container.dispose();
+    final freshBase = await Directory.systemTemp.createTemp(
+      'manytype_app_test_nosession_insert',
+    );
+    AccountRegistry.testBaseDirOverride = freshBase.path;
+    final freshContainer = ProviderContainer();
+    try {
+      final result = await freshContainer
+          .read(objectsControllerProvider)
+          .insertBlock('missing-object', text: 'x');
+      expect(result, isNull);
+    } finally {
+      freshContainer.dispose();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await freshBase.delete(recursive: true);
+    }
   });
 
   test('editBlock returns null when no session is open', () async {

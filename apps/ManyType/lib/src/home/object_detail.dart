@@ -1,7 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:manytype_cli/manytype_cli.dart' show ReplayedBlockView;
+import 'package:manytype_cli/manytype_cli.dart'
+    show NewBlockKind, ReplayedBlockView;
 import 'package:manytype_protocol/models.dart' show Block_Content_Text_Style;
 import 'package:manyui/manyui.dart';
 
@@ -131,6 +132,7 @@ class ObjectDetailView extends ConsumerWidget {
                             block: block,
                           ),
                         ),
+                      _AddBlockCard(objectId: objectId),
                       if (metadataLines.isNotEmpty) ...<Widget>[
                         const SizedBox(height: 8),
                         const MDivider(),
@@ -216,6 +218,94 @@ class _BlockEditor extends HookConsumerWidget {
             .read(objectsControllerProvider)
             .editBlock(objectId, blockId: block.id, setText: value);
       },
+    );
+  }
+}
+
+/// Phase-2 follow-on to `_BlockEditor`: a block-type picker plus text field
+/// to append a new typed block to the object via `insertBlock`, mirroring
+/// `home_page.dart`'s `_NewObjectCard` shape (text field + `MSelect` kind
+/// picker + submit button) but scoped to inserting into an existing object
+/// rather than creating a new one.
+class _AddBlockCard extends HookConsumerWidget {
+  const _AddBlockCard({required this.objectId});
+
+  final String objectId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = MTheme.of(context);
+    final controller = useMemoized(() => MController<String>(''), const []);
+    useEffect(() => controller.dispose, const []);
+    final kind = useState(NewBlockKind.text);
+    final busy = useState(false);
+    final error = useState<String?>(null);
+
+    Future<void> insert() async {
+      final text = controller.value.trim();
+      if (text.isEmpty || busy.value) {
+        return;
+      }
+      busy.value = true;
+      error.value = null;
+      try {
+        await ref
+            .read(objectsControllerProvider)
+            .insertBlock(objectId, text: text, kind: kind.value);
+        controller.value = '';
+      } catch (e) {
+        error.value = '$e';
+      } finally {
+        busy.value = false;
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          MTextField(
+            controller: controller,
+            placeholder: 'Add a block...',
+            semanticLabel: 'New block text',
+            enabled: !busy.value,
+            onSubmitted: (_) => insert(),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: MSelect<NewBlockKind>(
+                  items: <MSelectItem<NewBlockKind>>[
+                    for (final k in NewBlockKind.values)
+                      MSelectItem(value: k, label: k.label),
+                  ],
+                  initialValue: NewBlockKind.text,
+                  onChanged: (value) =>
+                      kind.value = value ?? NewBlockKind.text,
+                  semanticLabel: 'Block kind',
+                  enabled: !busy.value,
+                ),
+              ),
+              const SizedBox(width: 8),
+              MButton(
+                onPressed: busy.value ? null : insert,
+                child: const Text('Add block'),
+              ),
+            ],
+          ),
+          if (error.value != null) ...<Widget>[
+            const SizedBox(height: 8),
+            Text(
+              error.value!,
+              style: theme.typography.bodySmall.copyWith(
+                color: theme.colors.destructive,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
