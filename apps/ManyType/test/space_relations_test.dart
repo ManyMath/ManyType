@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manytype_cli/src/account_registry.dart';
+import 'package:manytype_protocol/models.dart' show RelationFormat;
 
 import 'package:manytype/src/state/accounts_providers.dart';
 import 'package:manytype/src/state/objects_providers.dart';
@@ -43,41 +44,42 @@ void main() {
   });
 
   test(
-      'spaceRelationsProvider only surfaces STRelation objects, not plain ones',
-      () async {
-    final session = await container.read(sessionProvider.future);
-    final spaceId = session!.identity.spaceId;
-    final controller = container.read(objectsControllerProvider);
+    'spaceRelationsProvider only surfaces STRelation objects, not plain ones',
+    () async {
+      final session = await container.read(sessionProvider.future);
+      final spaceId = session!.identity.spaceId;
+      final controller = container.read(objectsControllerProvider);
 
-    expect(
-      await container.read(spaceRelationsProvider(spaceId).future),
-      isEmpty,
-    );
+      expect(
+        await container.read(spaceRelationsProvider(spaceId).future),
+        isEmpty,
+      );
 
-    final plainResult = await controller.create('A plain object');
-    expect(plainResult, isNotNull);
-    expect(
-      await container.read(spaceRelationsProvider(spaceId).future),
-      isEmpty,
-    );
+      final plainResult = await controller.create('A plain object');
+      expect(plainResult, isNotNull);
+      expect(
+        await container.read(spaceRelationsProvider(spaceId).future),
+        isEmpty,
+      );
 
-    final relationResult = await controller.create(
-      'Priority',
-      kind: NewObjectKind.relation,
-      relationFormat: NewRelationFormat.status,
-    );
-    expect(relationResult, isNotNull);
-    final relations =
-        await container.read(spaceRelationsProvider(spaceId).future);
-    expect(relations.map((r) => r.id), [relationResult!.objectId]);
-    expect(relations.single.name, 'Priority');
-    expect(relations.single.details['uniqueKey'], 'priority');
-    // status == RelationFormat.status.value == 3.
-    expect(relations.single.details['relationFormat'], '3.0');
-  });
+      final relationResult = await controller.create(
+        'Priority',
+        kind: NewObjectKind.relation,
+        relationFormat: NewRelationFormat.status,
+      );
+      expect(relationResult, isNotNull);
+      final relations = await container.read(
+        spaceRelationsProvider(spaceId).future,
+      );
+      expect(relations.map((r) => r.id), [relationResult!.objectId]);
+      expect(relations.single.name, 'Priority');
+      expect(relations.single.details['uniqueKey'], 'priority');
+      // status == RelationFormat.status.value == 3.
+      expect(relations.single.details['relationFormat'], '3.0');
+    },
+  );
 
-  test(
-      'editRelation writes a status value keyed by a picked relation\'s '
+  test('editRelation writes a status value keyed by a picked relation\'s '
       'uniqueKey', () async {
     final session = await container.read(sessionProvider.future);
     final spaceId = session!.identity.spaceId;
@@ -88,8 +90,9 @@ void main() {
       kind: NewObjectKind.relation,
       relationFormat: NewRelationFormat.status,
     );
-    final relations =
-        await container.read(spaceRelationsProvider(spaceId).future);
+    final relations = await container.read(
+      spaceRelationsProvider(spaceId).future,
+    );
     final uniqueKey = relations.single.details['uniqueKey']!;
     expect(uniqueKey, 'priority');
 
@@ -103,9 +106,55 @@ void main() {
     );
     expect(editResult, isNotNull);
 
-    final detail =
-        await container.read(objectDetailProvider(objectResult.objectId).future);
+    final detail = await container.read(
+      objectDetailProvider(objectResult.objectId).future,
+    );
     expect(detail!.lines.any((line) => line.contains('Urgent')), isTrue);
     expect(relationResult, isNotNull);
+  });
+
+  test('editRelation writes an object-reference value keyed by a picked '
+      'relation', () async {
+    final session = await container.read(sessionProvider.future);
+    final spaceId = session!.identity.spaceId;
+    final controller = container.read(objectsControllerProvider);
+
+    final relationResult = await controller.create(
+      'Assignee',
+      kind: NewObjectKind.relation,
+      relationFormat: NewRelationFormat.object,
+    );
+    expect(relationResult, isNotNull);
+    final relations = await container.read(
+      spaceRelationsProvider(spaceId).future,
+    );
+    final relation = relations.single;
+    final uniqueKey = relation.details['uniqueKey']!;
+    expect(uniqueKey, 'assignee');
+    expect(
+      relation.details['relationFormat'],
+      RelationFormat.object.value.toDouble().toString(),
+    );
+
+    final personResult = await controller.create('Ada Lovelace');
+    final taskResult = await controller.create('Review draft');
+    expect(personResult, isNotNull);
+    expect(taskResult, isNotNull);
+
+    final editResult = await controller.editRelation(
+      taskResult!.objectId,
+      relationKey: uniqueKey,
+      objectIdValue: personResult!.objectId,
+    );
+    expect(editResult, isNotNull);
+
+    final replayed = await container.read(
+      objectRelationsProvider(taskResult.objectId).future,
+    );
+    final assignee = replayed!.relations.singleWhere(
+      (relation) => relation.key == uniqueKey,
+    );
+    expect(assignee.format, RelationFormat.object);
+    expect(assignee.objectIdValue, personResult.objectId);
   });
 }

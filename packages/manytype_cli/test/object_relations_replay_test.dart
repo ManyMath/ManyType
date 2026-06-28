@@ -46,8 +46,7 @@ void main() {
     );
 
     final result = await replayObjectRelations(db, config, created.objectId);
-    final view =
-        result!.relations.singleWhere((r) => r.key == 'description');
+    final view = result!.relations.singleWhere((r) => r.key == 'description');
     expect(view.stringValue, 'A description');
     expect(view.boolValue, isNull);
   });
@@ -81,6 +80,33 @@ void main() {
     final result = await replayObjectRelations(db, config, created.objectId);
     final view = result!.relations.singleWhere((r) => r.key == 'dueDate');
     expect(view.dateValue, 1700000000);
+  });
+
+  test('preserves an object-reference relation format from STRelation',
+      () async {
+    const relationKey = 'assignee';
+    await createCommand(
+      'Assignee',
+      db,
+      config,
+      asRelation: true,
+      format: 'object',
+    );
+    final person = await createCommand('Ada Lovelace', db, config);
+    final target = await createCommand('Review draft', db, config);
+    await editRelationOffline(
+      target.objectId,
+      db,
+      config,
+      relationKey: relationKey,
+      objectIdValue: person.objectId,
+    );
+
+    final result = await replayObjectRelations(db, config, target.objectId);
+    final view = result!.relations.singleWhere((r) => r.key == relationKey);
+    expect(view.format, RelationFormat.object);
+    expect(view.objectIdValue, person.objectId);
+    expect(view.stringValue, isNull);
   });
 
   test('resolves a status relation value to its option name/color', () async {
@@ -158,8 +184,7 @@ void main() {
     expect(view.tagOptions.map((o) => o.color), ['red', 'blue']);
   });
 
-  test('surfaces an orphaned tag option id alongside a resolved one',
-      () async {
+  test('surfaces an orphaned tag option id alongside a resolved one', () async {
     const relationKey = 'labels';
     await createCommand(
       'Labels',
@@ -203,8 +228,7 @@ void main() {
       targetObjectType: typeObj.objectId,
     );
 
-    final result =
-        await replayObjectRelations(db, config, template.objectId);
+    final result = await replayObjectRelations(db, config, template.objectId);
     expect(
       result!.relations.map((r) => r.key),
       isNot(contains('targetObjectType')),

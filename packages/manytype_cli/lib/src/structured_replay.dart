@@ -197,9 +197,9 @@ class ReplayedObjectRelations {
   final List<ReplayedRelationView> relations;
 }
 
-/// Replay [objectId]'s current relation values from local changes,
-/// resolving status/tag option IDs to display names via the local
-/// STRelationOption index.
+/// Replay [objectId]'s current relation values from local changes, resolving
+/// relation value formats via local STRelation definitions and status/tag
+/// option IDs to display names via the local STRelationOption index.
 ///
 /// Returns `null` when the object has no local changes (not found).
 /// Scoped to the same relation-value kinds [editRelationOffline] can write:
@@ -232,26 +232,60 @@ Future<ReplayedObjectRelations?> replayObjectRelations(
   );
 
   var optIndex = const <String, ResolvedOption>{};
+  var relationFormatIndex = const <String, RelationFormat>{};
   try {
     final spaceObjects = await db.getNonDeletedObjectsBySpace(identity.spaceId);
     final optionInputs = <OptionIndexInput>[];
+    final relationFormats = <String, RelationFormat>{};
     for (final obj in spaceObjects) {
       final rawRows = await db.getChangesForObject(obj.id);
+      final rawTreeChanges =
+          rawRows.map((r) => Uint8List.fromList(r.rawBytes)).toList();
       final objTreeKey = await deriveTreeKey(spaceKey, obj.id);
       optionInputs.add(OptionIndexInput(
         objectId: obj.id,
-        rawTreeChanges:
-            rawRows.map((r) => Uint8List.fromList(r.rawBytes)).toList(),
+        rawTreeChanges: rawTreeChanges,
         treeKey: objTreeKey,
       ));
+      if (extractRootSmartBlockType(rawTreeChanges) !=
+          SmartBlockType.STRelation.value) {
+        continue;
+      }
+      try {
+        final details = await replayObjectDetails(
+          rawTreeChanges: rawTreeChanges,
+          treeKey: objTreeKey,
+        );
+        final format = _relationFormatFromValue(details['relationFormat']);
+        if (format == null) {
+          continue;
+        }
+        _indexRelationFormat(
+          relationFormats,
+          details['uniqueKey']?.stringValue,
+          format,
+        );
+        _indexRelationFormat(
+          relationFormats,
+          details['relationKey']?.stringValue,
+          format,
+        );
+      } catch (_) {
+        // Ignore malformed/incomplete relation objects; value-shape guessing
+        // below still gives callers a best-effort editable value.
+      }
     }
     optIndex = await loadLocalOptionIndex(optionInputs);
+    relationFormatIndex = Map.unmodifiable(relationFormats);
   } catch (_) {
-    // Non-fatal: status/tag values fall back to unresolved option IDs.
+    // Non-fatal: status/tag values fall back to unresolved option IDs, and
+    // relation formats fall back to snapshot relationLinks/value guessing.
     optIndex = const <String, ResolvedOption>{};
+    relationFormatIndex = const <String, RelationFormat>{};
   }
 
   final formatByKey = <String, RelationFormat>{
+    ...relationFormatIndex,
     for (final link in replayed.snapshot.relationLinks) link.key: link.format,
   };
   final details = replayed.snapshot.details.fields;
@@ -268,6 +302,35 @@ Future<ReplayedObjectRelations?> replayObjectRelations(
   ];
 
   return ReplayedObjectRelations(objectId: objectId, relations: relations);
+}
+
+RelationFormat? _relationFormatFromValue(Value? value) {
+  if (value == null) {
+    return null;
+  }
+  final intValue = value.hasNumberValue()
+      ? value.numberValue.round()
+      : value.hasStringValue()
+          ? double.tryParse(value.stringValue)?.round()
+          : null;
+  return intValue == null ? null : RelationFormat.valueOf(intValue);
+}
+
+void _indexRelationFormat(
+  Map<String, RelationFormat> index,
+  String? key,
+  RelationFormat format,
+) {
+  final normalized = key?.trim() ?? '';
+  if (normalized.isEmpty) {
+    return;
+  }
+  index[normalized] = format;
+  if (normalized.startsWith('rel-') && normalized.length > 4) {
+    index.putIfAbsent(normalized.substring(4), () => format);
+  } else {
+    index.putIfAbsent('rel-$normalized', () => format);
+  }
 }
 
 ReplayedRelationView _buildRelationView(
@@ -373,15 +436,10 @@ ReplayedRelationView _buildRelationView(
   );
 }
 
-/// Best-effort format guess for a detail with no matching `relationLinks`
-/// entry -- the common case in practice today, since no code path in this
-/// codebase writes `RelationAdd` (relations written via `create
-/// --as-relation`/`editRelationOffline` only ever touch `DetailsSet`, per
-/// the session-6 handoff's finding), so [replayObjectState]'s
-/// `relationLinks` is always empty and every relation value falls through
-/// to this guess. Mirrors `read.dart`'s own value-based option-ref
-/// detection fallback for status/tag; adds number-value detection for
-/// dates, which `read.dart`'s own fallback doesn't need since it renders
+/// Best-effort format guess for a detail with no matching `relationLinks` or
+/// local STRelation definition entry. Mirrors `read.dart`'s own value-based
+/// option-ref detection fallback for status/tag; adds number-value detection
+/// for dates, which `read.dart`'s own fallback doesn't need since it renders
 /// numbers generically either way.
 RelationFormat _guessFormat(Value value, Map<String, ResolvedOption> optIndex) {
   if (optIndex.isNotEmpty) {

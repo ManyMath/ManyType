@@ -48,16 +48,13 @@ final objectDetailProvider = FutureProvider.family<ReadDetailResult?, String>((
 /// counterpart to [objectDetailProvider]'s pre-rendered text report. Backs
 /// `ObjectDetailView`'s per-block TextField/Checkbox/Toggle editor.
 final objectBlocksProvider =
-    FutureProvider.family<ReplayedObjectBlocks?, String>((
-  ref,
-  objectId,
-) async {
-  final session = await ref.watch(sessionProvider.future);
-  if (session == null) {
-    return null;
-  }
-  return replayObjectBlocks(session.db, session.config, objectId);
-});
+    FutureProvider.family<ReplayedObjectBlocks?, String>((ref, objectId) async {
+      final session = await ref.watch(sessionProvider.future);
+      if (session == null) {
+        return null;
+      }
+      return replayObjectBlocks(session.db, session.config, objectId);
+    });
 
 /// Structured relation-value replay for one object -- the data-shaped
 /// counterpart to [objectDetailProvider]'s pre-rendered text-report
@@ -66,15 +63,15 @@ final objectBlocksProvider =
 /// only writing blind.
 final objectRelationsProvider =
     FutureProvider.family<ReplayedObjectRelations?, String>((
-  ref,
-  objectId,
-) async {
-  final session = await ref.watch(sessionProvider.future);
-  if (session == null) {
-    return null;
-  }
-  return replayObjectRelations(session.db, session.config, objectId);
-});
+      ref,
+      objectId,
+    ) async {
+      final session = await ref.watch(sessionProvider.future);
+      if (session == null) {
+        return null;
+      }
+      return replayObjectRelations(session.db, session.config, objectId);
+    });
 
 /// Existing STType objects in [spaceId], for a type-picker dropdown.
 /// Filters `objectsProvider`'s already-fetched metas for the
@@ -96,12 +93,13 @@ final spaceTypesProvider = FutureProvider.family<List<ObjectMeta>, String>((
 /// own `relationFormat`/`uniqueKey` details with no new core call needed
 /// (relation objects get a random object id, not an `ot-`/`rel-` prefix, so
 /// they aren't caught by `_extractObjectMeta`'s bundled-object filter).
-final spaceRelationsProvider = FutureProvider.family<List<ObjectMeta>, String>(
-  (ref, spaceId) async {
-    final metas = await ref.watch(objectsProvider(spaceId).future);
-    return metas.where((m) => m.types.contains('ot-relation')).toList();
-  },
-);
+final spaceRelationsProvider = FutureProvider.family<List<ObjectMeta>, String>((
+  ref,
+  spaceId,
+) async {
+  final metas = await ref.watch(objectsProvider(spaceId).future);
+  return metas.where((m) => m.types.contains('ot-relation')).toList();
+});
 
 /// Text-block styles `createCommand` can produce offline, plus `type`: an
 /// STType object (`createCommand`'s `asType` flag) so a type-picker on
@@ -139,7 +137,7 @@ extension NewObjectKindLabel on NewObjectKind {
 /// `asRelation: true` (mirrors `create.dart`'s `_parseRelationFormat`, which
 /// only accepts these lowercase names -- anything else silently falls back
 /// to `longtext`).
-enum NewRelationFormat { text, status, tag, date, checkbox }
+enum NewRelationFormat { text, status, tag, date, checkbox, object }
 
 extension NewRelationFormatLabel on NewRelationFormat {
   String get label => switch (this) {
@@ -148,6 +146,7 @@ extension NewRelationFormatLabel on NewRelationFormat {
     NewRelationFormat.tag => 'Tag',
     NewRelationFormat.date => 'Date',
     NewRelationFormat.checkbox => 'Checkbox',
+    NewRelationFormat.object => 'Object',
   };
 
   String get wireName => switch (this) {
@@ -156,6 +155,7 @@ extension NewRelationFormatLabel on NewRelationFormat {
     NewRelationFormat.tag => 'tag',
     NewRelationFormat.date => 'date',
     NewRelationFormat.checkbox => 'checkbox',
+    NewRelationFormat.object => 'object',
   };
 }
 

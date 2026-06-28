@@ -135,7 +135,10 @@ class ObjectDetailView extends ConsumerWidget {
                       const SizedBox(height: 8),
                       const MDivider(),
                       const SizedBox(height: 8),
-                      _CurrentRelationsList(objectId: objectId),
+                      _CurrentRelationsList(
+                        objectId: objectId,
+                        spaceId: spaceId,
+                      ),
                       const SizedBox(height: 8),
                       _RelationEditorCard(objectId: objectId, spaceId: spaceId),
                       if (metadataLines.isNotEmpty) ...<Widget>[
@@ -318,15 +321,15 @@ class _AddBlockCard extends HookConsumerWidget {
 /// `editCommand`). `status`/`tag`/`date` round out the phase-1 text/
 /// checkbox pair now that a relation-format lookup exists (below) to
 /// auto-select the right one when a known relation is picked.
-enum _RelationValueKind { text, checkbox, status, tag, date }
+enum _RelationValueKind { text, checkbox, status, tag, date, object }
 
 /// Maps a `RelationFormat` enum value (as surfaced in
 /// `ObjectMeta.details['relationFormat']`, a stringified double -- see
 /// `create.dart`'s `_parseRelationFormat`/`read.dart`'s `_formatName`) to
 /// the [_RelationValueKind] widget that best fits it. Formats with no
-/// dedicated widget yet (object/file/number/url/email/phone/emoji) fall
-/// back to plain text, matching what `editRelationOffline` can construct
-/// for them today (a string-shaped write, e.g. `objectIdValue`).
+/// dedicated widget yet (file/number/url/email/phone/emoji) fall back to
+/// plain text, matching the scoped values `editRelationOffline` can
+/// construct today.
 _RelationValueKind? _kindForFormat(String? relationFormat) {
   final numberValue = double.tryParse(relationFormat ?? '');
   if (numberValue == null) {
@@ -337,6 +340,7 @@ _RelationValueKind? _kindForFormat(String? relationFormat) {
     RelationFormat.status => _RelationValueKind.status,
     RelationFormat.tag => _RelationValueKind.tag,
     RelationFormat.date => _RelationValueKind.date,
+    RelationFormat.object => _RelationValueKind.object,
     _ => _RelationValueKind.text,
   };
 }
@@ -347,7 +351,10 @@ _RelationValueKind? _kindForFormat(String? relationFormat) {
 /// counterpart to the text-report's `[key] value` metadata lines above
 /// (`objectDetailProvider`), replaced here per relation now that
 /// `replayObjectRelations` exists rather than only ever writing blind.
-String _formatRelationValue(ReplayedRelationView view) {
+String _formatRelationValue(
+  ReplayedRelationView view, {
+  Map<String, ObjectMeta> objectLabels = const <String, ObjectMeta>{},
+}) {
   switch (view.format) {
     case RelationFormat.checkbox:
       return view.boolValue == true ? 'true' : 'false';
@@ -368,7 +375,12 @@ String _formatRelationValue(ReplayedRelationView view) {
           )
           .join(', ');
     case RelationFormat.object:
-      return view.objectIdValue ?? '';
+      final objectId = view.objectIdValue;
+      if (objectId == null || objectId.isEmpty) {
+        return '';
+      }
+      final meta = objectLabels[objectId];
+      return meta == null ? objectId : '${meta.displayName} ($objectId)';
     default:
       return view.stringValue ??
           view.stringListValue?.join(', ') ??
@@ -382,9 +394,10 @@ String _formatRelationValue(ReplayedRelationView view) {
 /// rendered above `_RelationEditorCard` so a user can see what's already
 /// set before writing a new value via the form below.
 class _CurrentRelationsList extends ConsumerWidget {
-  const _CurrentRelationsList({required this.objectId});
+  const _CurrentRelationsList({required this.objectId, required this.spaceId});
 
   final String objectId;
+  final String spaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -392,6 +405,12 @@ class _CurrentRelationsList extends ConsumerWidget {
     final relations =
         ref.watch(objectRelationsProvider(objectId)).valueOrNull?.relations ??
         const <ReplayedRelationView>[];
+    final objectLabels = <String, ObjectMeta>{
+      for (final meta
+          in ref.watch(objectsProvider(spaceId)).valueOrNull ??
+              const <ObjectMeta>[])
+        meta.id: meta,
+    };
     if (relations.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -402,7 +421,7 @@ class _CurrentRelationsList extends ConsumerWidget {
         const SizedBox(height: 4),
         for (final view in relations)
           Text(
-            '${view.key}: ${_formatRelationValue(view)}',
+            '${view.key}: ${_formatRelationValue(view, objectLabels: objectLabels)}',
             style: theme.typography.bodySmall.copyWith(
               color: theme.colors.mutedForeground,
             ),
@@ -434,11 +453,17 @@ class _RelationEditorCard extends HookConsumerWidget {
     );
     final kind = useValueListenable(kindController) ?? _RelationValueKind.text;
     final checked = useState(false);
+    final objectIdValue = useState<String?>(null);
     final busy = useState(false);
     final error = useState<String?>(null);
     final relations =
         ref.watch(spaceRelationsProvider(spaceId)).valueOrNull ??
         const <ObjectMeta>[];
+    final objects =
+        (ref.watch(objectsProvider(spaceId)).valueOrNull ??
+                const <ObjectMeta>[])
+            .where((meta) => meta.id != objectId)
+            .toList(growable: false);
 
     void pickRelation(ObjectMeta? relation) {
       if (relation == null) {
@@ -467,13 +492,14 @@ class _RelationEditorCard extends HookConsumerWidget {
             .editRelation(
               objectId,
               relationKey: key,
-              stringValue:
-                  kind == _RelationValueKind.text ||
-                      kind == _RelationValueKind.status
+              stringValue: kind == _RelationValueKind.text
                   ? valueController.value.trim()
                   : null,
               boolValue: kind == _RelationValueKind.checkbox
                   ? checked.value.toString()
+                  : null,
+              objectIdValue: kind == _RelationValueKind.object
+                  ? objectIdValue.value
                   : null,
               stringListValue: kind == _RelationValueKind.tag
                   ? valueController.value
@@ -538,6 +564,10 @@ class _RelationEditorCard extends HookConsumerWidget {
                   ),
                   MSelectItem(value: _RelationValueKind.tag, label: 'Tag'),
                   MSelectItem(value: _RelationValueKind.date, label: 'Date'),
+                  MSelectItem(
+                    value: _RelationValueKind.object,
+                    label: 'Object',
+                  ),
                 ],
                 controller: kindController,
                 onChanged: (value) =>
@@ -553,6 +583,21 @@ class _RelationEditorCard extends HookConsumerWidget {
                       initialValue: checked.value,
                       onChanged: (value) => checked.value = value,
                       semanticLabel: 'Relation value',
+                    )
+                  : kind == _RelationValueKind.object
+                  ? MSelect<String?>(
+                      items: <MSelectItem<String?>>[
+                        const MSelectItem(value: null, label: 'Select object'),
+                        for (final object in objects)
+                          MSelectItem(
+                            value: object.id,
+                            label: object.displayName,
+                          ),
+                      ],
+                      initialValue: null,
+                      onChanged: (value) => objectIdValue.value = value,
+                      semanticLabel: 'Relation object value',
+                      enabled: !busy.value,
                     )
                   : MTextField(
                       controller: valueController,
