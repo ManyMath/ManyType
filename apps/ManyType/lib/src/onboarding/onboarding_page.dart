@@ -96,12 +96,9 @@ class OnboardingPage extends HookConsumerWidget {
     );
 
     return MScaffold(
-      header: Row(
-        children: <Widget>[
-          Text('ManyType', style: theme.typography.title),
-          const Spacer(),
-          const _ThemeToggle(),
-        ],
+      header: const MAppHeader(
+        title: 'ManyType',
+        actions: <Widget>[_ThemeToggle()],
       ),
       body: Center(
         child: SingleChildScrollView(

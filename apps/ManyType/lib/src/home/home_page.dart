@@ -33,10 +33,20 @@ class HomePage extends HookConsumerWidget {
     final showAccount = useState(false);
 
     return MScaffold(
-      header: Row(
-        children: <Widget>[
-          Text('ManyType', style: theme.typography.title),
-          const SizedBox(width: 12),
+      header: MAppHeader(
+        title: 'ManyType',
+        // TODO(manytype): phase 2 sync status. Sync is native-only today
+        // (QUIC FFI, rust build) and not wired into the app yet.
+        status: MBadge(
+          variant: MBadgeVariant.outline,
+          child: Text(
+            'Sync: not configured',
+            style: theme.typography.caption.copyWith(
+              color: theme.colors.mutedForeground,
+            ),
+          ),
+        ),
+        actions: <Widget>[
           if (account != null)
             MButton(
               variant: MButtonVariant.ghost,
@@ -49,19 +59,6 @@ class HomePage extends HookConsumerWidget {
                 ),
               ),
             ),
-          const Spacer(),
-          // TODO(manytype): phase 2 sync status. Sync is native-only today
-          // (QUIC FFI, rust build) and not wired into the app yet.
-          MBadge(
-            variant: MBadgeVariant.outline,
-            child: Text(
-              'Sync: not configured',
-              style: theme.typography.caption.copyWith(
-                color: theme.colors.mutedForeground,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
           MButton(
             variant: MButtonVariant.ghost,
             onPressed: () => ref.toggleMThemeMode(themeModeProvider),
