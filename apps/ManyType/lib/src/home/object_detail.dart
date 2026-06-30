@@ -107,19 +107,19 @@ class ObjectDetailView extends ConsumerWidget {
             const SizedBox(height: 12),
             Expanded(
               child: blocks.when(
-                loading: () => const Center(child: MProgress.indeterminate()),
-                error: (e, _) => Text(
-                  'Could not read object: $e',
-                  style: theme.typography.bodySmall.copyWith(
-                    color: theme.colors.destructive,
-                  ),
+                loading: () => const Center(
+                  child: MLoadingState(message: 'Loading object'),
+                ),
+                error: (e, _) => MAlert(
+                  variant: MAlertVariant.destructive,
+                  message: 'Could not read object: $e',
                 ),
                 data: (result) {
                   if (result == null) {
-                    return Text(
-                      'Object not found in the local store.',
-                      style: theme.typography.bodySmall.copyWith(
-                        color: theme.colors.mutedForeground,
+                    return const Center(
+                      child: MEmptyState(
+                        title: 'Object not found',
+                        description: 'This object is not in the local store.',
                       ),
                     );
                   }

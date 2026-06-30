@@ -47,12 +47,13 @@ class OnboardingPage extends HookConsumerWidget {
     }
 
     final body = accounts.when(
-      loading: () => const MProgress.indeterminate(),
-      error: (e, _) => Text(
-        'Could not load accounts: $e',
-        style: theme.typography.bodySmall.copyWith(
-          color: theme.colors.destructive,
-        ),
+      loading: () => const MLoadingState(
+        message: 'Loading accounts',
+        alignment: MLoadingStateAlignment.start,
+      ),
+      error: (e, _) => MAlert(
+        variant: MAlertVariant.destructive,
+        message: 'Could not load accounts: $e',
       ),
       data: (list) => switch (mode.value) {
         _Mode.create => _CreateAccountCard(

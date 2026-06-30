@@ -50,7 +50,9 @@ void main() {
   late ProviderContainer container;
 
   setUp(() async {
-    tempBase = await Directory.systemTemp.createTemp('manytype_home_widget_test');
+    tempBase = await Directory.systemTemp.createTemp(
+      'manytype_home_widget_test',
+    );
     AccountRegistry.testBaseDirOverride = tempBase.path;
     container = ProviderContainer(
       overrides: [
@@ -77,8 +79,9 @@ void main() {
     await tempBase.delete(recursive: true);
   });
 
-  testWidgets('renders the empty state for a freshly created account',
-      (tester) async {
+  testWidgets('renders the empty state for a freshly created account', (
+    tester,
+  ) async {
     // HomePage's list + create card + search field is taller than the
     // default 800x600 test surface, which silently puts lower content
     // off-screen for tester.tap() hit-testing (see ROADMAP.md's Fleet-wide
@@ -88,10 +91,7 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: MWidgetsApp(
-          theme: MThemeData.light(),
-          home: const HomePage(),
-        ),
+        child: MWidgetsApp(theme: MThemeData.light(), home: const HomePage()),
       ),
     );
     // Not pumpAndSettle(): would hang on MProgress.indeterminate()'s
@@ -100,7 +100,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('No objects yet. Create your first one above.'),
-        findsOneWidget);
+    expect(find.text('No objects yet'), findsOneWidget);
+    expect(find.text('Create your first object above.'), findsOneWidget);
   });
 }

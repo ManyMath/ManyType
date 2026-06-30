@@ -35,10 +35,17 @@ class _RootGate extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentId = ref.watch(currentAccountIdProvider);
     return currentId.when(
-      loading: () =>
-          const MScaffold(body: Center(child: MProgress.indeterminate())),
+      loading: () => const MScaffold(
+        body: Center(child: MLoadingState(message: 'Loading account registry')),
+      ),
       error: (e, _) => MScaffold(
-        body: Center(child: Text('Failed to load account registry: $e')),
+        body: Center(
+          child: MAlert(
+            variant: MAlertVariant.destructive,
+            message: 'Failed to load account registry: $e',
+            maxWidth: 420,
+          ),
+        ),
       ),
       data: (id) => id == null ? const OnboardingPage() : const HomePage(),
     );

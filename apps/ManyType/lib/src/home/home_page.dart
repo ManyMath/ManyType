@@ -72,13 +72,13 @@ class HomePage extends HookConsumerWidget {
         ],
       ),
       body: session.when(
-        loading: () => const Center(child: MProgress.indeterminate()),
+        loading: () =>
+            const Center(child: MLoadingState(message: 'Opening local store')),
         error: (e, _) => Center(
-          child: Text(
-            'Could not open local store: $e',
-            style: theme.typography.bodySmall.copyWith(
-              color: theme.colors.destructive,
-            ),
+          child: MAlert(
+            variant: MAlertVariant.destructive,
+            message: 'Could not open local store: $e',
+            maxWidth: 420,
           ),
         ),
         data: (open) {
@@ -110,7 +110,7 @@ class HomePage extends HookConsumerWidget {
                       child: showAccount.value
                           ? accountView
                           : selectedObjectId.value == null
-                          ? _EmptyDetailHint()
+                          ? const _EmptyDetailHint()
                           : ObjectDetailView(
                               objectId: selectedObjectId.value!,
                               spaceId: spaceId,
@@ -141,15 +141,14 @@ class HomePage extends HookConsumerWidget {
 }
 
 class _EmptyDetailHint extends StatelessWidget {
+  const _EmptyDetailHint();
+
   @override
   Widget build(BuildContext context) {
-    final theme = MTheme.of(context);
-    return Center(
-      child: Text(
-        'Select an object to view it.',
-        style: theme.typography.bodySmall.copyWith(
-          color: theme.colors.mutedForeground,
-        ),
+    return const Center(
+      child: MEmptyState(
+        title: 'Select an object',
+        description: 'Choose an object to view its blocks and relations.',
       ),
     );
   }
@@ -170,7 +169,6 @@ class _ListPane extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = MTheme.of(context);
     final objects = ref.watch(objectsProvider(spaceId));
     final query = ref.watch(_objectSearchQueryProvider);
 
@@ -187,28 +185,28 @@ class _ListPane extends ConsumerWidget {
           loading: () => const <Widget>[
             Padding(
               padding: EdgeInsets.all(16),
-              child: MProgress.indeterminate(),
+              child: MLoadingState(
+                message: 'Loading objects',
+                alignment: MLoadingStateAlignment.start,
+              ),
             ),
           ],
           error: (e, _) => <Widget>[
-            Text(
-              'Could not list objects: $e',
-              style: theme.typography.bodySmall.copyWith(
-                color: theme.colors.destructive,
-              ),
+            MAlert(
+              variant: MAlertVariant.destructive,
+              message: 'Could not list objects: $e',
             ),
           ],
           data: (metas) {
             final filtered = filterObjectsForSearch(metas, query);
             if (metas.isEmpty) {
               return <Widget>[
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'No objects yet. Create your first one above.',
-                    style: theme.typography.bodySmall.copyWith(
-                      color: theme.colors.mutedForeground,
-                    ),
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: MEmptyState(
+                    title: 'No objects yet',
+                    description: 'Create your first object above.',
+                    alignment: MEmptyStateAlignment.start,
                   ),
                 ),
               ];
@@ -217,11 +215,10 @@ class _ListPane extends ConsumerWidget {
               return <Widget>[
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'No objects match "$query".',
-                    style: theme.typography.bodySmall.copyWith(
-                      color: theme.colors.mutedForeground,
-                    ),
+                  child: MEmptyState(
+                    title: 'No matching objects',
+                    description: 'No objects match "$query".',
+                    alignment: MEmptyStateAlignment.start,
                   ),
                 ),
               ];
