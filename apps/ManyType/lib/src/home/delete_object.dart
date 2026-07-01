@@ -22,46 +22,17 @@ Future<bool> confirmDeleteObject(
   required String spaceId,
   required String displayName,
 }) async {
-  final theme = MTheme.of(context);
-  final confirmed = await showMDialog<bool>(
+  final confirmed = await showMConfirmDialog(
     context,
-    builder: (BuildContext ctx) => ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 380),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Text('Delete "$displayName"?', style: theme.typography.title),
-          const SizedBox(height: 8),
-          Text(
-            'This marks the object deleted on this device right away and '
-            'cannot be undone from here. The delete only reaches your other '
-            'devices once you sync.',
-            style: theme.typography.bodySmall
-                .copyWith(color: theme.colors.mutedForeground),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: <Widget>[
-              MButton(
-                variant: MButtonVariant.ghost,
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              MButton(
-                variant: MButtonVariant.destructive,
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    ),
+    title: 'Delete "$displayName"?',
+    message:
+        'This marks the object deleted on this device right away and cannot '
+        'be undone from here. The delete only reaches your other devices once '
+        'you sync.',
+    confirmLabel: 'Delete',
+    confirmVariant: MButtonVariant.destructive,
   );
-  if (confirmed != true) {
+  if (!confirmed) {
     return false;
   }
   final result = await ref

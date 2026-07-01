@@ -24,7 +24,6 @@ class OnboardingPage extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = MTheme.of(context);
     final accounts = ref.watch(accountsProvider);
     final mode = useState<_Mode>(_Mode.pick);
     final busy = useState(false);
@@ -113,11 +112,9 @@ class OnboardingPage extends HookConsumerWidget {
                 body,
                 if (error.value != null) ...<Widget>[
                   const SizedBox(height: 12),
-                  Text(
-                    error.value!,
-                    style: theme.typography.bodySmall.copyWith(
-                      color: theme.colors.destructive,
-                    ),
+                  MAlert(
+                    variant: MAlertVariant.destructive,
+                    message: error.value!,
                   ),
                 ],
               ],

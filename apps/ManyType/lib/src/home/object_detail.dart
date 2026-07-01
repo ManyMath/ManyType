@@ -240,7 +240,6 @@ class _AddBlockCard extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = MTheme.of(context);
     final controller = useMController<String>('');
     final kind = useState(NewBlockKind.text);
     final busy = useState(false);
@@ -301,12 +300,7 @@ class _AddBlockCard extends HookConsumerWidget {
           ),
           if (error.value != null) ...<Widget>[
             const SizedBox(height: 8),
-            Text(
-              error.value!,
-              style: theme.typography.bodySmall.copyWith(
-                color: theme.colors.destructive,
-              ),
-            ),
+            MAlert(variant: MAlertVariant.destructive, message: error.value!),
           ],
         ],
       ),
@@ -621,12 +615,7 @@ class _RelationEditorCard extends HookConsumerWidget {
         ),
         if (error.value != null) ...<Widget>[
           const SizedBox(height: 8),
-          Text(
-            error.value!,
-            style: theme.typography.bodySmall.copyWith(
-              color: theme.colors.destructive,
-            ),
-          ),
+          MAlert(variant: MAlertVariant.destructive, message: error.value!),
         ],
       ],
     );

@@ -440,12 +440,7 @@ class _NewObjectCard extends HookConsumerWidget {
             ],
             if (error.value != null) ...<Widget>[
               const SizedBox(height: 8),
-              Text(
-                error.value!,
-                style: theme.typography.bodySmall.copyWith(
-                  color: theme.colors.destructive,
-                ),
-              ),
+              MAlert(variant: MAlertVariant.destructive, message: error.value!),
             ],
           ],
         ),
