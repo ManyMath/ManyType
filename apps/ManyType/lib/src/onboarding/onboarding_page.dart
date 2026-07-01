@@ -335,12 +335,7 @@ class _CreateAccountCard extends HookWidget {
             else ...<Widget>[
               const MLabel('Recovery phrase'),
               const SizedBox(height: 8),
-              MCard(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(phrase, style: theme.typography.code),
-                ),
-              ),
+              MInsetPanel(child: Text(phrase, style: theme.typography.code)),
               const SizedBox(height: 8),
               MButton(
                 variant: MButtonVariant.outline,

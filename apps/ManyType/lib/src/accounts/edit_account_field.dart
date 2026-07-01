@@ -11,11 +11,9 @@ Future<String?> promptEditAccountField(
   required String label,
   required String? initialValue,
 }) async {
-  final theme = MTheme.of(context);
   return showMDialog<String>(
     context,
     builder: (BuildContext ctx) => _EditFieldDialog(
-      theme: theme,
       title: title,
       label: label,
       initialValue: initialValue ?? '',
@@ -25,13 +23,11 @@ Future<String?> promptEditAccountField(
 
 class _EditFieldDialog extends HookWidget {
   const _EditFieldDialog({
-    required this.theme,
     required this.title,
     required this.label,
     required this.initialValue,
   });
 
-  final MThemeData theme;
   final String title;
   final String label;
   final String initialValue;
@@ -43,14 +39,13 @@ class _EditFieldDialog extends HookWidget {
 
     final bool valid = value.value.trim().isNotEmpty;
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 380),
-      child: Column(
+    return MDialogContent(
+      title: title,
+      maxWidth: 380,
+      content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text(title, style: theme.typography.title),
-          const SizedBox(height: 16),
           MLabel(label),
           const SizedBox(height: 8),
           MTextField(
@@ -61,26 +56,21 @@ class _EditFieldDialog extends HookWidget {
               if (valid) Navigator.of(context).pop(value.value.trim());
             },
           ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: <Widget>[
-              MButton(
-                variant: MButtonVariant.ghost,
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              MButton(
-                onPressed: valid
-                    ? () => Navigator.of(context).pop(value.value.trim())
-                    : null,
-                child: const Text('Save'),
-              ),
-            ],
-          ),
         ],
       ),
+      actions: <Widget>[
+        MButton(
+          variant: MButtonVariant.ghost,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        MButton(
+          onPressed: valid
+              ? () => Navigator.of(context).pop(value.value.trim())
+              : null,
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }
