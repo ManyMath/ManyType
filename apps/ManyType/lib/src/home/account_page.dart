@@ -23,8 +23,7 @@ class AccountView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = MTheme.of(context);
     final account = ref.watch(currentAccountProvider).valueOrNull;
-    final server =
-        ref.watch(sessionProvider).valueOrNull?.config.serverAddress;
+    final server = ref.watch(sessionProvider).valueOrNull?.config.serverAddress;
 
     return MCard(
       child: Padding(
@@ -32,11 +31,9 @@ class AccountView extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text('Account', style: theme.typography.headlineSmall),
-                ),
+            MSectionHeader(
+              title: 'Account',
+              actions: <Widget>[
                 MButton(
                   variant: MButtonVariant.ghost,
                   onPressed: onBack,
@@ -102,11 +99,11 @@ class AccountView extends ConsumerWidget {
               onPressed: account == null
                   ? null
                   : () => confirmForgetAccount(
-                        context,
-                        ref,
-                        id: account.id,
-                        displayName: account.displayName,
-                      ),
+                      context,
+                      ref,
+                      id: account.id,
+                      displayName: account.displayName,
+                    ),
               child: const Text('Forget this account…'),
             ),
           ],
@@ -133,25 +130,15 @@ class _EditableFact extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = MTheme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(label, style: theme.typography.label),
-        const SizedBox(height: 4),
-        Row(
-          children: <Widget>[
-            Expanded(child: Text(value ?? '—', style: style)),
-            const SizedBox(width: 8),
-            MButton(
-              variant: MButtonVariant.outline,
-              size: MButtonSize.xs,
-              onPressed: onEdit == null ? null : () => onEdit!(),
-              child: const Text('Edit'),
-            ),
-          ],
-        ),
-      ],
+    return MPropertyRow(
+      label: label,
+      value: Text(value ?? '—', style: style),
+      trailing: MButton(
+        variant: MButtonVariant.outline,
+        size: MButtonSize.xs,
+        onPressed: onEdit == null ? null : () => onEdit!(),
+        child: const Text('Edit'),
+      ),
     );
   }
 }
@@ -179,29 +166,18 @@ class _CopyableFact extends HookWidget {
       }
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(label, style: theme.typography.label),
-        const SizedBox(height: 4),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                text ?? '—',
-                style: theme.typography.code.copyWith(fontSize: 12),
-              ),
-            ),
-            const SizedBox(width: 8),
-            MButton(
-              variant: MButtonVariant.outline,
-              size: MButtonSize.xs,
-              onPressed: text == null ? null : copy,
-              child: Text(copied.value ? 'Copied' : 'Copy'),
-            ),
-          ],
-        ),
-      ],
+    return MPropertyRow(
+      label: label,
+      value: Text(
+        text ?? '—',
+        style: theme.typography.code.copyWith(fontSize: 12),
+      ),
+      trailing: MButton(
+        variant: MButtonVariant.outline,
+        size: MButtonSize.xs,
+        onPressed: text == null ? null : copy,
+        child: Text(copied.value ? 'Copied' : 'Copy'),
+      ),
     );
   }
 }

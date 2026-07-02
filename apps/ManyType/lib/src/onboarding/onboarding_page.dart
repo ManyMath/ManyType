@@ -152,7 +152,6 @@ class _WelcomeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = MTheme.of(context);
     return MCard(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -160,14 +159,11 @@ class _WelcomeCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text('Welcome to ManyType', style: theme.typography.headlineSmall),
-            const SizedBox(height: 8),
-            Text(
-              'An offline-first Any-Sync client. Your notes live in a local, '
-              'encrypted store owned by a recovery phrase.',
-              style: theme.typography.bodySmall.copyWith(
-                color: theme.colors.mutedForeground,
-              ),
+            const MSectionHeader(
+              title: 'Welcome to ManyType',
+              description:
+                  'An offline-first Any-Sync client. Your notes live in a '
+                  'local, encrypted store owned by a recovery phrase.',
             ),
             const SizedBox(height: 24),
             MButton(onPressed: onCreate, child: const Text('Create account')),
@@ -211,7 +207,7 @@ class _AccountPickerCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text('Choose an account', style: theme.typography.headlineSmall),
+            const MSectionHeader(title: 'Choose an account'),
             const SizedBox(height: 16),
             for (final account in accounts) ...<Widget>[
               Row(
@@ -292,6 +288,7 @@ class _CreateAccountCard extends HookWidget {
     final mnemonic = useState<String?>(null);
     final saved = useState(false);
     final copied = useState(false);
+    final nameFocus = useFocusNode();
 
     final phrase = mnemonic.value;
 
@@ -311,15 +308,19 @@ class _CreateAccountCard extends HookWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text('Create account', style: theme.typography.headlineSmall),
+            const MSectionHeader(title: 'Create account'),
             const SizedBox(height: 16),
-            const MLabel('Display name'),
-            const SizedBox(height: 8),
-            MTextField(
-              placeholder: 'e.g. Personal',
-              semanticLabel: 'Display name',
+            MField(
+              label: 'Display name',
+              focusNode: nameFocus,
               enabled: !busy,
-              onChanged: (value) => name.value = value,
+              child: MTextField(
+                focusNode: nameFocus,
+                placeholder: 'e.g. Personal',
+                semanticLabel: 'Display name',
+                enabled: !busy,
+                onChanged: (value) => name.value = value,
+              ),
             ),
             const SizedBox(height: 16),
             if (phrase == null)
@@ -333,9 +334,12 @@ class _CreateAccountCard extends HookWidget {
                 child: const Text('Generate recovery phrase'),
               )
             else ...<Widget>[
-              const MLabel('Recovery phrase'),
-              const SizedBox(height: 8),
-              MInsetPanel(child: Text(phrase, style: theme.typography.code)),
+              MField(
+                label: 'Recovery phrase',
+                child: MInsetPanel(
+                  child: Text(phrase, style: theme.typography.code),
+                ),
+              ),
               const SizedBox(height: 8),
               MButton(
                 variant: MButtonVariant.outline,
@@ -395,10 +399,11 @@ class _ImportAccountCard extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = MTheme.of(context);
     final name = useState('');
     final phrase = useState('');
     final validationError = useState<String?>(null);
+    final nameFocus = useFocusNode();
+    final phraseFocus = useFocusNode();
 
     void submit() {
       final problem = mnemonicInputError(phrase.value);
@@ -419,35 +424,36 @@ class _ImportAccountCard extends HookWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text('Import phrase', style: theme.typography.headlineSmall),
+            const MSectionHeader(title: 'Import phrase'),
             const SizedBox(height: 16),
-            const MLabel('Display name'),
-            const SizedBox(height: 8),
-            MTextField(
-              placeholder: 'e.g. Personal',
-              semanticLabel: 'Display name',
+            MField(
+              label: 'Display name',
+              focusNode: nameFocus,
               enabled: !busy,
-              onChanged: (value) => name.value = value,
-            ),
-            const SizedBox(height: 16),
-            const MLabel('Recovery phrase (12 or 24 words)'),
-            const SizedBox(height: 8),
-            MTextField(
-              placeholder: 'word word word ...',
-              semanticLabel: 'Recovery phrase',
-              enabled: !busy,
-              onChanged: (value) => phrase.value = value,
-              onSubmitted: (_) => submit(),
-            ),
-            if (validationError.value != null) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(
-                validationError.value!,
-                style: theme.typography.bodySmall.copyWith(
-                  color: theme.colors.destructive,
-                ),
+              child: MTextField(
+                focusNode: nameFocus,
+                placeholder: 'e.g. Personal',
+                semanticLabel: 'Display name',
+                enabled: !busy,
+                onChanged: (value) => name.value = value,
               ),
-            ],
+            ),
+            const SizedBox(height: 16),
+            MField(
+              label: 'Recovery phrase (12 or 24 words)',
+              focusNode: phraseFocus,
+              enabled: !busy,
+              errorText: validationError.value,
+              child: MTextField(
+                focusNode: phraseFocus,
+                placeholder: 'word word word ...',
+                semanticLabel: 'Recovery phrase',
+                enabled: !busy,
+                error: validationError.value != null,
+                onChanged: (value) => phrase.value = value,
+                onSubmitted: (_) => submit(),
+              ),
+            ),
             const SizedBox(height: 16),
             MButton(
               onPressed: busy ? null : submit,

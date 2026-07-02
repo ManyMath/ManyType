@@ -36,6 +36,7 @@ class _EditFieldDialog extends HookWidget {
   Widget build(BuildContext context) {
     final controller = useMController<String>(initialValue);
     final value = useState(initialValue);
+    final fieldFocus = useFocusNode();
 
     final bool valid = value.value.trim().isNotEmpty;
 
@@ -46,15 +47,18 @@ class _EditFieldDialog extends HookWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          MLabel(label),
-          const SizedBox(height: 8),
-          MTextField(
-            controller: controller,
-            semanticLabel: label,
-            onChanged: (v) => value.value = v,
-            onSubmitted: (_) {
-              if (valid) Navigator.of(context).pop(value.value.trim());
-            },
+          MField(
+            label: label,
+            focusNode: fieldFocus,
+            child: MTextField(
+              focusNode: fieldFocus,
+              controller: controller,
+              semanticLabel: label,
+              onChanged: (v) => value.value = v,
+              onSubmitted: (_) {
+                if (valid) Navigator.of(context).pop(value.value.trim());
+              },
+            ),
           ),
         ],
       ),

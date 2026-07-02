@@ -54,25 +54,23 @@ class ObjectDetailView extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                if (onBack != null) ...<Widget>[
-                  MButton(
-                    variant: MButtonVariant.ghost,
-                    onPressed: onBack,
-                    child: const Text('Back'),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(
-                  child: Text(
-                    title,
-                    style: theme.typography.headlineSmall,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
+            MSectionHeader(
+              title: title,
+              description: objectId,
+              titleMaxLines: 2,
+              descriptionMaxLines: 1,
+              descriptionStyle: theme.typography.code.copyWith(
+                fontSize: 11,
+                color: theme.colors.mutedForeground,
+              ),
+              leading: onBack == null
+                  ? null
+                  : MButton(
+                      variant: MButtonVariant.ghost,
+                      onPressed: onBack,
+                      child: const Text('Back'),
+                    ),
+              actions: <Widget>[
                 MButton(
                   variant: MButtonVariant.destructive,
                   size: MButtonSize.sm,
@@ -91,16 +89,6 @@ class ObjectDetailView extends ConsumerWidget {
                   child: const Text('Delete'),
                 ),
               ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              objectId,
-              style: theme.typography.code.copyWith(
-                fontSize: 11,
-                color: theme.colors.mutedForeground,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 12),
             const MDivider(),
