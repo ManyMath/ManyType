@@ -9,10 +9,12 @@ import 'package:manyui_riverpod/manyui_riverpod.dart';
 import '../state/accounts_providers.dart';
 import '../state/objects_providers.dart';
 import '../state/session_provider.dart';
+import '../state/sync_controller.dart';
 import '../theme.dart';
 import 'account_page.dart';
 import 'delete_object.dart';
 import 'object_detail.dart';
+import 'sync_dialog.dart';
 
 /// Client-side search query over the object list. Filtering happens in Dart
 /// against the already-loaded [objectsProvider] results (no library-level
@@ -29,24 +31,25 @@ class HomePage extends HookConsumerWidget {
     final theme = MTheme.of(context);
     final account = ref.watch(currentAccountProvider).valueOrNull;
     final session = ref.watch(sessionProvider);
+    final headerSpaceId = session.valueOrNull?.identity.spaceId;
+    final syncState = ref.watch(syncControllerProvider);
     final selectedObjectId = useState<String?>(null);
     final showAccount = useState(false);
 
     return MScaffold(
       header: MAppHeader(
         title: 'ManyType',
-        // TODO(manytype): phase 2 sync status. Sync is native-only today
-        // (QUIC FFI, rust build) and not wired into the app yet.
-        status: MBadge(
-          variant: MBadgeVariant.outline,
-          child: Text(
-            'Sync: not configured',
-            style: theme.typography.caption.copyWith(
-              color: theme.colors.mutedForeground,
-            ),
-          ),
-        ),
+        status: _SyncStatusBadge(state: syncState),
         actions: <Widget>[
+          if (headerSpaceId != null)
+            MButton(
+              variant: MButtonVariant.ghost,
+              size: MButtonSize.sm,
+              onPressed: syncState.busy
+                  ? null
+                  : () => showSyncDialog(context, spaceId: headerSpaceId),
+              child: const Text('Sync'),
+            ),
           if (account != null)
             MButton(
               variant: MButtonVariant.ghost,
@@ -137,6 +140,36 @@ class HomePage extends HookConsumerWidget {
         },
       ),
     );
+  }
+}
+
+class _SyncStatusBadge extends StatelessWidget {
+  const _SyncStatusBadge({required this.state});
+
+  final SyncUiState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final variant = switch (state.status) {
+      SyncUiStatus.failed => MBadgeVariant.destructive,
+      SyncUiStatus.probeSucceeded ||
+      SyncUiStatus.syncSucceeded => MBadgeVariant.primary,
+      SyncUiStatus.ready ||
+      SyncUiStatus.probing ||
+      SyncUiStatus.syncing => MBadgeVariant.secondary,
+      SyncUiStatus.unconfigured => MBadgeVariant.outline,
+    };
+    final label = switch (state.status) {
+      SyncUiStatus.unconfigured => 'Sync: configure',
+      SyncUiStatus.ready => 'Sync: ready',
+      SyncUiStatus.probing => 'Probing...',
+      SyncUiStatus.syncing => 'Syncing...',
+      SyncUiStatus.probeSucceeded => 'Network OK',
+      SyncUiStatus.syncSucceeded => 'Synced',
+      SyncUiStatus.failed => 'Sync error',
+    };
+
+    return MBadge(variant: variant, child: Text(label));
   }
 }
 

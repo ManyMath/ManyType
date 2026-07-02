@@ -102,5 +102,7 @@ void main() {
 
     expect(find.text('No objects yet'), findsOneWidget);
     expect(find.text('Create your first object above.'), findsOneWidget);
+    expect(find.text('Sync: configure'), findsOneWidget);
+    expect(find.text('Sync'), findsOneWidget);
   });
 }
