@@ -265,6 +265,22 @@ nodes:
 ''';
 }
 
+String buildSelfHostedDockerStartCommand({
+  required String externalListenHosts,
+}) {
+  final hosts = _requiredSingleLine(externalListenHosts, 'externalListenHosts');
+  final escapedHosts = _escapeEnvDoubleQuoted(hosts);
+
+  return '''
+cd docker/any-sync
+cat > .env.override <<'EOF'
+EXTERNAL_LISTEN_HOSTS="$escapedHosts"
+EOF
+make start
+'''
+      .trim();
+}
+
 String _readyMessage(NetworkConfigFile config) {
   final network = _networkLabel(config.networkId);
   final nodeCount = config.nodes.length;
@@ -280,6 +296,13 @@ String _requiredSingleLine(String value, String field) {
     throw StateError('$field must be a single line');
   }
   return trimmed;
+}
+
+String _escapeEnvDoubleQuoted(String value) {
+  return value
+      .replaceAll(r'\', r'\\')
+      .replaceAll('"', r'\"')
+      .replaceAll(r'$', r'\$');
 }
 
 String _networkLabel(String networkId) {

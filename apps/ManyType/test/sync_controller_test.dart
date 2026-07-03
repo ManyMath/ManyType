@@ -90,6 +90,33 @@ void main() {
     );
   });
 
+  test('buildSelfHostedDockerStartCommand creates make-start script', () {
+    final command = buildSelfHostedDockerStartCommand(
+      externalListenHosts: '192.168.1.10',
+    );
+
+    expect(command, contains('cd docker/any-sync'));
+    expect(command, contains('EXTERNAL_LISTEN_HOSTS="192.168.1.10"'));
+    expect(command, contains('make start'));
+  });
+
+  test('buildSelfHostedDockerStartCommand escapes env value', () {
+    final command = buildSelfHostedDockerStartCommand(
+      externalListenHosts: r'host"$name\path',
+    );
+
+    expect(command, contains(r'EXTERNAL_LISTEN_HOSTS="host\"\$name\\path"'));
+  });
+
+  test('buildSelfHostedDockerStartCommand rejects multiline host list', () {
+    expect(
+      () => buildSelfHostedDockerStartCommand(
+        externalListenHosts: '127.0.0.1\n192.168.1.10',
+      ),
+      throwsStateError,
+    );
+  });
+
   test('useSelfHostedConfig fills state with generated config', () {
     final container = buildContainer();
     addTearDown(container.dispose);

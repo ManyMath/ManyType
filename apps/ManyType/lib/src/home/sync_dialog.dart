@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -28,9 +29,25 @@ class _SyncDialog extends HookConsumerWidget {
     );
     final selfHostedPeerController = useMController<String>('');
     final selfHostedNetworkController = useMController<String>('local-net');
+    final selfHostedServerHostController = useMController<String>('127.0.0.1');
+    final selfHostedServerHosts = useMControllerValue(
+      selfHostedServerHostController,
+    );
     final selfHostedError = useState<String?>(null);
+    final selfHostedCommandCopied = useState(false);
     final syncController = ref.read(syncControllerProvider.notifier);
     final theme = MTheme.of(context);
+
+    String? selfHostedCommand;
+    String? selfHostedCommandError;
+    try {
+      selfHostedCommand = buildSelfHostedDockerStartCommand(
+        externalListenHosts: selfHostedServerHosts,
+      );
+    } on Object catch (error) {
+      selfHostedCommandError = syncErrorMessage(error);
+    }
+
     void useSelfHostedConfig() {
       try {
         final content = syncController.useSelfHostedConfig(
@@ -42,6 +59,18 @@ class _SyncDialog extends HookConsumerWidget {
         selfHostedError.value = null;
       } on Object catch (error) {
         selfHostedError.value = syncErrorMessage(error);
+      }
+    }
+
+    Future<void> copySelfHostedCommand() async {
+      final command = selfHostedCommand;
+      if (command == null) return;
+
+      await Clipboard.setData(ClipboardData(text: command));
+      selfHostedCommandCopied.value = true;
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (context.mounted) {
+        selfHostedCommandCopied.value = false;
       }
     }
 
@@ -153,6 +182,62 @@ class _SyncDialog extends HookConsumerWidget {
                       variant: MButtonVariant.outline,
                       onPressed: state.busy ? null : useSelfHostedConfig,
                       child: const Text('Use self-hosted config'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const MDivider(),
+                const SizedBox(height: 12),
+                MSectionHeader(
+                  title: 'Server bootstrap',
+                  titleStyle: theme.typography.label,
+                  description:
+                      'Start the checked-in Docker stack and generate '
+                      'etc/client.yml.',
+                ),
+                const SizedBox(height: 12),
+                MField(
+                  label: 'External listen hosts',
+                  description:
+                      'Hostnames or IP addresses the server should advertise.',
+                  enabled: !state.busy,
+                  errorText: selfHostedCommandError,
+                  child: MTextField(
+                    controller: selfHostedServerHostController,
+                    enabled: !state.busy,
+                    placeholder: '127.0.0.1',
+                    semanticLabel: 'External listen hosts',
+                    onChanged: (_) => selfHostedCommandCopied.value = false,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                MField(
+                  label: 'Start command',
+                  description:
+                      'Run from the ManyType repository root before importing '
+                      'the generated client.yml.',
+                  child: MInsetPanel(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      selfHostedCommand ?? 'Enter an external host first.',
+                      style: theme.typography.code.copyWith(fontSize: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                MActionRow(
+                  children: <Widget>[
+                    MButton(
+                      variant: MButtonVariant.outline,
+                      size: MButtonSize.sm,
+                      onPressed: selfHostedCommand == null
+                          ? null
+                          : copySelfHostedCommand,
+                      child: Text(
+                        selfHostedCommandCopied.value
+                            ? 'Copied'
+                            : 'Copy command',
+                      ),
                     ),
                   ],
                 ),
