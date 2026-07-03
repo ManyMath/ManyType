@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manyui/manyui.dart';
 import 'package:manyui_hooks/manyui_hooks.dart';
@@ -22,14 +23,33 @@ class _SyncDialog extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(syncControllerProvider);
     final controller = useMController<String>(state.networkConfigContent);
+    final selfHostedAddressController = useMController<String>(
+      '127.0.0.1:33020',
+    );
+    final selfHostedPeerController = useMController<String>('');
+    final selfHostedNetworkController = useMController<String>('local-net');
+    final selfHostedError = useState<String?>(null);
     final syncController = ref.read(syncControllerProvider.notifier);
     final theme = MTheme.of(context);
+    void useSelfHostedConfig() {
+      try {
+        final content = syncController.useSelfHostedConfig(
+          coordinatorAddress: selfHostedAddressController.value,
+          peerId: selfHostedPeerController.value,
+          networkId: selfHostedNetworkController.value,
+        );
+        controller.value = content;
+        selfHostedError.value = null;
+      } on Object catch (error) {
+        selfHostedError.value = syncErrorMessage(error);
+      }
+    }
 
     return MDialogContent(
       title: 'Sync',
       description:
-          'Paste an any-sync client.yml config to probe the coordinator or '
-          'sync this local space.',
+          'Configure an any-sync network, then probe the coordinator or sync '
+          'this local space.',
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -55,7 +75,7 @@ class _SyncDialog extends HookConsumerWidget {
           ],
           MField(
             label: 'Network config YAML',
-            description: 'Use inline client.yml content, not a file path.',
+            description: 'Inline client.yml content.',
             enabled: !state.busy,
             errorText: state.validationError,
             child: MTextField(
@@ -72,6 +92,71 @@ class _SyncDialog extends HookConsumerWidget {
                   '      - coordinator',
               semanticLabel: 'Network config YAML',
               onChanged: syncController.updateNetworkConfig,
+            ),
+          ),
+          const SizedBox(height: 16),
+          MInsetPanel(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                MSectionHeader(
+                  title: 'Self-hosted',
+                  titleStyle: theme.typography.label,
+                  description: 'Generate client.yml for a single coordinator.',
+                ),
+                const SizedBox(height: 12),
+                MField(
+                  label: 'Coordinator address',
+                  enabled: !state.busy,
+                  child: MTextField(
+                    controller: selfHostedAddressController,
+                    enabled: !state.busy,
+                    placeholder: '127.0.0.1:33020',
+                    semanticLabel: 'Coordinator address',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                MField(
+                  label: 'Peer ID',
+                  enabled: !state.busy,
+                  child: MTextField(
+                    controller: selfHostedPeerController,
+                    enabled: !state.busy,
+                    placeholder: 'Server peer ID',
+                    semanticLabel: 'Peer ID',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                MField(
+                  label: 'Network ID',
+                  enabled: !state.busy,
+                  child: MTextField(
+                    controller: selfHostedNetworkController,
+                    enabled: !state.busy,
+                    placeholder: 'local-net',
+                    semanticLabel: 'Network ID',
+                  ),
+                ),
+                if (selfHostedError.value != null) ...<Widget>[
+                  const SizedBox(height: 12),
+                  MAlert(
+                    variant: MAlertVariant.destructive,
+                    message: selfHostedError.value!,
+                  ),
+                ],
+                const SizedBox(height: 12),
+                MActionRow(
+                  children: <Widget>[
+                    MButton(
+                      variant: MButtonVariant.outline,
+                      onPressed: state.busy ? null : useSelfHostedConfig,
+                      child: const Text('Use self-hosted config'),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           if (state.message != null) ...<Widget>[

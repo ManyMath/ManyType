@@ -131,9 +131,25 @@ class SyncController extends StateNotifier<SyncUiState> {
       state = SyncUiState(
         networkConfigContent: value,
         status: SyncUiStatus.failed,
-        validationError: _errorMessage(e),
+        validationError: syncErrorMessage(e),
       );
     }
+  }
+
+  String useSelfHostedConfig({
+    required String coordinatorAddress,
+    required String peerId,
+    String networkId = 'local-net',
+    String configId = 'local',
+  }) {
+    final content = buildSelfHostedNetworkConfig(
+      coordinatorAddress: coordinatorAddress,
+      peerId: peerId,
+      networkId: networkId,
+      configId: configId,
+    );
+    updateNetworkConfig(content);
+    return content;
   }
 
   Future<void> probe() async {
@@ -163,7 +179,7 @@ class SyncController extends StateNotifier<SyncUiState> {
     } catch (e) {
       state = state.copyWith(
         status: SyncUiStatus.failed,
-        message: 'Network probe failed: ${_errorMessage(e)}',
+        message: 'Network probe failed: ${syncErrorMessage(e)}',
       );
     }
   }
@@ -189,7 +205,7 @@ class SyncController extends StateNotifier<SyncUiState> {
     } catch (e) {
       state = state.copyWith(
         status: SyncUiStatus.failed,
-        message: 'Sync failed: ${_errorMessage(e)}',
+        message: 'Sync failed: ${syncErrorMessage(e)}',
       );
     }
   }
@@ -221,10 +237,49 @@ class SyncController extends StateNotifier<SyncUiState> {
   }
 }
 
+String buildSelfHostedNetworkConfig({
+  required String coordinatorAddress,
+  required String peerId,
+  String networkId = 'local-net',
+  String configId = 'local',
+}) {
+  final address = _requiredSingleLine(coordinatorAddress, 'coordinatorAddress');
+  final normalizedAddress = normalizeQuicAddress(address);
+  final peer = _requiredSingleLine(peerId, 'peerId');
+  final network = _requiredSingleLine(networkId, 'networkId');
+  final id = _requiredSingleLine(configId, 'configId');
+
+  return '''
+id: $id
+networkId: $network
+nodes:
+  - peerId: $peer
+    addresses:
+      - quic://$normalizedAddress
+      - $normalizedAddress
+    types:
+      - coordinator
+      - tree
+      - file
+      - consensus
+''';
+}
+
 String _readyMessage(NetworkConfigFile config) {
   final network = _networkLabel(config.networkId);
   final nodeCount = config.nodes.length;
   return 'Network $network is ready with $nodeCount configured nodes.';
+}
+
+String _requiredSingleLine(String value, String field) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    throw StateError('$field is required');
+  }
+  if (trimmed.contains('\n') || trimmed.contains('\r')) {
+    throw StateError('$field must be a single line');
+  }
+  return trimmed;
 }
 
 String _networkLabel(String networkId) {
@@ -232,7 +287,7 @@ String _networkLabel(String networkId) {
   return trimmed.isEmpty ? 'unknown' : trimmed;
 }
 
-String _errorMessage(Object error) {
+String syncErrorMessage(Object error) {
   final text = error.toString();
   if (text.startsWith('Exception: ')) {
     return text.substring('Exception: '.length);

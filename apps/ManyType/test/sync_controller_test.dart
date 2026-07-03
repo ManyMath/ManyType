@@ -69,6 +69,57 @@ void main() {
     expect(state.configSummary?.coordinatorAddress, '127.0.0.1:1014');
   });
 
+  test('buildSelfHostedNetworkConfig creates parseable single-node config', () {
+    final content = buildSelfHostedNetworkConfig(
+      coordinatorAddress: 'quic://127.0.0.1:33020',
+      peerId: 'peer-local',
+      networkId: 'home-net',
+      configId: 'home',
+    );
+
+    final config = parseNetworkConfig(content);
+    final coordinator = requireCoordinatorNode(config);
+
+    expect(config.id, 'home');
+    expect(config.networkId, 'home-net');
+    expect(coordinator.peerId, 'peer-local');
+    expect(chooseBestAddress(coordinator.addresses), '127.0.0.1:33020');
+    expect(
+      coordinator.types,
+      containsAll(<String>['coordinator', 'tree', 'file', 'consensus']),
+    );
+  });
+
+  test('useSelfHostedConfig fills state with generated config', () {
+    final container = buildContainer();
+    addTearDown(container.dispose);
+
+    final generated = container
+        .read(syncControllerProvider.notifier)
+        .useSelfHostedConfig(
+          coordinatorAddress: '127.0.0.1:33020',
+          peerId: 'peer-local',
+          networkId: 'home-net',
+        );
+
+    final state = container.read(syncControllerProvider);
+    expect(state.networkConfigContent, generated);
+    expect(state.status, SyncUiStatus.ready);
+    expect(state.validationError, isNull);
+    expect(state.configSummary?.networkId, 'home-net');
+    expect(state.configSummary?.coordinatorAddress, '127.0.0.1:33020');
+  });
+
+  test('buildSelfHostedNetworkConfig rejects missing peer id', () {
+    expect(
+      () => buildSelfHostedNetworkConfig(
+        coordinatorAddress: '127.0.0.1:33020',
+        peerId: '',
+      ),
+      throwsStateError,
+    );
+  });
+
   test('invalid network config reports a validation error', () {
     final container = buildContainer();
     addTearDown(container.dispose);
