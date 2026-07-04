@@ -135,7 +135,7 @@ a:focus-visible {
 
 .hero {
   position: relative;
-  height: clamp(500px, calc(100svh - 138px), 730px);
+  height: clamp(500px, calc(100svh - 170px), 680px);
   min-height: 500px;
   overflow: hidden;
   background: var(--ink);
@@ -588,8 +588,8 @@ footer {
   }
 
   .hero {
-    height: min(690px, calc(100svh - 92px));
-    min-height: 540px;
+    height: min(650px, calc(100svh - 96px));
+    min-height: 440px;
   }
 
   .hero-media {
@@ -667,6 +667,30 @@ footer {
 
   .footer-inner span {
     flex-basis: 100%;
+  }
+}
+
+@media (max-width: 700px) and (max-height: 620px) {
+  .hero {
+    height: calc(100svh - 154px);
+    min-height: 0;
+  }
+
+  .hero-inner {
+    padding-bottom: 32px;
+  }
+
+  .hero-summary {
+    margin-top: 14px;
+    font-size: 18px;
+  }
+
+  .hero-actions {
+    margin-top: 18px;
+  }
+
+  .hero-note {
+    margin-top: 10px;
   }
 }
 

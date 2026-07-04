@@ -59,6 +59,17 @@ if [[ -s "$dist_dir/home/flutter_service_worker.js" ]]; then
   exit 1
 fi
 
+for url in \
+  'https://manymath.com/' \
+  'https://manymatrix.com/' \
+  'https://manykee.com/' \
+  'https://manytier.com/'; do
+  grep -Fq "href=\"$url\"" "$dist_dir/index.html" || {
+    echo "landing page is missing ecosystem link: $url" >&2
+    exit 1
+  }
+done
+
 mkdir -p "$download_dir"
 python3 -m http.server "$port" \
   --bind 127.0.0.1 \
@@ -88,7 +99,9 @@ curl --fail --silent --show-error "http://127.0.0.1:$port/assets/manytype-worksp
   --output "$download_dir/manytype-workspace.png"
 curl --fail --silent --show-error "http://127.0.0.1:$port/home/main.dart.js" \
   --output "$download_dir/main.dart.js"
-curl --fail --silent --show-error "http://127.0.0.1:$port/home/sqlite3.wasm" \
+curl --fail --silent --show-error \
+  --dump-header "$download_dir/wasm.headers" \
+  "http://127.0.0.1:$port/home/sqlite3.wasm" \
   --output "$download_dir/sqlite3.wasm"
 curl --fail --silent --show-error "http://127.0.0.1:$port/home/drift_worker.dart.js" \
   --output "$download_dir/drift_worker.dart.js"
@@ -119,6 +132,11 @@ if [[ "$sqlite_magic" != "0061736d" ]]; then
   echo "/home/sqlite3.wasm is not a valid WebAssembly binary" >&2
   exit 1
 fi
+grep -Eiq '^Content-Type: application/wasm([[:space:]]*;|[[:space:]]*$)' \
+  "$download_dir/wasm.headers" || {
+  echo "served SQLite WebAssembly does not use the application/wasm content type" >&2
+  exit 1
+}
 
 for missing_path in home/missing.js home/missing.wasm; do
   status="$({ curl --silent --show-error \

@@ -11,15 +11,27 @@ SQLite WebAssembly runtime beneath `/home/`.
 
 ## Build and verify
 
-From the ManyType repository root:
+Building requires Flutter and the ManyUI repository checked out beside this
+repository at `../ManyUI`. The build consumes the `manyui`, `manyui_hooks`, and
+`manyui_riverpod` packages from that sibling checkout; those packages are not
+copied into this repository.
+
+From the ManyType repository root, build the Flutter application with a
+`/home/` base path, compose both routes, and verify the resulting static files:
 
 ```sh
 ./apps/ManyType.com/tool/build_web.sh
 ./apps/ManyType.com/tool/verify_web_dist.sh
 ```
 
-The build is assembled at `apps/ManyType.com/build/dist`. To inspect that exact
-artifact locally:
+The build disables Flutter's service worker and assembles the complete static
+distribution at `apps/ManyType.com/build/dist`. Its route contract is:
+
+- `/` serves the product site from `apps/ManyType.com/site`.
+- `/home/` serves the Flutter application and its Drift worker and SQLite WASM
+  runtime.
+
+To inspect that exact artifact locally:
 
 ```sh
 python3 -m http.server 8080 --directory apps/ManyType.com/build/dist
