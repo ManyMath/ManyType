@@ -1,11 +1,11 @@
 //! Manytype server: all four any-sync node roles in a single binary.
 
 mod config;
+mod consensus;
 mod coordinator;
 mod drpc;
-mod handshake;
-mod consensus;
 mod file_node;
+mod handshake;
 mod storage;
 mod sync_node;
 mod transport;
