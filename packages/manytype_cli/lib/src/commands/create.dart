@@ -138,8 +138,10 @@ Future<CreateResult> createCommand(
   String? color,
   bool textProvided = true,
   String? assignedType,
+  Identity? identityOverride,
 }) async {
-  final identity = await Identity.fromMnemonic(config.mnemonic);
+  final identity =
+      identityOverride ?? await Identity.fromMnemonic(config.mnemonic);
   final spaceId = identity.spaceId;
   final accountPrivRaw = Uint8List(64)
     ..setRange(0, 32, identity.accountSeed)
@@ -495,7 +497,7 @@ Future<CreateResult> createCommand(
   // matching `uniqueKey` / `relationKey` against forRelation, replays its
   // details via replayObjectDetails, appends the new Relation_Option to
   // `selectDict`, and writes a DetailsSet on the parent's tree. This
-  // prevents the dangling-reference class of bug called out in STATE.md : 
+  // prevents the dangling-reference class of bug called out in STATE.md :
   // the option ID is referenceable the moment the STRelationOption exists.
   if (asRelationOption) {
     final allObjects = await db.getNonDeletedObjectsBySpace(spaceId);

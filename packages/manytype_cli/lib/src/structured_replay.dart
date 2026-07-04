@@ -9,13 +9,50 @@ import 'config.dart';
 import 'identity.dart';
 import 'store/database.dart';
 
-/// Detail keys emitted as relation values by [replayObjectRelations] rather
-/// than as ordinary relation values, even though they technically live in
-/// the same `details` map -- mirrors `read.dart`'s own
-/// `renderedRelationKeys` exclusions for `targetObjectType`/`sourceObject`,
-/// which are structural (type-picker/template provenance), not user-facing
-/// relation values an editor should offer to overwrite.
-const _structuralRelationKeys = <String>{'targetObjectType', 'sourceObject'};
+/// Built-in object metadata that lives in the same `details` map as custom
+/// properties but should not be rendered as an editable user property.
+const _structuralRelationKeys = <String>{
+  'name',
+  'id',
+  'spaceId',
+  'type',
+  'internalFlags',
+  'layout',
+  'uniqueKey',
+  'relationKey',
+  'relationFormat',
+  'selectDict',
+  'targetObjectType',
+  'sourceObject',
+  'templateNamePrefillType',
+  'templateIsBundled',
+  'templatePlaceholders',
+  'createdDate',
+  'creator',
+  'lastModifiedDate',
+  'lastModifiedBy',
+  'lastOpenedDate',
+  'isFavorite',
+  'isArchived',
+  'restrictions',
+  'syncDate',
+  'syncStatus',
+  'syncError',
+  'coverId',
+  'coverScale',
+  'coverType',
+  'coverX',
+  'coverY',
+  'snippet',
+  'links',
+  'backlinks',
+  'mentions',
+  'resolvedLayout',
+  // ManyType app-owned marker for its seeded guest document. It is persisted
+  // as a detail so renaming the page does not duplicate the seed, but it is
+  // never a user-editable page property.
+  '_manytypeGuestDemo',
+};
 
 /// Structural block IDs from `createMinimalPageSnapshotBase` that every page
 /// object carries as scaffolding with no text content of its own. `title`
@@ -73,14 +110,16 @@ class ReplayedObjectBlocks {
 Future<ReplayedObjectBlocks?> replayObjectBlocks(
   ManytypeDatabase db,
   CliConfig config,
-  String objectId,
-) async {
+  String objectId, {
+  Identity? identityOverride,
+}) async {
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
     return null;
   }
 
-  final identity = await Identity.fromMnemonic(config.mnemonic);
+  final identity =
+      identityOverride ?? await Identity.fromMnemonic(config.mnemonic);
   final accountPrivRaw = Uint8List(64)
     ..setRange(0, 32, identity.accountSeed)
     ..setRange(32, 64, identity.accountKeyPair.publicKey);
@@ -204,9 +243,8 @@ class ReplayedObjectRelations {
 /// Returns `null` when the object has no local changes (not found).
 /// Scoped to the same relation-value kinds [editRelationOffline] can write:
 /// string, string-list, bool, date (unix seconds), object-ref, and status/
-/// tag (via the option index). `targetObjectType`/`sourceObject` are
-/// excluded (structural, see [_structuralRelationKeys]), matching
-/// `read.dart`'s own dedicated handling of those two keys.
+/// tag (via the option index). Built-in metadata is excluded via
+/// [_structuralRelationKeys].
 Future<ReplayedObjectRelations?> replayObjectRelations(
   ManytypeDatabase db,
   CliConfig config,
@@ -292,7 +330,8 @@ Future<ReplayedObjectRelations?> replayObjectRelations(
 
   final relations = <ReplayedRelationView>[
     for (final entry in details.entries)
-      if (!_structuralRelationKeys.contains(entry.key))
+      if (!_structuralRelationKeys.contains(entry.key) &&
+          _hasVisibleRelationValue(entry.value))
         _buildRelationView(
           entry.key,
           entry.value,
@@ -302,6 +341,16 @@ Future<ReplayedObjectRelations?> replayObjectRelations(
   ];
 
   return ReplayedObjectRelations(objectId: objectId, relations: relations);
+}
+
+bool _hasVisibleRelationValue(Value value) {
+  if (value.hasStringValue()) {
+    return value.stringValue.trim().isNotEmpty;
+  }
+  if (value.hasListValue()) {
+    return value.listValue.values.isNotEmpty;
+  }
+  return value.hasBoolValue() || value.hasNumberValue();
 }
 
 RelationFormat? _relationFormatFromValue(Value? value) {

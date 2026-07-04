@@ -62,10 +62,12 @@ Future<List<ObjectMeta>> listCommand(
   String? typeFilter,
   String? whereFilter,
   SyncService? syncService,
+  Identity? identityOverride,
 }) async {
   // Derive identity and space key once.
-  final identity = await Identity.fromMnemonic(config.mnemonic);
-  final accountKeyPair = await ed25519KeyPairFromSeed(identity.accountSeed);
+  final identity =
+      identityOverride ?? await Identity.fromMnemonic(config.mnemonic);
+  final accountKeyPair = identity.accountKeyPair;
   final accountPrivRaw = Uint8List(64)
     ..setRange(0, 32, identity.accountSeed)
     ..setRange(32, 64, accountKeyPair.publicKey);

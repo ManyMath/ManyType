@@ -57,12 +57,12 @@ void main() {
       created.objectId,
       db,
       config,
-      relationKey: 'isFavorite',
+      relationKey: 'reviewed',
       boolValue: 'true',
     );
 
     final result = await replayObjectRelations(db, config, created.objectId);
-    final view = result!.relations.singleWhere((r) => r.key == 'isFavorite');
+    final view = result!.relations.singleWhere((r) => r.key == 'reviewed');
     expect(view.format, RelationFormat.checkbox);
     expect(view.boolValue, isTrue);
   });
@@ -232,6 +232,34 @@ void main() {
     expect(
       result!.relations.map((r) => r.key),
       isNot(contains('targetObjectType')),
+    );
+  });
+
+  test('excludes built-in metadata and empty detail values', () async {
+    final created = await createCommand('A page', db, config);
+    final result = await replayObjectRelations(db, config, created.objectId);
+    final keys = result!.relations.map((relation) => relation.key);
+
+    expect(keys, isNot(contains('name')));
+    expect(keys, isNot(contains('layout')));
+    expect(keys, isNot(contains('createdDate')));
+    expect(keys, isNot(contains('lastModifiedDate')));
+  });
+
+  test('excludes the ManyType guest demo marker', () async {
+    final created = await createCommand('A page', db, config);
+    await editRelationOffline(
+      created.objectId,
+      db,
+      config,
+      relationKey: '_manytypeGuestDemo',
+      stringValue: 'v1',
+    );
+
+    final result = await replayObjectRelations(db, config, created.objectId);
+    expect(
+      result!.relations.map((relation) => relation.key),
+      isNot(contains('_manytypeGuestDemo')),
     );
   });
 }

@@ -1,6 +1,7 @@
 import 'package:manytype_cli/src/store/database_opener.dart';
 import 'package:manytype_cli/src/commands/create.dart';
 import 'package:manytype_cli/src/commands/edit.dart';
+import 'package:manytype_cli/src/commands/list.dart';
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/store/database.dart';
 import 'package:manytype_cli/src/structured_replay.dart';
@@ -33,8 +34,7 @@ void main() {
   test('mutates a block\'s text without any network dependency', () async {
     final created = await createCommand('Original text', db, config);
     final before = await replayObjectBlocks(db, config, created.objectId);
-    final titleBlockId =
-        before!.blocks.singleWhere((b) => b.id == 'title').id;
+    final titleBlockId = before!.blocks.singleWhere((b) => b.id == 'title').id;
 
     final result = await editOffline(
       created.objectId,
@@ -44,11 +44,15 @@ void main() {
       setText: 'Edited text',
     );
     expect(result.blockId, titleBlockId);
-    expect(result.description, 'set-text');
+    expect(result.description, 'rename');
 
     final after = await replayObjectBlocks(db, config, created.objectId);
     final updated = after!.blocks.singleWhere((b) => b.id == titleBlockId);
     expect(updated.text, 'Edited text');
+    final meta = (await listCommand(db, config)).singleWhere(
+      (object) => object.id == created.objectId,
+    );
+    expect(meta.name, 'Edited text');
   });
 
   test('mutates a checkbox\'s checked state offline', () async {
@@ -79,8 +83,7 @@ void main() {
   test('applies multiple offline edits in sequence', () async {
     final created = await createCommand('Step one', db, config);
     final before = await replayObjectBlocks(db, config, created.objectId);
-    final titleBlockId =
-        before!.blocks.singleWhere((b) => b.id == 'title').id;
+    final titleBlockId = before!.blocks.singleWhere((b) => b.id == 'title').id;
 
     await editOffline(
       created.objectId,
@@ -105,8 +108,7 @@ void main() {
   test('throws when no mutation is specified', () async {
     final created = await createCommand('Original text', db, config);
     final before = await replayObjectBlocks(db, config, created.objectId);
-    final titleBlockId =
-        before!.blocks.singleWhere((b) => b.id == 'title').id;
+    final titleBlockId = before!.blocks.singleWhere((b) => b.id == 'title').id;
 
     expect(
       () => editOffline(created.objectId, db, config, blockId: titleBlockId),

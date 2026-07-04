@@ -690,7 +690,7 @@ Future<EditOfflineResult> editOffline(
   final String description;
   if (setText != null) {
     eventBytes = buildBlockSetTextEvent(blockId, setText);
-    description = 'set-text';
+    description = blockId == 'title' ? 'rename' : 'set-text';
   } else if (setChecked != null) {
     eventBytes = buildBlockSetCheckedEvent(blockId, setChecked);
     description = 'set-checked=$setChecked';
@@ -703,10 +703,19 @@ Future<EditOfflineResult> editOffline(
     );
   }
 
-  final updateContent = changes_proto.Change_Content(
-    blockUpdate: changes_proto.Change_BlockUpdate(events: [eventBytes]),
-  );
-  final updateData = marshalChangeContent([updateContent]);
+  final updateContents = <changes_proto.Change_Content>[
+    if (blockId == 'title' && setText != null)
+      changes_proto.Change_Content(
+        detailsSet: changes_proto.Change_DetailsSet(
+          key: 'name',
+          value: Value(stringValue: setText),
+        ),
+      ),
+    changes_proto.Change_Content(
+      blockUpdate: changes_proto.Change_BlockUpdate(events: [eventBytes]),
+    ),
+  ];
+  final updateData = marshalChangeContent(updateContents);
 
   final updateTreeChange = await buildTreeChange(
     currentHeads: currentHeads,
@@ -766,6 +775,7 @@ Future<InsertBlockResult> insertBlockOffline(
   CliConfig config, {
   required String text,
   NewBlockKind kind = NewBlockKind.text,
+  Identity? identityOverride,
 }) async {
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
@@ -789,7 +799,8 @@ Future<InsertBlockResult> insertBlockOffline(
     throw StateError('Could not find root change for object $objectId');
   }
 
-  final identity = await Identity.fromMnemonic(config.mnemonic);
+  final identity =
+      identityOverride ?? await Identity.fromMnemonic(config.mnemonic);
   final spaceId = identity.spaceId;
   final allObjects = await db.getObjectsBySpace(spaceId);
   final fallbackAclHeadId = await findAclRootId(db, allObjects, spaceId);
@@ -816,10 +827,8 @@ Future<InsertBlockResult> insertBlockOffline(
     NewBlockKind.text => 'txt-${rng.nextInt(0xFFFFFF).toRadixString(16)}',
   };
   final newBlock = switch (kind) {
-    NewBlockKind.checkbox =>
-      createListBlock(blockId, text, checkbox: true),
-    NewBlockKind.numbered =>
-      createListBlock(blockId, text, numbered: true),
+    NewBlockKind.checkbox => createListBlock(blockId, text, checkbox: true),
+    NewBlockKind.numbered => createListBlock(blockId, text, numbered: true),
     NewBlockKind.toggle => createToggleBlock(blockId, text),
     NewBlockKind.quote => createQuoteBlock(blockId, text),
     NewBlockKind.callout => createCalloutBlock(blockId, text),
@@ -899,6 +908,7 @@ Future<EditRelationOfflineResult> editRelationOffline(
   String? dateValue,
   String? objectIdValue,
   String? status,
+  Identity? identityOverride,
 }) async {
   final changes = await db.getChangesForObject(objectId);
   if (changes.isEmpty) {
@@ -922,7 +932,8 @@ Future<EditRelationOfflineResult> editRelationOffline(
     throw StateError('Could not find root change for object $objectId');
   }
 
-  final identity = await Identity.fromMnemonic(config.mnemonic);
+  final identity =
+      identityOverride ?? await Identity.fromMnemonic(config.mnemonic);
   final spaceId = identity.spaceId;
   final allObjects = await db.getObjectsBySpace(spaceId);
   final fallbackAclHeadId = await findAclRootId(db, allObjects, spaceId);
