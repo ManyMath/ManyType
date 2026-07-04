@@ -7,242 +7,257 @@ import 'package:manyui_hooks/manyui_hooks.dart';
 
 import '../state/sync_controller.dart';
 
-Future<void> showSyncDialog(BuildContext context, {required String spaceId}) {
+Future<void> showSyncDialog(
+  BuildContext context, {
+  required String accountId,
+  required String spaceId,
+}) {
   return showMDialog<void>(
     context,
     semanticLabel: 'Configure sync',
-    builder: (context) => _SyncDialog(spaceId: spaceId),
+    builder: (context) => _SyncDialog(accountId: accountId, spaceId: spaceId),
   );
 }
 
 class _SyncDialog extends HookConsumerWidget {
-  const _SyncDialog({required this.spaceId});
+  const _SyncDialog({required this.accountId, required this.spaceId});
 
+  final String accountId;
   final String spaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(syncControllerProvider);
-    final controller = useMController<String>(state.networkConfigContent);
-    final selfHostedAddressController = useMController<String>(
-      '127.0.0.1:33020',
-    );
-    final selfHostedPeerController = useMController<String>('');
-    final selfHostedNetworkController = useMController<String>('local-net');
-    final selfHostedServerHostController = useMController<String>('127.0.0.1');
-    final selfHostedServerHosts = useMControllerValue(
-      selfHostedServerHostController,
-    );
-    final selfHostedError = useState<String?>(null);
-    final selfHostedCommandCopied = useState(false);
-    final syncController = ref.read(syncControllerProvider.notifier);
+    final provider = syncControllerProvider(accountId);
+    final state = ref.watch(provider);
+    final yamlController = useMController<String>(state.networkConfigContent);
+    final addressController = useMController<String>('127.0.0.1:33020');
+    final peerController = useMController<String>('');
+    final networkController = useMController<String>('local-net');
+    final serverHostController = useMController<String>('127.0.0.1');
+    final serverHosts = useMControllerValue(serverHostController);
+    final quickError = useState<String?>(null);
+    final commandCopied = useState(false);
+    final syncController = ref.read(provider.notifier);
     final theme = MTheme.of(context);
 
-    String? selfHostedCommand;
-    String? selfHostedCommandError;
+    String? serverCommand;
+    String? serverCommandError;
     try {
-      selfHostedCommand = buildSelfHostedDockerStartCommand(
-        externalListenHosts: selfHostedServerHosts,
+      serverCommand = buildSelfHostedDockerStartCommand(
+        externalListenHosts: serverHosts,
       );
-    } on Object catch (error) {
-      selfHostedCommandError = syncErrorMessage(error);
+    } catch (error) {
+      serverCommandError = syncErrorMessage(error);
     }
 
-    void useSelfHostedConfig() {
+    void connectSelfHosted() {
       try {
         final content = syncController.useSelfHostedConfig(
-          coordinatorAddress: selfHostedAddressController.value,
-          peerId: selfHostedPeerController.value,
-          networkId: selfHostedNetworkController.value,
+          coordinatorAddress: addressController.value,
+          peerId: peerController.value,
+          networkId: networkController.value,
         );
-        controller.value = content;
-        selfHostedError.value = null;
-      } on Object catch (error) {
-        selfHostedError.value = syncErrorMessage(error);
+        yamlController.value = content;
+        quickError.value = null;
+      } catch (error) {
+        quickError.value = syncErrorMessage(error);
       }
     }
 
-    Future<void> copySelfHostedCommand() async {
-      final command = selfHostedCommand;
+    Future<void> copyServerCommand() async {
+      final command = serverCommand;
       if (command == null) return;
-
       await Clipboard.setData(ClipboardData(text: command));
-      selfHostedCommandCopied.value = true;
+      commandCopied.value = true;
       await Future<void>.delayed(const Duration(seconds: 2));
-      if (context.mounted) {
-        selfHostedCommandCopied.value = false;
-      }
+      if (context.mounted) commandCopied.value = false;
     }
 
     return MDialogContent(
       title: 'Sync',
-      description:
-          'Configure an any-sync network, then probe the coordinator or sync '
-          'this local space.',
+      description: state.configSummary == null
+          ? 'Connect this workspace to an any-sync coordinator.'
+          : 'A network config is loaded. Probe it to verify availability or '
+                'start a real sync.',
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           if (state.configSummary != null) ...<Widget>[
-            MPropertyRow(
-              label: 'Network',
-              layout: MPropertyRowLayout.inline,
-              value: Text(state.configSummary!.networkId),
-            ),
-            const SizedBox(height: 8),
-            MPropertyRow(
-              label: 'Coordinator',
-              layout: MPropertyRowLayout.inline,
-              valueStyle: theme.typography.code,
-              value: Text(
-                state.configSummary!.coordinatorAddress,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
+            MInsetPanel(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  MPropertyRow(
+                    label: 'Network',
+                    layout: MPropertyRowLayout.inline,
+                    value: Text(state.configSummary!.networkId),
+                  ),
+                  const SizedBox(height: 8),
+                  MPropertyRow(
+                    label: 'Coordinator',
+                    layout: MPropertyRowLayout.inline,
+                    valueStyle: theme.typography.code,
+                    value: Text(
+                      state.configSummary!.coordinatorAddress,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
           ],
+          Text('Self-hosted coordinator', style: theme.typography.label),
+          const SizedBox(height: 10),
           MField(
-            label: 'Network config YAML',
-            description: 'Inline client.yml content.',
-            enabled: !state.busy,
-            errorText: state.validationError,
+            label: 'Coordinator address',
             child: MTextField(
-              controller: controller,
-              minLines: 8,
-              maxLines: 10,
+              controller: addressController,
               enabled: !state.busy,
-              placeholder:
-                  'id: local\nnetworkId: local-net\nnodes:\n'
-                  '  - peerId: coordinator\n'
-                  '    addresses:\n'
-                  '      - quic://127.0.0.1:1014\n'
-                  '    types:\n'
-                  '      - coordinator',
-              semanticLabel: 'Network config YAML',
-              onChanged: syncController.updateNetworkConfig,
+              placeholder: '127.0.0.1:33020',
+              semanticLabel: 'Coordinator address',
+            ),
+          ),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final peer = MField(
+                label: 'Peer ID',
+                child: MTextField(
+                  controller: peerController,
+                  enabled: !state.busy,
+                  placeholder: 'Coordinator peer ID',
+                  semanticLabel: 'Peer ID',
+                ),
+              );
+              final network = MField(
+                label: 'Network ID',
+                child: MTextField(
+                  controller: networkController,
+                  enabled: !state.busy,
+                  placeholder: 'local-net',
+                  semanticLabel: 'Network ID',
+                ),
+              );
+              if (constraints.maxWidth < 520) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[peer, const SizedBox(height: 10), network],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(child: peer),
+                  const SizedBox(width: 10),
+                  Expanded(child: network),
+                ],
+              );
+            },
+          ),
+          if (quickError.value != null) ...<Widget>[
+            const SizedBox(height: 10),
+            MAlert(
+              variant: MAlertVariant.destructive,
+              message: quickError.value!,
+            ),
+          ],
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: MButton(
+              variant: MButtonVariant.outline,
+              size: MButtonSize.sm,
+              onPressed: state.busy ? null : connectSelfHosted,
+              child: const Text('Use configuration'),
             ),
           ),
           const SizedBox(height: 16),
-          MInsetPanel(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                MSectionHeader(
-                  title: 'Self-hosted',
-                  titleStyle: theme.typography.label,
-                  description: 'Generate client.yml for a single coordinator.',
-                ),
-                const SizedBox(height: 12),
-                MField(
-                  label: 'Coordinator address',
-                  enabled: !state.busy,
-                  child: MTextField(
-                    controller: selfHostedAddressController,
-                    enabled: !state.busy,
-                    placeholder: '127.0.0.1:33020',
-                    semanticLabel: 'Coordinator address',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                MField(
-                  label: 'Peer ID',
-                  enabled: !state.busy,
-                  child: MTextField(
-                    controller: selfHostedPeerController,
-                    enabled: !state.busy,
-                    placeholder: 'Server peer ID',
-                    semanticLabel: 'Peer ID',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                MField(
-                  label: 'Network ID',
-                  enabled: !state.busy,
-                  child: MTextField(
-                    controller: selfHostedNetworkController,
-                    enabled: !state.busy,
-                    placeholder: 'local-net',
-                    semanticLabel: 'Network ID',
-                  ),
-                ),
-                if (selfHostedError.value != null) ...<Widget>[
-                  const SizedBox(height: 12),
-                  MAlert(
-                    variant: MAlertVariant.destructive,
-                    message: selfHostedError.value!,
-                  ),
-                ],
-                const SizedBox(height: 12),
-                MActionRow(
-                  children: <Widget>[
-                    MButton(
-                      variant: MButtonVariant.outline,
-                      onPressed: state.busy ? null : useSelfHostedConfig,
-                      child: const Text('Use self-hosted config'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const MDivider(),
-                const SizedBox(height: 12),
-                MSectionHeader(
-                  title: 'Server bootstrap',
-                  titleStyle: theme.typography.label,
-                  description:
-                      'Start the checked-in Docker stack and generate '
-                      'etc/client.yml.',
-                ),
-                const SizedBox(height: 12),
-                MField(
-                  label: 'External listen hosts',
-                  description:
-                      'Hostnames or IP addresses the server should advertise.',
-                  enabled: !state.busy,
-                  errorText: selfHostedCommandError,
-                  child: MTextField(
-                    controller: selfHostedServerHostController,
-                    enabled: !state.busy,
-                    placeholder: '127.0.0.1',
-                    semanticLabel: 'External listen hosts',
-                    onChanged: (_) => selfHostedCommandCopied.value = false,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                MField(
-                  label: 'Start command',
-                  description:
-                      'Run from the ManyType repository root before importing '
-                      'the generated client.yml.',
-                  child: MInsetPanel(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(
-                      selfHostedCommand ?? 'Enter an external host first.',
-                      style: theme.typography.code.copyWith(fontSize: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                MActionRow(
-                  children: <Widget>[
-                    MButton(
-                      variant: MButtonVariant.outline,
-                      size: MButtonSize.sm,
-                      onPressed: selfHostedCommand == null
-                          ? null
-                          : copySelfHostedCommand,
-                      child: Text(
-                        selfHostedCommandCopied.value
-                            ? 'Copied'
-                            : 'Copy command',
+          MAccordion(
+            semanticLabel: 'Advanced sync setup',
+            items: <MAccordionItem>[
+              MAccordionItem(
+                id: 'advanced',
+                title: const Text('Advanced setup'),
+                content: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      MField(
+                        label: 'Network config YAML',
+                        description: 'Paste an existing any-sync client.yml.',
+                        enabled: !state.busy,
+                        errorText: state.validationError,
+                        child: MTextField(
+                          controller: yamlController,
+                          minLines: 7,
+                          maxLines: 10,
+                          enabled: !state.busy,
+                          placeholder:
+                              'id: local\nnetworkId: local-net\nnodes:',
+                          semanticLabel: 'Network config YAML',
+                          onChanged: syncController.updateNetworkConfig,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 20),
+                      const MDivider(),
+                      const SizedBox(height: 16),
+                      MSectionHeader(
+                        title: 'Server bootstrap',
+                        titleStyle: theme.typography.label,
+                        description: 'Generate the local Docker start command.',
+                      ),
+                      const SizedBox(height: 12),
+                      MField(
+                        label: 'External listen hosts',
+                        enabled: !state.busy,
+                        errorText: serverCommandError,
+                        child: MTextField(
+                          controller: serverHostController,
+                          enabled: !state.busy,
+                          placeholder: '127.0.0.1',
+                          semanticLabel: 'External listen hosts',
+                          onChanged: (_) => commandCopied.value = false,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      MField(
+                        label: 'Start command',
+                        child: MInsetPanel(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            serverCommand ?? 'Enter an external host first.',
+                            style: theme.typography.code.copyWith(fontSize: 12),
+                            softWrap: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: MIconButton(
+                          icon: commandCopied.value
+                              ? MIconData.check
+                              : MIconData.copy,
+                          label: commandCopied.value
+                              ? 'Command copied'
+                              : 'Copy command',
+                          variant: MButtonVariant.outline,
+                          size: MButtonSize.sm,
+                          onPressed: serverCommand == null
+                              ? null
+                              : copyServerCommand,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           if (state.message != null) ...<Widget>[
             const SizedBox(height: 12),
@@ -252,9 +267,8 @@ class _SyncDialog extends HookConsumerWidget {
                   : MAlertVariant.neutral,
               message: state.message!,
               leading: state.busy
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
+                  ? const SizedBox.square(
+                      dimension: 16,
                       child: MCircularProgress.indeterminate(),
                     )
                   : null,

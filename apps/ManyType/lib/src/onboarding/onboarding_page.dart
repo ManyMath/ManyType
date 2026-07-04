@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -11,6 +13,8 @@ import 'package:manyui_riverpod/manyui_riverpod.dart';
 
 import '../accounts/forget_account.dart';
 import '../state/accounts_providers.dart';
+import '../state/guest_demo.dart';
+import '../state/objects_providers.dart';
 import '../theme.dart';
 import 'mnemonic_form.dart';
 
@@ -28,6 +32,8 @@ class OnboardingPage extends HookConsumerWidget {
     final mode = useState<_Mode>(_Mode.pick);
     final busy = useState(false);
     final error = useState<String?>(null);
+    final demoState = ref.watch(guestDemoStateProvider);
+    final demoBusy = demoState.status == GuestDemoStatus.preparing;
 
     Future<void> runGuarded(Future<void> Function() action) async {
       busy.value = true;
@@ -45,6 +51,73 @@ class OnboardingPage extends HookConsumerWidget {
       }
     }
 
+    void openGuestDemo() {
+      if (busy.value || demoBusy) return;
+      final accountsController = ref.read(accountsControllerProvider);
+      final objectsController = ref.read(objectsControllerProvider);
+      final demoNotifier = ref.read(guestDemoStateProvider.notifier);
+      final pendingSelection = ref.read(
+        pendingObjectSelectionProvider.notifier,
+      );
+      demoNotifier.state = const GuestDemoUiState(
+        status: GuestDemoStatus.preparing,
+        message: guestDemoCreatingAccountMessage,
+      );
+
+      unawaited(() async {
+        // Give the preparing state a frame before key derivation starts.
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        try {
+          String? createdDemoAccountId;
+          final launch = await createGuestDemoWorkspace(
+            createAndSelectIfNew:
+                ({required mnemonic, required displayName}) async {
+                  final account = await accountsController.createAndSelectIfNew(
+                    mnemonic: mnemonic,
+                    displayName: displayName,
+                    pendingStarterTemplate: true,
+                    excludedAccountIds: const <String>{
+                      legacySharedDemoAccountId,
+                    },
+                  );
+                  createdDemoAccountId = account?.id;
+                  return account?.id;
+                },
+            seedTemplate: () async {
+              final templateObjectId = await objectsController
+                  .seedDemoTemplate();
+              if (templateObjectId == null) {
+                throw StateError('Demo account has no open session.');
+              }
+              final accountId = createdDemoAccountId;
+              if (accountId == null) {
+                throw StateError('Demo account is no longer selected.');
+              }
+              await accountsController.completeStarterTemplate(accountId);
+              return templateObjectId;
+            },
+            onProgress: (message) {
+              demoNotifier.state = GuestDemoUiState(
+                status: GuestDemoStatus.preparing,
+                message: message,
+              );
+            },
+          );
+          if (launch.templateObjectId != null) {
+            pendingSelection.state = launch.templateObjectId;
+          }
+          demoNotifier.state = const GuestDemoUiState(
+            status: GuestDemoStatus.ready,
+          );
+        } catch (exception) {
+          demoNotifier.state = GuestDemoUiState(
+            status: GuestDemoStatus.failed,
+            message: 'Could not prepare the demo: $exception',
+          );
+        }
+      }());
+    }
+
     final body = accounts.when(
       loading: () => const MLoadingState(
         message: 'Loading accounts',
@@ -56,7 +129,7 @@ class OnboardingPage extends HookConsumerWidget {
       ),
       data: (list) => switch (mode.value) {
         _Mode.create => _CreateAccountCard(
-          busy: busy.value,
+          busy: busy.value || demoBusy,
           onCancel: () => mode.value = _Mode.pick,
           onCreate: (name, mnemonic) => runGuarded(() async {
             await ref
@@ -65,7 +138,7 @@ class OnboardingPage extends HookConsumerWidget {
           }),
         ),
         _Mode.import => _ImportAccountCard(
-          busy: busy.value,
+          busy: busy.value || demoBusy,
           onCancel: () => mode.value = _Mode.pick,
           onImport: (name, mnemonic) => runGuarded(() async {
             await ref
@@ -75,12 +148,13 @@ class OnboardingPage extends HookConsumerWidget {
         ),
         _Mode.pick when list.isNotEmpty => _AccountPickerCard(
           accounts: list,
-          busy: busy.value,
+          busy: busy.value || demoBusy,
           onUse: (id) => runGuarded(() async {
             await ref.read(accountsControllerProvider).select(id);
           }),
           onCreate: () => mode.value = _Mode.create,
           onImport: () => mode.value = _Mode.import,
+          onDemo: openGuestDemo,
           onForget: (account) => confirmForgetAccount(
             context,
             ref,
@@ -89,6 +163,8 @@ class OnboardingPage extends HookConsumerWidget {
           ),
         ),
         _Mode.pick => _WelcomeCard(
+          busy: busy.value || demoBusy,
+          onDemo: openGuestDemo,
           onCreate: () => mode.value = _Mode.create,
           onImport: () => mode.value = _Mode.import,
         ),
@@ -117,6 +193,14 @@ class OnboardingPage extends HookConsumerWidget {
                     message: error.value!,
                   ),
                 ],
+                if (demoState.status == GuestDemoStatus.failed &&
+                    demoState.message != null) ...<Widget>[
+                  const SizedBox(height: 12),
+                  MAlert(
+                    variant: MAlertVariant.destructive,
+                    message: demoState.message!,
+                  ),
+                ],
               ],
             ),
           ),
@@ -131,22 +215,27 @@ class _ThemeToggle extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return MButton(
-      variant: MButtonVariant.ghost,
+    return MIconButton(
+      icon: ref.watchMThemeMode(themeModeProvider) == MThemeMode.dark
+          ? MIconData.sun
+          : MIconData.moon,
+      label: 'Toggle theme',
+      size: MButtonSize.sm,
       onPressed: () => ref.toggleMThemeMode(themeModeProvider),
-      semanticLabel: 'Toggle theme',
-      child: MIcon(
-        ref.watchMThemeMode(themeModeProvider) == MThemeMode.dark
-            ? MIconData.sun
-            : MIconData.moon,
-      ),
     );
   }
 }
 
 class _WelcomeCard extends StatelessWidget {
-  const _WelcomeCard({required this.onCreate, required this.onImport});
+  const _WelcomeCard({
+    required this.busy,
+    required this.onDemo,
+    required this.onCreate,
+    required this.onImport,
+  });
 
+  final bool busy;
+  final VoidCallback onDemo;
   final VoidCallback onCreate;
   final VoidCallback onImport;
 
@@ -162,17 +251,39 @@ class _WelcomeCard extends StatelessWidget {
             const MSectionHeader(
               title: 'Welcome to ManyType',
               description:
-                  'An offline-first Any-Sync client. Your notes live in a '
-                  'local, encrypted store owned by a recovery phrase.',
+                  'An offline-first Any-Sync client. Encrypted document '
+                  'changes stay local and belong to your recovery identity.',
+              descriptionMaxLines: 5,
             ),
             const SizedBox(height: 24),
-            MButton(onPressed: onCreate, child: const Text('Create account')),
+            MButton(
+              onPressed: busy ? null : onDemo,
+              child: const Text('Explore demo workspace'),
+            ),
+            const SizedBox(height: 12),
+            const MAlert(
+              variant: MAlertVariant.neutral,
+              message:
+                  'Each demo creates a fresh local account and recovery '
+                  'phrase, then copies in sample content. Sync remains off '
+                  'until you configure it.',
+            ),
             const SizedBox(height: 8),
             MButton(
               variant: MButtonVariant.outline,
-              onPressed: onImport,
+              onPressed: busy ? null : onCreate,
+              child: const Text('Create account'),
+            ),
+            const SizedBox(height: 8),
+            MButton(
+              variant: MButtonVariant.ghost,
+              onPressed: busy ? null : onImport,
               child: const Text('Import phrase'),
             ),
+            if (busy) ...<Widget>[
+              const SizedBox(height: 16),
+              const MProgress.indeterminate(),
+            ],
           ],
         ),
       ),
@@ -187,6 +298,7 @@ class _AccountPickerCard extends StatelessWidget {
     required this.onUse,
     required this.onCreate,
     required this.onImport,
+    required this.onDemo,
     required this.onForget,
   });
 
@@ -195,6 +307,7 @@ class _AccountPickerCard extends StatelessWidget {
   final ValueChanged<String> onUse;
   final VoidCallback onCreate;
   final VoidCallback onImport;
+  final VoidCallback onDemo;
   final ValueChanged<AccountSummary> onForget;
 
   @override
@@ -235,12 +348,11 @@ class _AccountPickerCard extends StatelessWidget {
                     child: const Text('Use'),
                   ),
                   const SizedBox(width: 8),
-                  MButton(
-                    variant: MButtonVariant.ghost,
+                  MIconButton(
+                    icon: MIconData.trash,
+                    label: 'Forget ${account.displayName}',
                     size: MButtonSize.sm,
-                    semanticLabel: 'Forget ${account.displayName}',
                     onPressed: busy ? null : () => onForget(account),
-                    child: const Text('Forget'),
                   ),
                 ],
               ),
@@ -248,6 +360,11 @@ class _AccountPickerCard extends StatelessWidget {
             ],
             const MDivider(),
             const SizedBox(height: 12),
+            MButton(
+              onPressed: busy ? null : onDemo,
+              child: const Text('Open demo workspace'),
+            ),
+            const SizedBox(height: 8),
             MButton(
               variant: MButtonVariant.outline,
               onPressed: busy ? null : onCreate,

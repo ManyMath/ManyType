@@ -14,19 +14,37 @@ import 'package:manytype_cli/src/account_registry.dart';
 
 import 'package:manytype/src/state/accounts_providers.dart';
 import 'package:manytype/src/state/session_provider.dart';
+import 'package:manytype/src/state/sync_controller.dart';
 
 const _testMnemonic =
     'abandon abandon abandon abandon abandon abandon abandon abandon '
     'abandon abandon abandon about';
+
+const _networkConfig = '''
+id: local
+networkId: local-net
+nodes:
+  - peerId: coordinator
+    addresses:
+      - quic://127.0.0.1:1014
+    types:
+      - coordinator
+''';
 
 void main() {
   late Directory tempBase;
   late ProviderContainer container;
 
   setUp(() async {
-    tempBase = await Directory.systemTemp.createTemp('manytype_account_edit_test');
+    tempBase = await Directory.systemTemp.createTemp(
+      'manytype_account_edit_test',
+    );
     AccountRegistry.testBaseDirOverride = tempBase.path;
-    container = ProviderContainer();
+    container = ProviderContainer(
+      overrides: <Override>[
+        syncRunnerProvider.overrideWithValue((_, __) async {}),
+      ],
+    );
   });
 
   tearDown(() async {
@@ -36,33 +54,72 @@ void main() {
     await tempBase.delete(recursive: true);
   });
 
-  test('rename updates the display name surfaced by currentAccountProvider',
-      () async {
-    final profile = await container
-        .read(accountsControllerProvider)
-        .createAndSelect(mnemonic: _testMnemonic, displayName: 'Work');
+  test(
+    'rename updates the display name surfaced by currentAccountProvider',
+    () async {
+      final profile = await container
+          .read(accountsControllerProvider)
+          .createAndSelect(mnemonic: _testMnemonic, displayName: 'Work');
 
-    await container.read(accountsControllerProvider).rename(profile.id, 'Personal');
+      await container
+          .read(accountsControllerProvider)
+          .rename(profile.id, 'Personal');
 
-    final current = await container.read(currentAccountProvider.future);
-    expect(current, isNotNull);
-    expect(current!.displayName, 'Personal');
-  });
+      final current = await container.read(currentAccountProvider.future);
+      expect(current, isNotNull);
+      expect(current!.displayName, 'Personal');
+    },
+  );
 
-  test('updateServerAddress changes the address the session reopens with',
-      () async {
-    final profile = await container
-        .read(accountsControllerProvider)
-        .createAndSelect(mnemonic: _testMnemonic, displayName: 'Work');
+  test(
+    'updateServerAddress changes the address the session reopens with',
+    () async {
+      final profile = await container
+          .read(accountsControllerProvider)
+          .createAndSelect(mnemonic: _testMnemonic, displayName: 'Work');
 
-    final before = await container.read(sessionProvider.future);
-    expect(before!.config.serverAddress, '127.0.0.1:33020');
+      final before = await container.read(sessionProvider.future);
+      expect(before!.config.serverAddress, '127.0.0.1:33020');
 
-    await container
-        .read(accountsControllerProvider)
-        .updateServerAddress(profile.id, '10.0.0.5:33020');
+      await container
+          .read(accountsControllerProvider)
+          .updateServerAddress(profile.id, '10.0.0.5:33020');
 
-    final after = await container.read(sessionProvider.future);
-    expect(after!.config.serverAddress, '10.0.0.5:33020');
-  });
+      final after = await container.read(sessionProvider.future);
+      expect(after!.config.serverAddress, '10.0.0.5:33020');
+    },
+  );
+
+  test(
+    'forget and reimport resets sync state for the reused account id',
+    () async {
+      final accounts = container.read(accountsControllerProvider);
+      final profile = await accounts.createAndSelect(
+        mnemonic: _testMnemonic,
+        displayName: 'Work',
+      );
+      final session = await container.read(sessionProvider.future);
+
+      final sync = container.read(syncControllerProvider(profile.id).notifier);
+      sync.updateNetworkConfig(_networkConfig);
+      await sync.sync(spaceId: session!.identity.spaceId);
+      expect(
+        container.read(syncControllerProvider(profile.id)).status,
+        SyncUiStatus.syncSucceeded,
+      );
+
+      await accounts.forget(profile.id);
+      expect(await container.read(currentAccountIdProvider.future), isNull);
+
+      final restored = await accounts.createAndSelect(
+        mnemonic: _testMnemonic,
+        displayName: 'Restored',
+      );
+      expect(restored.id, profile.id);
+      final restoredSync = container.read(syncControllerProvider(restored.id));
+      expect(restoredSync.status, SyncUiStatus.unconfigured);
+      expect(restoredSync.networkConfigContent, isEmpty);
+      expect(restoredSync.message, isNull);
+    },
+  );
 }

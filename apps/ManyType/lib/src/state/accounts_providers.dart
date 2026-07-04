@@ -7,6 +7,7 @@ import 'package:manytype_cli/src/account_profile.dart';
 import 'package:manytype_cli/src/account_registry.dart';
 
 import 'session_provider.dart';
+import 'sync_controller.dart';
 
 /// All account profiles known to this install (registry summaries only:
 /// mnemonics never leave each account's own config).
@@ -59,6 +60,33 @@ class AccountsController {
     return profile;
   }
 
+  /// Creates and selects an account only when [mnemonic] is a new identity.
+  /// A collision returns null without reopening or overwriting the account.
+  Future<AccountProfile?> createAndSelectIfNew({
+    required String mnemonic,
+    required String displayName,
+    Set<String> excludedAccountIds = const <String>{},
+    bool pendingStarterTemplate = false,
+  }) async {
+    final profile = await AccountRegistry.createAccountIfNew(
+      mnemonic: mnemonic,
+      displayName: displayName,
+      excludedAccountIds: excludedAccountIds,
+      pendingStarterTemplate: pendingStarterTemplate,
+    );
+    if (profile == null) return null;
+    await AccountRegistry.setCurrentAccountId(profile.id);
+    _invalidate();
+    return profile;
+  }
+
+  /// Clears the durable recovery marker after a starter template seed has
+  /// completed. Only the account list changes; the open session remains valid.
+  Future<void> completeStarterTemplate(String id) async {
+    await AccountRegistry.setStarterTemplatePending(id, false);
+    _ref.invalidate(accountsProvider);
+  }
+
   Future<void> select(String id) async {
     await AccountRegistry.setCurrentAccountId(id);
     _invalidate();
@@ -89,10 +117,28 @@ class AccountsController {
   /// The recovery phrase remains the only way to bring the account back.
   Future<void> forget(String id) async {
     final current = await AccountRegistry.getCurrentAccountId();
-    await AccountRegistry.removeAccount(id);
     if (current == id) {
-      await AccountRegistry.setCurrentAccountId('');
+      // A workspace that failed to open still needs to be forgettable. In
+      // that case there is no usable session to close before storage removal.
+      final session = await _ref
+          .read(sessionProvider.future)
+          .catchError((_) => null);
+      await session?.close();
     }
+
+    try {
+      await AccountRegistry.removeAccount(id);
+    } catch (_) {
+      // Storage deletion is deliberately attempted before registry removal.
+      // If it fails, reopen the closed current session and leave the account
+      // fully registered so the user can retry.
+      if (current == id) {
+        _ref.invalidate(sessionProvider);
+      }
+      rethrow;
+    }
+
+    _ref.invalidate(syncControllerProvider(id));
     _invalidate();
   }
 

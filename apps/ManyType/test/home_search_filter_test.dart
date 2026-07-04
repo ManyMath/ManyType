@@ -8,6 +8,7 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:manytype/src/home/home_page.dart';
+import 'package:manytype/src/state/objects_providers.dart';
 import 'package:manytype_cli/manytype_cli.dart';
 
 ObjectMeta _meta({
@@ -53,6 +54,51 @@ void main() {
 
     test('no match returns an empty list', () {
       expect(filterObjectsForSearch(metas, 'nonexistent-xyz'), isEmpty);
+    });
+  });
+
+  group('library sections', () {
+    final page = _meta(id: 'page', name: 'Notes', types: ['ot-page']);
+    final type = _meta(id: 'type', name: 'Task', types: ['ot-objectType']);
+    final relation = _meta(
+      id: 'relation',
+      name: 'Priority',
+      types: ['ot-relation'],
+    );
+    final relationOption = _meta(
+      id: 'option',
+      name: 'High',
+      types: ['ot-relationOption'],
+    );
+    final template = _meta(
+      id: 'template',
+      name: 'Task template',
+      types: ['ot-template', 'task'],
+    );
+    final objects = <ObjectMeta>[
+      page,
+      type,
+      relation,
+      relationOption,
+      template,
+    ];
+
+    test('classifies pages, types, and relations independently', () {
+      expect(objectsForSection(objects, LibrarySection.pages), [page]);
+      expect(objectsForSection(objects, LibrarySection.types), [type]);
+      expect(objectsForSection(objects, LibrarySection.relations), [relation]);
+    });
+
+    test('does not expose relation options or templates as pages', () {
+      expect(isInternalSchemaSupportObject(relationOption), isTrue);
+      expect(isInternalSchemaSupportObject(template), isTrue);
+      expect(objectsForSection(objects, LibrarySection.pages), [page]);
+    });
+
+    test('uses friendly labels instead of protocol markers', () {
+      expect(friendlyObjectType(page), 'Page');
+      expect(friendlyObjectType(type), 'Type');
+      expect(friendlyObjectType(relation), 'Relation');
     });
   });
 }

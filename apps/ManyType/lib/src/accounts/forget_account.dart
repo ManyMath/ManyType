@@ -24,6 +24,27 @@ Future<void> confirmForgetAccount(
     confirmVariant: MButtonVariant.destructive,
   );
   if (confirmed) {
-    await ref.read(accountsControllerProvider).forget(id);
+    try {
+      await ref.read(accountsControllerProvider).forget(id);
+    } catch (error) {
+      if (!context.mounted) return;
+      await showMDialog<void>(
+        context,
+        semanticLabel: 'Could not forget account',
+        builder: (dialogContext) => MDialogContent(
+          title: 'Could not forget account',
+          description:
+              'The account is still registered, but some local files may '
+              'already have been removed. Close any other ManyType tabs, '
+              'then try again.\n\n$error',
+          actions: <Widget>[
+            MButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 }

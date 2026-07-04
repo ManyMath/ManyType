@@ -92,6 +92,44 @@ void main() {
     final metasAfterDelete = await container.read(
       objectsProvider(spaceId).future,
     );
-    expect(metasAfterDelete.map((m) => m.id), isNot(contains(created.objectId)));
+    expect(
+      metasAfterDelete.map((m) => m.id),
+      isNot(contains(created.objectId)),
+    );
+  });
+
+  test('reload resumes and completes a pending starter template', () async {
+    final profile = await container
+        .read(accountsControllerProvider)
+        .createAndSelectIfNew(
+          mnemonic: _testMnemonic,
+          displayName: 'Demo workspace',
+          pendingStarterTemplate: true,
+        );
+    expect(profile, isNotNull);
+    expect(
+      (await AccountRegistry.listAccounts()).single.pendingStarterTemplate,
+      isTrue,
+    );
+
+    // A new provider container models a browser reload: in-memory demo UI
+    // state is gone, while the registry marker and current account remain.
+    container.dispose();
+    container = ProviderContainer();
+
+    final objectId = await container.read(
+      starterTemplateRecoveryProvider(profile!.id).future,
+    );
+
+    expect(objectId, isNotNull);
+    expect(
+      (await AccountRegistry.listAccounts()).single.pendingStarterTemplate,
+      isFalse,
+    );
+    final session = await container.read(sessionProvider.future);
+    final objects = await container.read(
+      objectsProvider(session!.identity.spaceId).future,
+    );
+    expect(objects.map((object) => object.id), contains(objectId));
   });
 }

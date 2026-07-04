@@ -20,6 +20,7 @@ enum SyncUiStatus {
   syncing,
   probeSucceeded,
   syncSucceeded,
+  localChangesPending,
   failed,
 }
 
@@ -97,8 +98,13 @@ final syncProbeRunnerProvider = Provider<ManyTypeProbeRunner>((ref) {
   };
 });
 
+/// In-memory sync setup and results, isolated by account ID.
+///
+/// Network configuration is deliberately not inferred from the account's
+/// legacy `serverAddress` field. A new account remains [SyncUiStatus.unconfigured]
+/// until the user supplies a real any-sync network configuration.
 final syncControllerProvider =
-    StateNotifierProvider<SyncController, SyncUiState>((ref) {
+    StateNotifierProvider.family<SyncController, SyncUiState, String>((ref, _) {
       return SyncController(ref);
     });
 
@@ -106,6 +112,20 @@ class SyncController extends StateNotifier<SyncUiState> {
   SyncController(this._ref) : super(const SyncUiState());
 
   final Ref _ref;
+  var _localMutationRevision = 0;
+
+  /// Records a local write without claiming that an unconfigured account has
+  /// ever synced. If a write lands during sync, [sync] compares revisions and
+  /// reports the remaining change instead of incorrectly claiming success.
+  void markLocalChangesPending() {
+    _localMutationRevision++;
+    if (state.status == SyncUiStatus.syncSucceeded) {
+      state = state.copyWith(
+        status: SyncUiStatus.localChangesPending,
+        message: 'Local changes are waiting for the next sync.',
+      );
+    }
+  }
 
   void updateNetworkConfig(String value) {
     final trimmed = value.trim();
@@ -187,6 +207,7 @@ class SyncController extends StateNotifier<SyncUiState> {
   Future<void> sync({required String spaceId}) async {
     final content = _validNetworkConfigContent();
     if (content == null) return;
+    final mutationRevisionAtStart = _localMutationRevision;
 
     state = state.copyWith(
       status: SyncUiStatus.syncing,
@@ -198,9 +219,18 @@ class SyncController extends StateNotifier<SyncUiState> {
       final session = await _requireSession();
       await _ref.read(syncRunnerProvider)(session, content);
       _ref.invalidate(objectsProvider(spaceId));
+      _ref.invalidate(objectBlocksProvider);
+      _ref.invalidate(objectRelationsProvider);
+      _ref.invalidate(objectDetailProvider);
+      final changedWhileSyncing =
+          _localMutationRevision != mutationRevisionAtStart;
       state = state.copyWith(
-        status: SyncUiStatus.syncSucceeded,
-        message: 'Sync completed. Local objects are refreshing.',
+        status: changedWhileSyncing
+            ? SyncUiStatus.localChangesPending
+            : SyncUiStatus.syncSucceeded,
+        message: changedWhileSyncing
+            ? 'Sync completed, but newer local changes are still pending.'
+            : 'Sync completed. Local objects are refreshing.',
       );
     } catch (e) {
       state = state.copyWith(
@@ -284,7 +314,9 @@ make start
 String _readyMessage(NetworkConfigFile config) {
   final network = _networkLabel(config.networkId);
   final nodeCount = config.nodes.length;
-  return 'Network $network is ready with $nodeCount configured nodes.';
+  return 'Configured network $network with $nodeCount node '
+      '${nodeCount == 1 ? 'entry' : 'entries'}. Probe the coordinator to '
+      'verify availability.';
 }
 
 String _requiredSingleLine(String value, String field) {

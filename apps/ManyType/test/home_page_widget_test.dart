@@ -36,18 +36,21 @@ import 'package:manytype_cli/src/store/database_native.dart'
     show openDatabaseForTesting;
 import 'package:manyui/manyui.dart';
 
+import 'package:manytype/src/home/account_page.dart';
 import 'package:manytype/src/home/home_page.dart';
 import 'package:manytype/src/state/accounts_providers.dart';
+import 'package:manytype/src/state/guest_demo.dart';
 import 'package:manytype/src/state/objects_providers.dart';
 import 'package:manytype/src/state/session_provider.dart';
 
 const _testMnemonic =
-    'abandon abandon abandon abandon abandon abandon abandon abandon '
-    'abandon abandon abandon about';
+    'legal winner thank year wave sausage worth useful legal winner thank '
+    'yellow';
 
 void main() {
   late Directory tempBase;
   late ProviderContainer container;
+  late String spaceId;
 
   setUp(() async {
     tempBase = await Directory.systemTemp.createTemp(
@@ -63,14 +66,16 @@ void main() {
     );
     await container
         .read(accountsControllerProvider)
-        .createAndSelect(mnemonic: _testMnemonic, displayName: 'Test');
+        .createAndSelect(mnemonic: _testMnemonic, displayName: 'Guest');
+    await container.read(currentAccountProvider.future);
     // Pre-warm sessionProvider and objectsProvider here, outside
     // testWidgets' zone -- see the file-level comment above for why any
     // async Future awaited inside the test body itself never resolves in
     // this environment. Riverpod caches the resolved futures, so the
     // widget tree's own watch in the test below picks them up instantly.
     final session = await container.read(sessionProvider.future);
-    await container.read(objectsProvider(session!.identity.spaceId).future);
+    spaceId = session!.identity.spaceId;
+    await container.read(objectsProvider(spaceId).future);
   });
 
   tearDown(() async {
@@ -100,9 +105,206 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('No objects yet'), findsOneWidget);
-    expect(find.text('Create your first object above.'), findsOneWidget);
+    expect(find.text('No pages yet'), findsOneWidget);
+    expect(find.text('Create a page to start writing.'), findsOneWidget);
     expect(find.text('Sync: configure'), findsOneWidget);
-    expect(find.text('Sync'), findsOneWidget);
+    expect(find.bySemanticsLabel('Configure sync'), findsOneWidget);
+
+    final accountControl = find.byWidgetPredicate(
+      (widget) =>
+          widget is MIconButton &&
+          widget.label == 'Open account settings for Guest',
+    );
+    expect(accountControl, findsOneWidget);
+    expect(
+      tester.widget<MIconButton>(accountControl).icon,
+      same(MIconData.users),
+    );
+    expect(
+      find.bySemanticsLabel('Open account settings for Guest'),
+      findsOneWidget,
+    );
+
+    await tester.tap(accountControl);
+    await tester.pump();
+    expect(find.text('Local identity and workspace settings'), findsOneWidget);
+    final editName = find.byWidgetPredicate(
+      (widget) => widget is MIconButton && widget.label == 'Edit Display name',
+    );
+    expect(editName, findsOneWidget);
+    expect(tester.widget<MIconButton>(editName).onPressed, isNotNull);
+    expect(find.textContaining('public identity from an older'), findsNothing);
+
+    expect(find.bySemanticsLabel('View recovery phrase'), findsOneWidget);
+    expect(find.text(_testMnemonic), findsNothing);
+    await tester.tap(find.bySemanticsLabel('View recovery phrase'));
+    await tester.pump();
+    expect(find.text(_testMnemonic), findsOneWidget);
+    expect(find.text('Copy phrase'), findsOneWidget);
+  });
+
+  testWidgets('compact workspace has no overflow at a phone viewport', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MWidgetsApp(theme: MThemeData.light(), home: const HomePage()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Pages'), findsWidgets);
+    expect(find.text('No pages yet'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Open account settings for Guest'),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('Toggle theme'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'desktop navigation and browser collapse, and section selection reopens',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1440, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MWidgetsApp(theme: MThemeData.light(), home: const HomePage()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final navigation = find.byKey(
+        const ValueKey<String>('workspace-navigation'),
+      );
+      expect(tester.getSize(navigation).width, 232);
+      expect(
+        find.bySemanticsLabel('Collapse workspace navigation'),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel('Collapse Pages browser'), findsOneWidget);
+      expect(find.byType(MResizable), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Collapse workspace navigation'));
+      await tester.pump();
+      expect(tester.getSize(navigation).width, 60);
+      expect(
+        find.bySemanticsLabel('Expand workspace navigation'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.bySemanticsLabel('Collapse Pages browser'));
+      await tester.pump();
+      expect(find.byType(MResizable), findsNothing);
+      expect(find.bySemanticsLabel('Expand Pages browser'), findsOneWidget);
+      expect(find.bySemanticsLabel('Search pages'), findsNothing);
+
+      final typesControl = find.byWidgetPredicate(
+        (widget) => widget is MIconButton && widget.label.startsWith('Types,'),
+      );
+      await tester.tap(typesControl);
+      await tester.pump();
+
+      expect(container.read(librarySectionProvider), LibrarySection.types);
+      expect(find.byType(MResizable), findsOneWidget);
+      expect(find.bySemanticsLabel('Search types'), findsOneWidget);
+      expect(find.bySemanticsLabel('Collapse Types browser'), findsOneWidget);
+      expect(tester.getSize(navigation).width, 60);
+
+      await tester.tap(find.bySemanticsLabel('Collapse Types browser'));
+      await tester.pump();
+      final relationsControl = find.byWidgetPredicate(
+        (widget) =>
+            widget is MIconButton && widget.label.startsWith('Relations,'),
+      );
+      await tester.tap(relationsControl);
+      await tester.pump();
+      expect(container.read(librarySectionProvider), LibrarySection.relations);
+      expect(find.bySemanticsLabel('Search relations'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Collapse Relations browser'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.bySemanticsLabel('Collapse Relations browser'));
+      await tester.pump();
+      final pagesControl = find.byWidgetPredicate(
+        (widget) => widget is MIconButton && widget.label.startsWith('Pages,'),
+      );
+      await tester.tap(pagesControl);
+      await tester.pump();
+      expect(container.read(librarySectionProvider), LibrarySection.pages);
+      expect(find.bySemanticsLabel('Search pages'), findsOneWidget);
+      expect(find.bySemanticsLabel('Collapse Pages browser'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('demo preparation reports its current non-secret phase', (
+    tester,
+  ) async {
+    container
+        .read(guestDemoStateProvider.notifier)
+        .state = const GuestDemoUiState(
+      status: GuestDemoStatus.preparing,
+      message: guestDemoSeedingTemplateMessage,
+    );
+    await tester.binding.setSurfaceSize(const Size(800, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MWidgetsApp(theme: MThemeData.light(), home: const HomePage()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text(guestDemoSeedingTemplateMessage), findsOneWidget);
+    expect(find.textContaining(_testMnemonic), findsNothing);
+  });
+
+  testWidgets('retired shared demo identity remains visibly restricted', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MWidgetsApp(
+          theme: MThemeData.light(),
+          home: AccountView(
+            spaceId: spaceId,
+            isLegacySharedDemo: true,
+            onBack: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.textContaining('public identity from an older'),
+      findsOneWidget,
+    );
+    final editName = find.byWidgetPredicate(
+      (widget) => widget is MIconButton && widget.label == 'Edit Display name',
+    );
+    expect(editName, findsOneWidget);
+    expect(tester.widget<MIconButton>(editName).onPressed, isNull);
+    final recoveryControl = find.byWidgetPredicate(
+      (widget) =>
+          widget is MButton && widget.semanticLabel == 'View recovery phrase',
+    );
+    expect(recoveryControl, findsOneWidget);
+    expect(tester.widget<MButton>(recoveryControl).onPressed, isNull);
   });
 }

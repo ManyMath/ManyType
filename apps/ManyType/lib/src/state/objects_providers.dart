@@ -1,8 +1,154 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manytype_cli/manytype_cli.dart';
 import 'package:manytype_protocol/models.dart' show Block_Content_Text_Style;
 
+import 'accounts_providers.dart';
 import 'session_provider.dart';
+import 'sync_controller.dart';
+
+@visibleForTesting
+const demoTemplatePageTitle = 'Welcome to your ManyType workspace';
+
+@visibleForTesting
+const demoTemplateIntroText =
+    'This local-first page is yours to edit, organize, or delete.';
+
+@visibleForTesting
+const demoTemplateTaskText = 'Create your first page';
+
+const demoTemplateMarkerKey = '_manytypeGuestDemo';
+const demoTemplateMarkerValue = 'v1';
+
+typedef DemoTemplateBlockInserter =
+    Future<InsertBlockResult> Function(
+      ManytypeSession session,
+      String objectId, {
+      required String text,
+      required NewBlockKind kind,
+    });
+
+/// Injectable only so failure/retry behavior can be proven without replacing
+/// the production database or offline command implementation.
+final demoTemplateBlockInserterProvider = Provider<DemoTemplateBlockInserter>(
+  (ref) =>
+      (session, objectId, {required text, required kind}) => insertBlockOffline(
+        objectId,
+        session.db,
+        session.config,
+        text: text,
+        kind: kind,
+        identityOverride: session.identity,
+      ),
+);
+
+enum GuestDemoStatus { idle, preparing, ready, failed }
+
+class GuestDemoUiState {
+  const GuestDemoUiState({this.status = GuestDemoStatus.idle, this.message});
+
+  final GuestDemoStatus status;
+  final String? message;
+}
+
+final guestDemoStateProvider = StateProvider<GuestDemoUiState>(
+  (ref) => const GuestDemoUiState(),
+);
+
+final pendingObjectSelectionProvider = StateProvider<String?>((ref) => null);
+
+/// Resumes an interrupted starter-template seed before Home mounts its object
+/// list. The account-level pending flag makes this work across browser reloads;
+/// Riverpod coalesces concurrent reads of the same account family instance.
+final starterTemplateRecoveryProvider = FutureProvider.family<String?, String>((
+  ref,
+  accountId,
+) async {
+  final currentId = await ref.watch(currentAccountIdProvider.future);
+  if (currentId != accountId) {
+    throw StateError('starter template account is no longer current');
+  }
+
+  final accounts = await ref.watch(accountsProvider.future);
+  final matches = accounts.where((account) => account.id == accountId);
+  if (matches.isEmpty) {
+    throw StateError('starter template account is no longer registered');
+  }
+  if (!matches.single.pendingStarterTemplate) {
+    return null;
+  }
+
+  final objectId = await ref.read(objectsControllerProvider).seedDemoTemplate();
+  if (objectId == null) {
+    throw StateError('starter template account has no open session');
+  }
+  await ref.read(accountsControllerProvider).completeStarterTemplate(accountId);
+  ref.read(pendingObjectSelectionProvider.notifier).state = objectId;
+  return objectId;
+});
+
+enum LibrarySection { pages, types, relations }
+
+extension LibrarySectionLabel on LibrarySection {
+  String get label => switch (this) {
+    LibrarySection.pages => 'Pages',
+    LibrarySection.types => 'Types',
+    LibrarySection.relations => 'Relations',
+  };
+
+  String get singularLabel => switch (this) {
+    LibrarySection.pages => 'page',
+    LibrarySection.types => 'type',
+    LibrarySection.relations => 'relation',
+  };
+}
+
+bool isTypeObject(ObjectMeta meta) => meta.types.contains('ot-objectType');
+
+bool isRelationObject(ObjectMeta meta) => meta.types.contains('ot-relation');
+
+bool isInternalSchemaSupportObject(ObjectMeta meta) =>
+    meta.types.contains('ot-relationOption') ||
+    meta.types.contains('ot-template');
+
+bool isPageObject(ObjectMeta meta) =>
+    !isTypeObject(meta) &&
+    !isRelationObject(meta) &&
+    !isInternalSchemaSupportObject(meta);
+
+List<ObjectMeta> objectsForSection(
+  Iterable<ObjectMeta> objects,
+  LibrarySection section,
+) {
+  return objects
+      .where((meta) {
+        return switch (section) {
+          LibrarySection.pages => isPageObject(meta),
+          LibrarySection.types => isTypeObject(meta),
+          LibrarySection.relations => isRelationObject(meta),
+        };
+      })
+      .toList(growable: false);
+}
+
+String friendlyObjectType(ObjectMeta meta) {
+  if (isTypeObject(meta)) return 'Type';
+  if (isRelationObject(meta)) return 'Relation';
+  if (meta.isCollection) {
+    final count = meta.collectionMemberCount;
+    return 'Collection - $count item${count == 1 ? '' : 's'}';
+  }
+  final raw = meta.type?.trim() ?? '';
+  if (raw.isEmpty || raw == 'ot-page') return 'Page';
+  final value = raw.startsWith('ot-') ? raw.substring(3) : raw;
+  return value
+      .split(RegExp(r'[-_]'))
+      .where((part) => part.isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
+}
 
 /// Objects in [spaceId] via the real `listCommand`, offline (no network
 /// config passed, so no sync attempt). Phase 1 only ever passes the
@@ -17,7 +163,11 @@ final objectsProvider = FutureProvider.family<List<ObjectMeta>, String>((
   if (session == null) {
     return const <ObjectMeta>[];
   }
-  final metas = await listCommand(session.db, session.config);
+  final metas = await listCommand(
+    session.db,
+    session.config,
+    identityOverride: session.identity,
+  );
   // Space initialization derives system roots (Home / Archive / Widgets /
   // Workspace dashboards) that surface from listCommand with no object
   // type and no name; hide them from the user-facing list.
@@ -177,6 +327,19 @@ class ObjectsController {
   ObjectsController(this._ref);
 
   final Ref _ref;
+  Future<void> _mutationTail = Future<void>.value();
+
+  Future<T> _runMutation<T>(Future<T> Function() mutation) async {
+    final previous = _mutationTail;
+    final release = Completer<void>();
+    _mutationTail = release.future;
+    await previous;
+    try {
+      return await mutation();
+    } finally {
+      release.complete();
+    }
+  }
 
   /// Creates a text object (or, with `kind: NewObjectKind.type`/`.relation`,
   /// a new STType/STRelation named [text]) in the personal space and
@@ -194,7 +357,7 @@ class ObjectsController {
     NewObjectKind kind = NewObjectKind.text,
     String? assignedType,
     NewRelationFormat? relationFormat,
-  }) async {
+  }) => _runMutation(() async {
     final session = await _ref.read(sessionProvider.future);
     if (session == null) {
       return null;
@@ -219,7 +382,133 @@ class ObjectsController {
       assignedType: assignedType,
     );
     _ref.invalidate(objectsProvider(result.spaceId));
+    _markLocalChangesPending();
     return result;
+  });
+
+  /// Copies the editable starter template into the current local account.
+  ///
+  /// This seeds real local object/block data through the same offline
+  /// commands used by the editor UI, so the demo exercises the production
+  /// replay/edit paths instead of showing a static mock document.
+  Future<String?> seedDemoTemplate() => _runMutation(() async {
+    final session = await _ref.read(sessionProvider.future);
+    if (session == null) {
+      return null;
+    }
+    final metas = await listCommand(
+      session.db,
+      session.config,
+      identityOverride: session.identity,
+    );
+    ObjectMeta? candidate;
+    var markerPresent = false;
+    for (final meta in metas) {
+      if (meta.details[demoTemplateMarkerKey] == demoTemplateMarkerValue) {
+        candidate = meta;
+        markerPresent = true;
+        break;
+      }
+      if (candidate == null &&
+          isPageObject(meta) &&
+          meta.displayName == demoTemplatePageTitle) {
+        candidate = meta;
+      }
+    }
+
+    final String objectId;
+    final String spaceId;
+    final bool inspectExistingBlocks;
+    if (candidate != null) {
+      objectId = candidate.id;
+      spaceId = session.identity.spaceId;
+      inspectExistingBlocks = true;
+    } else {
+      final created = await createCommand(
+        demoTemplatePageTitle,
+        session.db,
+        session.config,
+        identityOverride: session.identity,
+      );
+      objectId = created.objectId;
+      spaceId = created.spaceId;
+      inspectExistingBlocks = false;
+    }
+
+    final repaired = await _ensureDemoTemplateBlocks(
+      session,
+      objectId,
+      inspectExisting: inspectExistingBlocks,
+    );
+    // The marker is a completion record, so it must be written after every
+    // starter block. Rewriting it after repairing an older partial seed also
+    // leaves that repaired object with a final completion change.
+    if (!markerPresent || repaired) {
+      await editRelationOffline(
+        objectId,
+        session.db,
+        session.config,
+        relationKey: demoTemplateMarkerKey,
+        stringValue: demoTemplateMarkerValue,
+        identityOverride: session.identity,
+      );
+    }
+
+    _ref.invalidate(objectsProvider(spaceId));
+    _ref.invalidate(objectBlocksProvider(objectId));
+    _ref.invalidate(objectDetailProvider(objectId));
+    _ref.invalidate(objectRelationsProvider(objectId));
+    _markLocalChangesPending();
+    return objectId;
+  });
+
+  Future<bool> _ensureDemoTemplateBlocks(
+    ManytypeSession session,
+    String objectId, {
+    required bool inspectExisting,
+  }) async {
+    final existing = inspectExisting
+        ? await replayObjectBlocks(
+            session.db,
+            session.config,
+            objectId,
+            identityOverride: session.identity,
+          )
+        : null;
+    if (inspectExisting && existing == null) {
+      throw StateError('Demo template object is missing locally: $objectId');
+    }
+
+    final blocks = existing?.blocks ?? const <ReplayedBlockView>[];
+    final insert = _ref.read(demoTemplateBlockInserterProvider);
+    var repaired = false;
+    if (!blocks.any(
+      (block) =>
+          block.style == Block_Content_Text_Style.Paragraph &&
+          block.text == demoTemplateIntroText,
+    )) {
+      await insert(
+        session,
+        objectId,
+        text: demoTemplateIntroText,
+        kind: NewBlockKind.text,
+      );
+      repaired = true;
+    }
+    if (!blocks.any(
+      (block) =>
+          block.style == Block_Content_Text_Style.Checkbox &&
+          block.text == demoTemplateTaskText,
+    )) {
+      await insert(
+        session,
+        objectId,
+        text: demoTemplateTaskText,
+        kind: NewBlockKind.checkbox,
+      );
+      repaired = true;
+    }
+    return repaired;
   }
 
   /// Mutates one block's text/checked/style in place via `editOffline` and
@@ -233,7 +522,7 @@ class ObjectsController {
     String? setText,
     bool? setChecked,
     Block_Content_Text_Style? setStyle,
-  }) async {
+  }) => _runMutation(() async {
     final session = await _ref.read(sessionProvider.future);
     if (session == null) {
       return null;
@@ -249,8 +538,12 @@ class ObjectsController {
     );
     _ref.invalidate(objectBlocksProvider(objectId));
     _ref.invalidate(objectDetailProvider(objectId));
+    if (blockId == 'title') {
+      _ref.invalidate(objectsProvider(session.identity.spaceId));
+    }
+    _markLocalChangesPending();
     return result;
-  }
+  });
 
   /// Deletes [objectId] in [spaceId] and refreshes the list. Uses
   /// `deleteOffline` (not `deleteCommand`) -- `deleteCommand` brackets its
@@ -260,15 +553,18 @@ class ObjectsController {
   /// performs the local archive + delete-flag write; the corresponding
   /// `ObjectDelete` settings change reaches other devices/peers on the next
   /// successful `manytype sync`. Returns null when no session is open.
-  Future<DeleteResult?> delete(String objectId, String spaceId) async {
-    final session = await _ref.read(sessionProvider.future);
-    if (session == null) {
-      return null;
-    }
-    final result = await deleteOffline(objectId, session.db, session.config);
-    _ref.invalidate(objectsProvider(spaceId));
-    return result;
-  }
+  Future<DeleteResult?> delete(String objectId, String spaceId) => _runMutation(
+    () async {
+      final session = await _ref.read(sessionProvider.future);
+      if (session == null) {
+        return null;
+      }
+      final result = await deleteOffline(objectId, session.db, session.config);
+      _ref.invalidate(objectsProvider(spaceId));
+      _markLocalChangesPending();
+      return result;
+    },
+  );
 
   /// Appends a new typed block to [objectId] via `insertBlockOffline` and
   /// refreshes both the structured and text-report detail views. Returns
@@ -277,7 +573,7 @@ class ObjectsController {
     String objectId, {
     required String text,
     NewBlockKind kind = NewBlockKind.text,
-  }) async {
+  }) => _runMutation(() async {
     final session = await _ref.read(sessionProvider.future);
     if (session == null) {
       return null;
@@ -291,8 +587,9 @@ class ObjectsController {
     );
     _ref.invalidate(objectBlocksProvider(objectId));
     _ref.invalidate(objectDetailProvider(objectId));
+    _markLocalChangesPending();
     return result;
-  }
+  });
 
   /// Writes one typed relation value on [objectId] via
   /// `editRelationOffline` and refreshes both the structured relation view
@@ -308,7 +605,7 @@ class ObjectsController {
     String? dateValue,
     String? objectIdValue,
     String? status,
-  }) async {
+  }) => _runMutation(() async {
     final session = await _ref.read(sessionProvider.future);
     if (session == null) {
       return null;
@@ -327,7 +624,16 @@ class ObjectsController {
     );
     _ref.invalidate(objectRelationsProvider(objectId));
     _ref.invalidate(objectDetailProvider(objectId));
+    _markLocalChangesPending();
     return result;
+  });
+
+  void _markLocalChangesPending() {
+    final accountId = _ref.read(currentAccountIdProvider).valueOrNull;
+    if (accountId == null) return;
+    _ref
+        .read(syncControllerProvider(accountId).notifier)
+        .markLocalChangesPending();
   }
 }
 

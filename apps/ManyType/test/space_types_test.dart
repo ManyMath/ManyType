@@ -42,56 +42,61 @@ void main() {
     await tempBase.delete(recursive: true);
   });
 
-  test('spaceTypesProvider only surfaces STType objects, not plain ones',
-      () async {
-    final session = await container.read(sessionProvider.future);
-    final spaceId = session!.identity.spaceId;
-    final controller = container.read(objectsControllerProvider);
+  test(
+    'spaceTypesProvider only surfaces STType objects, not plain ones',
+    () async {
+      final session = await container.read(sessionProvider.future);
+      final spaceId = session!.identity.spaceId;
+      final controller = container.read(objectsControllerProvider);
 
-    expect(await container.read(spaceTypesProvider(spaceId).future), isEmpty);
+      expect(await container.read(spaceTypesProvider(spaceId).future), isEmpty);
 
-    final plainResult = await controller.create('A plain object');
-    expect(plainResult, isNotNull);
-    // A plain object should NOT show up as a type.
-    expect(await container.read(spaceTypesProvider(spaceId).future), isEmpty);
+      final plainResult = await controller.create('A plain object');
+      expect(plainResult, isNotNull);
+      // A plain object should NOT show up as a type.
+      expect(await container.read(spaceTypesProvider(spaceId).future), isEmpty);
 
-    final typeResult =
-        await controller.create('Project', kind: NewObjectKind.type);
-    expect(typeResult, isNotNull);
-    final types = await container.read(spaceTypesProvider(spaceId).future);
-    expect(types.map((t) => t.id), [typeResult!.objectId]);
-    expect(types.single.name, 'Project');
-  });
+      final typeResult = await controller.create(
+        'Project',
+        kind: NewObjectKind.type,
+      );
+      expect(typeResult, isNotNull);
+      final types = await container.read(spaceTypesProvider(spaceId).future);
+      expect(types.map((t) => t.id), [typeResult!.objectId]);
+      expect(types.single.name, 'Project');
+    },
+  );
 
   test(
-      'create with assignedType bakes an existing STType into objectTypes',
-      () async {
-    final session = await container.read(sessionProvider.future);
-    final spaceId = session!.identity.spaceId;
-    final controller = container.read(objectsControllerProvider);
+    'create with assignedType bakes an existing STType into objectTypes',
+    () async {
+      final session = await container.read(sessionProvider.future);
+      final spaceId = session!.identity.spaceId;
+      final controller = container.read(objectsControllerProvider);
 
-    // Create the STType itself entirely through the app-facing
-    // ObjectsController API (kind: NewObjectKind.type), the same path the
-    // "New object" card's kind picker now exposes -- not a CLI-only
-    // fixture reachable outside the GUI.
-    final typeCreate = await controller.create(
-      'Project',
-      kind: NewObjectKind.type,
-    );
-    expect(typeCreate, isNotNull);
-    final typeId = typeCreate!.objectId;
+      // Create the STType itself entirely through the app-facing
+      // ObjectsController API (kind: NewObjectKind.type), the same path the
+      // "New object" card's kind picker now exposes -- not a CLI-only
+      // fixture reachable outside the GUI.
+      final typeCreate = await controller.create(
+        'Project',
+        kind: NewObjectKind.type,
+      );
+      expect(typeCreate, isNotNull);
+      final typeId = typeCreate!.objectId;
 
-    final types = await container.read(spaceTypesProvider(spaceId).future);
-    expect(types.map((t) => t.id), contains(typeId));
+      final types = await container.read(spaceTypesProvider(spaceId).future);
+      expect(types.map((t) => t.id), contains(typeId));
 
-    final objectResult = await controller.create(
-      'My project',
-      assignedType: typeId,
-    );
-    expect(objectResult, isNotNull);
+      final objectResult = await controller.create(
+        'My project',
+        assignedType: typeId,
+      );
+      expect(objectResult, isNotNull);
 
-    final metas = await container.read(objectsProvider(spaceId).future);
-    final created = metas.singleWhere((m) => m.id == objectResult!.objectId);
-    expect(created.types, ['project']);
-  });
+      final metas = await container.read(objectsProvider(spaceId).future);
+      final created = metas.singleWhere((m) => m.id == objectResult!.objectId);
+      expect(created.types, ['project']);
+    },
+  );
 }

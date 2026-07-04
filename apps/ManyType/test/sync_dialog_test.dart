@@ -23,7 +23,11 @@ void main() {
             builder: (context) {
               return MButton(
                 onPressed: () {
-                  showSyncDialog(context, spaceId: 'space-id');
+                  showSyncDialog(
+                    context,
+                    accountId: 'account-id',
+                    spaceId: 'space-id',
+                  );
                 },
                 child: const Text('Open sync'),
               );
@@ -37,9 +41,15 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
-    expect(find.text('Server bootstrap'), findsOneWidget);
+    expect(find.text('Advanced setup'), findsOneWidget);
+    expect(find.text('Server bootstrap').hitTestable(), findsNothing);
+    await tester.tap(find.text('Advanced setup'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('Server bootstrap').hitTestable(), findsOneWidget);
     expect(find.text('External listen hosts'), findsOneWidget);
-    expect(find.text('Copy command'), findsOneWidget);
+    expect(find.bySemanticsLabel('Copy command'), findsOneWidget);
     expect(find.textContaining('cd docker/any-sync'), findsOneWidget);
     expect(
       find.textContaining('EXTERNAL_LISTEN_HOSTS="127.0.0.1"'),
@@ -54,5 +64,35 @@ void main() {
       find.textContaining('EXTERNAL_LISTEN_HOSTS="10.0.0.5"'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('default sync setup fits a phone viewport', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MWidgetsApp(
+          theme: MThemeData.light(),
+          home: Builder(
+            builder: (context) => MButton(
+              onPressed: () => showSyncDialog(
+                context,
+                accountId: 'account-id',
+                spaceId: 'space-id',
+              ),
+              child: const Text('Open sync'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open sync'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('Self-hosted coordinator'), findsOneWidget);
+    expect(find.text('Advanced setup'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

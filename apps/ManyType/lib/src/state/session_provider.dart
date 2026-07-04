@@ -13,7 +13,9 @@ import 'accounts_providers.dart';
 /// see [ManytypeSession.open]'s dbOverride doc comment for why the
 /// real background-isolate constructor never completes under
 /// `testWidgets()`.
-final sessionTestDbOverrideProvider = Provider<ManytypeDatabase?>((ref) => null);
+final sessionTestDbOverrideProvider = Provider<ManytypeDatabase?>(
+  (ref) => null,
+);
 
 /// Open [ManytypeSession] for the current account, or null before
 /// onboarding completes.
