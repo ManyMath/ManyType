@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">ManyType</title>
+  <rect width="64" height="64" rx="10" fill="#111714"/>
+  <path d="M17 18h30M32 18v28" fill="none" stroke="#78d2b0" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="17" cy="18" r="4" fill="#f5f7f6"/>
+  <circle cx="47" cy="18" r="4" fill="#456b90"/>
+  <circle cx="32" cy="46" r="4" fill="#bd5d4d"/>
+</svg>
