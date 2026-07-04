@@ -51,6 +51,11 @@ class AccountSummary {
   final String displayName;
   final DateTime createdAt;
 
+  /// True until an app-created starter template has been copied into this
+  /// account. Persisting this in the registry lets a later launch resume an
+  /// interrupted seed without inferring intent from the display name.
+  final bool pendingStarterTemplate;
+
   /// When set, this account's config/db live at these exact paths instead
   /// of the standard `accounts/<id>/` convention. Used by
   /// [AccountRegistry.migrateLegacyAccount] to register a pre-existing
@@ -63,14 +68,21 @@ class AccountSummary {
     required this.id,
     required this.displayName,
     required this.createdAt,
+    this.pendingStarterTemplate = false,
     this.configPathOverride,
     this.dbPathOverride,
   });
 
-  AccountSummary copyWith({String? displayName}) => AccountSummary(
+  AccountSummary copyWith({
+    String? displayName,
+    bool? pendingStarterTemplate,
+  }) =>
+      AccountSummary(
         id: id,
         displayName: displayName ?? this.displayName,
         createdAt: createdAt,
+        pendingStarterTemplate:
+            pendingStarterTemplate ?? this.pendingStarterTemplate,
         configPathOverride: configPathOverride,
         dbPathOverride: dbPathOverride,
       );
@@ -79,6 +91,7 @@ class AccountSummary {
         'id': id,
         'displayName': displayName,
         'createdAt': createdAt.toIso8601String(),
+        if (pendingStarterTemplate) 'pendingStarterTemplate': true,
         if (configPathOverride != null)
           'configPathOverride': configPathOverride,
         if (dbPathOverride != null) 'dbPathOverride': dbPathOverride,
@@ -88,6 +101,8 @@ class AccountSummary {
         id: json['id'] as String,
         displayName: json['displayName'] as String,
         createdAt: DateTime.parse(json['createdAt'] as String),
+        pendingStarterTemplate:
+            json['pendingStarterTemplate'] as bool? ?? false,
         configPathOverride: json['configPathOverride'] as String?,
         dbPathOverride: json['dbPathOverride'] as String?,
       );

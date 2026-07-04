@@ -75,16 +75,45 @@ class AccountRegistry {
   }
 
   /// Remove an account's registry entry and delete its on-disk directory
-  /// (config.toml + store.db + downloads). This is local profile removal
-  /// only: never the protocol-level AccountDelete operation.
+  /// (config.toml + store.db + downloads). Migrated accounts resolve and
+  /// delete their legacy config/database overrides instead. This is local
+  /// profile removal only: never the protocol-level AccountDelete operation.
   static Future<void> removeAccount(String id) async {
     final accounts = await listAccounts();
-    await _writeAccounts(accounts.where((a) => a.id != id).toList());
+    AccountSummary? summary;
+    for (final account in accounts) {
+      if (account.id == id) {
+        summary = account;
+        break;
+      }
+    }
+
+    if (summary != null) {
+      final dbPath = summary.dbPathOverride;
+      if (dbPath != null) {
+        // SQLite may leave these siblings behind even after the connection
+        // closes. Delete them before the main database so a failure keeps the
+        // registry entry available for another cleanup attempt.
+        for (final suffix in const <String>['-wal', '-shm', '-journal']) {
+          await _deleteFileIfPresent('$dbPath$suffix');
+        }
+        await _deleteFileIfPresent(dbPath);
+      }
+
+      final configPath = summary.configPathOverride;
+      if (configPath != null) {
+        await _deleteFileIfPresent(configPath);
+      }
+    }
 
     final dir = Directory(accountDir(id));
     if (await dir.exists()) {
       await dir.delete(recursive: true);
     }
+
+    // Remove the registry entry only after durable data deletion succeeds.
+    // A filesystem failure therefore leaves the profile available for retry.
+    await _writeAccounts(accounts.where((a) => a.id != id).toList());
 
     final currentId = await getCurrentAccountId();
     if (currentId == id) {
@@ -92,6 +121,13 @@ class AccountRegistry {
       if (await file.exists()) {
         await file.delete();
       }
+    }
+  }
+
+  static Future<void> _deleteFileIfPresent(String path) async {
+    final file = File(path);
+    if (await file.exists()) {
+      await file.delete();
     }
   }
 
@@ -108,10 +144,28 @@ class AccountRegistry {
     await _writeAccounts(updated);
   }
 
+  /// Persist whether [id] still needs its app-provided starter template.
+  static Future<void> setStarterTemplatePending(
+    String id,
+    bool pending,
+  ) async {
+    final accounts = await listAccounts();
+    final index = accounts.indexWhere((account) => account.id == id);
+    if (index < 0) {
+      throw StateError('no account registered with id $id');
+    }
+    final updated = List<AccountSummary>.of(accounts);
+    updated[index] = accounts[index].copyWith(
+      pendingStarterTemplate: pending,
+    );
+    await _writeAccounts(updated);
+  }
+
   /// Update an account's server address in its own config.toml, preserving
   /// its mnemonic. Throws [StateError] if no account is registered under
   /// [id].
-  static Future<void> updateServerAddress(String id, String serverAddress) async {
+  static Future<void> updateServerAddress(
+      String id, String serverAddress) async {
     final accounts = await listAccounts();
     AccountSummary? summary;
     for (final account in accounts) {
@@ -132,7 +186,7 @@ class AccountRegistry {
   }
 
   /// Load an account's config (mnemonic + server address), the same way
-  /// [resolveActiveAccount] does for the currently-active account : 
+  /// [resolveActiveAccount] does for the currently-active account :
   /// respecting [AccountSummary.configPathOverride] for migrated legacy
   /// accounts. Throws [StateError] if no account is registered under [id].
   static Future<CliConfig> loadConfig(String id,
@@ -176,8 +230,47 @@ class AccountRegistry {
     required String mnemonic,
     required String displayName,
     String serverAddress = '127.0.0.1:33020',
+    bool pendingStarterTemplate = false,
   }) async {
     final id = await AccountProfile.deriveAccountId(mnemonic);
+    return _createAccountWithId(
+      id: id,
+      mnemonic: mnemonic,
+      displayName: displayName,
+      serverAddress: serverAddress,
+      pendingStarterTemplate: pendingStarterTemplate,
+    );
+  }
+
+  /// Creates an account only when its mnemonic-derived ID is not registered.
+  /// Returns null without touching the existing account when the ID collides.
+  static Future<AccountProfile?> createAccountIfNew({
+    required String mnemonic,
+    required String displayName,
+    String serverAddress = '127.0.0.1:33020',
+    Set<String> excludedAccountIds = const <String>{},
+    bool pendingStarterTemplate = false,
+  }) async {
+    final id = await AccountProfile.deriveAccountId(mnemonic);
+    if (excludedAccountIds.contains(id)) return null;
+    final accounts = await listAccounts();
+    if (accounts.any((account) => account.id == id)) return null;
+    return _createAccountWithId(
+      id: id,
+      mnemonic: mnemonic,
+      displayName: displayName,
+      serverAddress: serverAddress,
+      pendingStarterTemplate: pendingStarterTemplate,
+    );
+  }
+
+  static Future<AccountProfile> _createAccountWithId({
+    required String id,
+    required String mnemonic,
+    required String displayName,
+    required String serverAddress,
+    required bool pendingStarterTemplate,
+  }) async {
     final dir = Directory(accountDir(id));
     if (!await dir.exists()) {
       await dir.create(recursive: true);
@@ -193,6 +286,7 @@ class AccountRegistry {
       id: id,
       displayName: displayName,
       createdAt: createdAt,
+      pendingStarterTemplate: pendingStarterTemplate,
     ));
 
     return AccountProfile(

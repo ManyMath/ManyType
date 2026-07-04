@@ -33,6 +33,7 @@ class ManytypeSession {
   final ManytypeDatabase db;
   final CliConfig config;
   final Identity identity;
+  Future<void>? _closeOperation;
 
   /// Resolves the active account (see [resolveActiveAccount]) and opens a
   /// session against its config/db. Native/vm only: [resolveActiveAccount]
@@ -128,5 +129,9 @@ class ManytypeSession {
 
   SyncFacade get sync => SyncFacade(this);
 
-  Future<void> close() => db.close();
+  /// Closes the underlying database exactly once.
+  ///
+  /// Riverpod disposal can race an explicit close performed before local
+  /// account deletion. Sharing the same future keeps that cleanup idempotent.
+  Future<void> close() => _closeOperation ??= db.close();
 }

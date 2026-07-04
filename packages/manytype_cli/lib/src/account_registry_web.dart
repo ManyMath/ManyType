@@ -4,6 +4,7 @@ import 'package:web/web.dart' as web;
 
 import 'account_profile.dart';
 import 'config.dart';
+import 'store/database_web.dart' show deleteWebDatabaseForApp;
 
 /// Web account registry backed by `window.localStorage`:
 /// - `<prefix>:accounts`: JSON index of known account summaries
@@ -66,13 +67,17 @@ class AccountRegistry {
     _writeAccounts([...withoutExisting, summary]);
   }
 
-  /// Remove an account's registry entry and secret material. This is local
-  /// profile removal only: never the protocol-level AccountDelete
-  /// operation. Does not delete the account's OPFS/IndexedDB database
-  /// contents (callers that need that should drop the database by name via
-  /// [accountDbPath] themselves).
+  /// Remove an account's durable local database, registry entry, and secret
+  /// material. This is local profile removal only: never the protocol-level
+  /// AccountDelete operation.
+  ///
+  /// Database deletion happens first. If it is blocked or fails, registry and
+  /// recovery metadata stay intact so callers can retry without creating an
+  /// orphaned workspace.
   static Future<void> removeAccount(String id) async {
     final accounts = await listAccounts();
+    await deleteWebDatabaseForApp(accountDbPath(id));
+
     _writeAccounts(accounts.where((a) => a.id != id).toList());
     _storage.removeItem(_mnemonicKey(id));
     _storage.removeItem(_serverKey(id));
@@ -96,9 +101,27 @@ class AccountRegistry {
     _writeAccounts(updated);
   }
 
+  /// Persist whether [id] still needs its app-provided starter template.
+  static Future<void> setStarterTemplatePending(
+    String id,
+    bool pending,
+  ) async {
+    final accounts = await listAccounts();
+    final index = accounts.indexWhere((account) => account.id == id);
+    if (index < 0) {
+      throw StateError('no account registered with id $id');
+    }
+    final updated = List<AccountSummary>.of(accounts);
+    updated[index] = accounts[index].copyWith(
+      pendingStarterTemplate: pending,
+    );
+    _writeAccounts(updated);
+  }
+
   /// Update an account's stored server address. Throws [StateError] if no
   /// account is registered under [id].
-  static Future<void> updateServerAddress(String id, String serverAddress) async {
+  static Future<void> updateServerAddress(
+      String id, String serverAddress) async {
     if (_storage.getItem(_mnemonicKey(id)) == null) {
       throw StateError('no account registered with id $id');
     }
@@ -135,8 +158,47 @@ class AccountRegistry {
     required String mnemonic,
     required String displayName,
     String serverAddress = '127.0.0.1:33020',
+    bool pendingStarterTemplate = false,
   }) async {
     final id = await AccountProfile.deriveAccountId(mnemonic);
+    return _createAccountWithId(
+      id: id,
+      mnemonic: mnemonic,
+      displayName: displayName,
+      serverAddress: serverAddress,
+      pendingStarterTemplate: pendingStarterTemplate,
+    );
+  }
+
+  /// Creates an account only when its mnemonic-derived ID is not registered.
+  /// Returns null without touching the existing account when the ID collides.
+  static Future<AccountProfile?> createAccountIfNew({
+    required String mnemonic,
+    required String displayName,
+    String serverAddress = '127.0.0.1:33020',
+    Set<String> excludedAccountIds = const <String>{},
+    bool pendingStarterTemplate = false,
+  }) async {
+    final id = await AccountProfile.deriveAccountId(mnemonic);
+    if (excludedAccountIds.contains(id)) return null;
+    final accounts = await listAccounts();
+    if (accounts.any((account) => account.id == id)) return null;
+    return _createAccountWithId(
+      id: id,
+      mnemonic: mnemonic,
+      displayName: displayName,
+      serverAddress: serverAddress,
+      pendingStarterTemplate: pendingStarterTemplate,
+    );
+  }
+
+  static Future<AccountProfile> _createAccountWithId({
+    required String id,
+    required String mnemonic,
+    required String displayName,
+    required String serverAddress,
+    required bool pendingStarterTemplate,
+  }) async {
     _storage.setItem(_mnemonicKey(id), mnemonic);
     _storage.setItem(_serverKey(id), serverAddress);
 
@@ -145,6 +207,7 @@ class AccountRegistry {
       id: id,
       displayName: displayName,
       createdAt: createdAt,
+      pendingStarterTemplate: pendingStarterTemplate,
     ));
 
     return AccountProfile(

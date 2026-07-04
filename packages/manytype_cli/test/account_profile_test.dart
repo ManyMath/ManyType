@@ -54,6 +54,7 @@ void main() {
         id: 'abc123',
         displayName: 'work',
         createdAt: createdAt,
+        pendingStarterTemplate: true,
       );
 
       final decoded = AccountSummary.fromJson(summary.toJson());
@@ -61,7 +62,18 @@ void main() {
       expect(decoded.id, summary.id);
       expect(decoded.displayName, summary.displayName);
       expect(decoded.createdAt, createdAt);
+      expect(decoded.pendingStarterTemplate, isTrue);
       expect(summary.toJson().containsKey('mnemonic'), isFalse);
+    });
+
+    test('older JSON defaults starter-template state to complete', () {
+      final decoded = AccountSummary.fromJson(<String, dynamic>{
+        'id': 'abc123',
+        'displayName': 'work',
+        'createdAt': DateTime.utc(2026, 7, 1, 12).toIso8601String(),
+      });
+
+      expect(decoded.pendingStarterTemplate, isFalse);
     });
   });
 }

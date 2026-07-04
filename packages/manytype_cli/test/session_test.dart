@@ -40,6 +40,23 @@ void main() {
     const testMnemonic =
         'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 
+    test('close is idempotent when explicit cleanup races disposal', () async {
+      final session = ManytypeSession(
+        db: ManytypeDatabase.forTesting(await openDatabaseForTesting()),
+        config: CliConfig(
+          mnemonic: testMnemonic,
+          serverAddress: '127.0.0.1:0',
+        ),
+        identity: await Identity.fromMnemonic(testMnemonic),
+      );
+
+      final explicitClose = session.close();
+      final disposalClose = session.close();
+
+      expect(identical(explicitClose, disposalClose), isTrue);
+      await explicitClose;
+    });
+
     test('exposes a byte-based file-transfer facade with no CLI I/O', () async {
       final identity = await Identity.fromMnemonic(testMnemonic);
       final session = ManytypeSession(

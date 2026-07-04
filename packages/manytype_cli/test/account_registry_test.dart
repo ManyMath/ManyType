@@ -4,6 +4,7 @@ library;
 
 import 'dart:io';
 
+import 'package:manytype_cli/src/account_profile.dart' show AccountProfile;
 import 'package:manytype_cli/src/account_registry.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -97,6 +98,54 @@ void main() {
           'work-renamed');
     });
 
+    test('createAccountIfNew never overwrites or creates excluded IDs',
+        () async {
+      final original = await AccountRegistry.createAccount(
+        mnemonic: mnemonicA,
+        displayName: 'original',
+      );
+      final duplicate = await AccountRegistry.createAccountIfNew(
+        mnemonic: mnemonicA,
+        displayName: 'replacement',
+      );
+
+      expect(duplicate, isNull);
+      final accounts = await AccountRegistry.listAccounts();
+      expect(accounts.single.id, original.id);
+      expect(accounts.single.displayName, 'original');
+
+      final excludedId = await AccountProfile.deriveAccountId(mnemonicB);
+      final excluded = await AccountRegistry.createAccountIfNew(
+        mnemonic: mnemonicB,
+        displayName: 'excluded',
+        excludedAccountIds: <String>{excludedId},
+      );
+      expect(excluded, isNull);
+      expect(await AccountRegistry.listAccounts(), hasLength(1));
+    });
+
+    test('starter-template pending state persists until explicitly cleared',
+        () async {
+      final profile = await AccountRegistry.createAccountIfNew(
+        mnemonic: mnemonicA,
+        displayName: 'demo',
+        pendingStarterTemplate: true,
+      );
+
+      expect(profile, isNotNull);
+      expect(
+        (await AccountRegistry.listAccounts()).single.pendingStarterTemplate,
+        isTrue,
+      );
+
+      await AccountRegistry.setStarterTemplatePending(profile!.id, false);
+
+      expect(
+        (await AccountRegistry.listAccounts()).single.pendingStarterTemplate,
+        isFalse,
+      );
+    });
+
     test('current pointer defaults to null, then reflects setCurrentAccountId',
         () async {
       expect(await AccountRegistry.getCurrentAccountId(), isNull);
@@ -150,8 +199,7 @@ void main() {
       await AccountRegistry.renameAccount(profile.id, 'personal');
 
       final accounts = await AccountRegistry.listAccounts();
-      expect(
-          accounts.firstWhere((a) => a.id == profile.id).displayName,
+      expect(accounts.firstWhere((a) => a.id == profile.id).displayName,
           'personal');
     });
 
@@ -169,8 +217,7 @@ void main() {
         displayName: 'work',
       );
 
-      await AccountRegistry.updateServerAddress(
-          profile.id, '10.0.0.5:33020');
+      await AccountRegistry.updateServerAddress(profile.id, '10.0.0.5:33020');
 
       final config = await AccountRegistry.loadConfig(profile.id);
       expect(config.serverAddress, '10.0.0.5:33020');
@@ -228,6 +275,28 @@ void main() {
         );
 
         expect(await AccountRegistry.getCurrentAccountId(), profile!.id);
+      });
+
+      test('removeAccount deletes migrated config and database files',
+          () async {
+        final profile = await AccountRegistry.migrateLegacyAccount(
+          legacyConfigPath: legacyConfigFile.path,
+          legacyDbPath: legacyDbFile.path,
+          legacyMnemonic: mnemonicA,
+        );
+        final wal = File('${legacyDbFile.path}-wal');
+        final shm = File('${legacyDbFile.path}-shm');
+        await wal.writeAsString('wal bytes');
+        await shm.writeAsString('shm bytes');
+
+        await AccountRegistry.removeAccount(profile!.id);
+
+        expect(await legacyConfigFile.exists(), isFalse);
+        expect(await legacyDbFile.exists(), isFalse);
+        expect(await wal.exists(), isFalse);
+        expect(await shm.exists(), isFalse);
+        expect(await AccountRegistry.listAccounts(), isEmpty);
+        expect(await AccountRegistry.getCurrentAccountId(), isNull);
       });
 
       test('is idempotent: a second call is a no-op once any account exists',
