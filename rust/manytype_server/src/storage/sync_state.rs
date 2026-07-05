@@ -14,9 +14,12 @@ use manytype_proto::treechange::{RawTreeChange, RootChange};
 use prost::Message;
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 
+use crate::input::{validate_space_id, validate_storage_key};
+
 const GLOBAL_SPACES_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("spaces");
 const GLOBAL_DELETED_ACCOUNTS_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("deleted_accounts");
+const GLOBAL_SCHEMA_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("schema");
 const SPACE_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("meta");
 const SPACE_HEADS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("heads");
 const SPACE_OBJECT_CHANGES_TABLE: TableDefinition<&str, &[u8]> =
@@ -32,6 +35,8 @@ const META_SETTINGS_PAYLOAD: &str = "settings_payload";
 const META_SETTINGS_PAYLOAD_ID: &str = "settings_payload_id";
 const META_IS_SHARED: &str = "is_shared";
 const META_OWNER_PEER_ID: &str = "owner_peer_id";
+const SCHEMA_VERSION_KEY: &str = "version";
+const CURRENT_SCHEMA_VERSION: &[u8] = b"1";
 
 #[derive(Clone, Debug, Default)]
 pub struct SpaceState {
@@ -85,8 +90,9 @@ impl StoragePaths {
         }
     }
 
-    fn space_db_path(&self, space_id: &str) -> PathBuf {
-        self.spaces_dir.join(format!("{space_id}.redb"))
+    fn space_db_path(&self, space_id: &str) -> Result<PathBuf> {
+        validate_space_id(space_id)?;
+        Ok(self.spaces_dir.join(format!("{space_id}.redb")))
     }
 }
 
@@ -95,6 +101,7 @@ impl SyncStateStorage {
         let paths = StoragePaths::from_config(config_path);
         std::fs::create_dir_all(&paths.spaces_dir)?;
         let global_db = Database::create(&paths.global_db_path)?;
+        ensure_schema(&global_db)?;
         ensure_table(&global_db, GLOBAL_SPACES_TABLE)?;
         ensure_table(&global_db, GLOBAL_DELETED_ACCOUNTS_TABLE)?;
         Ok(Self {
@@ -114,6 +121,7 @@ impl SyncStateStorage {
         let mut spaces = HashMap::new();
         for entry in table.iter()?.flatten() {
             let space_id = entry.0.value().to_string();
+            validate_space_id(&space_id)?;
             let state = self.load_space(&space_id)?;
             spaces.insert(space_id, state);
         }
@@ -127,13 +135,13 @@ impl SyncStateStorage {
             table.insert(space_id, b"1".as_slice())?;
         }
         write_txn.commit()?;
-        let space_db = Database::create(self.paths().space_db_path(space_id))?;
+        let space_db = Database::create(self.paths().space_db_path(space_id)?)?;
         ensure_space_tables(&space_db)?;
         Ok(())
     }
 
     fn load_space(&self, space_id: &str) -> Result<SpaceState> {
-        let space_db = Database::create(self.paths().space_db_path(space_id))?;
+        let space_db = Database::create(self.paths().space_db_path(space_id)?)?;
         ensure_space_tables(&space_db)?;
 
         let read_txn = space_db.begin_read()?;
@@ -236,7 +244,7 @@ impl SyncStateStorage {
     ) -> Result<()> {
         let _guard = self.persist_lock.lock().unwrap();
         self.ensure_space_registered_locked(space_id)?;
-        let space_db = Database::create(self.paths().space_db_path(space_id))?;
+        let space_db = Database::create(self.paths().space_db_path(space_id)?)?;
         let write_txn = space_db.begin_write()?;
         {
             let mut table = write_txn.open_table(SPACE_META_TABLE)?;
@@ -277,7 +285,7 @@ impl SyncStateStorage {
     ) -> Result<()> {
         let _guard = self.persist_lock.lock().unwrap();
         self.ensure_space_registered_locked(space_id)?;
-        let space_db = Database::create(self.paths().space_db_path(space_id))?;
+        let space_db = Database::create(self.paths().space_db_path(space_id)?)?;
         let write_txn = space_db.begin_write()?;
         {
             let mut table = write_txn.open_table(SPACE_ACL_TABLE)?;
@@ -299,7 +307,7 @@ impl SyncStateStorage {
     ) -> Result<()> {
         let _guard = self.persist_lock.lock().unwrap();
         self.ensure_space_registered_locked(space_id)?;
-        let space_db = Database::create(self.paths().space_db_path(space_id))?;
+        let space_db = Database::create(self.paths().space_db_path(space_id)?)?;
         let write_txn = space_db.begin_write()?;
         {
             let mut heads_table = write_txn.open_table(SPACE_HEADS_TABLE)?;
@@ -326,7 +334,7 @@ impl SyncStateStorage {
     ) -> Result<()> {
         let _guard = self.persist_lock.lock().unwrap();
         self.ensure_space_registered_locked(space_id)?;
-        let space_db = Database::create(self.paths().space_db_path(space_id))?;
+        let space_db = Database::create(self.paths().space_db_path(space_id)?)?;
         let write_txn = space_db.begin_write()?;
         {
             let mut table = write_txn.open_table(SPACE_STORE_TABLE)?;
@@ -411,6 +419,7 @@ impl SharedSyncState {
         is_shared: Option<bool>,
         owner_peer_id: Option<String>,
     ) -> Result<()> {
+        validate_space_id(space_id)?;
         {
             let mut state = self.inner.write().unwrap();
             let space = state.entry(space_id.to_string()).or_default();
@@ -461,7 +470,7 @@ impl SharedSyncState {
     /// Existing ownership may be reaffirmed by the same peer but can never be
     /// transferred through a later registration or metadata update.
     pub fn claim_space_owner(&self, space_id: &str, peer_id: &str) -> Result<()> {
-        anyhow::ensure!(!space_id.is_empty(), "space id is empty");
+        validate_space_id(space_id)?;
         anyhow::ensure!(!peer_id.is_empty(), "space owner peer id is empty");
 
         let mut state = self.inner.write().unwrap();
@@ -486,6 +495,7 @@ impl SharedSyncState {
     }
 
     pub fn authorize_space(&self, space_id: &str, peer_id: &str) -> Result<()> {
+        validate_space_id(space_id)?;
         let state = self.inner.read().unwrap();
         let authorized = state
             .get(space_id)
@@ -531,6 +541,9 @@ impl SharedSyncState {
     }
 
     pub fn peer_owns_space(&self, space_id: &str, peer_id: &str) -> bool {
+        if validate_space_id(space_id).is_err() {
+            return false;
+        }
         let state = self.inner.read().unwrap();
         let Some(space) = state.get(space_id) else {
             return false;
@@ -555,6 +568,7 @@ impl SharedSyncState {
         raw_record_with_id: Vec<u8>,
         record_id: &str,
     ) -> Result<()> {
+        validate_space_id(space_id)?;
         let index = {
             let mut state = self.inner.write().unwrap();
             let space = state.entry(space_id.to_string()).or_default();
@@ -614,6 +628,9 @@ impl SharedSyncState {
         raw_change: Vec<u8>,
         parent_heads: &[String],
     ) -> Result<()> {
+        validate_space_id(space_id)?;
+        validate_storage_key("object id", object_id)?;
+        validate_storage_key("change id", change_id)?;
         let is_root_change = RawTreeChange::decode(raw_change.as_slice())
             .ok()
             .and_then(|raw_tree| RootChange::decode(raw_tree.payload.as_slice()).ok())
@@ -669,6 +686,8 @@ impl SharedSyncState {
     }
 
     pub fn upsert_store_entry(&self, entry: StoreKeyValue) -> Result<()> {
+        validate_space_id(&entry.space_id)?;
+        validate_storage_key("store peer id", &entry.key_peer_id)?;
         let encoded = entry.encode_to_vec();
         {
             let mut state = self.inner.write().unwrap();
@@ -720,6 +739,29 @@ fn ensure_table(db: &Database, definition: TableDefinition<&str, &[u8]>) -> Resu
     Ok(())
 }
 
+fn ensure_schema(db: &Database) -> Result<()> {
+    let write_txn = db.begin_write()?;
+    {
+        let mut table = write_txn.open_table(GLOBAL_SCHEMA_TABLE)?;
+        let existing_version = table
+            .get(SCHEMA_VERSION_KEY)?
+            .map(|version| version.value().to_vec());
+        match existing_version.as_deref() {
+            Some(version) => anyhow::ensure!(
+                version == CURRENT_SCHEMA_VERSION,
+                "unsupported sync schema version {} (expected {})",
+                String::from_utf8_lossy(version),
+                String::from_utf8_lossy(CURRENT_SCHEMA_VERSION)
+            ),
+            None => {
+                table.insert(SCHEMA_VERSION_KEY, CURRENT_SCHEMA_VERSION)?;
+            }
+        }
+    }
+    write_txn.commit()?;
+    Ok(())
+}
+
 fn ensure_space_tables(db: &Database) -> Result<()> {
     let write_txn = db.begin_write()?;
     {
@@ -745,6 +787,45 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    #[test]
+    fn rejects_unsafe_space_id_before_creating_a_database_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        assert!(state.claim_space_owner("../outside", "peer-1").is_err());
+        assert!(
+            !temp_dir
+                .path()
+                .parent()
+                .unwrap()
+                .join("outside.redb")
+                .exists()
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_persistent_schema_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let global_path = temp_dir.path().join("global.redb");
+        {
+            let db = Database::create(&global_path).unwrap();
+            let write_txn = db.begin_write().unwrap();
+            {
+                let mut table = write_txn.open_table(GLOBAL_SCHEMA_TABLE).unwrap();
+                table.insert(SCHEMA_VERSION_KEY, b"999".as_slice()).unwrap();
+            }
+            write_txn.commit().unwrap();
+        }
+        let error = match new_shared_sync_state_at(temp_dir.path()) {
+            Ok(_) => panic!("unknown schema version was accepted"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("unsupported sync schema version")
+        );
+    }
 
     #[test]
     fn sync_state_persists_space_metadata_and_changes_across_reopen() {

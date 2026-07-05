@@ -12,7 +12,10 @@ const FILE_CIDS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("file
 const SPACE_USAGE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("space_usage");
 const GLOBAL_USAGE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("global_usage");
 const PUBLIC_INVITES_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("public_invites");
+const SCHEMA_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("schema");
 const GLOBAL_TOTALS_KEY: &str = "totals";
+const SCHEMA_VERSION_KEY: &str = "version";
+const CURRENT_SCHEMA_VERSION: &[u8] = b"1";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlobMetadata {
@@ -221,6 +224,21 @@ fn ensure_tables(db: &Database) -> Result<()> {
         let _space_usage = write_txn.open_table(SPACE_USAGE_TABLE)?;
         let _global_usage = write_txn.open_table(GLOBAL_USAGE_TABLE)?;
         let _public_invites = write_txn.open_table(PUBLIC_INVITES_TABLE)?;
+        let mut schema = write_txn.open_table(SCHEMA_TABLE)?;
+        let existing_version = schema
+            .get(SCHEMA_VERSION_KEY)?
+            .map(|version| version.value().to_vec());
+        match existing_version.as_deref() {
+            Some(version) => anyhow::ensure!(
+                version == CURRENT_SCHEMA_VERSION,
+                "unsupported file-index schema version {} (expected {})",
+                String::from_utf8_lossy(version),
+                String::from_utf8_lossy(CURRENT_SCHEMA_VERSION)
+            ),
+            None => {
+                schema.insert(SCHEMA_VERSION_KEY, CURRENT_SCHEMA_VERSION)?;
+            }
+        }
     }
     write_txn.commit()?;
     Ok(())
@@ -252,6 +270,28 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    #[test]
+    fn rejects_unknown_persistent_schema_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path().join("files");
+        std::fs::create_dir_all(&root).unwrap();
+        let db_path = root.join("files.redb");
+        {
+            let db = Database::create(&db_path).unwrap();
+            let write_txn = db.begin_write().unwrap();
+            {
+                let mut table = write_txn.open_table(SCHEMA_TABLE).unwrap();
+                table.insert(SCHEMA_VERSION_KEY, b"999".as_slice()).unwrap();
+            }
+            write_txn.commit().unwrap();
+        }
+        let error = match BlobIndex::open(&root) {
+            Ok(_) => panic!("unknown schema version was accepted"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("unsupported file-index schema"));
+    }
 
     #[test]
     fn blob_index_persists_bindings_and_usage_across_reopen() {

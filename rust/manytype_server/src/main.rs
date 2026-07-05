@@ -1,22 +1,14 @@
 //! Manytype server: all four any-sync node roles in a single binary.
 
-mod auth;
-mod config;
-mod consensus;
-mod coordinator;
-mod drpc;
-mod file_node;
-mod handshake;
-mod storage;
-mod sync_node;
-mod transport;
-
 use std::sync::Arc;
 
 use anyhow::Result;
 use libp2p_identity::Keypair;
 use manytype_core::crypto::ed25519;
 use manytype_proto::handshake::{Encoding, ProtoType};
+use manytype_server::{
+    auth, config, coordinator, drpc, file_node, handshake, identity, sync_node, transport,
+};
 
 fn is_benign_connection_error(error: &anyhow::Error) -> bool {
     use std::io::ErrorKind;
@@ -75,27 +67,23 @@ async fn main() -> Result<()> {
         .nth(1)
         .unwrap_or_else(|| "config.toml".to_string());
     let config = config::ServerConfig::load(&config_path)?;
+    let storage_paths = config.storage_paths()?;
 
-    // Derive signing key from identity seed
-    let seed_bytes = hex::decode(&config.identity_seed)?;
-    let seed: [u8; 32] = seed_bytes
-        .try_into()
-        .map_err(|v: Vec<u8>| anyhow::anyhow!("identity_seed must be 32 bytes, got {}", v.len()))?;
+    let seed = match config.identity_seed.as_deref() {
+        Some(seed) => hex::decode(seed)?.try_into().map_err(|value: Vec<u8>| {
+            anyhow::anyhow!("identity_seed must be 32 bytes, got {}", value.len())
+        })?,
+        None => identity::load_or_create(&storage_paths.identity_file)?,
+    };
     let signing_key = ed25519::signing_key_from_seed(&seed);
     let mut libp2p_seed = seed;
     let local_identity_keypair = Keypair::ed25519_from_bytes(libp2p_seed.as_mut_slice())
         .map_err(|e| anyhow::anyhow!("failed to derive libp2p identity from seed: {e}"))?;
     let local_peer_id_libp2p = local_identity_keypair.public().to_peer_id().to_string();
-    let default_seed_hex = "0101010101010101010101010101010101010101010101010101010101010101";
-    if config.identity_seed == default_seed_hex {
-        tracing::warn!(
-            "Server is using the default identity seed; change identity_seed in config for production use"
-        );
-    }
-
-    let sync_state = sync_node::SharedSyncState::open(&config.db_path)?;
-    let file_node = file_node::FileNodeState::open(&config.db_path)?;
-    tracing::info!("Opened sync state at {}", config.db_path);
+    let sync_state = sync_node::SharedSyncState::open(&storage_paths.sync_root)?;
+    let file_node = file_node::FileNodeState::open(&storage_paths.files_root)?;
+    let access_policy = Arc::new(auth::AccessPolicy::from_config(&config)?);
+    tracing::info!("Opened sync state at {}", storage_paths.sync_root.display());
     tracing::info!("Server peer ID: {}", local_peer_id_libp2p);
 
     // Build shared server state
@@ -123,12 +111,14 @@ async fn main() -> Result<()> {
         let local_peer_id_libp2p = local_peer_id_libp2p.clone();
         let local_identity_keypair = local_identity_keypair.clone();
         let state = Arc::clone(&state);
+        let access_policy = Arc::clone(&access_policy);
         tokio::spawn(async move {
             if let Err(e) = handle_connection(
                 incoming,
                 local_peer_id_libp2p,
                 local_identity_keypair,
                 state,
+                access_policy,
             )
             .await
             {
@@ -145,6 +135,7 @@ async fn handle_connection(
     local_peer_id_libp2p: String,
     local_identity_keypair: Keypair,
     state: Arc<drpc::router::ServerState>,
+    access_policy: Arc<auth::AccessPolicy>,
 ) -> Result<()> {
     let connection = incoming.await?;
     let remote_tls_peer_id = tls_peer_id(&connection)?;
@@ -177,6 +168,7 @@ async fn handle_connection(
         let remote_tls_peer_id = remote_tls_peer_id.clone();
         let remote_account_identity = remote_account_identity.clone();
         let state = Arc::clone(&state);
+        let access_policy = Arc::clone(&access_policy);
         tokio::spawn(async move {
             if let Err(e) = handle_stream(
                 send,
@@ -184,6 +176,7 @@ async fn handle_connection(
                 remote_tls_peer_id,
                 remote_account_identity,
                 state,
+                access_policy,
             )
             .await
             {
@@ -203,6 +196,7 @@ async fn handle_stream(
     remote_tls_peer_id: String,
     remote_account_identity: Vec<u8>,
     state: Arc<drpc::router::ServerState>,
+    access_policy: Arc<auth::AccessPolicy>,
 ) -> Result<()> {
     let mut stream = tokio::io::join(recv, send);
     let trace_file_rpcs = std::env::var_os("MANYTYPE_TRACE_FILE_RPCS").is_some();
@@ -211,6 +205,7 @@ async fn handle_stream(
     tracing::info!("Proto handshake complete with peer {}", remote_tls_peer_id);
     let authenticated_peer =
         auth::AuthenticatedPeer::from_connection(&remote_tls_peer_id, &remote_account_identity)?;
+    access_policy.authorize(&authenticated_peer)?;
 
     // Transition to DRPC dispatch
     let mut drpc_stream = drpc::stream::DrpcStream::new(stream);

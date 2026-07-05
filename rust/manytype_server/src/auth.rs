@@ -1,9 +1,57 @@
 //! Authenticated connection identity passed across DRPC trust boundaries.
 
+use std::collections::HashSet;
 use std::str::FromStr;
 
 use anyhow::{Result, ensure};
 use libp2p_identity::PeerId;
+
+use crate::config::{DeploymentMode, ServerConfig};
+
+#[derive(Clone, Debug)]
+pub struct AccessPolicy {
+    restrict: bool,
+    peer_ids: HashSet<String>,
+    account_identities: HashSet<[u8; 32]>,
+}
+
+impl AccessPolicy {
+    pub fn from_config(config: &ServerConfig) -> Result<Self> {
+        let account_identities = config
+            .allowed_account_identities
+            .iter()
+            .map(|identity| {
+                let decoded = hex::decode(identity)?;
+                decoded.try_into().map_err(|decoded: Vec<u8>| {
+                    anyhow::anyhow!(
+                        "allowed account identity must be 32 bytes, got {}",
+                        decoded.len()
+                    )
+                })
+            })
+            .collect::<Result<HashSet<_>>>()?;
+        Ok(Self {
+            restrict: config.deployment_mode != DeploymentMode::Development,
+            peer_ids: config.allowed_peer_ids.iter().cloned().collect(),
+            account_identities,
+        })
+    }
+
+    pub fn authorize(&self, peer: &AuthenticatedPeer<'_>) -> Result<()> {
+        if !self.restrict {
+            return Ok(());
+        }
+        ensure!(
+            self.peer_ids.contains(peer.id()),
+            "transport peer is not allowlisted"
+        );
+        ensure!(
+            self.account_identities.contains(peer.account_identity()),
+            "account identity is not allowlisted"
+        );
+        Ok(())
+    }
+}
 
 /// A peer ID proven by the client certificate on the current QUIC connection.
 ///
@@ -60,6 +108,22 @@ impl<'a> AuthenticatedPeer<'a> {
 mod tests {
     use super::*;
 
+    fn config_with_allowlist(peer_id: &str, account: [u8; 32]) -> ServerConfig {
+        toml::from_str(&format!(
+            r#"
+                deployment_mode = "private_canary"
+                quic_listen = "0.0.0.0:33020"
+                health_listen = "127.0.0.1:33021"
+                network_id = "manytype-private-canary"
+                data_dir = "/var/lib/manytype"
+                allowed_peer_ids = ["{peer_id}"]
+                allowed_account_identities = ["{}"]
+            "#,
+            hex::encode(account)
+        ))
+        .unwrap()
+    }
+
     #[test]
     fn rejects_unparseable_transport_peer_ids() {
         assert!(AuthenticatedPeer::from_connection("not-a-peer-id", &[0; 32]).is_err());
@@ -73,5 +137,34 @@ mod tests {
             .to_peer_id()
             .to_string();
         assert!(AuthenticatedPeer::from_connection(&peer_id, &[]).is_err());
+    }
+
+    #[test]
+    fn private_policy_requires_both_transport_peer_and_account() {
+        let key = libp2p_identity::Keypair::ed25519_from_bytes(&mut [8; 32]).unwrap();
+        let peer_id = key.public().to_peer_id().to_string();
+        let account = [9; 32];
+        let config = config_with_allowlist(&peer_id, account);
+        let policy = AccessPolicy::from_config(&config).unwrap();
+
+        policy
+            .authorize(&AuthenticatedPeer::from_connection(&peer_id, &account).unwrap())
+            .unwrap();
+        assert!(
+            policy
+                .authorize(&AuthenticatedPeer::from_connection(&peer_id, &[7; 32]).unwrap())
+                .is_err()
+        );
+
+        let other = libp2p_identity::Keypair::ed25519_from_bytes(&mut [10; 32])
+            .unwrap()
+            .public()
+            .to_peer_id()
+            .to_string();
+        assert!(
+            policy
+                .authorize(&AuthenticatedPeer::from_connection(&other, &account).unwrap())
+                .is_err()
+        );
     }
 }
