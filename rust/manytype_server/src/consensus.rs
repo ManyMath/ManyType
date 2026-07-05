@@ -137,6 +137,26 @@ pub fn has_persisted_space_linked_log(log_id: &str, sync_state: &SharedSyncState
     !space.acl_root_id.is_empty() || !space.acl_head.is_empty() || !space.acl_records.is_empty()
 }
 
+/// Returns true when a generic `LogAdd` is an ACL root for its space-scoped log.
+pub fn is_space_linked_log_add(request: &LogAddRequest) -> bool {
+    let Some(raw_with_id) = request.record.as_ref() else {
+        return false;
+    };
+    let Ok(raw_record) = RawRecord::decode(raw_with_id.payload.as_slice()) else {
+        return false;
+    };
+    let Ok(record) = Record::decode(raw_record.payload.as_slice()) else {
+        return false;
+    };
+    if !record.prev_id.is_empty() {
+        return false;
+    }
+    let Ok(acl_root) = AclRoot::decode(record.data.as_slice()) else {
+        return false;
+    };
+    acl_root.space_id == request.log_id
+}
+
 /// Persist a direct `LogAdd` root when it is a space-linked ACL root.
 ///
 /// Direct consensus RPCs remain generic, so non-ACL logs are ignored here.
@@ -144,26 +164,10 @@ pub fn persist_space_linked_log_add(
     request: &LogAddRequest,
     sync_state: &SharedSyncState,
 ) -> Result<bool> {
-    let Some(raw_with_id) = request.record.as_ref() else {
-        return Ok(false);
-    };
-
-    let Ok(raw_record) = RawRecord::decode(raw_with_id.payload.as_slice()) else {
-        return Ok(false);
-    };
-    let Ok(record) = Record::decode(raw_record.payload.as_slice()) else {
-        return Ok(false);
-    };
-    if !record.prev_id.is_empty() {
+    if !is_space_linked_log_add(request) {
         return Ok(false);
     }
-
-    let Ok(acl_root) = AclRoot::decode(record.data.as_slice()) else {
-        return Ok(false);
-    };
-    if acl_root.space_id != request.log_id {
-        return Ok(false);
-    }
+    let raw_with_id = request.record.as_ref().expect("space-linked record exists");
 
     sync_state.upsert_space_metadata(
         &request.log_id,

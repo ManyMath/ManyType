@@ -1,5 +1,6 @@
 //! Manytype server: all four any-sync node roles in a single binary.
 
+mod auth;
 mod config;
 mod consensus;
 mod coordinator;
@@ -151,7 +152,7 @@ async fn handle_connection(
 
     let (handshake_send, handshake_recv) = connection.accept_bi().await?;
     let mut handshake_stream = tokio::io::join(handshake_recv, handshake_send);
-    let remote_peer_id = handshake::perform_handshake(
+    let remote_account_identity = handshake::perform_handshake(
         &mut handshake_stream,
         &local_identity_keypair,
         &local_peer_id_libp2p,
@@ -174,11 +175,17 @@ async fn handle_connection(
         };
 
         let remote_tls_peer_id = remote_tls_peer_id.clone();
-        let remote_peer_id = remote_peer_id.clone();
+        let remote_account_identity = remote_account_identity.clone();
         let state = Arc::clone(&state);
         tokio::spawn(async move {
-            if let Err(e) =
-                handle_stream(send, recv, remote_tls_peer_id, remote_peer_id, state).await
+            if let Err(e) = handle_stream(
+                send,
+                recv,
+                remote_tls_peer_id,
+                remote_account_identity,
+                state,
+            )
+            .await
             {
                 if is_benign_connection_error(&e) {
                     tracing::info!("Stream closed by peer");
@@ -194,7 +201,7 @@ async fn handle_stream(
     send: quinn::SendStream,
     recv: quinn::RecvStream,
     remote_tls_peer_id: String,
-    _remote_peer_id: Vec<u8>,
+    remote_account_identity: Vec<u8>,
     state: Arc<drpc::router::ServerState>,
 ) -> Result<()> {
     let mut stream = tokio::io::join(recv, send);
@@ -202,6 +209,8 @@ async fn handle_stream(
 
     handshake::perform_proto_handshake(&mut stream, ProtoType::Drpc, &[Encoding::None]).await?;
     tracing::info!("Proto handshake complete with peer {}", remote_tls_peer_id);
+    let authenticated_peer =
+        auth::AuthenticatedPeer::from_connection(&remote_tls_peer_id, &remote_account_identity)?;
 
     // Transition to DRPC dispatch
     let mut drpc_stream = drpc::stream::DrpcStream::new(stream);
@@ -225,7 +234,7 @@ async fn handle_stream(
             &method,
             &mut drpc_stream,
             &state,
-            &remote_tls_peer_id,
+            &authenticated_peer,
         )
         .await
         {

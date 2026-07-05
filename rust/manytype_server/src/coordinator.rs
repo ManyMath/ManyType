@@ -17,11 +17,14 @@ use manytype_proto::coordinator::{
     SpaceReceiptWithSignature, SpaceSignRequest, SpaceSignResponse, SpaceStatus,
     SpaceStatusCheckRequest, SpaceStatusCheckResponse, SpaceStatusPayload,
 };
+use manytype_proto::crypto::{Key, KeyType};
 use manytype_proto::spacesync::{RawSpaceHeader, SpaceHeader};
 
+use crate::auth::AuthenticatedPeer;
 use crate::consensus;
 use crate::file_node;
 use crate::storage::sync_state::SharedSyncState;
+use manytype_core::crdt::cid::compute_cid;
 
 /// Configuration for the coordinator subsystem.
 pub struct CoordinatorConfig {
@@ -82,14 +85,19 @@ pub fn handle_space_sign(
     request_bytes: &[u8],
     config: &CoordinatorConfig,
     signing_key: &ed25519_dalek::SigningKey,
-    remote_peer_id: &str,
+    authenticated_peer: &AuthenticatedPeer<'_>,
     sync_state: &SharedSyncState,
 ) -> Result<Vec<u8>> {
     let request = SpaceSignRequest::decode(request_bytes)?;
-    let account_identity = decode_account_identity(&request.header)?;
+    let account_identity = validate_space_header(
+        &request.space_id,
+        &request.header,
+        authenticated_peer.account_identity(),
+    )?;
+    sync_state.claim_space_owner(&request.space_id, authenticated_peer.id())?;
     let receipt = build_signed_space_receipt(
         &request.space_id,
-        remote_peer_id,
+        authenticated_peer.id(),
         &account_identity,
         config,
         signing_key,
@@ -107,7 +115,7 @@ pub fn handle_space_sign(
         None,
         None,
         None,
-        Some(remote_peer_id.to_string()),
+        None,
     )?;
     let response = SpaceSignResponse {
         receipt: Some(receipt),
@@ -120,19 +128,17 @@ pub fn handle_space_sign(
 pub fn handle_space_status_check(
     request_bytes: &[u8],
     sync_state: &SharedSyncState,
-    remote_peer_id: &str,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = SpaceStatusCheckRequest::decode(request_bytes)?;
     let state = sync_state.read().unwrap();
-    let payload = if let Some(space) = state.get(&request.space_id) {
-        let permissions = if sync_state.peer_owns_space(&request.space_id, remote_peer_id) {
-            SpacePermissions::Owner
-        } else {
-            SpacePermissions::Unknown
-        };
+    let payload = if let Some(space) = state
+        .get(&request.space_id)
+        .filter(|space| space.owner_peer_id == authenticated_peer.id())
+    {
         SpaceStatusPayload {
             status: SpaceStatus::Created as i32,
-            permissions: permissions as i32,
+            permissions: SpacePermissions::Owner as i32,
             is_shared: space.is_shared,
             ..Default::default()
         }
@@ -154,8 +160,10 @@ pub fn handle_space_status_check(
 pub fn handle_space_make_shareable(
     request_bytes: &[u8],
     sync_state: &SharedSyncState,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = SpaceMakeShareableRequest::decode(request_bytes)?;
+    sync_state.authorize_space(&request.space_id, authenticated_peer.id())?;
     sync_state.mark_space_shared(&request.space_id)?;
     Ok(SpaceMakeShareableResponse::default().encode_to_vec())
 }
@@ -165,8 +173,10 @@ pub fn handle_acl_add_record(
     request_bytes: &[u8],
     sync_state: &SharedSyncState,
     signing_key: &ed25519_dalek::SigningKey,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = AclAddRecordRequest::decode(request_bytes)?;
+    sync_state.authorize_space(&request.space_id, authenticated_peer.id())?;
     let raw_record = RawRecord::decode(request.payload.as_slice())?;
 
     if consensus::ensure_log_exists_from_sync_state(&request.space_id, sync_state).is_none() {
@@ -199,8 +209,10 @@ pub fn handle_acl_add_record(
 pub fn handle_acl_get_records(
     request_bytes: &[u8],
     sync_state: &SharedSyncState,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = AclGetRecordsRequest::decode(request_bytes)?;
+    sync_state.authorize_space(&request.space_id, authenticated_peer.id())?;
     let response = AclGetRecordsResponse {
         records: sync_state.list_acl_records(&request.space_id, &request.acl_head),
     };
@@ -224,8 +236,13 @@ pub fn handle_acl_upload_invite(
 /// Handle /coordinator.Coordinator/SpaceDelete
 ///
 /// Stub: returns success with a future timestamp. No actual space teardown in v2.4.
-pub fn handle_space_delete(request_bytes: &[u8]) -> Result<Vec<u8>> {
-    let _request = SpaceDeleteRequest::decode(request_bytes)?;
+pub fn handle_space_delete(
+    request_bytes: &[u8],
+    sync_state: &SharedSyncState,
+    authenticated_peer: &AuthenticatedPeer<'_>,
+) -> Result<Vec<u8>> {
+    let request = SpaceDeleteRequest::decode(request_bytes)?;
+    sync_state.authorize_space(&request.space_id, authenticated_peer.id())?;
     let response = SpaceDeleteResponse {
         to_be_deleted_timestamp: unix_now_secs() as i64,
     };
@@ -334,10 +351,64 @@ pub fn validate_space_receipt(
     Ok(())
 }
 
-pub fn decode_account_identity(raw_header_bytes: &[u8]) -> Result<Vec<u8>> {
+/// Validates that a space claim is account-signed and content-addressed.
+pub fn validate_space_header(
+    space_id: &str,
+    raw_header_bytes: &[u8],
+    authenticated_account_identity: &[u8; 32],
+) -> Result<Vec<u8>> {
     let raw_header = RawSpaceHeader::decode(raw_header_bytes)?;
     let header = SpaceHeader::decode(raw_header.space_header.as_slice())?;
+    let identity = Key::decode(header.identity.as_slice())?;
+    anyhow::ensure!(
+        identity.r#type == KeyType::Ed25519Public as i32,
+        "space header identity must be an Ed25519 public key"
+    );
+    let public_key: [u8; 32] = identity
+        .data
+        .as_slice()
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("space header identity must be 32 bytes"))?;
+    anyhow::ensure!(
+        &public_key == authenticated_account_identity,
+        "space header identity does not match authenticated account"
+    );
+    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&public_key)?;
+    let signature_bytes: [u8; 64] = raw_header
+        .signature
+        .as_slice()
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("space header signature must be 64 bytes"))?;
+    verifying_key.verify(
+        &raw_header.space_header,
+        &ed25519_dalek::Signature::from_bytes(&signature_bytes),
+    )?;
+
+    let expected_space_id = format!(
+        "{}.{}",
+        compute_cid(raw_header_bytes),
+        format_base36(header.replication_key)
+    );
+    anyhow::ensure!(
+        space_id == expected_space_id,
+        "space header id is incorrect"
+    );
     Ok(header.identity)
+}
+
+fn format_base36(mut value: u64) -> String {
+    const DIGITS: &[u8; 36] = b"0123456789abcdefghijklmnopqrstuvwxyz";
+    if value == 0 {
+        return "0".to_string();
+    }
+
+    let mut encoded = Vec::new();
+    while value > 0 {
+        encoded.push(DIGITS[(value % 36) as usize]);
+        value /= 36;
+    }
+    encoded.reverse();
+    String::from_utf8(encoded).expect("base36 alphabet is valid UTF-8")
 }
 
 fn unix_now_secs() -> u64 {
@@ -350,6 +421,7 @@ fn unix_now_secs() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::AuthenticatedPeer;
     use crate::consensus::reset_logs_for_tests;
     use crate::sync_node::new_shared_sync_state;
     use crate::sync_node::new_shared_sync_state_at;
@@ -358,6 +430,30 @@ mod tests {
     use manytype_proto::consensus::{RawRecord, Record};
     use manytype_proto::spacesync::SpacePushRequest;
     use tempfile::TempDir;
+
+    const OWNER_PEER_ID: &str = "remote-peer";
+    const OTHER_PEER_ID: &str = "other-peer";
+
+    fn owner_peer() -> AuthenticatedPeer<'static> {
+        let account_identity = ed25519::signing_key_from_seed(&[3; 32])
+            .verifying_key()
+            .to_bytes();
+        AuthenticatedPeer::for_test_with_account(OWNER_PEER_ID, account_identity)
+    }
+
+    fn other_peer() -> AuthenticatedPeer<'static> {
+        let account_identity = ed25519::signing_key_from_seed(&[4; 32])
+            .verifying_key()
+            .to_bytes();
+        AuthenticatedPeer::for_test_with_account(OTHER_PEER_ID, account_identity)
+    }
+
+    fn other_peer_for_owner_account() -> AuthenticatedPeer<'static> {
+        let account_identity = ed25519::signing_key_from_seed(&[3; 32])
+            .verifying_key()
+            .to_bytes();
+        AuthenticatedPeer::for_test_with_account(OTHER_PEER_ID, account_identity)
+    }
 
     fn test_signing_key() -> ed25519_dalek::SigningKey {
         ed25519::signing_key_from_seed(&[7u8; 32])
@@ -369,17 +465,27 @@ mod tests {
         ed25519::ed25519_pubkey_to_libp2p_peer_id(&verifying_key.to_bytes())
     }
 
-    fn test_space_header(account_identity: &[u8]) -> Vec<u8> {
+    fn test_space_header(seed: u8) -> (String, Vec<u8>, Vec<u8>) {
+        let account_key = ed25519::signing_key_from_seed(&[seed; 32]);
+        let account_identity = Key {
+            r#type: KeyType::Ed25519Public as i32,
+            data: account_key.verifying_key().to_bytes().to_vec(),
+        }
+        .encode_to_vec();
         let header = SpaceHeader {
-            identity: account_identity.to_vec(),
+            identity: account_identity.clone(),
             space_type: "anytype.space".to_string(),
+            replication_key: 42,
             ..Default::default()
         };
-        RawSpaceHeader {
-            space_header: header.encode_to_vec(),
-            signature: vec![1; 64],
+        let header_bytes = header.encode_to_vec();
+        let raw_header = RawSpaceHeader {
+            signature: account_key.sign(&header_bytes).to_bytes().to_vec(),
+            space_header: header_bytes,
         }
-        .encode_to_vec()
+        .encode_to_vec();
+        let space_id = format!("{}.{}", compute_cid(&raw_header), format_base36(42));
+        (space_id, raw_header, account_identity)
     }
 
     fn acl_add_request(space_id: &str, prev_id: &str, data: &[u8]) -> AclAddRecordRequest {
@@ -491,10 +597,10 @@ mod tests {
             addresses: vec!["127.0.0.1:4830".to_string()],
         };
         let signing_key = test_signing_key();
-        let account_identity = vec![3; 32];
+        let (space_id, header, account_identity) = test_space_header(3);
         let request = SpaceSignRequest {
-            space_id: "space-1".to_string(),
-            header: test_space_header(&account_identity),
+            space_id: space_id.clone(),
+            header,
             ..Default::default()
         };
 
@@ -503,7 +609,7 @@ mod tests {
             &request.encode_to_vec(),
             &config,
             &signing_key,
-            "remote-peer",
+            &owner_peer(),
             &sync_state,
         )
         .unwrap();
@@ -511,8 +617,8 @@ mod tests {
         let receipt = response.receipt.unwrap();
         validate_space_receipt(
             &receipt,
-            "space-1",
-            "remote-peer",
+            &space_id,
+            OWNER_PEER_ID,
             &account_identity,
             &config,
             &ed25519::verifying_key(&signing_key),
@@ -528,10 +634,10 @@ mod tests {
             addresses: vec!["127.0.0.1:4830".to_string()],
         };
         let signing_key = test_signing_key();
-        let account_identity = vec![3; 32];
+        let (space_id, header, _) = test_space_header(3);
         let request = SpaceSignRequest {
-            space_id: "space-1".to_string(),
-            header: test_space_header(&account_identity),
+            space_id: space_id.clone(),
+            header,
             ..Default::default()
         };
         let sync_state = new_shared_sync_state();
@@ -540,11 +646,11 @@ mod tests {
         let before = SpaceStatusCheckResponse::decode(
             handle_space_status_check(
                 &SpaceStatusCheckRequest {
-                    space_id: "space-1".to_string(),
+                    space_id: space_id.clone(),
                 }
                 .encode_to_vec(),
                 &sync_state,
-                "remote-peer",
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -559,7 +665,7 @@ mod tests {
             &request.encode_to_vec(),
             &config,
             &signing_key,
-            "remote-peer",
+            &owner_peer(),
             &sync_state,
         )
         .unwrap();
@@ -569,12 +675,9 @@ mod tests {
         // SpacePush/HeadSync has happened; this must already report Created.
         let after = SpaceStatusCheckResponse::decode(
             handle_space_status_check(
-                &SpaceStatusCheckRequest {
-                    space_id: "space-1".to_string(),
-                }
-                .encode_to_vec(),
+                &SpaceStatusCheckRequest { space_id }.encode_to_vec(),
                 &sync_state,
-                "remote-peer",
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -583,6 +686,143 @@ mod tests {
         let payload = after.payload.unwrap();
         assert_eq!(payload.status, SpaceStatus::Created as i32);
         assert_eq!(payload.permissions, SpacePermissions::Owner as i32);
+    }
+
+    #[test]
+    fn space_sign_binds_the_first_claim_to_account_and_peer() {
+        let config = CoordinatorConfig {
+            network_id: "manytype-dev".to_string(),
+            peer_id: "test-peer".to_string(),
+            addresses: vec!["127.0.0.1:4830".to_string()],
+        };
+        let signing_key = test_signing_key();
+        let (space_id, header, _) = test_space_header(3);
+        let request = SpaceSignRequest {
+            space_id: space_id.clone(),
+            header,
+            ..Default::default()
+        };
+        let sync_state = new_shared_sync_state();
+
+        let wrong_account = handle_space_sign(
+            &request.encode_to_vec(),
+            &config,
+            &signing_key,
+            &other_peer(),
+            &sync_state,
+        )
+        .unwrap_err();
+        assert!(
+            wrong_account
+                .to_string()
+                .contains("does not match authenticated account")
+        );
+        assert!(!sync_state.read().unwrap().contains_key(&space_id));
+
+        handle_space_sign(
+            &request.encode_to_vec(),
+            &config,
+            &signing_key,
+            &owner_peer(),
+            &sync_state,
+        )
+        .unwrap();
+
+        let second_peer = handle_space_sign(
+            &request.encode_to_vec(),
+            &config,
+            &signing_key,
+            &other_peer_for_owner_account(),
+            &sync_state,
+        )
+        .unwrap_err();
+        assert!(second_peer.to_string().contains("space access denied"));
+        assert!(sync_state.peer_owns_space(&space_id, OWNER_PEER_ID));
+        assert!(!sync_state.peer_owns_space(&space_id, OTHER_PEER_ID));
+    }
+
+    #[test]
+    fn unauthorized_peer_cannot_discover_or_administer_space() {
+        let sync_state = new_shared_sync_state();
+        sync_state
+            .upsert_space_metadata(
+                "space-1",
+                Some(b"raw".to_vec()),
+                Some(b"acl-root".to_vec()),
+                Some("root-cid".to_string()),
+                None,
+                None,
+                Some(false),
+                Some(OWNER_PEER_ID.to_string()),
+            )
+            .unwrap();
+
+        let status = SpaceStatusCheckResponse::decode(
+            handle_space_status_check(
+                &SpaceStatusCheckRequest {
+                    space_id: "space-1".to_string(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+                &other_peer(),
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            status.payload.unwrap().status,
+            SpaceStatus::NotExists as i32
+        );
+
+        assert!(
+            handle_space_make_shareable(
+                &SpaceMakeShareableRequest {
+                    space_id: "space-1".to_string(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+                &other_peer(),
+            )
+            .is_err()
+        );
+        assert!(
+            handle_acl_get_records(
+                &AclGetRecordsRequest {
+                    space_id: "space-1".to_string(),
+                    acl_head: String::new(),
+                }
+                .encode_to_vec(),
+                &sync_state,
+                &other_peer(),
+            )
+            .is_err()
+        );
+        assert!(
+            handle_acl_add_record(
+                &acl_add_request("space-1", "root-cid", b"unauthorized").encode_to_vec(),
+                &sync_state,
+                &test_signing_key(),
+                &other_peer(),
+            )
+            .is_err()
+        );
+        assert!(
+            handle_space_delete(
+                &SpaceDeleteRequest {
+                    space_id: "space-1".to_string(),
+                    ..Default::default()
+                }
+                .encode_to_vec(),
+                &sync_state,
+                &other_peer(),
+            )
+            .is_err()
+        );
+
+        let space = &sync_state.read().unwrap()["space-1"];
+        assert!(!space.is_shared);
+        assert!(space.acl_records.is_empty());
     }
 
     #[test]
@@ -610,7 +850,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                None,
+                Some(OWNER_PEER_ID.to_string()),
             )
             .unwrap();
 
@@ -620,7 +860,7 @@ mod tests {
             }
             .encode_to_vec(),
             &sync_state,
-            "remote-peer",
+            &owner_peer(),
         )
         .unwrap();
         let response = SpaceStatusCheckResponse::decode(response_bytes.as_slice()).unwrap();
@@ -643,7 +883,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                None,
+                Some(OWNER_PEER_ID.to_string()),
             )
             .unwrap();
 
@@ -653,6 +893,7 @@ mod tests {
             }
             .encode_to_vec(),
             &sync_state,
+            &owner_peer(),
         )
         .unwrap();
 
@@ -663,7 +904,7 @@ mod tests {
                 }
                 .encode_to_vec(),
                 &sync_state,
-                "remote-peer",
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -687,7 +928,7 @@ mod tests {
                     None,
                     None,
                     Some(false),
-                    None,
+                    Some(OWNER_PEER_ID.to_string()),
                 )
                 .unwrap();
 
@@ -697,6 +938,7 @@ mod tests {
                 }
                 .encode_to_vec(),
                 &sync_state,
+                &owner_peer(),
             )
             .unwrap();
         }
@@ -709,7 +951,7 @@ mod tests {
                 }
                 .encode_to_vec(),
                 &reopened,
-                "remote-peer",
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -733,7 +975,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                None,
+                Some(OWNER_PEER_ID.to_string()),
             )
             .unwrap();
 
@@ -741,6 +983,7 @@ mod tests {
             &acl_add_request("space-1", "root-cid", b"first").encode_to_vec(),
             &sync_state,
             &test_signing_key(),
+            &owner_peer(),
         )
         .unwrap();
         let response = AclAddRecordResponse::decode(response_bytes.as_slice()).unwrap();
@@ -768,7 +1011,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                None,
+                Some(OWNER_PEER_ID.to_string()),
             )
             .unwrap();
 
@@ -777,6 +1020,7 @@ mod tests {
                 &acl_add_request("space-1", "root-cid", b"first").encode_to_vec(),
                 &sync_state,
                 &test_signing_key(),
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -787,6 +1031,7 @@ mod tests {
                 &acl_add_request("space-1", &first.record_id, b"second").encode_to_vec(),
                 &sync_state,
                 &test_signing_key(),
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -801,6 +1046,7 @@ mod tests {
                 }
                 .encode_to_vec(),
                 &sync_state,
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -816,6 +1062,7 @@ mod tests {
                 }
                 .encode_to_vec(),
                 &sync_state,
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -847,7 +1094,7 @@ mod tests {
                     None,
                     None,
                     Some(false),
-                    None,
+                    Some(OWNER_PEER_ID.to_string()),
                 )
                 .unwrap();
 
@@ -856,6 +1103,7 @@ mod tests {
                     &acl_add_request("space-1", "root-cid", b"first").encode_to_vec(),
                     &sync_state,
                     &signing_key,
+                    &owner_peer(),
                 )
                 .unwrap()
                 .as_slice(),
@@ -865,6 +1113,7 @@ mod tests {
                 &acl_add_request("space-1", &first.record_id, b"second").encode_to_vec(),
                 &sync_state,
                 &signing_key,
+                &owner_peer(),
             )
             .unwrap();
         }
@@ -879,6 +1128,7 @@ mod tests {
                 }
                 .encode_to_vec(),
                 &reopened,
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -893,6 +1143,7 @@ mod tests {
                 &acl_add_request("space-1", &latest_id, b"third").encode_to_vec(),
                 &reopened,
                 &signing_key,
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -905,11 +1156,16 @@ mod tests {
 
     #[test]
     fn space_delete_stub_returns_timestamp() {
+        let sync_state = new_shared_sync_state();
+        sync_state
+            .claim_space_owner("space-1", OWNER_PEER_ID)
+            .unwrap();
         let request = SpaceDeleteRequest {
             space_id: "space-1".to_string(),
             ..Default::default()
         };
-        let response_bytes = handle_space_delete(&request.encode_to_vec()).unwrap();
+        let response_bytes =
+            handle_space_delete(&request.encode_to_vec(), &sync_state, &owner_peer()).unwrap();
         let response = SpaceDeleteResponse::decode(response_bytes.as_slice()).unwrap();
         assert!(response.to_be_deleted_timestamp > 0);
     }

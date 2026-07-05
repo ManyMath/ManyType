@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LockResult, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -412,6 +414,13 @@ impl SharedSyncState {
         {
             let mut state = self.inner.write().unwrap();
             let space = state.entry(space_id.to_string()).or_default();
+            if let Some(owner_peer_id) = owner_peer_id.as_deref() {
+                anyhow::ensure!(!owner_peer_id.is_empty(), "space owner peer id is empty");
+                anyhow::ensure!(
+                    space.owner_peer_id.is_empty() || space.owner_peer_id == owner_peer_id,
+                    "space ownership is immutable"
+                );
+            }
             if let Some(space_header) = space_header.clone() {
                 space.space_header = Some(space_header);
             }
@@ -445,6 +454,44 @@ impl SharedSyncState {
             is_shared,
             owner_peer_id.as_deref(),
         )
+    }
+
+    /// Atomically assigns the first authenticated owner of a space.
+    ///
+    /// Existing ownership may be reaffirmed by the same peer but can never be
+    /// transferred through a later registration or metadata update.
+    pub fn claim_space_owner(&self, space_id: &str, peer_id: &str) -> Result<()> {
+        anyhow::ensure!(!space_id.is_empty(), "space id is empty");
+        anyhow::ensure!(!peer_id.is_empty(), "space owner peer id is empty");
+
+        let mut state = self.inner.write().unwrap();
+        let space = state.entry(space_id.to_string()).or_default();
+        if !space.owner_peer_id.is_empty() {
+            anyhow::ensure!(space.owner_peer_id == peer_id, "space access denied");
+            return Ok(());
+        }
+
+        self.storage.persist_space_metadata(
+            space_id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(peer_id),
+        )?;
+        space.owner_peer_id = peer_id.to_string();
+        Ok(())
+    }
+
+    pub fn authorize_space(&self, space_id: &str, peer_id: &str) -> Result<()> {
+        let state = self.inner.read().unwrap();
+        let authorized = state
+            .get(space_id)
+            .is_some_and(|space| !peer_id.is_empty() && space.owner_peer_id == peer_id);
+        anyhow::ensure!(authorized, "space access denied");
+        Ok(())
     }
 
     pub fn mark_space_shared(&self, space_id: &str) -> Result<()> {
@@ -488,25 +535,18 @@ impl SharedSyncState {
         let Some(space) = state.get(space_id) else {
             return false;
         };
-        space.owner_peer_id.is_empty() || space.owner_peer_id == peer_id
+        !peer_id.is_empty() && space.owner_peer_id == peer_id
     }
 
     pub fn owned_space_ids(&self, peer_id: &str) -> Vec<String> {
         let state = self.inner.read().unwrap();
         let mut owned: Vec<_> = state
             .iter()
-            .filter(|(_, space)| space.owner_peer_id.is_empty() || space.owner_peer_id == peer_id)
+            .filter(|(_, space)| !peer_id.is_empty() && space.owner_peer_id == peer_id)
             .map(|(space_id, _)| space_id.clone())
             .collect();
         owned.sort();
         owned
-    }
-
-    pub fn space_ids(&self) -> Vec<String> {
-        let state = self.inner.read().unwrap();
-        let mut ids: Vec<_> = state.keys().cloned().collect();
-        ids.sort();
-        ids
     }
 
     pub fn append_acl_record(
@@ -650,12 +690,19 @@ impl SharedSyncState {
 }
 
 #[cfg(test)]
+static NEXT_TEST_STATE_ID: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(test)]
 pub fn new_shared_sync_state() -> SharedSyncState {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    let path = std::env::temp_dir().join(format!("manytype-sync-state-{nonce}"));
+    let sequence = NEXT_TEST_STATE_ID.fetch_add(1, Ordering::Relaxed);
+    let path = std::env::temp_dir().join(format!(
+        "manytype-sync-state-{}-{nonce}-{sequence}",
+        std::process::id()
+    ));
     SharedSyncState::open(path).expect("failed to create sync state")
 }
 
@@ -949,5 +996,49 @@ mod tests {
 
         let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();
         assert!(reopened.read().unwrap()["space-1"].is_shared);
+    }
+
+    #[test]
+    fn first_owner_claim_is_immutable_and_persists() {
+        let temp_dir = TempDir::new().unwrap();
+        {
+            let state = new_shared_sync_state_at(temp_dir.path()).unwrap();
+            state
+                .upsert_space_metadata(
+                    "space-1",
+                    Some(b"header".to_vec()),
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(false),
+                    None,
+                )
+                .unwrap();
+            assert!(state.authorize_space("space-1", "peer-1").is_err());
+
+            state.claim_space_owner("space-1", "peer-1").unwrap();
+            state.claim_space_owner("space-1", "peer-1").unwrap();
+            assert!(state.claim_space_owner("space-1", "peer-2").is_err());
+            assert!(
+                state
+                    .upsert_space_metadata(
+                        "space-1",
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        Some("peer-2".to_string()),
+                    )
+                    .is_err()
+            );
+        }
+
+        let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        reopened.authorize_space("space-1", "peer-1").unwrap();
+        assert!(reopened.authorize_space("space-1", "peer-2").is_err());
+        assert_eq!(reopened.read().unwrap()["space-1"].owner_peer_id, "peer-1");
     }
 }

@@ -17,6 +17,7 @@ use manytype_proto::filesync::{
     FilesDeleteRequest, FilesDeleteResponse, Ok as FilesyncOk, SpaceInfoRequest, SpaceInfoResponse,
 };
 
+use crate::auth::AuthenticatedPeer;
 use crate::storage::blob_index::{BlobIndex, SpaceUsage};
 use crate::storage::blob_store::BlobStore;
 use crate::storage::sync_state::SharedSyncState;
@@ -93,10 +94,10 @@ pub fn handle_blocks_check(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &str,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = BlocksCheckRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
-    let is_authorized = sync_state.peer_owns_space(&request.space_id, remote_peer_id);
+    let is_authorized = sync_state.peer_owns_space(&request.space_id, authenticated_peer.id());
 
     let mut availability = Vec::with_capacity(request.cids.len());
     for cid_bytes in request.cids {
@@ -136,10 +137,10 @@ pub fn handle_block_push(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &str,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = BlockPushRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
-    ensure_space_authorized(&request.space_id, sync_state, remote_peer_id)?;
+    ensure_space_authorized(&request.space_id, sync_state, authenticated_peer.id())?;
     put_and_bind_block(
         state,
         &request.space_id,
@@ -155,11 +156,11 @@ pub fn handle_block_push_many(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &str,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = BlockPushManyRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
     for file_blocks in request.file_blocks {
-        ensure_space_authorized(&file_blocks.space_id, sync_state, remote_peer_id)?;
+        ensure_space_authorized(&file_blocks.space_id, sync_state, authenticated_peer.id())?;
         for block in file_blocks.blocks {
             put_and_bind_block(
                 state,
@@ -178,10 +179,10 @@ pub fn handle_blocks_bind(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &str,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = BlocksBindRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
-    ensure_space_authorized(&request.space_id, sync_state, remote_peer_id)?;
+    ensure_space_authorized(&request.space_id, sync_state, authenticated_peer.id())?;
 
     for cid_bytes in request.cids {
         let cid = cid_bytes_to_string(&cid_bytes).map_err(FileNodeError::invalid_cid)?;
@@ -205,10 +206,10 @@ pub fn handle_files_delete(
     request_bytes: &[u8],
     _state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &str,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = FilesDeleteRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
-    ensure_space_authorized(&request.space_id, sync_state, remote_peer_id)?;
+    ensure_space_authorized(&request.space_id, sync_state, authenticated_peer.id())?;
     Ok(FilesDeleteResponse {}.encode_to_vec())
 }
 
@@ -216,7 +217,7 @@ pub fn handle_block_get(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &str,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = BlockGetRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
     let cid = cid_bytes_to_string(&request.cid).map_err(FileNodeError::invalid_cid)?;
@@ -247,7 +248,7 @@ pub fn handle_block_get(
         .encode_to_vec());
     }
 
-    ensure_space_authorized(&request.space_id, sync_state, remote_peer_id)?;
+    ensure_space_authorized(&request.space_id, sync_state, authenticated_peer.id())?;
     if !state
         .blob_index
         .space_has_cid(&request.space_id, &cid)
@@ -276,7 +277,7 @@ pub fn handle_block_get(
 pub fn handle_check(
     request_bytes: &[u8],
     sync_state: &SharedSyncState,
-    _remote_peer_id: &str,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let _request = CheckRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
 
@@ -290,7 +291,7 @@ pub fn handle_check(
     // node is writable here is safe.
     // Include the empty space id to support pre-join flows (SpaceInviteView) where
     // the official client fetches invite blocks without a known space id.
-    let mut space_ids = sync_state.space_ids();
+    let mut space_ids = sync_state.owned_space_ids(authenticated_peer.id());
     if space_ids.first().map(|id| !id.is_empty()).unwrap_or(true) {
         space_ids.insert(0, String::new());
     }
@@ -306,30 +307,15 @@ pub fn handle_space_info(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &str,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = SpaceInfoRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
-    // Official clients may call SpaceInfo early in bootstrap before the server
-    // has recorded space ownership metadata. This RPC is read-only, so return
-    // a conservative empty usage snapshot when the space isn't yet authorized.
-    let authorized = sync_state.peer_owns_space(&request.space_id, remote_peer_id);
-    let usage = if authorized {
-        state
-            .blob_index
-            .get_space_usage(&request.space_id)
-            .map_err(FileNodeError::unexpected)?
-    } else {
-        SpaceUsage::default()
-    };
-    let account_snapshot = if authorized {
-        account_snapshot(sync_state, state, remote_peer_id)?
-    } else {
-        AccountSnapshot {
-            total_usage_bytes: 0,
-            total_cids_count: 0,
-            spaces: Vec::new(),
-        }
-    };
+    ensure_space_authorized(&request.space_id, sync_state, authenticated_peer.id())?;
+    let usage = state
+        .blob_index
+        .get_space_usage(&request.space_id)
+        .map_err(FileNodeError::unexpected)?;
+    let account_snapshot = account_snapshot(sync_state, state, authenticated_peer.id())?;
     Ok(SpaceInfoResponse {
         limit_bytes: DEFAULT_STORAGE_LIMIT_BYTES,
         total_usage_bytes: account_snapshot.total_usage_bytes,
@@ -345,10 +331,10 @@ pub fn handle_account_info(
     request_bytes: &[u8],
     state: &FileNodeState,
     sync_state: &SharedSyncState,
-    remote_peer_id: &str,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let _request = AccountInfoRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
-    let snapshot = account_snapshot(sync_state, state, remote_peer_id)?;
+    let snapshot = account_snapshot(sync_state, state, authenticated_peer.id())?;
     Ok(AccountInfoResponse {
         limit_bytes: DEFAULT_STORAGE_LIMIT_BYTES,
         total_usage_bytes: snapshot.total_usage_bytes,
@@ -494,6 +480,14 @@ mod tests {
     const OWNER_PEER_ID: &str = "peer-1";
     const OTHER_PEER_ID: &str = "peer-2";
 
+    fn owner_peer() -> AuthenticatedPeer<'static> {
+        AuthenticatedPeer::for_test(OWNER_PEER_ID)
+    }
+
+    fn other_peer() -> AuthenticatedPeer<'static> {
+        AuthenticatedPeer::for_test(OTHER_PEER_ID)
+    }
+
     fn seeded_sync_state(temp_dir: &TempDir) -> SharedSyncState {
         let path = temp_dir.path().join("sync.redb");
         let state = new_shared_sync_state_at(path).unwrap();
@@ -538,7 +532,7 @@ mod tests {
                 data: payload.clone(),
             };
             let response_bytes =
-                handle_block_push(&request.encode_to_vec(), &state, &sync_state, OWNER_PEER_ID)
+                handle_block_push(&request.encode_to_vec(), &state, &sync_state, &owner_peer())
                     .unwrap();
             let _ok = FilesyncOk::decode(response_bytes.as_slice()).unwrap();
         }
@@ -553,7 +547,7 @@ mod tests {
             .encode_to_vec(),
             &reopened,
             &sync_state,
-            OWNER_PEER_ID,
+            &owner_peer(),
         )
         .unwrap();
         let response = BlockGetResponse::decode(response_bytes.as_slice()).unwrap();
@@ -580,7 +574,7 @@ mod tests {
             .encode_to_vec(),
             &state,
             &sync_state,
-            OWNER_PEER_ID,
+            &owner_peer(),
         )
         .unwrap();
 
@@ -608,7 +602,7 @@ mod tests {
                 .encode_to_vec(),
                 &state,
                 &sync_state,
-                OWNER_PEER_ID,
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -628,7 +622,7 @@ mod tests {
                 .encode_to_vec(),
                 &state,
                 &other_sync,
-                OWNER_PEER_ID,
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -648,7 +642,7 @@ mod tests {
                 .encode_to_vec(),
                 &state,
                 &sync_state,
-                OWNER_PEER_ID,
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -676,7 +670,7 @@ mod tests {
             .encode_to_vec(),
             &state,
             &sync_state,
-            OWNER_PEER_ID,
+            &owner_peer(),
         )
         .unwrap_err()
         .to_string();
@@ -714,7 +708,7 @@ mod tests {
             .encode_to_vec(),
             &state,
             &sync_state,
-            OWNER_PEER_ID,
+            &owner_peer(),
         )
         .unwrap();
         let _ok = FilesyncOk::decode(response.as_slice()).unwrap();
@@ -729,7 +723,7 @@ mod tests {
                 .encode_to_vec(),
                 &state,
                 &sync_state,
-                OWNER_PEER_ID,
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -747,7 +741,7 @@ mod tests {
                 .encode_to_vec(),
                 &state,
                 &sync_state,
-                OWNER_PEER_ID,
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -774,7 +768,7 @@ mod tests {
             .encode_to_vec(),
             &state,
             &sync_state,
-            OWNER_PEER_ID,
+            &owner_peer(),
         )
         .unwrap();
         let _ok = FilesyncOk::decode(response.as_slice()).unwrap();
@@ -789,7 +783,7 @@ mod tests {
                 .encode_to_vec(),
                 &state,
                 &sync_state,
-                OWNER_PEER_ID,
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -816,7 +810,7 @@ mod tests {
             .encode_to_vec(),
             &state,
             &sync_state,
-            OWNER_PEER_ID,
+            &owner_peer(),
         )
         .unwrap();
 
@@ -829,7 +823,7 @@ mod tests {
             .encode_to_vec(),
             &state,
             &sync_state,
-            OWNER_PEER_ID,
+            &owner_peer(),
         )
         .unwrap();
         let _ok = FilesyncOk::decode(response.as_slice()).unwrap();
@@ -856,7 +850,7 @@ mod tests {
             .encode_to_vec(),
             &state,
             &seeded_sync_state(&temp_dir),
-            OWNER_PEER_ID,
+            &owner_peer(),
         )
         .unwrap_err()
         .to_string();
@@ -882,7 +876,7 @@ mod tests {
             .encode_to_vec(),
             &state,
             &sync_state,
-            OWNER_PEER_ID,
+            &owner_peer(),
         )
         .unwrap_err()
         .to_string();
@@ -892,14 +886,12 @@ mod tests {
 
     #[test]
     fn check_lists_owned_spaces_plus_prejoin_placeholder() {
-        // handle_check advertises every known space (plus a leading empty
-        // space id for pre-join flows like SpaceInviteView) regardless of
-        // the calling peer, since real authorization is enforced by the
-        // mutating RPCs instead. See handle_check's doc comment.
+        // The pre-join placeholder is public, but private space IDs are scoped
+        // to the authenticated owner.
         let temp_dir = TempDir::new().unwrap();
         let sync_state = seeded_sync_state(&temp_dir);
         let response = CheckResponse::decode(
-            handle_check(&CheckRequest {}.encode_to_vec(), &sync_state, OWNER_PEER_ID)
+            handle_check(&CheckRequest {}.encode_to_vec(), &sync_state, &owner_peer())
                 .unwrap()
                 .as_slice(),
         )
@@ -911,12 +903,12 @@ mod tests {
         assert!(response.allow_write);
 
         let other = CheckResponse::decode(
-            handle_check(&CheckRequest {}.encode_to_vec(), &sync_state, OTHER_PEER_ID)
+            handle_check(&CheckRequest {}.encode_to_vec(), &sync_state, &other_peer())
                 .unwrap()
                 .as_slice(),
         )
         .unwrap();
-        assert_eq!(other.space_ids, vec![String::new(), "space-1".to_string()]);
+        assert_eq!(other.space_ids, vec![String::new()]);
         assert!(other.allow_write);
     }
 
@@ -938,7 +930,7 @@ mod tests {
             .encode_to_vec(),
             &state,
             &sync_state,
-            OWNER_PEER_ID,
+            &owner_peer(),
         )
         .unwrap();
 
@@ -950,7 +942,7 @@ mod tests {
                 .encode_to_vec(),
                 &state,
                 &sync_state,
-                OWNER_PEER_ID,
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -967,7 +959,7 @@ mod tests {
                 &AccountInfoRequest {}.encode_to_vec(),
                 &state,
                 &sync_state,
-                OWNER_PEER_ID,
+                &owner_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -1005,7 +997,7 @@ mod tests {
                 .encode_to_vec(),
                 &state,
                 &sync_state,
-                OTHER_PEER_ID,
+                &other_peer(),
             )
             .unwrap()
             .as_slice(),
@@ -1037,7 +1029,7 @@ mod tests {
             .encode_to_vec(),
             &state,
             &sync_state,
-            OWNER_PEER_ID,
+            &owner_peer(),
         )
         .unwrap();
 
@@ -1063,11 +1055,106 @@ mod tests {
             .encode_to_vec(),
             &state,
             &sync_state,
-            OWNER_PEER_ID,
+            &owner_peer(),
         )
         .unwrap_err()
         .to_string();
 
         assert!(error.contains("CIDNotFound"));
+    }
+
+    #[test]
+    fn unauthorized_peer_cannot_read_write_or_inspect_private_blobs() {
+        let temp_dir = TempDir::new().unwrap();
+        let sync_state = seeded_sync_state(&temp_dir);
+        let state = file_node_state(&temp_dir);
+        let private_payload = b"private-block".to_vec();
+        let private_cid = compute_cid(&private_payload);
+        let private_cid_bytes = cid_string_to_bytes(&private_cid).unwrap();
+
+        handle_block_push(
+            &BlockPushRequest {
+                space_id: "space-1".to_string(),
+                file_id: "file-1".to_string(),
+                cid: private_cid_bytes.clone(),
+                data: private_payload,
+            }
+            .encode_to_vec(),
+            &state,
+            &sync_state,
+            &owner_peer(),
+        )
+        .unwrap();
+
+        let availability = BlocksCheckResponse::decode(
+            handle_blocks_check(
+                &BlocksCheckRequest {
+                    space_id: "space-1".to_string(),
+                    cids: vec![private_cid_bytes.clone()],
+                }
+                .encode_to_vec(),
+                &state,
+                &sync_state,
+                &other_peer(),
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            availability.blocks_availability[0].status,
+            AvailabilityStatus::NotExists as i32
+        );
+        assert!(
+            handle_block_get(
+                &BlockGetRequest {
+                    space_id: "space-1".to_string(),
+                    cid: private_cid_bytes,
+                    wait: false,
+                }
+                .encode_to_vec(),
+                &state,
+                &sync_state,
+                &other_peer(),
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("Forbidden")
+        );
+
+        let unauthorized_payload = b"unauthorized-block".to_vec();
+        let unauthorized_cid = compute_cid(&unauthorized_payload);
+        assert!(
+            handle_block_push(
+                &BlockPushRequest {
+                    space_id: "space-1".to_string(),
+                    file_id: "file-other".to_string(),
+                    cid: cid_string_to_bytes(&unauthorized_cid).unwrap(),
+                    data: unauthorized_payload,
+                }
+                .encode_to_vec(),
+                &state,
+                &sync_state,
+                &other_peer(),
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("Forbidden")
+        );
+        assert!(!state.blob_store.has(&unauthorized_cid));
+        assert!(
+            handle_space_info(
+                &SpaceInfoRequest {
+                    space_id: "space-1".to_string(),
+                }
+                .encode_to_vec(),
+                &state,
+                &sync_state,
+                &other_peer(),
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("Forbidden")
+        );
     }
 }

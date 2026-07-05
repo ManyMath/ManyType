@@ -6,6 +6,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::codec::{KIND_CLOSE, KIND_CLOSE_SEND};
 use super::stream::DrpcStream;
+use crate::auth::AuthenticatedPeer;
 use crate::consensus;
 use crate::coordinator::{self, CoordinatorConfig};
 use crate::file_node;
@@ -34,7 +35,7 @@ pub async fn dispatch<T>(
     method: &str,
     stream: &mut DrpcStream<T>,
     state: &ServerState,
-    remote_peer_id: &str,
+    authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<()>
 where
     T: AsyncRead + AsyncWrite + Unpin,
@@ -253,7 +254,7 @@ where
                 &request_bytes,
                 &state.coordinator_config,
                 &state.local_signing_key,
-                remote_peer_id,
+                authenticated_peer,
                 &state.sync_state,
             )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
@@ -263,14 +264,17 @@ where
             let response_bytes = coordinator::handle_space_status_check(
                 &request_bytes,
                 &state.sync_state,
-                remote_peer_id,
+                authenticated_peer,
             )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/coordinator.Coordinator/SpaceMakeShareable" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes =
-                coordinator::handle_space_make_shareable(&request_bytes, &state.sync_state)?;
+            let response_bytes = coordinator::handle_space_make_shareable(
+                &request_bytes,
+                &state.sync_state,
+                authenticated_peer,
+            )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/coordinator.Coordinator/AclAddRecord" => {
@@ -279,13 +283,17 @@ where
                 &request_bytes,
                 &state.sync_state,
                 &state.local_signing_key,
+                authenticated_peer,
             )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/coordinator.Coordinator/AclGetRecords" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes =
-                coordinator::handle_acl_get_records(&request_bytes, &state.sync_state)?;
+            let response_bytes = coordinator::handle_acl_get_records(
+                &request_bytes,
+                &state.sync_state,
+                authenticated_peer,
+            )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/coordinator.Coordinator/AclUploadInvite" => {
@@ -296,7 +304,11 @@ where
         }
         "/coordinator.Coordinator/SpaceDelete" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes = coordinator::handle_space_delete(&request_bytes)?;
+            let response_bytes = coordinator::handle_space_delete(
+                &request_bytes,
+                &state.sync_state,
+                authenticated_peer,
+            )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/coordinator.Coordinator/AccountDelete" => {
@@ -325,12 +337,17 @@ where
         }
         "/spacesync.SpaceSync/HeadSync" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes = sync_node::handle_head_sync(&request_bytes, &state.sync_state)?;
+            let response_bytes =
+                sync_node::handle_head_sync(&request_bytes, &state.sync_state, authenticated_peer)?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/spacesync.SpaceSync/StoreDiff" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes = sync_node::handle_store_diff(&request_bytes, &state.sync_state)?;
+            let response_bytes = sync_node::handle_store_diff(
+                &request_bytes,
+                &state.sync_state,
+                authenticated_peer,
+            )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/spacesync.SpaceSync/StoreElements" => {
@@ -381,6 +398,12 @@ where
 
                 if msg.space_id.is_empty() {
                     msg.space_id = active_space_id.clone();
+                }
+
+                if !msg.space_id.is_empty() {
+                    state
+                        .sync_state
+                        .authorize_space(&msg.space_id, authenticated_peer.id())?;
                 }
 
                 // Terminator: empty StoreKeyValue (no spaceId + no key/value).
@@ -456,8 +479,11 @@ where
         }
         "/spacesync.SpaceSync/ObjectSync" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes =
-                sync_node::handle_object_sync_message(&request_bytes, &state.sync_state)?;
+            let response_bytes = sync_node::handle_object_sync_message(
+                &request_bytes,
+                &state.sync_state,
+                authenticated_peer,
+            )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/spacesync.SpaceSync/ObjectSyncStream" => {
@@ -495,8 +521,11 @@ where
                     buf
                 };
 
-                let response_bytes =
-                    sync_node::handle_object_sync_message(&msg_bytes, &state.sync_state)?;
+                let response_bytes = sync_node::handle_object_sync_message(
+                    &msg_bytes,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
                 // Official Anytype clients treat server->client stream messages
                 // as semantic updates, not per-message acks. Avoid sending
                 // empty responses for push-style requests, but still respond
@@ -524,8 +553,11 @@ where
         }
         "/spacesync.SpaceSync/ObjectSyncRequestStream" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes =
-                sync_node::handle_object_sync_message(&request_bytes, &state.sync_state)?;
+            let response_bytes = sync_node::handle_object_sync_message(
+                &request_bytes,
+                &state.sync_state,
+                authenticated_peer,
+            )?;
             if let Some(error_message) = object_sync_error_message(&response_bytes) {
                 write_error_response(stream, stream_id, &mut next_message_id, &error_message)
                     .await?;
@@ -541,13 +573,17 @@ where
                 &request_bytes,
                 &state.sync_state,
                 &state.local_signing_key,
+                authenticated_peer,
             )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/spacesync.SpaceSync/AclGetRecords" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes =
-                coordinator::handle_acl_get_records(&request_bytes, &state.sync_state)?;
+            let response_bytes = coordinator::handle_acl_get_records(
+                &request_bytes,
+                &state.sync_state,
+                authenticated_peer,
+            )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/spacesync.SpaceSync/SpacePush" => {
@@ -557,19 +593,26 @@ where
                 &state.sync_state,
                 &state.coordinator_config,
                 &state.local_signing_key,
-                remote_peer_id,
+                authenticated_peer,
             )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/spacesync.SpaceSync/SpacePull" => {
             let request_bytes = stream.read_message().await?;
-            let response_bytes = sync_node::handle_space_pull(&request_bytes, &state.sync_state)?;
+            let response_bytes = sync_node::handle_space_pull(
+                &request_bytes,
+                &state.sync_state,
+                authenticated_peer,
+            )?;
             write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
         }
         "/consensusProto.Consensus/LogAdd" => {
             let request_bytes = stream.read_message().await?;
             let request =
                 manytype_proto::consensus::LogAddRequest::decode(request_bytes.as_slice())?;
+            state
+                .sync_state
+                .authorize_space(&request.log_id, authenticated_peer.id())?;
             if consensus::has_persisted_space_linked_log(&request.log_id, &state.sync_state) {
                 anyhow::bail!("consensus log already exists");
             }
@@ -581,6 +624,9 @@ where
             let request_bytes = stream.read_message().await?;
             let request =
                 manytype_proto::consensus::RecordAddRequest::decode(request_bytes.as_slice())?;
+            state
+                .sync_state
+                .authorize_space(&request.log_id, authenticated_peer.id())?;
             consensus::ensure_log_exists_from_sync_state(&request.log_id, &state.sync_state);
             let response_bytes =
                 consensus::handle_record_add(&request_bytes, &state.local_signing_key)?;
@@ -600,7 +646,7 @@ where
                 &request_bytes,
                 &state.file_node,
                 &state.sync_state,
-                remote_peer_id,
+                authenticated_peer,
             ) {
                 Ok(response_bytes) => {
                     write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
@@ -624,7 +670,7 @@ where
                 &request_bytes,
                 &state.file_node,
                 &state.sync_state,
-                remote_peer_id,
+                authenticated_peer,
             ) {
                 Ok(response_bytes) => {
                     write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
@@ -648,7 +694,7 @@ where
                 &request_bytes,
                 &state.file_node,
                 &state.sync_state,
-                remote_peer_id,
+                authenticated_peer,
             ) {
                 Ok(response_bytes) => {
                     write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
@@ -672,7 +718,7 @@ where
                 &request_bytes,
                 &state.file_node,
                 &state.sync_state,
-                remote_peer_id,
+                authenticated_peer,
             ) {
                 Ok(response_bytes) => {
                     write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
@@ -696,7 +742,7 @@ where
                 &request_bytes,
                 &state.file_node,
                 &state.sync_state,
-                remote_peer_id,
+                authenticated_peer,
             ) {
                 Ok(response_bytes) => {
                     write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
@@ -716,7 +762,7 @@ where
         }
         "/filesync.File/Check" => {
             let request_bytes = stream.read_message().await?;
-            match file_node::handle_check(&request_bytes, &state.sync_state, remote_peer_id) {
+            match file_node::handle_check(&request_bytes, &state.sync_state, authenticated_peer) {
                 Ok(response_bytes) => {
                     write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
                         .await
@@ -739,7 +785,7 @@ where
                 &request_bytes,
                 &state.file_node,
                 &state.sync_state,
-                remote_peer_id,
+                authenticated_peer,
             ) {
                 Ok(response_bytes) => {
                     write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
@@ -763,7 +809,7 @@ where
                 &request_bytes,
                 &state.file_node,
                 &state.sync_state,
-                remote_peer_id,
+                authenticated_peer,
             ) {
                 Ok(response_bytes) => {
                     write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
@@ -787,7 +833,7 @@ where
                 &request_bytes,
                 &state.file_node,
                 &state.sync_state,
-                remote_peer_id,
+                authenticated_peer,
             ) {
                 Ok(response_bytes) => {
                     write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
@@ -837,21 +883,59 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::AuthenticatedPeer;
     use bytes::Bytes;
     use prost::Message;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
     use tokio::io::duplex;
 
     use crate::drpc::codec::{DrpcFrame, KIND_ERROR, KIND_MESSAGE};
+    use ed25519_dalek::Signer;
     use manytype_core::crdt::cid::compute_cid;
     use manytype_core::crypto::ed25519;
+    use manytype_proto::crypto::{Key, KeyType};
     use manytype_proto::spacesync::{StoreKeyInner, StoreKeyValue};
+
+    static NEXT_TEST_STATE_ID: AtomicU64 = AtomicU64::new(0);
+
+    fn test_peer() -> AuthenticatedPeer<'static> {
+        let account_identity = ed25519::signing_key_from_seed(&[2; 32])
+            .verifying_key()
+            .to_bytes();
+        AuthenticatedPeer::for_test_with_account("peer", account_identity)
+    }
+
+    fn valid_space_header(seed: u8) -> (String, Vec<u8>, Vec<u8>) {
+        use manytype_proto::spacesync::{RawSpaceHeader, SpaceHeader};
+
+        let account_key = ed25519::signing_key_from_seed(&[seed; 32]);
+        let account_identity = Key {
+            r#type: KeyType::Ed25519Public as i32,
+            data: account_key.verifying_key().to_bytes().to_vec(),
+        }
+        .encode_to_vec();
+        let header_bytes = SpaceHeader {
+            identity: account_identity.clone(),
+            replication_key: 42,
+            ..Default::default()
+        }
+        .encode_to_vec();
+        let raw_header = RawSpaceHeader {
+            signature: account_key.sign(&header_bytes).to_bytes().to_vec(),
+            space_header: header_bytes,
+        }
+        .encode_to_vec();
+        let space_id = format!("{}.16", compute_cid(&raw_header));
+        (space_id, raw_header, account_identity)
+    }
 
     fn test_state() -> ServerState {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
+        let sequence = NEXT_TEST_STATE_ID.fetch_add(1, Ordering::Relaxed);
         let sync_state = sync_node::new_shared_sync_state();
         sync_state
             .upsert_space_metadata(
@@ -862,7 +946,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                Some(hex::encode(b"peer")),
+                Some("peer".to_string()),
             )
             .unwrap();
         ServerState {
@@ -872,9 +956,10 @@ mod tests {
                 addresses: vec!["127.0.0.1:4830".to_string()],
             },
             sync_state,
-            file_node: file_node::FileNodeState::open(
-                std::env::temp_dir().join(format!("manytype-file-node-router-{nonce}.redb")),
-            )
+            file_node: file_node::FileNodeState::open(std::env::temp_dir().join(format!(
+                "manytype-file-node-router-{}-{nonce}-{sequence}.redb",
+                std::process::id()
+            )))
             .unwrap(),
             local_signing_key: ed25519::signing_key_from_seed(&[1u8; 32]),
         }
@@ -913,7 +998,7 @@ mod tests {
                 "/unknown.Service/Method",
                 &mut server_stream,
                 &state,
-                "peer",
+                &test_peer(),
             )
             .await;
             assert!(result.is_err());
@@ -951,7 +1036,7 @@ mod tests {
                 "/filesync.File/Check",
                 &mut server_stream,
                 &state,
-                "peer",
+                &test_peer(),
             )
             .await
             .unwrap();
@@ -984,7 +1069,7 @@ mod tests {
                 "/filesync.File/SpaceInfo",
                 &mut server_stream,
                 &state,
-                "peer",
+                &test_peer(),
             )
             .await
             .unwrap();
@@ -1024,7 +1109,7 @@ mod tests {
                 "/spacesync.SpaceSync/ObjectSyncRequestStream",
                 &mut server_stream,
                 &state,
-                "peer",
+                &test_peer(),
             )
             .await
             .unwrap();
@@ -1068,7 +1153,7 @@ mod tests {
                 "/spacesync.SpaceSync/ObjectSyncRequestStream",
                 &mut server_stream,
                 &state,
-                "peer",
+                &test_peer(),
             )
             .await;
             assert!(result.is_err());
@@ -1125,7 +1210,7 @@ mod tests {
                 "/coordinator.Coordinator/NetworkConfiguration",
                 &mut server_stream,
                 &state,
-                "peer",
+                &test_peer(),
             )
             .await
             .unwrap();
@@ -1175,14 +1260,14 @@ mod tests {
                 "/spacesync.SpaceSync/HeadSync",
                 &mut server_stream,
                 &state,
-                "peer",
+                &test_peer(),
             )
             .await
             .unwrap();
         });
 
         let request = HeadSyncRequest {
-            space_id: "test-space".to_string(),
+            space_id: "space-1".to_string(),
             ..Default::default()
         };
         client_stream
@@ -1196,8 +1281,9 @@ mod tests {
         assert_eq!(frame.stream_id, 1);
         assert_eq!(frame.message_id, 1);
         let response = HeadSyncResponse::decode(frame.data.as_ref()).unwrap();
-        // Unknown space should return empty results
-        assert!(response.results.is_empty());
+        // A registered space with no object heads returns one empty range.
+        assert_eq!(response.results.len(), 1);
+        assert!(response.results[0].elements.is_empty());
 
         let close_frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
@@ -1210,8 +1296,7 @@ mod tests {
     #[tokio::test]
     async fn test_dispatch_space_push() {
         use manytype_proto::spacesync::{
-            RawSpaceHeader, RawSpaceHeaderWithId, SpaceHeader, SpacePayload, SpacePushRequest,
-            SpacePushResponse,
+            RawSpaceHeaderWithId, SpacePayload, SpacePushRequest, SpacePushResponse,
         };
 
         let (client, server) = duplex(4096);
@@ -1219,19 +1304,15 @@ mod tests {
         let mut client_stream = DrpcStream::new(client);
 
         let state = test_state();
-        let raw_header = RawSpaceHeader {
-            space_header: SpaceHeader {
-                identity: vec![2; 32],
-                ..Default::default()
-            }
-            .encode_to_vec(),
-            signature: vec![1; 64],
-        }
-        .encode_to_vec();
+        let (space_id, raw_header, account_identity) = valid_space_header(2);
+        state
+            .sync_state
+            .claim_space_owner(&space_id, test_peer().id())
+            .unwrap();
         let credential = coordinator::build_signed_space_receipt(
-            "sp-1",
-            &hex::encode(b"peer"),
-            &[2; 32],
+            &space_id,
+            test_peer().id(),
+            &account_identity,
             &state.coordinator_config,
             &state.local_signing_key,
         )
@@ -1244,7 +1325,7 @@ mod tests {
                 "/spacesync.SpaceSync/SpacePush",
                 &mut server_stream,
                 &state,
-                &hex::encode(b"peer"),
+                &test_peer(),
             )
             .await
             .unwrap();
@@ -1253,7 +1334,7 @@ mod tests {
             payload: Some(SpacePayload {
                 space_header: Some(RawSpaceHeaderWithId {
                     raw_header,
-                    id: "sp-1".to_string(),
+                    id: space_id,
                 }),
                 ..Default::default()
             }),
@@ -1288,6 +1369,10 @@ mod tests {
         let mut client_stream = DrpcStream::new(client);
 
         let state = test_state();
+        state
+            .sync_state
+            .claim_space_owner("sp-1", test_peer().id())
+            .unwrap();
 
         let handle = tokio::spawn(async move {
             dispatch(
@@ -1295,7 +1380,7 @@ mod tests {
                 "/spacesync.SpaceSync/ObjectSyncStream",
                 &mut server_stream,
                 &state,
-                "peer",
+                &test_peer(),
             )
             .await
             .unwrap();
@@ -1380,6 +1465,10 @@ mod tests {
         let state = test_state();
         state
             .sync_state
+            .claim_space_owner("sp-1", test_peer().id())
+            .unwrap();
+        state
+            .sync_state
             .upsert_store_entry(make_store_entry("sp-1", "settings-peer-1", 10))
             .unwrap();
 
@@ -1389,7 +1478,7 @@ mod tests {
                 "/spacesync.SpaceSync/StoreDiff",
                 &mut server_stream,
                 &state,
-                "peer",
+                &test_peer(),
             )
             .await
             .unwrap();
@@ -1429,6 +1518,10 @@ mod tests {
         let state = test_state();
         state
             .sync_state
+            .claim_space_owner("sp-1", test_peer().id())
+            .unwrap();
+        state
+            .sync_state
             .upsert_store_entry(make_store_entry("sp-1", "settings-peer-1", 10))
             .unwrap();
 
@@ -1438,7 +1531,7 @@ mod tests {
                 "/spacesync.SpaceSync/StoreElements",
                 &mut server_stream,
                 &state,
-                "peer",
+                &test_peer(),
             )
             .await
             .unwrap();
@@ -1503,6 +1596,10 @@ mod tests {
         let mut client_stream = DrpcStream::new(client);
 
         let state = test_state();
+        state
+            .sync_state
+            .claim_space_owner("router-test-log-add", test_peer().id())
+            .unwrap();
 
         let handle = tokio::spawn(async move {
             dispatch(
@@ -1510,7 +1607,7 @@ mod tests {
                 "/consensusProto.Consensus/LogAdd",
                 &mut server_stream,
                 &state,
-                "peer",
+                &test_peer(),
             )
             .await
             .unwrap();
@@ -1555,6 +1652,10 @@ mod tests {
         let state = test_state();
         state
             .sync_state
+            .claim_space_owner("sp1", test_peer().id())
+            .unwrap();
+        state
+            .sync_state
             .upsert_space_metadata(
                 "sp1",
                 Some(vec![1]),
@@ -1573,7 +1674,7 @@ mod tests {
                 "/filesync.File/BlockPush",
                 &mut server_stream,
                 &state,
-                "peer",
+                &test_peer(),
             )
             .await
             .unwrap();
@@ -1623,7 +1724,7 @@ mod tests {
                 "/filesync.File/BlockGet",
                 &mut server_stream,
                 &state,
-                &hex::encode(b"peer"),
+                &test_peer(),
             )
             .await;
             assert!(result.is_err());
@@ -1651,11 +1752,15 @@ mod tests {
     #[tokio::test]
     async fn test_integration_space_push_then_head_sync() {
         use manytype_proto::spacesync::{
-            HeadSyncRequest, HeadSyncResponse, RawSpaceHeader, RawSpaceHeaderWithId, SpaceHeader,
-            SpacePayload, SpacePushRequest, SpacePushResponse,
+            HeadSyncRequest, HeadSyncResponse, RawSpaceHeaderWithId, SpacePayload,
+            SpacePushRequest, SpacePushResponse,
         };
 
         let sync_state = sync_node::new_shared_sync_state();
+        let (space_id, raw_header, account_identity) = valid_space_header(2);
+        sync_state
+            .claim_space_owner(&space_id, test_peer().id())
+            .unwrap();
 
         // Step 1: SpacePush
         {
@@ -1687,25 +1792,16 @@ mod tests {
                     "/spacesync.SpaceSync/SpacePush",
                     &mut server_stream,
                     &state,
-                    &hex::encode(b"peer"),
+                    &test_peer(),
                 )
                 .await
                 .unwrap();
             });
 
-            let raw_header = RawSpaceHeader {
-                space_header: SpaceHeader {
-                    identity: vec![2; 32],
-                    ..Default::default()
-                }
-                .encode_to_vec(),
-                signature: vec![1; 64],
-            }
-            .encode_to_vec();
             let credential = coordinator::build_signed_space_receipt(
-                "integration-space",
-                &hex::encode(b"peer"),
-                &[2; 32],
+                &space_id,
+                test_peer().id(),
+                &account_identity,
                 &CoordinatorConfig {
                     network_id: "test".to_string(),
                     peer_id: "p".to_string(),
@@ -1719,7 +1815,7 @@ mod tests {
                 payload: Some(SpacePayload {
                     space_header: Some(RawSpaceHeaderWithId {
                         raw_header,
-                        id: "integration-space".to_string(),
+                        id: space_id.clone(),
                     }),
                     ..Default::default()
                 }),
@@ -1764,14 +1860,14 @@ mod tests {
                     "/spacesync.SpaceSync/HeadSync",
                     &mut server_stream,
                     &state,
-                    "peer",
+                    &test_peer(),
                 )
                 .await
                 .unwrap();
             });
 
             let request = HeadSyncRequest {
-                space_id: "integration-space".to_string(),
+                space_id,
                 ..Default::default()
             };
             client_stream

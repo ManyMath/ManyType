@@ -1,5 +1,6 @@
 //! Manytype server library: exposes modules for reuse by FFI crate.
 
+pub mod auth;
 pub mod config;
 pub mod consensus;
 pub mod coordinator;
