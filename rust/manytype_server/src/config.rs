@@ -199,6 +199,10 @@ impl ResourceLimits {
             self.max_streams_per_connection > 0,
             "max_streams_per_connection must be positive"
         );
+        ensure!(
+            u32::try_from(self.max_streams_per_connection).is_ok(),
+            "max_streams_per_connection exceeds QUIC capacity"
+        );
         ensure!(self.max_frame_bytes >= 1024, "max_frame_bytes is too small");
         ensure!(
             self.max_message_bytes >= self.max_frame_bytes,

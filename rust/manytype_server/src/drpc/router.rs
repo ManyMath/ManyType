@@ -370,22 +370,7 @@ where
                     break;
                 }
 
-                let msg_bytes = if frame.done {
-                    frame.data.to_vec()
-                } else {
-                    let mut buf = frame.data.to_vec();
-                    loop {
-                        let next = stream
-                            .read_frame()
-                            .await?
-                            .ok_or_else(|| anyhow::anyhow!("connection closed mid-message"))?;
-                        buf.extend_from_slice(&next.data);
-                        if next.done {
-                            break;
-                        }
-                    }
-                    buf
-                };
+                let msg_bytes = stream.read_message_after_first(frame).await?;
 
                 let mut msg = match StoreKeyValue::decode(msg_bytes.as_slice()) {
                     Ok(msg) => msg,
@@ -502,24 +487,7 @@ where
                     break;
                 }
 
-                // Accumulate message data (handle multi-frame messages)
-                let msg_bytes = if frame.done {
-                    frame.data.to_vec()
-                } else {
-                    // For multi-frame messages, collect until done
-                    let mut buf = frame.data.to_vec();
-                    loop {
-                        let next = stream
-                            .read_frame()
-                            .await?
-                            .ok_or_else(|| anyhow::anyhow!("connection closed mid-message"))?;
-                        buf.extend_from_slice(&next.data);
-                        if next.done {
-                            break;
-                        }
-                    }
-                    buf
-                };
+                let msg_bytes = stream.read_message_after_first(frame).await?;
 
                 let response_bytes = sync_node::handle_object_sync_message(
                     &msg_bytes,

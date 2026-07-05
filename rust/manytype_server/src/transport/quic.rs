@@ -24,6 +24,14 @@ pub fn make_server_config(identity_seed: &[u8; 32]) -> Result<quinn::ServerConfi
     )))
 }
 
+pub fn apply_stream_limit(config: &mut quinn::ServerConfig, max_streams: usize) -> Result<()> {
+    let max_streams = u32::try_from(max_streams).context("stream limit exceeds QUIC capacity")?;
+    let mut transport = quinn::TransportConfig::default();
+    transport.max_concurrent_bidi_streams(quinn::VarInt::from_u32(max_streams));
+    config.transport_config(Arc::new(transport));
+    Ok(())
+}
+
 /// Create a QUIC endpoint listening on the given address.
 pub async fn run_quic_listener(
     addr: &str,

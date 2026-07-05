@@ -59,12 +59,26 @@ pub fn decode_header(h: u8) -> (bool, u8, bool) {
 }
 
 /// Tokio codec for DRPC frames.
-#[derive(Debug, Default)]
-pub struct DrpcCodec;
+pub const DEFAULT_MAX_FRAME_BYTES: usize = 2 * 1024 * 1024;
+
+#[derive(Debug)]
+pub struct DrpcCodec {
+    max_frame_bytes: usize,
+}
+
+impl Default for DrpcCodec {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl DrpcCodec {
     pub fn new() -> Self {
-        DrpcCodec
+        Self::with_max_frame_bytes(DEFAULT_MAX_FRAME_BYTES)
+    }
+
+    pub fn with_max_frame_bytes(max_frame_bytes: usize) -> Self {
+        Self { max_frame_bytes }
     }
 }
 
@@ -72,6 +86,12 @@ impl Encoder<DrpcFrame> for DrpcCodec {
     type Error = std::io::Error;
 
     fn encode(&mut self, frame: DrpcFrame, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        if frame.data.len() > self.max_frame_bytes {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("DRPC frame exceeds {} byte limit", self.max_frame_bytes),
+            ));
+        }
         // Header byte
         dst.put_u8(encode_header(frame.kind, frame.done, frame.control));
 
@@ -126,12 +146,27 @@ impl Decoder for DrpcCodec {
         };
 
         let data_len = match decode_varint(&mut cursor) {
-            Ok(v) => v as usize,
+            Ok(value) => usize::try_from(value).map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "DRPC frame length does not fit in memory",
+                )
+            })?,
             Err(_) => {
                 src.reserve(1);
                 return Ok(None);
             }
         };
+
+        if data_len > self.max_frame_bytes {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "DRPC frame length {data_len} exceeds {} byte limit",
+                    self.max_frame_bytes
+                ),
+            ));
+        }
 
         // Check if we have enough data bytes
         if cursor.remaining() < data_len {
@@ -312,5 +347,39 @@ mod tests {
 
         // Buffer should be empty now
         assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn rejects_claimed_frame_length_before_reserving_payload() {
+        let mut codec = DrpcCodec::with_max_frame_bytes(1024);
+        let mut buf = BytesMut::new();
+        buf.put_u8(encode_header(KIND_MESSAGE, true, false));
+        encode_varint(1, &mut buf);
+        encode_varint(1, &mut buf);
+        encode_varint(1025, &mut buf);
+
+        let error = codec.decode(&mut buf).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("exceeds"));
+    }
+
+    #[test]
+    fn rejects_oversized_outbound_frame() {
+        let mut codec = DrpcCodec::with_max_frame_bytes(2);
+        let mut buf = BytesMut::new();
+        let error = codec
+            .encode(
+                DrpcFrame {
+                    kind: KIND_MESSAGE,
+                    done: true,
+                    control: false,
+                    stream_id: 1,
+                    message_id: 1,
+                    data: Bytes::from_static(b"too large"),
+                },
+                &mut buf,
+            )
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     }
 }

@@ -3,7 +3,7 @@
 use std::fmt;
 use std::io::Cursor;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use cid::Cid;
 use multihash_codetable::{Code, MultihashDigest};
@@ -18,27 +18,35 @@ use manytype_proto::filesync::{
 };
 
 use crate::auth::AuthenticatedPeer;
+use crate::config::ResourceLimits;
 use crate::storage::blob_index::{BlobIndex, SpaceUsage};
 use crate::storage::blob_store::BlobStore;
 use crate::storage::sync_state::SharedSyncState;
 
 type Result<T> = std::result::Result<T, FileNodeError>;
 
-// The official Anytype file-sync client treats zero as "no capacity left",
-// not "unlimited". Advertise a large practical quota so uploads can proceed.
-const DEFAULT_STORAGE_LIMIT_BYTES: u64 = 1 << 50;
-
 #[derive(Clone)]
 pub struct FileNodeState {
     blob_index: Arc<BlobIndex>,
     blob_store: Arc<BlobStore>,
+    limits: ResourceLimits,
+    quota_lock: Arc<Mutex<()>>,
 }
 
 impl FileNodeState {
     pub fn open(config_path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        Self::open_with_limits(config_path, ResourceLimits::default())
+    }
+
+    pub fn open_with_limits(
+        config_path: impl AsRef<Path>,
+        limits: ResourceLimits,
+    ) -> anyhow::Result<Self> {
         Ok(Self {
             blob_index: Arc::new(BlobIndex::open(config_path.as_ref())?),
             blob_store: Arc::new(BlobStore::open(config_path.as_ref())?),
+            limits,
+            quota_lock: Arc::new(Mutex::new(())),
         })
     }
 }
@@ -143,6 +151,8 @@ pub fn handle_block_push(
     ensure_space_authorized(&request.space_id, sync_state, authenticated_peer.id())?;
     put_and_bind_block(
         state,
+        sync_state,
+        authenticated_peer.id(),
         &request.space_id,
         &request.file_id,
         &request.cid,
@@ -164,6 +174,8 @@ pub fn handle_block_push_many(
         for block in file_blocks.blocks {
             put_and_bind_block(
                 state,
+                sync_state,
+                authenticated_peer.id(),
                 &file_blocks.space_id,
                 &file_blocks.file_id,
                 &block.cid,
@@ -193,6 +205,18 @@ pub fn handle_blocks_bind(
         else {
             return Err(FileNodeError::cid_not_found(format!("cid {cid} not found")));
         };
+        let _quota_guard = state
+            .quota_lock
+            .lock()
+            .map_err(|_| FileNodeError::unexpected("storage quota lock is poisoned"))?;
+        ensure_storage_quota(
+            state,
+            sync_state,
+            authenticated_peer.id(),
+            &request.space_id,
+            &cid,
+            data.len() as u64,
+        )?;
         state
             .blob_index
             .bind_blob(&request.space_id, &request.file_id, &cid, data.len() as u64)
@@ -317,7 +341,7 @@ pub fn handle_space_info(
         .map_err(FileNodeError::unexpected)?;
     let account_snapshot = account_snapshot(sync_state, state, authenticated_peer.id())?;
     Ok(SpaceInfoResponse {
-        limit_bytes: DEFAULT_STORAGE_LIMIT_BYTES,
+        limit_bytes: state.limits.max_space_storage_bytes,
         total_usage_bytes: account_snapshot.total_usage_bytes,
         cids_count: usage.cids_count,
         files_count: usage.files_count,
@@ -336,14 +360,14 @@ pub fn handle_account_info(
     let _request = AccountInfoRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
     let snapshot = account_snapshot(sync_state, state, authenticated_peer.id())?;
     Ok(AccountInfoResponse {
-        limit_bytes: DEFAULT_STORAGE_LIMIT_BYTES,
+        limit_bytes: state.limits.max_account_storage_bytes,
         total_usage_bytes: snapshot.total_usage_bytes,
         total_cids_count: snapshot.total_cids_count,
         spaces: snapshot
             .spaces
             .into_iter()
             .map(|(space_id, usage)| SpaceInfoResponse {
-                limit_bytes: DEFAULT_STORAGE_LIMIT_BYTES,
+                limit_bytes: state.limits.max_space_storage_bytes,
                 total_usage_bytes: snapshot.total_usage_bytes,
                 cids_count: usage.cids_count,
                 files_count: usage.files_count,
@@ -351,7 +375,7 @@ pub fn handle_account_info(
                 space_id,
             })
             .collect(),
-        account_limit_bytes: DEFAULT_STORAGE_LIMIT_BYTES,
+        account_limit_bytes: state.limits.max_account_storage_bytes,
     }
     .encode_to_vec())
 }
@@ -371,11 +395,14 @@ fn ensure_space_authorized(
 
 fn put_and_bind_block(
     state: &FileNodeState,
+    sync_state: &SharedSyncState,
+    remote_peer_id: &str,
     space_id: &str,
     file_id: &str,
     cid_bytes: &[u8],
     data: &[u8],
 ) -> Result<()> {
+    ensure_blob_size(state, data.len() as u64)?;
     let claimed = Cid::read_bytes(Cursor::new(cid_bytes)).map_err(FileNodeError::invalid_cid)?;
     let claimed_cid = claimed
         .to_string_of_base(multibase::Base::Base32Lower)
@@ -392,6 +419,18 @@ fn put_and_bind_block(
         )));
     }
 
+    let _quota_guard = state
+        .quota_lock
+        .lock()
+        .map_err(|_| FileNodeError::unexpected("storage quota lock is poisoned"))?;
+    ensure_storage_quota(
+        state,
+        sync_state,
+        remote_peer_id,
+        space_id,
+        &claimed_cid,
+        data.len() as u64,
+    )?;
     state
         .blob_store
         .put(&claimed_cid, data)
@@ -408,6 +447,7 @@ pub fn store_public_invite_block(
     cid_bytes: &[u8],
     data: &[u8],
 ) -> Result<()> {
+    ensure_blob_size(state, data.len() as u64)?;
     let claimed = Cid::read_bytes(Cursor::new(cid_bytes)).map_err(FileNodeError::invalid_cid)?;
     let claimed_cid = claimed
         .to_string_of_base(multibase::Base::Base32Lower)
@@ -424,6 +464,27 @@ pub fn store_public_invite_block(
         )));
     }
 
+    let _quota_guard = state
+        .quota_lock
+        .lock()
+        .map_err(|_| FileNodeError::unexpected("storage quota lock is poisoned"))?;
+    let global_usage = state
+        .blob_index
+        .get_global_usage()
+        .map_err(FileNodeError::unexpected)?;
+    let is_new = state
+        .blob_index
+        .get_blob_metadata(&claimed_cid)
+        .map_err(FileNodeError::unexpected)?
+        .is_none();
+    if is_new {
+        ensure_within_limit(
+            "total storage",
+            global_usage.total_usage_bytes,
+            data.len() as u64,
+            state.limits.max_total_storage_bytes,
+        )?;
+    }
     state
         .blob_store
         .put(&claimed_cid, data)
@@ -432,6 +493,81 @@ pub fn store_public_invite_block(
         .blob_index
         .mark_public_invite(&claimed_cid)
         .map_err(FileNodeError::unexpected)?;
+    Ok(())
+}
+
+fn ensure_blob_size(state: &FileNodeState, size_bytes: u64) -> Result<()> {
+    if size_bytes > state.limits.max_blob_bytes {
+        return Err(FileNodeError::unexpected(format!(
+            "blob size {size_bytes} exceeds {} byte limit",
+            state.limits.max_blob_bytes
+        )));
+    }
+    Ok(())
+}
+
+fn ensure_storage_quota(
+    state: &FileNodeState,
+    sync_state: &SharedSyncState,
+    remote_peer_id: &str,
+    space_id: &str,
+    cid: &str,
+    size_bytes: u64,
+) -> Result<()> {
+    ensure_blob_size(state, size_bytes)?;
+    let new_blob = state
+        .blob_index
+        .get_blob_metadata(cid)
+        .map_err(FileNodeError::unexpected)?
+        .is_none();
+    let new_space_binding = !state
+        .blob_index
+        .space_has_cid(space_id, cid)
+        .map_err(FileNodeError::unexpected)?;
+
+    if new_blob {
+        let global = state
+            .blob_index
+            .get_global_usage()
+            .map_err(FileNodeError::unexpected)?;
+        ensure_within_limit(
+            "total storage",
+            global.total_usage_bytes,
+            size_bytes,
+            state.limits.max_total_storage_bytes,
+        )?;
+    }
+    if new_space_binding {
+        let space = state
+            .blob_index
+            .get_space_usage(space_id)
+            .map_err(FileNodeError::unexpected)?;
+        ensure_within_limit(
+            "space storage",
+            space.usage_bytes,
+            size_bytes,
+            state.limits.max_space_storage_bytes,
+        )?;
+        let account = account_snapshot(sync_state, state, remote_peer_id)?;
+        ensure_within_limit(
+            "account storage",
+            account.total_usage_bytes,
+            size_bytes,
+            state.limits.max_account_storage_bytes,
+        )?;
+    }
+    Ok(())
+}
+
+fn ensure_within_limit(label: &str, used: u64, increase: u64, limit: u64) -> Result<()> {
+    let requested = used
+        .checked_add(increase)
+        .ok_or_else(|| FileNodeError::unexpected(format!("{label} usage overflow")))?;
+    if requested > limit {
+        return Err(FileNodeError::unexpected(format!(
+            "{label} quota exceeded: requested {requested} bytes, limit {limit} bytes"
+        )));
+    }
     Ok(())
 }
 
@@ -456,8 +592,12 @@ fn account_snapshot(
             .blob_index
             .get_space_usage(&space_id)
             .map_err(FileNodeError::unexpected)?;
-        total_usage_bytes += usage.usage_bytes;
-        total_cids_count += usage.cids_count;
+        total_usage_bytes = total_usage_bytes
+            .checked_add(usage.usage_bytes)
+            .ok_or_else(|| FileNodeError::unexpected("account usage overflow"))?;
+        total_cids_count = total_cids_count
+            .checked_add(usage.cids_count)
+            .ok_or_else(|| FileNodeError::unexpected("account CID count overflow"))?;
         spaces.push((space_id, usage));
     }
 
@@ -508,6 +648,10 @@ mod tests {
 
     fn file_node_state(temp_dir: &TempDir) -> FileNodeState {
         FileNodeState::open(temp_dir.path().join("sync.redb")).unwrap()
+    }
+
+    fn file_node_state_with_limits(temp_dir: &TempDir, limits: ResourceLimits) -> FileNodeState {
+        FileNodeState::open_with_limits(temp_dir.path().join("sync.redb"), limits).unwrap()
     }
 
     fn compute_raw_cid_bytes(data: &[u8]) -> Vec<u8> {
@@ -952,7 +1096,10 @@ mod tests {
         assert_eq!(space_info.cids_count, 1);
         assert_eq!(space_info.files_count, 1);
         assert_eq!(space_info.total_usage_bytes, payload.len() as u64);
-        assert_eq!(space_info.limit_bytes, DEFAULT_STORAGE_LIMIT_BYTES);
+        assert_eq!(
+            space_info.limit_bytes,
+            ResourceLimits::default().max_space_storage_bytes
+        );
 
         let account_info = AccountInfoResponse::decode(
             handle_account_info(
@@ -969,15 +1116,97 @@ mod tests {
         assert_eq!(account_info.total_cids_count, 1);
         assert_eq!(account_info.spaces.len(), 1);
         assert_eq!(account_info.spaces[0].space_id, "space-1");
-        assert_eq!(account_info.limit_bytes, DEFAULT_STORAGE_LIMIT_BYTES);
+        assert_eq!(
+            account_info.limit_bytes,
+            ResourceLimits::default().max_account_storage_bytes
+        );
         assert_eq!(
             account_info.account_limit_bytes,
-            DEFAULT_STORAGE_LIMIT_BYTES
+            ResourceLimits::default().max_account_storage_bytes
         );
         assert_eq!(
             account_info.spaces[0].limit_bytes,
-            DEFAULT_STORAGE_LIMIT_BYTES
+            ResourceLimits::default().max_space_storage_bytes
         );
+    }
+
+    #[test]
+    fn block_push_rejects_blob_over_configured_limit() {
+        let temp_dir = TempDir::new().unwrap();
+        let sync_state = seeded_sync_state(&temp_dir);
+        let limits = ResourceLimits {
+            max_blob_bytes: 4,
+            ..ResourceLimits::default()
+        };
+        let state = file_node_state_with_limits(&temp_dir, limits);
+        let payload = b"12345".to_vec();
+        let cid = compute_cid(&payload);
+
+        let error = handle_block_push(
+            &BlockPushRequest {
+                space_id: "space-1".to_string(),
+                file_id: "file-1".to_string(),
+                cid: cid_string_to_bytes(&cid).unwrap(),
+                data: payload,
+            }
+            .encode_to_vec(),
+            &state,
+            &sync_state,
+            &owner_peer(),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("blob size"));
+        assert!(!state.blob_store.has(&cid));
+    }
+
+    #[test]
+    fn block_push_keeps_existing_data_when_storage_quota_is_exhausted() {
+        let temp_dir = TempDir::new().unwrap();
+        let sync_state = seeded_sync_state(&temp_dir);
+        let limits = ResourceLimits {
+            max_blob_bytes: 5,
+            max_space_storage_bytes: 5,
+            max_account_storage_bytes: 5,
+            max_total_storage_bytes: 5,
+            ..ResourceLimits::default()
+        };
+        let state = file_node_state_with_limits(&temp_dir, limits);
+        let first = b"1234".to_vec();
+        let first_cid = compute_cid(&first);
+        handle_block_push(
+            &BlockPushRequest {
+                space_id: "space-1".to_string(),
+                file_id: "file-1".to_string(),
+                cid: cid_string_to_bytes(&first_cid).unwrap(),
+                data: first,
+            }
+            .encode_to_vec(),
+            &state,
+            &sync_state,
+            &owner_peer(),
+        )
+        .unwrap();
+
+        let second = b"567".to_vec();
+        let second_cid = compute_cid(&second);
+        let error = handle_block_push(
+            &BlockPushRequest {
+                space_id: "space-1".to_string(),
+                file_id: "file-2".to_string(),
+                cid: cid_string_to_bytes(&second_cid).unwrap(),
+                data: second,
+            }
+            .encode_to_vec(),
+            &state,
+            &sync_state,
+            &owner_peer(),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("quota exceeded"));
+        assert!(state.blob_store.has(&first_cid));
+        assert!(!state.blob_store.has(&second_cid));
     }
 
     #[test]

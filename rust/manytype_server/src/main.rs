@@ -9,6 +9,7 @@ use manytype_proto::handshake::{Encoding, ProtoType};
 use manytype_server::{
     auth, config, coordinator, drpc, file_node, handshake, identity, sync_node, transport,
 };
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 fn is_benign_connection_error(error: &anyhow::Error) -> bool {
     use std::io::ErrorKind;
@@ -81,7 +82,10 @@ async fn main() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("failed to derive libp2p identity from seed: {e}"))?;
     let local_peer_id_libp2p = local_identity_keypair.public().to_peer_id().to_string();
     let sync_state = sync_node::SharedSyncState::open(&storage_paths.sync_root)?;
-    let file_node = file_node::FileNodeState::open(&storage_paths.files_root)?;
+    let file_node = file_node::FileNodeState::open_with_limits(
+        &storage_paths.files_root,
+        config.limits.clone(),
+    )?;
     let access_policy = Arc::new(auth::AccessPolicy::from_config(&config)?);
     tracing::info!("Opened sync state at {}", storage_paths.sync_root.display());
     tracing::info!("Server peer ID: {}", local_peer_id_libp2p);
@@ -102,16 +106,30 @@ async fn main() -> Result<()> {
     });
 
     // Start QUIC listener
-    let server_config = transport::quic::make_server_config(&seed)?;
+    let mut server_config = transport::quic::make_server_config(&seed)?;
+    transport::quic::apply_stream_limit(
+        &mut server_config,
+        config.limits.max_streams_per_connection,
+    )?;
     let endpoint = transport::quic::run_quic_listener(&config.quic_listen, server_config).await?;
     tracing::info!("Listening on QUIC {}", config.quic_listen);
+    let connection_limit = Arc::new(Semaphore::new(config.limits.max_connections));
 
     // Accept connections
     while let Some(incoming) = endpoint.accept().await {
+        let connection_permit = match Arc::clone(&connection_limit).try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                tracing::warn!(event = "connection_rejected", reason = "connection_limit");
+                incoming.refuse();
+                continue;
+            }
+        };
         let local_peer_id_libp2p = local_peer_id_libp2p.clone();
         let local_identity_keypair = local_identity_keypair.clone();
         let state = Arc::clone(&state);
         let access_policy = Arc::clone(&access_policy);
+        let limits = config.limits.clone();
         tokio::spawn(async move {
             if let Err(e) = handle_connection(
                 incoming,
@@ -119,6 +137,8 @@ async fn main() -> Result<()> {
                 local_identity_keypair,
                 state,
                 access_policy,
+                limits,
+                connection_permit,
             )
             .await
             {
@@ -136,6 +156,8 @@ async fn handle_connection(
     local_identity_keypair: Keypair,
     state: Arc<drpc::router::ServerState>,
     access_policy: Arc<auth::AccessPolicy>,
+    limits: config::ResourceLimits,
+    _connection_permit: OwnedSemaphorePermit,
 ) -> Result<()> {
     let connection = incoming.await?;
     let remote_tls_peer_id = tls_peer_id(&connection)?;
@@ -154,6 +176,7 @@ async fn handle_connection(
         "Credential handshake complete with peer {}",
         remote_tls_peer_id
     );
+    let stream_limit = Arc::new(Semaphore::new(limits.max_streams_per_connection));
 
     loop {
         let (send, recv) = match connection.accept_bi().await {
@@ -165,11 +188,27 @@ async fn handle_connection(
             Err(e) => return Err(e.into()),
         };
 
+        let stream_permit = match Arc::clone(&stream_limit).try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                tracing::warn!(
+                    event = "stream_rejected",
+                    peer_id = %remote_tls_peer_id,
+                    reason = "stream_limit"
+                );
+                drop(send);
+                drop(recv);
+                continue;
+            }
+        };
+
         let remote_tls_peer_id = remote_tls_peer_id.clone();
         let remote_account_identity = remote_account_identity.clone();
         let state = Arc::clone(&state);
         let access_policy = Arc::clone(&access_policy);
+        let limits = limits.clone();
         tokio::spawn(async move {
+            let _stream_permit = stream_permit;
             if let Err(e) = handle_stream(
                 send,
                 recv,
@@ -177,6 +216,7 @@ async fn handle_connection(
                 remote_account_identity,
                 state,
                 access_policy,
+                limits,
             )
             .await
             {
@@ -197,6 +237,7 @@ async fn handle_stream(
     remote_account_identity: Vec<u8>,
     state: Arc<drpc::router::ServerState>,
     access_policy: Arc<auth::AccessPolicy>,
+    limits: config::ResourceLimits,
 ) -> Result<()> {
     let mut stream = tokio::io::join(recv, send);
     let trace_file_rpcs = std::env::var_os("MANYTYPE_TRACE_FILE_RPCS").is_some();
@@ -208,7 +249,11 @@ async fn handle_stream(
     access_policy.authorize(&authenticated_peer)?;
 
     // Transition to DRPC dispatch
-    let mut drpc_stream = drpc::stream::DrpcStream::new(stream);
+    let mut drpc_stream = drpc::stream::DrpcStream::with_limits(
+        stream,
+        limits.max_frame_bytes,
+        limits.max_message_bytes,
+    );
 
     loop {
         let (stream_id, method) = match drpc_stream.read_invoke().await {

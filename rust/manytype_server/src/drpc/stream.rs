@@ -10,13 +10,17 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 
 use super::codec::{
-    DrpcCodec, DrpcFrame, KIND_CANCEL, KIND_CLOSE, KIND_CLOSE_SEND, KIND_ERROR, KIND_INVOKE,
-    KIND_INVOKE_METADATA, KIND_MESSAGE,
+    DEFAULT_MAX_FRAME_BYTES, DrpcCodec, DrpcFrame, KIND_CANCEL, KIND_CLOSE, KIND_CLOSE_SEND,
+    KIND_ERROR, KIND_INVOKE, KIND_INVOKE_METADATA, KIND_MESSAGE,
 };
+
+const DEFAULT_MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_METHOD_BYTES: usize = 1024;
 
 /// A bidirectional DRPC stream over an async transport.
 pub struct DrpcStream<T> {
     framed: Framed<T, DrpcCodec>,
+    max_message_bytes: usize,
 }
 
 impl<T> DrpcStream<T>
@@ -25,8 +29,13 @@ where
 {
     /// Create a new DRPC stream wrapping the given IO transport.
     pub fn new(io: T) -> Self {
+        Self::with_limits(io, DEFAULT_MAX_FRAME_BYTES, DEFAULT_MAX_MESSAGE_BYTES)
+    }
+
+    pub fn with_limits(io: T, max_frame_bytes: usize, max_message_bytes: usize) -> Self {
         Self {
-            framed: Framed::new(io, DrpcCodec::new()),
+            framed: Framed::new(io, DrpcCodec::with_max_frame_bytes(max_frame_bytes)),
+            max_message_bytes,
         }
     }
 
@@ -87,6 +96,9 @@ where
 
         let method = String::from_utf8(frame.data.to_vec())
             .context("invoke method path is not valid UTF-8")?;
+        if method.len() > MAX_METHOD_BYTES {
+            bail!("invoke method exceeds {MAX_METHOD_BYTES} byte limit");
+        }
 
         Ok((frame.stream_id, method))
     }
@@ -94,15 +106,42 @@ where
     /// Read KIND_MESSAGE frames, collecting data until done=true.
     /// Returns the concatenated body bytes.
     pub async fn read_message(&mut self) -> Result<Vec<u8>> {
+        let frame = self
+            .read_frame()
+            .await?
+            .context("connection closed mid-message")?;
+        self.read_message_after_first(frame).await
+    }
+
+    pub async fn read_message_after_first(&mut self, first: DrpcFrame) -> Result<Vec<u8>> {
+        let stream_id = first.stream_id;
+        let mut next = Some(first);
         let mut body = Vec::new();
         loop {
-            let frame = self
-                .read_frame()
-                .await?
-                .context("connection closed mid-message")?;
+            let frame = match next.take() {
+                Some(frame) => frame,
+                None => self
+                    .read_frame()
+                    .await?
+                    .context("connection closed mid-message")?,
+            };
+
+            if frame.stream_id != stream_id {
+                bail!(
+                    "message stream_id changed from {stream_id} to {}",
+                    frame.stream_id
+                );
+            }
 
             match frame.kind {
                 KIND_MESSAGE => {
+                    let new_len = body
+                        .len()
+                        .checked_add(frame.data.len())
+                        .context("DRPC message length overflow")?;
+                    if new_len > self.max_message_bytes {
+                        bail!("DRPC message exceeds {} byte limit", self.max_message_bytes);
+                    }
                     body.extend_from_slice(&frame.data);
                     if frame.done {
                         return Ok(body);
@@ -153,5 +192,50 @@ where
             data: Bytes::copy_from_slice(message.as_bytes()),
         })
         .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use tokio::io::duplex;
+
+    #[tokio::test]
+    async fn rejects_fragmented_message_over_total_limit() {
+        let (client, server) = duplex(4096);
+        let mut writer = DrpcStream::new(client);
+        let mut reader = DrpcStream::with_limits(server, 1024, 5);
+        writer
+            .write_frame(DrpcFrame {
+                kind: KIND_MESSAGE,
+                done: false,
+                control: false,
+                stream_id: 1,
+                message_id: 1,
+                data: Bytes::from_static(b"abc"),
+            })
+            .await
+            .unwrap();
+        writer
+            .write_frame(DrpcFrame {
+                kind: KIND_MESSAGE,
+                done: true,
+                control: false,
+                stream_id: 1,
+                message_id: 2,
+                data: Bytes::from_static(b"def"),
+            })
+            .await
+            .unwrap();
+
+        assert!(
+            reader
+                .read_message()
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("limit")
+        );
     }
 }
