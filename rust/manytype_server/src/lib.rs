@@ -10,6 +10,7 @@ pub mod handshake;
 pub mod health;
 pub mod identity;
 pub mod input;
+pub mod ops;
 pub mod storage;
 pub mod sync_node;
 pub mod transport;

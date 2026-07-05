@@ -1,5 +1,6 @@
 //! Manytype server: all four any-sync node roles in a single binary.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,7 +9,8 @@ use libp2p_identity::Keypair;
 use manytype_core::crypto::ed25519;
 use manytype_proto::handshake::{Encoding, ProtoType};
 use manytype_server::{
-    auth, config, coordinator, drpc, file_node, handshake, health, identity, sync_node, transport,
+    auth, config, coordinator, drpc, file_node, handshake, health, identity, ops, sync_node,
+    transport,
 };
 use tokio::net::TcpListener;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -16,6 +18,25 @@ use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(30);
+
+#[derive(Debug, Eq, PartialEq)]
+enum Command {
+    Serve {
+        config: PathBuf,
+    },
+    CheckConfig {
+        config: PathBuf,
+    },
+    Backup {
+        config: PathBuf,
+        output: PathBuf,
+    },
+    Restore {
+        config: PathBuf,
+        input: PathBuf,
+        force: bool,
+    },
+}
 
 fn is_benign_connection_error(error: &anyhow::Error) -> bool {
     use std::io::ErrorKind;
@@ -73,12 +94,36 @@ async fn main() -> Result<()> {
         .with_env_filter(filter)
         .init();
 
-    // Load config
-    let config_path = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "config.toml".to_string());
+    match parse_command(std::env::args().skip(1))? {
+        Command::Serve { config } => serve(config).await,
+        Command::CheckConfig { config } => {
+            config::ServerConfig::load(&config)?;
+            println!("configuration valid: {}", config.display());
+            Ok(())
+        }
+        Command::Backup { config, output } => {
+            let config = config::ServerConfig::load(&config)?;
+            ops::create_backup(&config.storage_paths()?, &output)?;
+            println!("backup created: {}", output.display());
+            Ok(())
+        }
+        Command::Restore {
+            config,
+            input,
+            force,
+        } => {
+            let config = config::ServerConfig::load(&config)?;
+            ops::restore_backup(&config.storage_paths()?, &input, force)?;
+            println!("backup restored: {}", input.display());
+            Ok(())
+        }
+    }
+}
+
+async fn serve(config_path: PathBuf) -> Result<()> {
     let config = config::ServerConfig::load(&config_path)?;
     let storage_paths = config.storage_paths()?;
+    let _server_lock = ops::ServerLock::acquire(&storage_paths)?;
 
     let seed = match config.identity_seed.as_deref() {
         Some(seed) => hex::decode(seed)?.try_into().map_err(|value: Vec<u8>| {
@@ -227,6 +272,53 @@ async fn main() -> Result<()> {
     health_task.await.context("health task panicked")??;
     tracing::info!(event = "shutdown_complete");
     Ok(())
+}
+
+fn parse_command(args: impl IntoIterator<Item = String>) -> Result<Command> {
+    let args = args.into_iter().collect::<Vec<_>>();
+    match args.as_slice() {
+        [] => Ok(Command::Serve {
+            config: PathBuf::from("config.toml"),
+        }),
+        [config] if !config.starts_with('-') && !is_command(config) => Ok(Command::Serve {
+            config: PathBuf::from(config),
+        }),
+        [command, flag, config] if command == "serve" && flag == "--config" => Ok(Command::Serve {
+            config: PathBuf::from(config),
+        }),
+        [command, flag, config] if command == "check-config" && flag == "--config" => {
+            Ok(Command::CheckConfig {
+                config: PathBuf::from(config),
+            })
+        }
+        [command, config_flag, config, output_flag, output]
+            if command == "backup" && config_flag == "--config" && output_flag == "--output" =>
+        {
+            Ok(Command::Backup {
+                config: PathBuf::from(config),
+                output: PathBuf::from(output),
+            })
+        }
+        [command, config_flag, config, input_flag, input, force]
+            if command == "restore"
+                && config_flag == "--config"
+                && input_flag == "--input"
+                && force == "--force" =>
+        {
+            Ok(Command::Restore {
+                config: PathBuf::from(config),
+                input: PathBuf::from(input),
+                force: true,
+            })
+        }
+        _ => bail!(
+            "usage: manytype_server [CONFIG] | serve --config CONFIG | check-config --config CONFIG | backup --config CONFIG --output DIRECTORY | restore --config CONFIG --input DIRECTORY --force"
+        ),
+    }
+}
+
+fn is_command(value: &str) -> bool {
+    matches!(value, "serve" | "check-config" | "backup" | "restore")
 }
 
 async fn shutdown_signal() -> Result<()> {
@@ -422,4 +514,53 @@ fn tls_peer_id(connection: &quinn::Connection) -> Result<String> {
     let cert = libp2p_tls::certificate::parse(cert)
         .map_err(|e| anyhow::anyhow!("invalid libp2p TLS certificate: {e}"))?;
     Ok(cert.peer_id().to_string())
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn legacy_config_argument_still_starts_server() {
+        assert_eq!(
+            parse_command(args(&["fixture.toml"])).unwrap(),
+            Command::Serve {
+                config: PathBuf::from("fixture.toml")
+            }
+        );
+    }
+
+    #[test]
+    fn restore_requires_force_in_command_shape() {
+        assert!(
+            parse_command(args(&[
+                "restore",
+                "--config",
+                "server.toml",
+                "--input",
+                "snapshot"
+            ]))
+            .is_err()
+        );
+        assert_eq!(
+            parse_command(args(&[
+                "restore",
+                "--config",
+                "server.toml",
+                "--input",
+                "snapshot",
+                "--force"
+            ]))
+            .unwrap(),
+            Command::Restore {
+                config: PathBuf::from("server.toml"),
+                input: PathBuf::from("snapshot"),
+                force: true,
+            }
+        );
+    }
 }
