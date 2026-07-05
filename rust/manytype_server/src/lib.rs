@@ -7,6 +7,7 @@ pub mod coordinator;
 pub mod drpc;
 pub mod file_node;
 pub mod handshake;
+pub mod health;
 pub mod identity;
 pub mod input;
 pub mod storage;
