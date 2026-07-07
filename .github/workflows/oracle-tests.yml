@@ -47,9 +47,9 @@ jobs:
           timeout --signal=TERM --kill-after=30s 45m
           cargo build --release -p manytype_quic_ffi -p manytype_server
 
-      - uses: dart-lang/setup-dart@v1
+      - uses: subosito/flutter-action@v2
         with:
-          sdk: stable
+          channel: stable
           cache: true
 
       - name: Activate melos
