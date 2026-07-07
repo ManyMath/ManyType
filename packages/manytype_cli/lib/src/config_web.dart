@@ -1,5 +1,28 @@
 import 'package:path/path.dart' as p;
 
+import 'dart:convert';
+
+Map<String, String> parseSimpleToml(String content) {
+  throw UnsupportedError('config I/O is vm-only');
+}
+
+Future<Map<String, String>> readSimpleTomlFile(String path) async {
+  throw UnsupportedError('config I/O is vm-only');
+}
+
+String encodeCliConfig({
+  required String serverAddress,
+  String? mnemonic,
+  bool usesPlatformRecoveryPhrase = false,
+}) {
+  return <String>[
+    if (mnemonic != null) 'mnemonic = ${jsonEncode(mnemonic)}',
+    if (usesPlatformRecoveryPhrase) 'recovery_phrase_store = "platform"',
+    'server_address = ${jsonEncode(serverAddress)}',
+    '',
+  ].join('\n');
+}
+
 class CliConfig {
   final String mnemonic;
   final String serverAddress;

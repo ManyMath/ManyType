@@ -4,6 +4,7 @@ import 'package:web/web.dart' as web;
 
 import 'account_profile.dart';
 import 'config.dart';
+import 'recovery_phrase_store.dart';
 import 'store/database_web.dart' show deleteWebDatabaseForApp;
 
 /// Web account registry backed by `window.localStorage`:
@@ -27,6 +28,11 @@ class AccountRegistry {
   /// keep the conditional-export API surface identical to
   /// account_registry_native.dart's [testBaseDirOverride].
   static String? testBaseDirOverride;
+
+  /// Native hosts inject secure storage through this API. Web intentionally
+  /// keeps its browser-local recovery identity in localStorage for the offline
+  /// editor and ignores the native-only store.
+  static void configureRecoveryPhraseStore(RecoveryPhraseStore? store) {}
 
   static String get _accountsKey => '$keyPrefix:accounts';
   static String get _currentKey => '$keyPrefix:current';

@@ -2,10 +2,17 @@
 
 ManyType is the Flutter workspace client for the repository's offline-first
 Any-Sync implementation. Document change payloads are encrypted before they
-are written to the local database. Recovery phrases remain in the native
-account config or browser profile storage and therefore rely on the device and
-browser's access controls. Synchronization is opt-in and requires a real
-Any-Sync network configuration.
+are written to the local database. Native recovery phrases are stored through
+the operating system's secure credential store; existing plaintext native
+configs migrate on their first successful open. The offline web editor keeps
+its identity in browser-local storage. Synchronization is opt-in and requires a
+real Any-Sync network configuration.
+
+The pure Dart `manytype_cli` package retains its original plaintext
+`config.toml` behavior when no `RecoveryPhraseStore` is injected. This keeps
+command-line installs compatible, while making the boundary explicit: an
+account created by this Flutter app must be opened by a native host that can
+read its platform-secure phrase.
 
 ## Run and test
 

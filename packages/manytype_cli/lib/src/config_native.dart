@@ -1,10 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
+
 import 'package:path/path.dart' as p;
 import 'package:manytype_core/manytype_core.dart' show generateMnemonic;
 
 /// Parse a simple TOML file with key = "value" pairs.
 /// Supports only flat string values (sufficient for config.toml).
-Map<String, String> _parseSimpleToml(String content) {
+Map<String, String> parseSimpleToml(String content) {
   final result = <String, String>{};
   for (final line in content.split('\n')) {
     final trimmed = line.trim();
@@ -20,6 +22,27 @@ Map<String, String> _parseSimpleToml(String content) {
     result[key] = value;
   }
   return result;
+}
+
+Future<Map<String, String>> readSimpleTomlFile(String path) async {
+  final file = File(path);
+  if (!await file.exists()) {
+    throw StateError('Config not found at $path. Run: manytype init');
+  }
+  return parseSimpleToml(await file.readAsString());
+}
+
+String encodeCliConfig({
+  required String serverAddress,
+  String? mnemonic,
+  bool usesPlatformRecoveryPhrase = false,
+}) {
+  return <String>[
+    if (mnemonic != null) 'mnemonic = ${jsonEncode(mnemonic)}',
+    if (usesPlatformRecoveryPhrase) 'recovery_phrase_store = "platform"',
+    'server_address = ${jsonEncode(serverAddress)}',
+    '',
+  ].join('\n');
 }
 
 /// CLI configuration loaded from ~/.manytype/config.toml.
@@ -55,18 +78,20 @@ class CliConfig {
   /// Load config from a specific file path (for testing).
   static Future<CliConfig> loadFrom(String path,
       {String? serverOverride}) async {
-    final file = File(path);
-    if (!await file.exists()) {
-      throw StateError('Config not found at $path. Run: manytype init');
-    }
-    final content = await file.readAsString();
-    final map = _parseSimpleToml(content);
+    final map = await readSimpleTomlFile(path);
 
     final mnemonic = map['mnemonic'] ?? '';
     final serverAddress =
         serverOverride ?? (map['server_address'] ?? '127.0.0.1:33020');
 
     if (mnemonic.isEmpty) {
+      if (map['recovery_phrase_store'] == 'platform') {
+        throw StateError(
+          'Recovery phrase for $path is held in platform secure storage. '
+          'Open this account through a host that configures a '
+          'RecoveryPhraseStore.',
+        );
+      }
       throw StateError('mnemonic not set in $path');
     }
 
@@ -84,9 +109,10 @@ class CliConfig {
         CliConfig(mnemonic: mnemonic, serverAddress: '127.0.0.1:33020');
 
     final file = File(configPath);
-    await file.writeAsString(
-      'mnemonic = "${config.mnemonic}"\nserver_address = "${config.serverAddress}"\n',
-    );
+    await file.writeAsString(encodeCliConfig(
+      mnemonic: config.mnemonic,
+      serverAddress: config.serverAddress,
+    ));
     return config;
   }
 }

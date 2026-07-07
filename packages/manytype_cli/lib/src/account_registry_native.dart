@@ -5,16 +5,29 @@ import 'package:path/path.dart' as p;
 
 import 'account_profile.dart';
 import 'config.dart';
+import 'recovery_phrase_store.dart';
 
 /// Native (vm) account registry backed by files under `~/.manytype`:
 /// - `accounts.json`: index of known account summaries (no secrets)
 /// - `current`: plain-text file naming the currently-selected account id
-/// - `accounts/<id>/config.toml`: that account's mnemonic + server_address
+/// - `accounts/<id>/config.toml`: server address and, for CLI-only hosts,
+///   the account mnemonic
 /// - `accounts/<id>/store.db`: that account's database
 class AccountRegistry {
   /// Test-only override for [baseDir]. When null, baseDir resolves to
   /// `$HOME/.manytype` (or `$USERPROFILE` on Windows) as usual.
   static String? testBaseDirOverride;
+  static RecoveryPhraseStore? _recoveryPhraseStore;
+
+  /// Supplies the native host's OS-backed secret storage.
+  ///
+  /// The Flutter app configures this before accessing accounts. A pure Dart
+  /// CLI host leaves it null to retain the established plaintext
+  /// `config.toml` format and receives an explicit error if it encounters an
+  /// app-owned config whose phrase is only available from platform storage.
+  static void configureRecoveryPhraseStore(RecoveryPhraseStore? store) {
+    _recoveryPhraseStore = store;
+  }
 
   static String get baseDir {
     if (testBaseDirOverride != null) {
@@ -88,39 +101,53 @@ class AccountRegistry {
       }
     }
 
-    if (summary != null) {
-      final dbPath = summary.dbPathOverride;
-      if (dbPath != null) {
-        // SQLite may leave these siblings behind even after the connection
-        // closes. Delete them before the main database so a failure keeps the
-        // registry entry available for another cleanup attempt.
-        for (final suffix in const <String>['-wal', '-shm', '-journal']) {
-          await _deleteFileIfPresent('$dbPath$suffix');
+    final recoveryPhrase = await _recoveryPhraseStore?.read(id);
+    var recoveryPhraseDeleted = false;
+    if (recoveryPhrase != null) {
+      await _recoveryPhraseStore!.delete(id);
+      recoveryPhraseDeleted = true;
+    }
+
+    try {
+      if (summary != null) {
+        final dbPath = summary.dbPathOverride;
+        if (dbPath != null) {
+          // SQLite may leave these siblings behind even after the connection
+          // closes. Delete them before the main database so a failure keeps the
+          // registry entry available for another cleanup attempt.
+          for (final suffix in const <String>['-wal', '-shm', '-journal']) {
+            await _deleteFileIfPresent('$dbPath$suffix');
+          }
+          await _deleteFileIfPresent(dbPath);
         }
-        await _deleteFileIfPresent(dbPath);
+
+        final configPath = summary.configPathOverride;
+        if (configPath != null) {
+          await _deleteFileIfPresent(configPath);
+        }
       }
 
-      final configPath = summary.configPathOverride;
-      if (configPath != null) {
-        await _deleteFileIfPresent(configPath);
+      final dir = Directory(accountDir(id));
+      if (await dir.exists()) {
+        await dir.delete(recursive: true);
       }
-    }
 
-    final dir = Directory(accountDir(id));
-    if (await dir.exists()) {
-      await dir.delete(recursive: true);
-    }
+      // Remove the registry entry only after durable data deletion succeeds.
+      // A filesystem failure therefore leaves the profile available for retry.
+      await _writeAccounts(accounts.where((a) => a.id != id).toList());
 
-    // Remove the registry entry only after durable data deletion succeeds.
-    // A filesystem failure therefore leaves the profile available for retry.
-    await _writeAccounts(accounts.where((a) => a.id != id).toList());
-
-    final currentId = await getCurrentAccountId();
-    if (currentId == id) {
-      final file = File(currentPath);
-      if (await file.exists()) {
-        await file.delete();
+      final currentId = await getCurrentAccountId();
+      if (currentId == id) {
+        final file = File(currentPath);
+        if (await file.exists()) {
+          await file.delete();
+        }
       }
+    } catch (_) {
+      if (recoveryPhraseDeleted) {
+        await _recoveryPhraseStore!.write(id, recoveryPhrase!);
+      }
+      rethrow;
     }
   }
 
@@ -166,22 +193,16 @@ class AccountRegistry {
   /// [id].
   static Future<void> updateServerAddress(
       String id, String serverAddress) async {
-    final accounts = await listAccounts();
-    AccountSummary? summary;
-    for (final account in accounts) {
-      if (account.id == id) {
-        summary = account;
-        break;
-      }
-    }
-    if (summary == null) {
-      throw StateError('no account registered with id $id');
-    }
+    final summary = await _requireSummary(id);
     final configPath = summary.configPathOverride ?? accountConfigPath(id);
-    final config = await CliConfig.loadFrom(configPath);
-    final configFile = File(configPath);
-    await configFile.writeAsString(
-      'mnemonic = "${config.mnemonic}"\nserver_address = "$serverAddress"\n',
+    final config = await loadConfig(id);
+    await _writeFileAtomically(
+      configPath,
+      encodeCliConfig(
+        mnemonic: _recoveryPhraseStore == null ? config.mnemonic : null,
+        serverAddress: serverAddress,
+        usesPlatformRecoveryPhrase: _recoveryPhraseStore != null,
+      ),
     );
   }
 
@@ -191,19 +212,63 @@ class AccountRegistry {
   /// accounts. Throws [StateError] if no account is registered under [id].
   static Future<CliConfig> loadConfig(String id,
       {String? serverOverride}) async {
-    final accounts = await listAccounts();
-    AccountSummary? summary;
-    for (final account in accounts) {
-      if (account.id == id) {
-        summary = account;
-        break;
-      }
-    }
-    if (summary == null) {
-      throw StateError('no account registered with id $id');
-    }
+    final summary = await _requireSummary(id);
     final configPath = summary.configPathOverride ?? accountConfigPath(id);
-    return CliConfig.loadFrom(configPath, serverOverride: serverOverride);
+    final store = _recoveryPhraseStore;
+    if (store == null) {
+      return CliConfig.loadFrom(configPath, serverOverride: serverOverride);
+    }
+
+    final values = await readSimpleTomlFile(configPath);
+    final serverAddress =
+        serverOverride ?? (values['server_address'] ?? '127.0.0.1:33020');
+    final plaintextPhrase = values['mnemonic']?.trim();
+    var securePhrase = await store.read(id);
+
+    if (plaintextPhrase != null && plaintextPhrase.isNotEmpty) {
+      if (securePhrase != null && securePhrase != plaintextPhrase) {
+        throw StateError(
+          'Platform recovery phrase does not match the plaintext phrase for '
+          'account $id; refusing to overwrite either copy.',
+        );
+      }
+
+      final createdSecureCopy = securePhrase == null;
+      if (createdSecureCopy) {
+        await store.write(id, plaintextPhrase);
+      }
+      try {
+        await _writeFileAtomically(
+          configPath,
+          encodeCliConfig(
+            serverAddress: values['server_address'] ?? '127.0.0.1:33020',
+            usesPlatformRecoveryPhrase: true,
+          ),
+        );
+      } catch (_) {
+        if (createdSecureCopy) {
+          await store.delete(id);
+        }
+        rethrow;
+      }
+      securePhrase = plaintextPhrase;
+    }
+
+    if (securePhrase == null || securePhrase.trim().isEmpty) {
+      throw StateError(
+        'Recovery phrase is missing from platform secure storage for account '
+        '$id.',
+      );
+    }
+    return CliConfig(mnemonic: securePhrase, serverAddress: serverAddress);
+  }
+
+  static Future<AccountSummary> _requireSummary(String id) async {
+    final accounts = await listAccounts();
+    for (final account in accounts) {
+      if (account.id == id) return account;
+    }
+    throw StateError('no account registered with id $id');
   }
 
   static Future<String?> getCurrentAccountId() async {
@@ -277,17 +342,37 @@ class AccountRegistry {
     }
 
     final createdAt = DateTime.now().toUtc();
-    final configFile = File(accountConfigPath(id));
-    await configFile.writeAsString(
-      'mnemonic = "$mnemonic"\nserver_address = "$serverAddress"\n',
-    );
+    final store = _recoveryPhraseStore;
+    var securePhraseWritten = false;
+    try {
+      if (store != null) {
+        await store.write(id, mnemonic);
+        securePhraseWritten = true;
+      }
+      await _writeFileAtomically(
+        accountConfigPath(id),
+        encodeCliConfig(
+          mnemonic: store == null ? mnemonic : null,
+          serverAddress: serverAddress,
+          usesPlatformRecoveryPhrase: store != null,
+        ),
+      );
 
-    await registerAccount(AccountSummary(
-      id: id,
-      displayName: displayName,
-      createdAt: createdAt,
-      pendingStarterTemplate: pendingStarterTemplate,
-    ));
+      await registerAccount(AccountSummary(
+        id: id,
+        displayName: displayName,
+        createdAt: createdAt,
+        pendingStarterTemplate: pendingStarterTemplate,
+      ));
+    } catch (_) {
+      if (securePhraseWritten) {
+        await store!.delete(id);
+      }
+      await _deleteFileIfPresent(accountConfigPath(id));
+      final children = await dir.list().toList();
+      if (children.isEmpty) await dir.delete();
+      rethrow;
+    }
 
     return AccountProfile(
       id: id,
@@ -336,5 +421,19 @@ class AccountRegistry {
       mnemonic: legacyMnemonic,
       createdAt: createdAt,
     );
+  }
+
+  static Future<void> _writeFileAtomically(String path, String content) async {
+    final target = File(path);
+    await target.parent.create(recursive: true);
+    final temporary = File(
+      '$path.tmp-${DateTime.now().microsecondsSinceEpoch}-${pid.toString()}',
+    );
+    try {
+      await temporary.writeAsString(content, flush: true);
+      await temporary.rename(path);
+    } finally {
+      if (await temporary.exists()) await temporary.delete();
+    }
   }
 }

@@ -26,6 +26,7 @@ export 'src/head_sync_client.dart';
 export 'src/identity.dart';
 export 'src/network_config.dart';
 export 'src/peer_id.dart';
+export 'src/recovery_phrase_store.dart';
 export 'src/session.dart';
 export 'src/space_pull_bootstrap.dart';
 export 'src/store/database.dart';

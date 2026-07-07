@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:manytype_cli/src/account_profile.dart' show AccountProfile;
 import 'package:manytype_cli/src/account_registry.dart';
+import 'package:manytype_cli/src/recovery_phrase_store.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -26,6 +27,7 @@ void main() {
     });
 
     tearDown(() async {
+      AccountRegistry.configureRecoveryPhraseStore(null);
       AccountRegistry.testBaseDirOverride = null;
       if (await tempBase.exists()) {
         await tempBase.delete(recursive: true);
@@ -231,6 +233,163 @@ void main() {
       );
     });
 
+    group('platform recovery phrase storage', () {
+      late _MemoryRecoveryPhraseStore secureStore;
+
+      setUp(() {
+        secureStore = _MemoryRecoveryPhraseStore();
+        AccountRegistry.configureRecoveryPhraseStore(secureStore);
+      });
+
+      test('new accounts keep the phrase out of config.toml', () async {
+        final profile = await AccountRegistry.createAccount(
+          mnemonic: mnemonicA,
+          displayName: 'work',
+        );
+
+        final content = await File(
+          AccountRegistry.accountConfigPath(profile.id),
+        ).readAsString();
+        expect(content, isNot(contains(mnemonicA)));
+        expect(content, contains('recovery_phrase_store = "platform"'));
+        expect(secureStore.values[profile.id], mnemonicA);
+        expect(
+            (await AccountRegistry.loadConfig(profile.id)).mnemonic, mnemonicA);
+      });
+
+      test('account secrets are isolated and forget deletes only its secret',
+          () async {
+        final profileA = await AccountRegistry.createAccount(
+          mnemonic: mnemonicA,
+          displayName: 'work',
+        );
+        final profileB = await AccountRegistry.createAccount(
+          mnemonic: mnemonicB,
+          displayName: 'personal',
+        );
+
+        expect(secureStore.values[profileA.id], mnemonicA);
+        expect(secureStore.values[profileB.id], mnemonicB);
+
+        await AccountRegistry.removeAccount(profileA.id);
+
+        expect(secureStore.values, isNot(contains(profileA.id)));
+        expect(secureStore.values[profileB.id], mnemonicB);
+        expect((await AccountRegistry.loadConfig(profileB.id)).mnemonic,
+            mnemonicB);
+      });
+
+      test('legacy plaintext migrates on first load without changing identity',
+          () async {
+        AccountRegistry.configureRecoveryPhraseStore(null);
+        final profile = await AccountRegistry.createAccount(
+          mnemonic: mnemonicA,
+          displayName: 'legacy',
+        );
+        final configPath = AccountRegistry.accountConfigPath(profile.id);
+        expect(await File(configPath).readAsString(), contains(mnemonicA));
+
+        AccountRegistry.configureRecoveryPhraseStore(secureStore);
+        final config = await AccountRegistry.loadConfig(profile.id);
+
+        expect(config.mnemonic, mnemonicA);
+        expect(
+            await AccountProfile.deriveAccountId(config.mnemonic), profile.id);
+        expect(secureStore.values[profile.id], mnemonicA);
+        final migrated = await File(configPath).readAsString();
+        expect(migrated, isNot(contains(mnemonicA)));
+        expect(migrated, contains('recovery_phrase_store = "platform"'));
+      });
+
+      test('secure-storage write failure leaves legacy plaintext untouched',
+          () async {
+        AccountRegistry.configureRecoveryPhraseStore(null);
+        final profile = await AccountRegistry.createAccount(
+          mnemonic: mnemonicA,
+          displayName: 'legacy',
+        );
+        final configPath = AccountRegistry.accountConfigPath(profile.id);
+        final original = await File(configPath).readAsString();
+
+        secureStore.failWrites = true;
+        AccountRegistry.configureRecoveryPhraseStore(secureStore);
+
+        await expectLater(
+          AccountRegistry.loadConfig(profile.id),
+          throwsA(isA<StateError>()),
+        );
+        expect(await File(configPath).readAsString(), original);
+        expect(secureStore.values, isNot(contains(profile.id)));
+      });
+
+      test('secure-storage creation failure leaves no partial account',
+          () async {
+        secureStore.failWrites = true;
+
+        await expectLater(
+          AccountRegistry.createAccount(
+            mnemonic: mnemonicA,
+            displayName: 'work',
+          ),
+          throwsA(isA<StateError>()),
+        );
+
+        final id = await AccountProfile.deriveAccountId(mnemonicA);
+        expect(await AccountRegistry.listAccounts(), isEmpty);
+        expect(await File(AccountRegistry.accountConfigPath(id)).exists(),
+            isFalse);
+      });
+
+      test('secure-storage delete failure leaves the account and data intact',
+          () async {
+        final profile = await AccountRegistry.createAccount(
+          mnemonic: mnemonicA,
+          displayName: 'work',
+        );
+        final db = File(AccountRegistry.accountDbPath(profile.id));
+        await db.writeAsString('workspace');
+        secureStore.failDeletes = true;
+
+        await expectLater(
+          AccountRegistry.removeAccount(profile.id),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(await db.readAsString(), 'workspace');
+        expect(
+          (await AccountRegistry.listAccounts()).map((account) => account.id),
+          contains(profile.id),
+        );
+        expect(secureStore.values[profile.id], mnemonicA);
+      });
+
+      test('a secure/plaintext mismatch refuses destructive migration',
+          () async {
+        AccountRegistry.configureRecoveryPhraseStore(null);
+        final profile = await AccountRegistry.createAccount(
+          mnemonic: mnemonicA,
+          displayName: 'legacy',
+        );
+        final original = await File(
+          AccountRegistry.accountConfigPath(profile.id),
+        ).readAsString();
+        secureStore.values[profile.id] = mnemonicB;
+        AccountRegistry.configureRecoveryPhraseStore(secureStore);
+
+        await expectLater(
+          AccountRegistry.loadConfig(profile.id),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(
+          await File(AccountRegistry.accountConfigPath(profile.id))
+              .readAsString(),
+          original,
+        );
+        expect(secureStore.values[profile.id], mnemonicB);
+      });
+    });
+
     group('migrateLegacyAccount', () {
       late File legacyConfigFile;
       late File legacyDbFile;
@@ -336,4 +495,25 @@ void main() {
       });
     });
   });
+}
+
+class _MemoryRecoveryPhraseStore implements RecoveryPhraseStore {
+  final Map<String, String> values = <String, String>{};
+  bool failWrites = false;
+  bool failDeletes = false;
+
+  @override
+  Future<void> delete(String accountId) async {
+    if (failDeletes) throw StateError('injected secure delete failure');
+    values.remove(accountId);
+  }
+
+  @override
+  Future<String?> read(String accountId) async => values[accountId];
+
+  @override
+  Future<void> write(String accountId, String recoveryPhrase) async {
+    if (failWrites) throw StateError('injected secure write failure');
+    values[accountId] = recoveryPhrase;
+  }
 }
