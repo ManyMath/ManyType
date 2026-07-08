@@ -7,15 +7,18 @@ an Internet-facing deployment.
 
 Run it on loopback, an authenticated overlay network, or a private interface
 protected by a firewall allowlist. Do not publish its QUIC port in public DNS or
-open that port to the Internet. The server does not yet provide the resource
-controls, audit trail, or complete ACL semantics required for public operation.
+open that port to the Internet. The packaged runtime now enforces account and
+peer allowlists, bounded resources, structured lifecycle logs, and an explicit
+production-mode prohibition. It still lacks the complete ACL semantics and
+field evidence required for public operation. See `deploy/RUNBOOK.md` for the
+private-canary boundary.
 
 ## Protected assets
 
 - Account and peer identities.
 - Space headers, ACL records, settings, object changes, and sync heads.
 - Private file blocks and their space/file bindings.
-- The server identity seed and signing key.
+- The generated server identity and signing key.
 - Availability of the QUIC listener, redb databases, and blob filesystem.
 
 ## Trust boundaries
@@ -65,41 +68,41 @@ is one reason public deployment remains disabled.
 | Tampering | Signed and content-addressed space headers; immutable first owner; receipt validation; owner checks before scoped mutations | ACL record signatures and semantic permissions need complete validation; delete RPCs are stubs |
 | Repudiation | Structured tracing records method-level activity | No durable, principal-bound security audit log or retention policy |
 | Information disclosure | Owner-only reads; hidden space status and private blob availability | Public invite CIDs are bearer capabilities; metadata/log review and ACL member reads remain incomplete |
-| Denial of service | Handshake messages have a size limit | DRPC frames, reassembled messages, request collections, connections, and storage have no adequate limits |
+| Denial of service | Bounded handshakes, DRPC frames, reassembled messages, blobs, connections, streams, and enforced storage quotas | No per-principal request-rate budget, comprehensive collection limits, or production capacity evidence |
 | Elevation of privilege | Header account binding and immutable peer ownership close first-claim and ownership-replacement paths | No persisted ACL evaluator for readers/writers, invite redemption, revocation, or device authorization |
 
 ## Public-deployment blockers
 
 Resolve and test all of these before reconsidering an Internet-facing service:
 
-1. Add strict maximum sizes for DRPC frames, reassembled messages, protobuf
-   collections, object changes, store values, ACL records, and blob uploads.
-2. Replace the advertised 1 PiB placeholder with enforced per-account and
-   per-space quotas, including atomic reservation and cleanup on failure.
-3. Add connection, stream, request-rate, concurrency, and idle-time limits.
-4. Validate or safely encode every space ID before constructing a database path;
-   migrate or reject malformed legacy IDs.
-5. Authenticate and bind `AccountDelete` to the credential account, verify its
+1. Add method-specific limits for protobuf collections, object changes, store
+   values, ACL records, and other work that can be expensive below the bounded
+   message-size ceiling.
+2. Add durable quota accounting and reservation semantics that remain correct
+   across partial writes, cleanup failures, crashes, and multiple processes.
+3. Add per-principal request-rate and CPU budgets plus production capacity and
+   idle-time evidence beyond the current connection and stream concurrency caps.
+4. Authenticate and bind `AccountDelete` to the credential account, verify its
    signature, and implement real authorized deletion for spaces and files.
-6. Implement and persist ACL reader/writer evaluation, invitation redemption,
+5. Implement and persist ACL reader/writer evaluation, invitation redemption,
    expiry, revocation, and multi-device enrollment without making ownership
    mutable.
-7. Put authentication, quotas, expiry, garbage collection, and abuse controls
+6. Put authentication, quotas, expiry, garbage collection, and abuse controls
    around public invite uploads. Document bearer-CID leakage behavior.
-8. Add durable security audit events, metrics, alerts, health reporting, and
-   failure-state visibility without logging content or secrets.
-9. Define backup/restore, database and blob consistency checks, retention,
-   disaster recovery, and server identity rotation procedures.
-10. Protect the server identity seed with an appropriate secret store and strict
-    filesystem permissions. Reject the development seed outside tests.
-11. Add protocol fuzzing and adversarial integration tests for malformed frames,
-    protobufs, signatures, CIDs, paths, partial writes, and concurrent claims.
+7. Extend structured runtime logs and minimal health checks with durable,
+   principal-bound security audit events, metrics, alerts, and retention.
+8. Exercise offline backup/restore on the deployment host and define retention,
+   full blob/database consistency checks, disaster recovery, and server identity
+   recovery and rotation procedures.
+9. Add protocol fuzzing and adversarial integration tests for malformed frames,
+   protobufs, signatures, CIDs, paths, partial writes, and concurrent claims.
 
 ## Private-canary checklist
 
 - Bind only to the intended loopback, private, or overlay address.
 - Enforce a network firewall allowlist independently of this process.
-- Generate a unique server identity seed and restrict its configuration file.
+- Protect the generated `identity.key` with restrictive permissions and a
+  separate encrypted host backup; never place it in the server configuration.
 - Store databases and blobs on a private volume with backups and monitored free
   space.
 - Limit access to trusted clients while the owner-only model is in effect.
@@ -110,5 +113,5 @@ Resolve and test all of these before reconsidering an Internet-facing service:
 Run the locked server tests before each canary build:
 
 ```sh
-cargo test -p manytype_server --locked
+cargo test --locked -p manytype_server
 ```

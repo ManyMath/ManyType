@@ -90,7 +90,7 @@ impl ServerConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
-        let quic: SocketAddr = self
+        let _: SocketAddr = self
             .quic_listen
             .parse()
             .context("quic_listen must be a socket address")?;
@@ -136,10 +136,6 @@ impl ServerConfig {
                 ensure!(
                     !self.allowed_account_identities.is_empty(),
                     "private_canary requires at least one allowed_account_identity"
-                );
-                ensure!(
-                    !quic.ip().is_loopback() || self.allowed_peer_ids.len() > 1,
-                    "a loopback private canary must still list both intended device peers"
                 );
             }
             DeploymentMode::Production => bail!(
@@ -244,8 +240,6 @@ mod tests {
     use super::*;
 
     const PEER_ONE: &str = "12D3KooWGHMiFc5JJNpGWJxaqUd7ozGQASZz2TU9PwfGGjqjrc5J";
-    const PEER_TWO: &str = "12D3KooWJfkLquzcZF3jF9RAdWuuw1pGpWynhDvT4VfJ23W9Ckgh";
-
     fn private_config() -> String {
         format!(
             r#"
@@ -254,7 +248,7 @@ mod tests {
                 health_listen = "127.0.0.1:33021"
                 network_id = "manytype-private-canary"
                 data_dir = "/var/lib/manytype"
-                allowed_peer_ids = ["{PEER_ONE}", "{PEER_TWO}"]
+                allowed_peer_ids = ["{PEER_ONE}"]
                 allowed_account_identities = ["0303030303030303030303030303030303030303030303030303030303030303"]
             "#
         )

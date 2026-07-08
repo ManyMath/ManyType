@@ -1,0 +1,47 @@
+[Unit]
+Description=ManyType private sync canary
+Documentation=file:/usr/local/share/doc/manytype-server/RUNBOOK.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=manytype
+Group=manytype
+UMask=0077
+StateDirectory=manytype
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/manytype
+ExecStartPre=/usr/local/bin/manytype_server check-config --config /etc/manytype/server.toml
+ExecStart=/usr/local/bin/manytype_server serve --config /etc/manytype/server.toml
+ExecStartPost=/usr/bin/curl --fail --silent --show-error --output /dev/null --retry 30 --retry-delay 1 --retry-connrefused --max-time 2 http://127.0.0.1:33021/readyz
+Restart=on-failure
+RestartSec=5s
+KillSignal=SIGTERM
+TimeoutStopSec=35s
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+TasksMax=128
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

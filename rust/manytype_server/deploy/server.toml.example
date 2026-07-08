@@ -1,0 +1,21 @@
+# Private canary only. Production mode is deliberately rejected by the binary.
+deployment_mode = "private_canary"
+network_id = "manytype-private-canary"
+quic_listen = "0.0.0.0:33020"
+health_listen = "127.0.0.1:33021"
+data_dir = "DATA_DIR"
+
+# Same-phrase devices currently derive the same transport peer identity. A
+# connection must match both this peer ID and the account identity.
+allowed_peer_ids = ["ACCOUNT_DEVICE_PEER_ID"]
+allowed_account_identities = ["ACCOUNT_IDENTITY_HEX"]
+
+[limits]
+max_connections = 32
+max_streams_per_connection = 16
+max_frame_bytes = 2097152
+max_message_bytes = 8388608
+max_blob_bytes = 4194304
+max_space_storage_bytes = 536870912
+max_account_storage_bytes = 1073741824
+max_total_storage_bytes = 2147483648
