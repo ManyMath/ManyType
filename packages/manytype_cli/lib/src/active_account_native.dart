@@ -44,12 +44,24 @@ Future<({CliConfig config, String dbPath})> resolveActiveAccount({
     }
     if (await File(CliConfig.configPath).exists()) {
       final legacyConfig = await CliConfig.load(serverOverride: serverOverride);
-      await AccountRegistry.migrateLegacyAccount(
+      final migrated = await AccountRegistry.migrateLegacyAccount(
         legacyConfigPath: CliConfig.configPath,
         legacyDbPath: CliConfig.dbPath,
         legacyMnemonic: legacyConfig.mnemonic,
       );
-      return (config: legacyConfig, dbPath: CliConfig.dbPath);
+      if (migrated == null) {
+        throw StateError(
+            'Legacy account migration did not register an account.');
+      }
+      // A Flutter host has injected platform secure storage before opening a
+      // session. Loading through the registry performs the plaintext-to-secure
+      // migration atomically before the phrase is returned to the caller. A
+      // pure CLI host has no injected store and retains its legacy config.
+      final migratedConfig = await AccountRegistry.loadConfig(
+        migrated.id,
+        serverOverride: serverOverride,
+      );
+      return (config: migratedConfig, dbPath: CliConfig.dbPath);
     }
     final config = await CliConfig.load(serverOverride: serverOverride);
     return (config: config, dbPath: CliConfig.dbPath);

@@ -52,7 +52,11 @@ class CliConfig {
 
   CliConfig({required this.mnemonic, required this.serverAddress});
 
+  /// Test-only override for the legacy single-account config directory.
+  static String? testConfigDirOverride;
+
   static String get configDir {
+    if (testConfigDirOverride != null) return testConfigDirOverride!;
     final home = Platform.environment['HOME'] ??
         Platform.environment['USERPROFILE'] ??
         '.';

@@ -6,6 +6,7 @@ import 'package:manytype_cli/src/account_profile.dart';
 // ignore: implementation_imports
 import 'package:manytype_cli/src/account_registry.dart';
 
+import 'legacy_account_bootstrap.dart';
 import 'session_provider.dart';
 import 'sync_controller.dart';
 
@@ -16,8 +17,19 @@ final accountsProvider = FutureProvider<List<AccountSummary>>((ref) {
 });
 
 /// The persisted "current account" pointer, or null before onboarding.
-final currentAccountIdProvider = FutureProvider<String?>((ref) {
-  return AccountRegistry.getCurrentAccountId();
+///
+/// Native installs created before the account registry existed only have a
+/// top-level config and database. Resolve that legacy identity here so the
+/// root gate migrates it before deciding whether to show onboarding.
+final currentAccountIdProvider = FutureProvider<String?>((ref) async {
+  final currentId = await AccountRegistry.getCurrentAccountId();
+  if (currentId != null) {
+    return currentId;
+  }
+  if ((await AccountRegistry.listAccounts()).isNotEmpty) {
+    return null;
+  }
+  return bootstrapLegacyAccountIfPresent();
 });
 
 /// Summary of the current account (display name for the header), if any.

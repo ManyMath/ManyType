@@ -29,6 +29,8 @@ class CliConfig {
 
   CliConfig({required this.mnemonic, required this.serverAddress});
 
+  static String? testConfigDirOverride;
+
   static String get configDir => throw UnsupportedError(
       'config I/O is vm-only; construct CliConfig directly on web');
 
