@@ -26,7 +26,6 @@ pub struct ServerConfig {
     #[serde(default = "default_health_listen")]
     pub health_listen: String,
     pub network_id: String,
-    #[serde(default)]
     pub deployment_mode: DeploymentMode,
     pub data_dir: Option<PathBuf>,
     /// Legacy development-only storage location used by compatibility harnesses.
@@ -306,6 +305,7 @@ mod tests {
     fn legacy_config_is_development_only() {
         let config: ServerConfig = toml::from_str(
             r#"
+                deployment_mode = "development"
                 quic_listen = "127.0.0.1:33020"
                 db_path = "/tmp/test.redb"
                 identity_seed = "0101010101010101010101010101010101010101010101010101010101010101"
@@ -318,6 +318,20 @@ mod tests {
             config.storage_paths().unwrap().sync_root,
             Path::new("/tmp/test")
         );
+    }
+
+    #[test]
+    fn config_requires_an_explicit_deployment_mode() {
+        let error = toml::from_str::<ServerConfig>(
+            r#"
+                quic_listen = "0.0.0.0:33020"
+                network_id = "ambiguous-deployment"
+                data_dir = "/var/lib/manytype"
+            "#,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("deployment_mode"));
     }
 
     #[test]

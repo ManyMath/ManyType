@@ -29,6 +29,7 @@ printf 'Building manytype_server...\n'
 
 printf 'Writing temporary config in %s...\n' "$TMPDIR"
 cat >"$TMPDIR/server.toml" <<EOF
+deployment_mode = "development"
 quic_listen = "127.0.0.1:$PORT"
 db_path = "$TMPDIR/server.redb"
 identity_seed = "0101010101010101010101010101010101010101010101010101010101010101"

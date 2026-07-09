@@ -115,6 +115,7 @@ if ! (cd "$RUST_DIR" && cargo build -p manytype_server --bin manytype_server 2>/
 fi
 
 cat >"$TMPDIR/server.toml" <<EOF
+deployment_mode = "development"
 quic_listen = "127.0.0.1:$PORT"
 db_path = "$TMPDIR/server.redb"
 identity_seed = "0909090909090909090909090909090909090909090909090909090909090939"

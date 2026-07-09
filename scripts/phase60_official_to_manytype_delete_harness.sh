@@ -185,6 +185,7 @@ printf 'Building binaries...\n'
 oracle_build_probe_binary "$PROBE_BIN"
 
 cat >"$SERVER_CONFIG" <<EOF
+deployment_mode = "development"
 quic_listen = "127.0.0.1:${LOCAL_SERVER_PORT}"
 db_path = "${TMPDIR}/manytype-server.redb"
 identity_seed = "0505050505050505050505050505050505050505050505050505050505050505"

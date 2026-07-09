@@ -78,6 +78,7 @@ start_local_server() {
 
 write_local_server_files() {
   cat >"$LOCAL_SERVER_CONFIG" <<EOF
+deployment_mode = "development"
 quic_listen = "127.0.0.1:${LOCAL_SERVER_PORT}"
 db_path = "${LOCAL_DB_PATH}"
 identity_seed = "0303030303030303030303030303030303030303030303030303030303030303"

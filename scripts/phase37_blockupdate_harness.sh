@@ -67,6 +67,7 @@ printf 'Building manytype_server...\n'
 (cd "$RUST_DIR" && cargo build -p manytype_server >/dev/null)
 
 cat >"$TMPDIR/server.toml" <<EOF
+deployment_mode = "development"
 quic_listen = "127.0.0.1:$PORT"
 db_path = "$TMPDIR/server.redb"
 identity_seed = "0707070707070707070707070707070707070707070707070707070707070737"
