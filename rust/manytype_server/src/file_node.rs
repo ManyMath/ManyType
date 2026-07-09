@@ -485,14 +485,24 @@ pub fn store_public_invite_block(
             state.limits.max_total_storage_bytes,
         )?;
     }
+    let blob_preexisted = state.blob_store.has(&claimed_cid);
     state
         .blob_store
         .put(&claimed_cid, data)
         .map_err(FileNodeError::unexpected)?;
-    state
+    if let Err(error) = state
         .blob_index
-        .mark_public_invite(&claimed_cid)
-        .map_err(FileNodeError::unexpected)?;
+        .register_public_invite(&claimed_cid, data.len() as u64)
+    {
+        if !blob_preexisted {
+            state.blob_store.remove(&claimed_cid).map_err(|cleanup| {
+                FileNodeError::unexpected(format!(
+                    "failed to register public invite: {error}; failed to remove orphan blob: {cleanup}"
+                ))
+            })?;
+        }
+        return Err(FileNodeError::unexpected(error));
+    }
     Ok(())
 }
 
@@ -657,6 +667,10 @@ mod tests {
     fn compute_raw_cid_bytes(data: &[u8]) -> Vec<u8> {
         let hash = Code::Sha2_256.digest(data);
         Cid::new_v1(0x55, hash).to_bytes()
+    }
+
+    fn compute_raw_cid(data: &[u8]) -> String {
+        cid_bytes_to_string(&compute_raw_cid_bytes(data)).unwrap()
     }
 
     #[test]
@@ -1207,6 +1221,57 @@ mod tests {
         assert!(error.to_string().contains("quota exceeded"));
         assert!(state.blob_store.has(&first_cid));
         assert!(!state.blob_store.has(&second_cid));
+    }
+
+    #[test]
+    fn public_invites_share_the_global_storage_quota() {
+        let temp_dir = TempDir::new().unwrap();
+        let limits = ResourceLimits {
+            max_blob_bytes: 6,
+            max_space_storage_bytes: 6,
+            max_account_storage_bytes: 6,
+            max_total_storage_bytes: 10,
+            ..ResourceLimits::default()
+        };
+        let first = b"123456";
+        let second = b"abcdef";
+
+        {
+            let state = file_node_state_with_limits(&temp_dir, limits.clone());
+            store_public_invite_block(&state, &compute_raw_cid_bytes(first), first).unwrap();
+        }
+        let state = file_node_state_with_limits(&temp_dir, limits);
+        let error =
+            store_public_invite_block(&state, &compute_raw_cid_bytes(second), second).unwrap_err();
+
+        assert!(error.to_string().contains("total storage quota exceeded"));
+        assert_eq!(
+            state
+                .blob_index
+                .get_global_usage()
+                .unwrap()
+                .total_usage_bytes,
+            first.len() as u64
+        );
+        assert!(!state.blob_store.has(&compute_raw_cid(second)));
+    }
+
+    #[test]
+    fn failed_public_invite_registration_removes_a_new_orphan_blob() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = file_node_state(&temp_dir);
+        let payload = b"invite";
+        let cid = compute_raw_cid(payload);
+        state
+            .blob_index
+            .bind_blob("space-1", "file-1", &cid, payload.len() as u64 + 1)
+            .unwrap();
+
+        let error = store_public_invite_block(&state, &compute_raw_cid_bytes(payload), payload)
+            .unwrap_err();
+
+        assert!(error.to_string().contains("blob metadata mismatch"));
+        assert!(!state.blob_store.has(&cid));
     }
 
     #[test]

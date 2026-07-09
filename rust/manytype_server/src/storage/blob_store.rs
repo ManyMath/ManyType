@@ -60,6 +60,15 @@ impl BlobStore {
         Ok(())
     }
 
+    pub fn remove(&self, cid: &str) -> Result<()> {
+        let path = self.blob_path(cid);
+        match std::fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.into()),
+        }
+    }
+
     pub fn blob_path(&self, cid: &str) -> PathBuf {
         let first = &cid[..cid.len().min(2)];
         let second = if cid.len() > 4 {

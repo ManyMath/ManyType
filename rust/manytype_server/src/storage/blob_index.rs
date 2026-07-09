@@ -107,11 +107,42 @@ impl BlobIndex {
         Ok(decode_optional(table.get(GLOBAL_TOTALS_KEY)?)?.unwrap_or_default())
     }
 
-    pub fn mark_public_invite(&self, cid: &str) -> Result<()> {
+    pub fn register_public_invite(&self, cid: &str, size_bytes: u64) -> Result<()> {
         let write_txn = self.db.begin_write()?;
         {
-            let mut table = write_txn.open_table(PUBLIC_INVITES_TABLE)?;
-            table.insert(cid, b"1".as_slice())?;
+            let mut blobs_table = write_txn.open_table(BLOBS_TABLE)?;
+            let mut global_usage_table = write_txn.open_table(GLOBAL_USAGE_TABLE)?;
+            let mut public_invites_table = write_txn.open_table(PUBLIC_INVITES_TABLE)?;
+
+            let existing: Option<BlobMetadata> = decode_optional(blobs_table.get(cid)?)?;
+            match existing {
+                Some(existing) => {
+                    if existing.size_bytes != size_bytes {
+                        bail!(
+                            "blob metadata mismatch for cid {cid}: existing size {} != {size_bytes}",
+                            existing.size_bytes
+                        );
+                    }
+                }
+                None => {
+                    blobs_table
+                        .insert(cid, encode_json(&BlobMetadata { size_bytes })?.as_slice())?;
+                    let mut global_usage: GlobalUsage =
+                        decode_optional(global_usage_table.get(GLOBAL_TOTALS_KEY)?)?
+                            .unwrap_or_default();
+                    global_usage.total_usage_bytes = global_usage
+                        .total_usage_bytes
+                        .checked_add(size_bytes)
+                        .ok_or_else(|| anyhow::anyhow!("global blob usage overflow"))?;
+                    global_usage.total_cids_count = global_usage
+                        .total_cids_count
+                        .checked_add(1)
+                        .ok_or_else(|| anyhow::anyhow!("global blob count overflow"))?;
+                    global_usage_table
+                        .insert(GLOBAL_TOTALS_KEY, encode_json(&global_usage)?.as_slice())?;
+                }
+            }
+            public_invites_table.insert(cid, b"1".as_slice())?;
         }
         write_txn.commit()?;
         Ok(())
@@ -400,5 +431,28 @@ mod tests {
             Some(BlobMetadata { size_bytes: 42 })
         );
         assert_eq!(index.get_blob_metadata("cid-missing").unwrap(), None);
+    }
+
+    #[test]
+    fn public_invites_are_counted_once_in_global_usage() {
+        let temp_dir = TempDir::new().unwrap();
+        let index = BlobIndex::open(temp_dir.path().join("manytype.redb")).unwrap();
+
+        index.register_public_invite("cid-1", 5).unwrap();
+        index.register_public_invite("cid-1", 5).unwrap();
+
+        assert!(index.is_public_invite("cid-1").unwrap());
+        assert_eq!(
+            index.get_blob_metadata("cid-1").unwrap(),
+            Some(BlobMetadata { size_bytes: 5 })
+        );
+        assert_eq!(
+            index.get_global_usage().unwrap(),
+            GlobalUsage {
+                total_usage_bytes: 5,
+                total_cids_count: 1,
+            }
+        );
+        assert!(index.register_public_invite("cid-1", 6).is_err());
     }
 }
