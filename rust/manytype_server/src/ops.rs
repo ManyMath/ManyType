@@ -102,42 +102,104 @@ pub fn restore_backup(paths: &StoragePaths, input: &Path, force: bool) -> Result
     );
     create_private_dir_exact(&staging)?;
 
-    let restore_result = (|| -> Result<()> {
+    let preflight_result = (|| -> Result<()> {
         copy_tree(&input.join("sync"), &staging.join("sync"))?;
         copy_tree(&input.join("files"), &staging.join("files"))?;
+
+        require_snapshot_database(
+            &staging.join("sync").join("global.redb"),
+            "snapshot sync database",
+        )?;
+        require_snapshot_database(
+            &staging.join("files").join("files.redb"),
+            "snapshot file database",
+        )?;
 
         // Opening both stores proves the snapshot matches the supported schemas
         // before any current data is moved.
         drop(SharedSyncState::open(staging.join("sync"))?);
         drop(FileNodeState::open(staging.join("files"))?);
-
-        create_private_dir_exact(&previous)?;
-        move_if_present(&paths.sync_root, &previous.join("sync"))?;
-        move_if_present(&paths.files_root, &previous.join("files"))?;
-
-        if let Err(error) = install_staged_restore(paths, &staging) {
-            let _ = std::fs::remove_dir_all(&paths.sync_root);
-            let _ = std::fs::remove_dir_all(&paths.files_root);
-            let _ = move_if_present(&previous.join("sync"), &paths.sync_root);
-            let _ = move_if_present(&previous.join("files"), &paths.files_root);
-            return Err(error).context("restore failed; previous data was reinstated");
-        }
         Ok(())
     })();
 
-    let _ = std::fs::remove_dir_all(&staging);
-    if restore_result.is_ok() {
-        std::fs::remove_dir_all(&previous)
-            .context("failed to remove previous data after restore")?;
+    if let Err(error) = preflight_result {
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err(error);
     }
-    restore_result
+
+    create_private_dir_exact(&previous)?;
+    swap_staged_restore(paths, &staging, &previous)
 }
 
-fn install_staged_restore(paths: &StoragePaths, staging: &Path) -> Result<()> {
-    std::fs::rename(staging.join("sync"), &paths.sync_root)
-        .context("failed to install restored sync data")?;
-    std::fs::rename(staging.join("files"), &paths.files_root)
-        .context("failed to install restored file data")?;
+fn swap_staged_restore(paths: &StoragePaths, staging: &Path, previous: &Path) -> Result<()> {
+    let mut saved_sync = false;
+    let mut saved_files = false;
+    let mut installed_sync = false;
+    let mut installed_files = false;
+
+    let swap_result = (|| -> Result<()> {
+        saved_sync = move_if_present(&paths.sync_root, &previous.join("sync"))?;
+        saved_files = move_if_present(&paths.files_root, &previous.join("files"))?;
+
+        std::fs::rename(staging.join("sync"), &paths.sync_root)
+            .context("failed to install restored sync data")?;
+        installed_sync = true;
+        std::fs::rename(staging.join("files"), &paths.files_root)
+            .context("failed to install restored file data")?;
+        installed_files = true;
+        Ok(())
+    })();
+
+    if let Err(error) = swap_result {
+        let rollback_result = rollback_restore(
+            paths,
+            previous,
+            saved_sync,
+            saved_files,
+            installed_sync,
+            installed_files,
+        );
+        if let Err(rollback_error) = rollback_result {
+            return Err(anyhow::anyhow!(
+                "restore failed: {error:#}; rollback also failed: {rollback_error:#}; recovery data remains at {} and {}",
+                previous.display(),
+                staging.display()
+            ));
+        }
+        let _ = std::fs::remove_dir_all(staging);
+        let _ = std::fs::remove_dir_all(previous);
+        return Err(error).context("restore failed; previous data was reinstated");
+    }
+
+    std::fs::remove_dir_all(previous).context("failed to remove previous data after restore")?;
+    let _ = std::fs::remove_dir_all(staging);
+    Ok(())
+}
+
+fn rollback_restore(
+    paths: &StoragePaths,
+    previous: &Path,
+    saved_sync: bool,
+    saved_files: bool,
+    installed_sync: bool,
+    installed_files: bool,
+) -> Result<()> {
+    if installed_sync {
+        std::fs::remove_dir_all(&paths.sync_root)
+            .context("failed to remove partially restored sync data")?;
+    }
+    if installed_files {
+        std::fs::remove_dir_all(&paths.files_root)
+            .context("failed to remove partially restored file data")?;
+    }
+    if saved_sync {
+        std::fs::rename(previous.join("sync"), &paths.sync_root)
+            .context("failed to reinstate previous sync data")?;
+    }
+    if saved_files {
+        std::fs::rename(previous.join("files"), &paths.files_root)
+            .context("failed to reinstate previous file data")?;
+    }
     Ok(())
 }
 
@@ -154,7 +216,17 @@ fn ensure_operational_layout(paths: &StoragePaths) -> Result<()> {
     Ok(())
 }
 
-fn move_if_present(source: &Path, destination: &Path) -> Result<()> {
+fn require_snapshot_database(path: &Path, label: &str) -> Result<()> {
+    let metadata = std::fs::symlink_metadata(path)
+        .with_context(|| format!("{label} is missing at {}", path.display()))?;
+    ensure!(
+        metadata.is_file() && !metadata.file_type().is_symlink(),
+        "{label} is not a regular file"
+    );
+    Ok(())
+}
+
+fn move_if_present(source: &Path, destination: &Path) -> Result<bool> {
     if source.exists() {
         std::fs::rename(source, destination).with_context(|| {
             format!(
@@ -163,8 +235,9 @@ fn move_if_present(source: &Path, destination: &Path) -> Result<()> {
                 destination.display()
             )
         })?;
+        return Ok(true);
     }
-    Ok(())
+    Ok(false)
 }
 
 fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
@@ -372,6 +445,71 @@ mod tests {
         let error = restore_backup(&paths, &temp.path().join("missing"), false).unwrap_err();
         assert!(error.to_string().contains("--force"));
         assert!(!paths.sync_root.exists());
+    }
+
+    #[test]
+    fn restore_rejects_empty_snapshot_without_replacing_live_data() {
+        let temp = TempDir::new().unwrap();
+        let paths = paths(&temp);
+        let live = SharedSyncState::open(&paths.sync_root).unwrap();
+        live.claim_space_owner("space-1", "peer-1").unwrap();
+        drop(live);
+        FileNodeState::open(&paths.files_root).unwrap();
+
+        let backup = temp.path().join("empty-backup");
+        std::fs::create_dir_all(backup.join("sync")).unwrap();
+        std::fs::create_dir_all(backup.join("files")).unwrap();
+        let manifest = SnapshotManifest {
+            format_version: SNAPSHOT_FORMAT_VERSION,
+            created_unix_seconds: unix_now(),
+            sync_directory: "sync".to_string(),
+            files_directory: "files".to_string(),
+        };
+        std::fs::write(
+            backup.join(MANIFEST_FILE),
+            serde_json::to_vec_pretty(&manifest).unwrap(),
+        )
+        .unwrap();
+
+        let error = restore_backup(&paths, &backup, true).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("snapshot sync database is missing")
+        );
+        let reopened = SharedSyncState::open(&paths.sync_root).unwrap();
+        reopened.authorize_space("space-1", "peer-1").unwrap();
+    }
+
+    #[test]
+    fn failed_install_reinstates_both_live_stores() {
+        let temp = TempDir::new().unwrap();
+        let paths = paths(&temp);
+        let live = SharedSyncState::open(&paths.sync_root).unwrap();
+        live.claim_space_owner("space-1", "peer-1").unwrap();
+        drop(live);
+        let blobs = BlobStore::open(&paths.files_root).unwrap();
+        blobs.put("live-cid", b"live payload").unwrap();
+
+        let staging = paths.data_dir.join("staging");
+        let previous = paths.data_dir.join("previous");
+        std::fs::create_dir_all(staging.join("sync")).unwrap();
+        std::fs::write(staging.join("sync").join("sentinel"), b"new").unwrap();
+        std::fs::create_dir_all(&previous).unwrap();
+
+        let error = swap_staged_restore(&paths, &staging, &previous).unwrap_err();
+
+        assert!(error.to_string().contains("previous data was reinstated"));
+        let reopened = SharedSyncState::open(&paths.sync_root).unwrap();
+        reopened.authorize_space("space-1", "peer-1").unwrap();
+        let reopened_blobs = BlobStore::open(&paths.files_root).unwrap();
+        assert_eq!(
+            reopened_blobs.get("live-cid").unwrap(),
+            Some(b"live payload".to_vec())
+        );
+        assert!(!staging.exists());
+        assert!(!previous.exists());
     }
 
     #[cfg(unix)]
