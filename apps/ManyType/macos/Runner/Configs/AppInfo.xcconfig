@@ -8,7 +8,8 @@
 PRODUCT_NAME = manytype
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.manytype.manytype
+MANYTYPE_PRODUCT_BUNDLE_IDENTIFIER = com.manytype.manytype
+PRODUCT_BUNDLE_IDENTIFIER = $(MANYTYPE_PRODUCT_BUNDLE_IDENTIFIER)
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.manytype. All rights reserved.
