@@ -103,8 +103,52 @@ typedef FfiSyncStoreDart = Pointer<FfiResult> Function(
   int messagesLen,
 );
 
+typedef FfiAbiVersionNative = Uint32 Function();
+typedef FfiAbiVersionDart = int Function();
+
+/// Resolves locations used by the native QUIC bridge loader.
+///
+/// The macOS bundle layout is intentionally kept here, next to the loader,
+/// so package verification exercises the same path contract as the app.
+class NativeLibraryLocator {
+  static const macOSLibraryName = 'libmanytype_quic_ffi.dylib';
+  static const linuxLibraryName = 'libmanytype_quic_ffi.so';
+
+  static String? libraryNameForOperatingSystem(String operatingSystem) {
+    return switch (operatingSystem) {
+      'linux' => linuxLibraryName,
+      'macos' => macOSLibraryName,
+      _ => null,
+    };
+  }
+
+  static String macOSBundleLibraryPath(String executablePath) {
+    final contentsDirectory = File(executablePath).absolute.parent.parent;
+    return '${contentsDirectory.path}/Frameworks/$macOSLibraryName';
+  }
+
+  static List<String> developmentLibraryPaths(
+    String libraryName, {
+    required String workingDirectory,
+  }) {
+    final paths = <String>[];
+    var directory = Directory(workingDirectory).absolute;
+    while (true) {
+      paths
+        ..add('${directory.path}/rust/target/release/$libraryName')
+        ..add('${directory.path}/rust/target/debug/$libraryName');
+      if (directory.parent.path == directory.path) {
+        break;
+      }
+      directory = directory.parent;
+    }
+    return paths;
+  }
+}
+
 class NativeBridge {
-  late final DynamicLibrary _lib;
+  final DynamicLibrary _lib;
+  late final FfiAbiVersionDart _abiVersion;
   late final FfiConnectDart _connect;
   late final FfiInvokeDart _invoke;
   late final FfiSyncObjectDart _syncObject;
@@ -113,8 +157,19 @@ class NativeBridge {
   late final FfiFreeHandleDart _freeHandle;
   late final FfiFreeResultDart _freeResult;
 
-  NativeBridge() {
-    _lib = _loadLibrary();
+  NativeBridge() : this._(_loadLibrary());
+
+  /// Load as if [executablePath] were the running macOS app executable.
+  ///
+  /// This is intentionally exposed only from the package's internal FFI
+  /// implementation so release tooling can probe an assembled `.app` using
+  /// the exact production bundle-path resolver.
+  NativeBridge.forExecutablePath(String executablePath)
+      : this._(_loadLibrary(resolvedExecutablePath: executablePath));
+
+  NativeBridge._(this._lib) {
+    _abiVersion = _lib.lookupFunction<FfiAbiVersionNative, FfiAbiVersionDart>(
+        'ffi_abi_version');
     _connect =
         _lib.lookupFunction<FfiConnectNative, FfiConnectDart>('ffi_connect');
     _invoke = _lib.lookupFunction<FfiInvokeNative, FfiInvokeDart>('ffi_invoke');
@@ -132,12 +187,9 @@ class NativeBridge {
   }
 
   /// Load the platform-specific shared library.
-  static DynamicLibrary _loadLibrary() {
-    final libName = Platform.isLinux
-        ? 'libmanytype_quic_ffi.so'
-        : Platform.isMacOS
-            ? 'libmanytype_quic_ffi.dylib'
-            : null;
+  static DynamicLibrary _loadLibrary({String? resolvedExecutablePath}) {
+    final libName = NativeLibraryLocator.libraryNameForOperatingSystem(
+        Platform.operatingSystem);
     if (libName == null) {
       throw UnsupportedError(
           'Unsupported platform: ${Platform.operatingSystem}');
@@ -148,31 +200,36 @@ class NativeBridge {
       return DynamicLibrary.open(explicitPath);
     }
 
+    if (Platform.isMacOS) {
+      final packagedPath = NativeLibraryLocator.macOSBundleLibraryPath(
+          resolvedExecutablePath ?? Platform.resolvedExecutable);
+      if (File(packagedPath).existsSync()) {
+        // A present bundle library is authoritative. Do not silently load a
+        // developer build if its signature, architecture, or ABI is invalid.
+        return DynamicLibrary.open(packagedPath);
+      }
+    }
+
     try {
       return DynamicLibrary.open(libName);
     } catch (_) {
       // Fallback for local dev/test: try to load the Rust cdylib from this repo.
       // This avoids requiring callers to set LD_LIBRARY_PATH manually.
-      var dir = Directory.current.absolute;
-      while (true) {
-        final root = dir.path;
-        final candidates = [
-          '$root/rust/target/release/$libName',
-          '$root/rust/target/debug/$libName',
-        ];
-        for (final candidate in candidates) {
-          if (File(candidate).existsSync()) {
-            return DynamicLibrary.open(candidate);
-          }
+      final candidates = NativeLibraryLocator.developmentLibraryPaths(
+        libName,
+        workingDirectory: Directory.current.path,
+      );
+      for (final candidate in candidates) {
+        if (File(candidate).existsSync()) {
+          return DynamicLibrary.open(candidate);
         }
-        if (dir.parent.path == dir.path) {
-          break;
-        }
-        dir = dir.parent;
       }
       rethrow;
     }
   }
+
+  /// Version of the loaded native C ABI.
+  int get abiVersion => _abiVersion();
 
   /// Connect to a QUIC server and perform credential handshake.
   ///

@@ -23,6 +23,18 @@ use manytype_proto::spacesync::{ObjectSyncMessage, ObjectType};
 use prost::Message;
 use runtime::RUNTIME;
 
+/// Version of the exported C ABI used by native ManyType clients.
+pub const FFI_ABI_VERSION: u32 = 1;
+
+/// Return the C ABI version without allocating or initializing a connection.
+///
+/// Packaging probes use this symbol to verify that the loaded library is the
+/// ManyType QUIC bridge expected by the Dart client.
+#[unsafe(no_mangle)]
+pub extern "C" fn ffi_abi_version() -> u32 {
+    FFI_ABI_VERSION
+}
+
 /// Global handle storage: maps handle IDs to ConnHandles.
 static HANDLES: LazyLock<Mutex<HashMap<u64, ConnHandle>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -467,5 +479,15 @@ pub unsafe extern "C" fn ffi_free_result(result: *mut FfiResult) {
     }
     if !res.error.is_null() {
         let _ = unsafe { CString::from_raw(res.error) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exported_abi_version_is_stable() {
+        assert_eq!(ffi_abi_version(), 1);
     }
 }

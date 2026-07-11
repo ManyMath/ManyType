@@ -5,6 +5,14 @@ class NativeBridge {
     throw UnsupportedError('NativeBridge is not available on web');
   }
 
+  NativeBridge.forExecutablePath(String executablePath) {
+    throw UnsupportedError('NativeBridge is not available on web');
+  }
+
+  int get abiVersion {
+    throw UnsupportedError('NativeBridge.abiVersion is not available on web');
+  }
+
   int connect(String addr, Uint8List peerSeed, Uint8List accountSeed) {
     throw UnsupportedError('NativeBridge.connect is not available on web');
   }
