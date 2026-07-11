@@ -9,18 +9,22 @@ use futures::{SinkExt, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 
+use crate::deadline::{self, DeadlineStage};
+
 use super::codec::{
     DEFAULT_MAX_FRAME_BYTES, DrpcCodec, DrpcFrame, KIND_CANCEL, KIND_CLOSE, KIND_CLOSE_SEND,
     KIND_ERROR, KIND_INVOKE, KIND_INVOKE_METADATA, KIND_MESSAGE,
 };
 
 const DEFAULT_MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
+const DEFAULT_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 const MAX_METHOD_BYTES: usize = 1024;
 
 /// A bidirectional DRPC stream over an async transport.
 pub struct DrpcStream<T> {
     framed: Framed<T, DrpcCodec>,
     max_message_bytes: usize,
+    io_timeout: std::time::Duration,
 }
 
 impl<T> DrpcStream<T>
@@ -29,19 +33,40 @@ where
 {
     /// Create a new DRPC stream wrapping the given IO transport.
     pub fn new(io: T) -> Self {
-        Self::with_limits(io, DEFAULT_MAX_FRAME_BYTES, DEFAULT_MAX_MESSAGE_BYTES)
+        Self::with_limits_and_timeout(
+            io,
+            DEFAULT_MAX_FRAME_BYTES,
+            DEFAULT_MAX_MESSAGE_BYTES,
+            DEFAULT_IO_TIMEOUT,
+        )
     }
 
     pub fn with_limits(io: T, max_frame_bytes: usize, max_message_bytes: usize) -> Self {
+        Self::with_limits_and_timeout(io, max_frame_bytes, max_message_bytes, DEFAULT_IO_TIMEOUT)
+    }
+
+    pub fn with_limits_and_timeout(
+        io: T,
+        max_frame_bytes: usize,
+        max_message_bytes: usize,
+        io_timeout: std::time::Duration,
+    ) -> Self {
         Self {
             framed: Framed::new(io, DrpcCodec::with_max_frame_bytes(max_frame_bytes)),
             max_message_bytes,
+            io_timeout,
         }
     }
 
     /// Read the next frame from the stream.
     pub async fn read_frame(&mut self) -> Result<Option<DrpcFrame>> {
-        match self.framed.next().await {
+        let next = deadline::value(
+            DeadlineStage::StreamRead,
+            self.io_timeout,
+            self.framed.next(),
+        )
+        .await?;
+        match next {
             Some(Ok(frame)) => Ok(Some(frame)),
             Some(Err(e)) => Err(e).context("failed to read DRPC frame"),
             None => Ok(None),
@@ -50,10 +75,13 @@ where
 
     /// Write a frame to the stream.
     pub async fn write_frame(&mut self, frame: DrpcFrame) -> Result<()> {
-        self.framed
-            .send(frame)
-            .await
-            .context("failed to write DRPC frame")
+        deadline::result(DeadlineStage::StreamWrite, self.io_timeout, async {
+            self.framed
+                .send(frame)
+                .await
+                .context("failed to write DRPC frame")
+        })
+        .await
     }
 
     /// Read KIND_INVOKE frame, returning (stream_id, method_path).
@@ -197,9 +225,79 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::pin::Pin;
+    use std::task::{Context as TaskContext, Poll};
+
     use super::*;
     use bytes::Bytes;
-    use tokio::io::duplex;
+    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf, duplex};
+
+    struct PendingIo;
+
+    impl AsyncRead for PendingIo {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _context: &mut TaskContext<'_>,
+            _buffer: &mut ReadBuf<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            Poll::Pending
+        }
+    }
+
+    impl AsyncWrite for PendingIo {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _context: &mut TaskContext<'_>,
+            _buffer: &[u8],
+        ) -> Poll<std::io::Result<usize>> {
+            Poll::Pending
+        }
+
+        fn poll_flush(
+            self: Pin<&mut Self>,
+            _context: &mut TaskContext<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            Poll::Pending
+        }
+
+        fn poll_shutdown(
+            self: Pin<&mut Self>,
+            _context: &mut TaskContext<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            Poll::Pending
+        }
+    }
+
+    #[tokio::test]
+    async fn incomplete_frame_hits_typed_read_deadline() {
+        let (_client, server) = duplex(64);
+        let mut reader =
+            DrpcStream::with_limits_and_timeout(server, 1024, 1024, std::time::Duration::ZERO);
+
+        let error = reader.read_frame().await.unwrap_err();
+        let exceeded = deadline::exceeded(&error).unwrap();
+        assert_eq!(exceeded.stage(), DeadlineStage::StreamRead);
+    }
+
+    #[tokio::test]
+    async fn blocked_frame_write_hits_typed_write_deadline() {
+        let mut writer =
+            DrpcStream::with_limits_and_timeout(PendingIo, 1024, 1024, std::time::Duration::ZERO);
+
+        let error = writer
+            .write_frame(DrpcFrame {
+                kind: KIND_MESSAGE,
+                done: true,
+                control: false,
+                stream_id: 1,
+                message_id: 1,
+                data: Bytes::from_static(b"payload"),
+            })
+            .await
+            .unwrap_err();
+        let exceeded = deadline::exceeded(&error).unwrap();
+        assert_eq!(exceeded.stage(), DeadlineStage::StreamWrite);
+    }
 
     #[tokio::test]
     async fn rejects_fragmented_message_over_total_limit() {

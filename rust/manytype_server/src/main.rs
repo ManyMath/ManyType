@@ -9,8 +9,8 @@ use libp2p_identity::Keypair;
 use manytype_core::crypto::ed25519;
 use manytype_proto::handshake::{Encoding, ProtoType};
 use manytype_server::{
-    auth, config, coordinator, drpc, file_node, handshake, health, identity, ops, sync_node,
-    transport,
+    auth, config, coordinator, deadline, drpc, file_node, handshake, health, identity, ops,
+    sync_node, transport,
 };
 use tokio::net::TcpListener;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -216,10 +216,15 @@ async fn serve(config_path: PathBuf) -> Result<()> {
                 let Some(incoming) = incoming else {
                     bail!("QUIC listener stopped before shutdown");
                 };
+                let remote_address = incoming.remote_address();
                 let connection_permit = match Arc::clone(&connection_limit).try_acquire_owned() {
                     Ok(permit) => permit,
                     Err(_) => {
-                        tracing::warn!(event = "connection_rejected", reason = "connection_limit");
+                        tracing::warn!(
+                            event = "connection_rejected",
+                            remote_address = %remote_address,
+                            reason = "connection_limit"
+                        );
                         incoming.refuse();
                         continue;
                     }
@@ -241,7 +246,15 @@ async fn serve(config_path: PathBuf) -> Result<()> {
                     )
                     .await
                     {
-                        if is_benign_connection_error(&error) {
+                        if let Some(exceeded) = deadline::exceeded(&error) {
+                            tracing::warn!(
+                                event = "connection_rejected",
+                                reason = "deadline_exceeded",
+                                stage = exceeded.stage().as_str(),
+                                remote_address = %remote_address,
+                                timeout_ms = exceeded.timeout().as_millis() as u64
+                            );
+                        } else if is_benign_connection_error(&error) {
                             tracing::info!(event = "connection_closed");
                         } else {
                             tracing::warn!(event = "connection_failed", error = %error);
@@ -353,23 +366,63 @@ async fn handle_connection(
     limits: config::ResourceLimits,
     _connection_permit: OwnedSemaphorePermit,
 ) -> Result<()> {
-    let connection = incoming.await?;
-    let remote_tls_peer_id = tls_peer_id(&connection)?;
-    tracing::info!(
-        event = "connection_accepted",
-        remote_address = %connection.remote_address(),
-        peer_id = %remote_tls_peer_id
-    );
+    let (connection, remote_tls_peer_id, remote_account_identity) = deadline::result(
+        deadline::DeadlineStage::ConnectionSetup,
+        limits.connection_setup_timeout(),
+        async {
+            let connection = incoming.await.context("QUIC transport handshake failed")?;
+            let remote_tls_peer_id = tls_peer_id(&connection)?;
+            tracing::info!(
+                event = "connection_accepted",
+                remote_address = %connection.remote_address(),
+                peer_id = %remote_tls_peer_id
+            );
 
-    let (handshake_send, handshake_recv) = connection.accept_bi().await?;
-    let mut handshake_stream = tokio::io::join(handshake_recv, handshake_send);
-    let remote_account_identity = handshake::perform_handshake(
-        &mut handshake_stream,
-        &local_identity_keypair,
-        &local_peer_id_libp2p,
-        &remote_tls_peer_id,
+            let (handshake_send, handshake_recv) = connection
+                .accept_bi()
+                .await
+                .context("credential stream was not opened")?;
+            let mut handshake_stream = tokio::io::join(handshake_recv, handshake_send);
+            let remote_account_identity = handshake::perform_handshake(
+                &mut handshake_stream,
+                &local_identity_keypair,
+                &local_peer_id_libp2p,
+                &remote_tls_peer_id,
+            )
+            .await
+            .context("credential handshake failed")?;
+
+            Ok((connection, remote_tls_peer_id, remote_account_identity))
+        },
     )
     .await?;
+
+    let authenticated_peer = match auth::AuthenticatedPeer::from_connection(
+        &remote_tls_peer_id,
+        &remote_account_identity,
+    ) {
+        Ok(peer) => peer,
+        Err(error) => {
+            tracing::warn!(
+                event = "connection_rejected",
+                peer_id = %remote_tls_peer_id,
+                reason = "credential_identity",
+                error = %error
+            );
+            connection.close(quinn::VarInt::from_u32(1), b"access denied");
+            return Ok(());
+        }
+    };
+    if let Err(error) = access_policy.authorize(&authenticated_peer) {
+        tracing::warn!(
+            event = "connection_rejected",
+            peer_id = %remote_tls_peer_id,
+            reason = "access_policy",
+            error = %error
+        );
+        connection.close(quinn::VarInt::from_u32(1), b"access denied");
+        return Ok(());
+    }
     tracing::info!(event = "credential_authenticated", peer_id = %remote_tls_peer_id);
     let stream_limit = Arc::new(Semaphore::new(limits.max_streams_per_connection));
     let mut stream_tasks = JoinSet::new();
@@ -426,6 +479,16 @@ async fn handle_connection(
             )
             .await
             {
+                if let Some(exceeded) = deadline::exceeded(&error) {
+                    tracing::warn!(
+                        event = "stream_rejected",
+                        peer_id = %remote_tls_peer_id,
+                        reason = "deadline_exceeded",
+                        stage = exceeded.stage().as_str(),
+                        timeout_ms = exceeded.timeout().as_millis() as u64
+                    );
+                    return;
+                }
                 if is_benign_connection_error(&error) {
                     tracing::debug!(event = "stream_closed", peer_id = %remote_tls_peer_id);
                     return;
@@ -455,17 +518,26 @@ async fn handle_stream(
     let mut stream = tokio::io::join(recv, send);
     let trace_file_rpcs = std::env::var_os("MANYTYPE_TRACE_FILE_RPCS").is_some();
 
-    handshake::perform_proto_handshake(&mut stream, ProtoType::Drpc, &[Encoding::None]).await?;
+    deadline::result(
+        deadline::DeadlineStage::StreamSetup,
+        limits.stream_setup_timeout(),
+        async {
+            handshake::perform_proto_handshake(&mut stream, ProtoType::Drpc, &[Encoding::None])
+                .await
+        },
+    )
+    .await?;
     tracing::debug!(event = "protocol_negotiated", peer_id = %remote_tls_peer_id);
     let authenticated_peer =
         auth::AuthenticatedPeer::from_connection(&remote_tls_peer_id, &remote_account_identity)?;
     access_policy.authorize(&authenticated_peer)?;
 
     // Transition to DRPC dispatch
-    let mut drpc_stream = drpc::stream::DrpcStream::with_limits(
+    let mut drpc_stream = drpc::stream::DrpcStream::with_limits_and_timeout(
         stream,
         limits.max_frame_bytes,
         limits.max_message_bytes,
+        limits.stream_io_timeout(),
     );
 
     loop {

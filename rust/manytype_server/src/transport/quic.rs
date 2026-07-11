@@ -2,9 +2,12 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use libp2p_identity::Keypair;
+
+const TRANSPORT_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Build a quinn ServerConfig with a libp2p-compliant certificate bound to the node identity.
 pub fn make_server_config(identity_seed: &[u8; 32]) -> Result<quinn::ServerConfig> {
@@ -28,6 +31,11 @@ pub fn apply_stream_limit(config: &mut quinn::ServerConfig, max_streams: usize) 
     let max_streams = u32::try_from(max_streams).context("stream limit exceeds QUIC capacity")?;
     let mut transport = quinn::TransportConfig::default();
     transport.max_concurrent_bidi_streams(quinn::VarInt::from_u32(max_streams));
+    transport.max_idle_timeout(Some(
+        TRANSPORT_IDLE_TIMEOUT
+            .try_into()
+            .context("transport idle timeout exceeds QUIC capacity")?,
+    ));
     config.transport_config(Arc::new(transport));
     Ok(())
 }

@@ -73,6 +73,17 @@ database at startup. These are logical single-process budgets with conservative
 per-entry overhead; continue monitoring filesystem usage because Redb pages,
 filesystem allocation, and stale pages are not represented by the counters.
 
+Keep all three transport deadlines explicit as shown in the example config.
+`connection_setup_timeout_seconds` bounds QUIC establishment, the first stream,
+and credential authentication while a connection permit is held.
+`stream_setup_timeout_seconds` bounds DRPC protocol negotiation, and
+`stream_io_timeout_seconds` requires each complete DRPC frame read or write to
+finish on time. Timeout rejections are emitted as structured
+`connection_rejected` or `stream_rejected` events with
+`reason=deadline_exceeded`. Do not raise a setup deadline above 60 seconds or
+the frame I/O deadline above 300 seconds; the configuration validator rejects
+larger values.
+
 The first start creates `/var/lib/manytype/identity.key` once with mode `0600`.
 Changing or deleting it changes the server peer identity and invalidates the
 address clients trust.

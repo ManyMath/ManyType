@@ -4,6 +4,7 @@ pub mod auth;
 pub mod config;
 pub mod consensus;
 pub mod coordinator;
+pub mod deadline;
 pub mod drpc;
 pub mod file_node;
 pub mod handshake;

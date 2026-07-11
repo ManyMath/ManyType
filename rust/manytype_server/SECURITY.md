@@ -26,8 +26,10 @@ private-canary boundary.
 1. QUIC authenticates the libp2p peer ID from the client TLS certificate.
 2. The connection credential handshake proves control of an Ed25519 account
    key by signing the client and server peer IDs.
-3. `AuthenticatedPeer` carries both proven identities into DRPC dispatch. Empty
-   or malformed identities are rejected before a scoped handler runs.
+3. `AuthenticatedPeer` carries both proven identities into DRPC dispatch. Empty,
+   malformed, or non-allowlisted identities are rejected at the connection
+   boundary before DRPC streams are accepted, then checked again before
+   a scoped handler runs.
 4. A first `SpaceSign` claim is accepted only when the space header:
    - is signed by its embedded Ed25519 account key;
    - contains the account key proven by the credential handshake; and
@@ -68,7 +70,7 @@ is one reason public deployment remains disabled.
 | Tampering | Signed and content-addressed space headers; immutable first owner; receipt validation; owner checks before scoped mutations | ACL record signatures and semantic permissions need complete validation; delete RPCs are stubs |
 | Repudiation | Structured tracing records method-level activity | No durable, principal-bound security audit log or retention policy |
 | Information disclosure | Owner-only reads; hidden space status and private blob availability | Public invite CIDs are bearer capabilities; metadata/log review and ACL member reads remain incomplete |
-| Denial of service | Bounded handshakes, DRPC frames, reassembled messages, blobs, connections, streams, blob bytes, logical sync state, and file-index metadata | No per-principal request-rate budget, comprehensive transient collection limits, physical database-size quota, or production capacity evidence |
+| Denial of service | Bounded connection/stream setup and complete-frame I/O deadlines; transport idle timeout; bounded handshakes, messages, blobs, connections, streams, logical sync state, and file-index metadata | No per-principal request/CPU budget; an allowed peer can sustain complete-frame or control traffic; transient collection limits, physical database-size quota, and production capacity evidence remain incomplete |
 | Elevation of privilege | Header account binding and immutable peer ownership close first-claim and ownership-replacement paths | No persisted ACL evaluator for readers/writers, invite redemption, revocation, or device authorization |
 
 ## Public-deployment blockers
@@ -81,8 +83,9 @@ Resolve and test all of these before reconsidering an Internet-facing service:
 2. Extend the single-process logical quota reservations to physical database
    allocation, stale-page reclamation, crash recovery, cleanup failures, and
    independently writing processes.
-3. Add per-principal request-rate and CPU budgets plus production capacity and
-   idle-time evidence beyond the current connection and stream concurrency caps.
+3. Add per-principal request-rate and CPU budgets for active traffic, including
+   repeated complete control or zero-length frames, plus production capacity
+   evidence beyond the current deadlines and concurrency caps.
 4. Implement real authorized account, space, and file teardown plus an
    authenticated `AccountRevertDeletion`; `AccountDelete` currently verifies
    its signed, content-addressed, fresh credential-bound confirmation but only

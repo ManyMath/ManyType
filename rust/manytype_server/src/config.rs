@@ -3,12 +3,16 @@
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail, ensure};
 use libp2p_identity::PeerId;
 use serde::Deserialize;
 
 const DEFAULT_HEALTH_LISTEN: &str = "127.0.0.1:33021";
+const MAX_CONNECTION_SETUP_TIMEOUT_SECONDS: u64 = 60;
+const MAX_STREAM_SETUP_TIMEOUT_SECONDS: u64 = 60;
+const MAX_STREAM_IO_TIMEOUT_SECONDS: u64 = 300;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -45,6 +49,9 @@ pub struct ServerConfig {
 pub struct ResourceLimits {
     pub max_connections: usize,
     pub max_streams_per_connection: usize,
+    pub connection_setup_timeout_seconds: u64,
+    pub stream_setup_timeout_seconds: u64,
+    pub stream_io_timeout_seconds: u64,
     pub max_frame_bytes: usize,
     pub max_message_bytes: usize,
     pub max_blob_bytes: u64,
@@ -60,6 +67,9 @@ impl Default for ResourceLimits {
         Self {
             max_connections: 32,
             max_streams_per_connection: 16,
+            connection_setup_timeout_seconds: 15,
+            stream_setup_timeout_seconds: 10,
+            stream_io_timeout_seconds: 30,
             max_frame_bytes: 2 * 1024 * 1024,
             max_message_bytes: 8 * 1024 * 1024,
             max_blob_bytes: 4 * 1024 * 1024,
@@ -192,6 +202,18 @@ impl ServerConfig {
 }
 
 impl ResourceLimits {
+    pub fn connection_setup_timeout(&self) -> Duration {
+        Duration::from_secs(self.connection_setup_timeout_seconds)
+    }
+
+    pub fn stream_setup_timeout(&self) -> Duration {
+        Duration::from_secs(self.stream_setup_timeout_seconds)
+    }
+
+    pub fn stream_io_timeout(&self) -> Duration {
+        Duration::from_secs(self.stream_io_timeout_seconds)
+    }
+
     fn validate(&self) -> Result<()> {
         ensure!(self.max_connections > 0, "max_connections must be positive");
         ensure!(
@@ -202,6 +224,21 @@ impl ResourceLimits {
             u32::try_from(self.max_streams_per_connection).is_ok(),
             "max_streams_per_connection exceeds QUIC capacity"
         );
+        validate_timeout(
+            self.connection_setup_timeout_seconds,
+            "connection_setup_timeout_seconds",
+            MAX_CONNECTION_SETUP_TIMEOUT_SECONDS,
+        )?;
+        validate_timeout(
+            self.stream_setup_timeout_seconds,
+            "stream_setup_timeout_seconds",
+            MAX_STREAM_SETUP_TIMEOUT_SECONDS,
+        )?;
+        validate_timeout(
+            self.stream_io_timeout_seconds,
+            "stream_io_timeout_seconds",
+            MAX_STREAM_IO_TIMEOUT_SECONDS,
+        )?;
         ensure!(self.max_frame_bytes >= 1024, "max_frame_bytes is too small");
         ensure!(
             self.max_message_bytes >= self.max_frame_bytes,
@@ -234,6 +271,12 @@ impl ResourceLimits {
         );
         Ok(())
     }
+}
+
+fn validate_timeout(value: u64, name: &str, maximum: u64) -> Result<()> {
+    ensure!(value > 0, "{name} must be positive");
+    ensure!(value <= maximum, "{name} must not exceed {maximum} seconds");
+    Ok(())
 }
 
 fn default_health_listen() -> String {
@@ -361,6 +404,24 @@ mod tests {
 
         config.limits.max_sync_state_bytes = ResourceLimits::default().max_sync_state_bytes;
         config.limits.max_file_index_bytes = 0;
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn resource_limits_reject_disabled_or_excessive_deadlines() {
+        let mut config: ServerConfig = toml::from_str(&private_config()).unwrap();
+        config.limits.connection_setup_timeout_seconds = 0;
+        assert!(config.validate().is_err());
+
+        config.limits.connection_setup_timeout_seconds =
+            ResourceLimits::default().connection_setup_timeout_seconds;
+        config.limits.stream_setup_timeout_seconds =
+            MAX_STREAM_SETUP_TIMEOUT_SECONDS.saturating_add(1);
+        assert!(config.validate().is_err());
+
+        config.limits.stream_setup_timeout_seconds =
+            ResourceLimits::default().stream_setup_timeout_seconds;
+        config.limits.stream_io_timeout_seconds = MAX_STREAM_IO_TIMEOUT_SECONDS.saturating_add(1);
         assert!(config.validate().is_err());
     }
 }
