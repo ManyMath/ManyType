@@ -1041,9 +1041,11 @@ class _SyncStatusBadge extends StatelessWidget {
       SyncUiStatus.localChangesPending ||
       SyncUiStatus.probing ||
       SyncUiStatus.syncing => MBadgeVariant.secondary,
+      SyncUiStatus.unsupported ||
       SyncUiStatus.unconfigured => MBadgeVariant.outline,
     };
     final label = switch (state.status) {
+      SyncUiStatus.unsupported => 'Sync: native only',
       SyncUiStatus.unconfigured => 'Sync: configure',
       SyncUiStatus.ready => 'Sync: configured',
       SyncUiStatus.probing => 'Probing...',
@@ -1058,6 +1060,7 @@ class _SyncStatusBadge extends StatelessWidget {
 }
 
 String _syncSummary(SyncUiStatus status) => switch (status) {
+  SyncUiStatus.unsupported => 'Unavailable in browser',
   SyncUiStatus.unconfigured => 'Not configured',
   SyncUiStatus.ready => 'Configured',
   SyncUiStatus.probing => 'Checking connection',

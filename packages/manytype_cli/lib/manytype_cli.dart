@@ -3,6 +3,7 @@ library manytype_cli;
 
 export 'src/acl_codec.dart';
 export 'src/acl_sync_service.dart';
+export 'src/account_sync_metadata.dart';
 export 'src/collection_keys.dart';
 export 'src/commands/account.dart';
 export 'src/commands/account_delete.dart';

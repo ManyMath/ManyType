@@ -362,6 +362,7 @@ class ObjectsController {
     if (session == null) {
       return null;
     }
+    await _markLocalChangesPending();
     final result = await createCommand(
       text,
       session.db,
@@ -382,7 +383,6 @@ class ObjectsController {
       assignedType: assignedType,
     );
     _ref.invalidate(objectsProvider(result.spaceId));
-    _markLocalChangesPending();
     return result;
   });
 
@@ -419,6 +419,7 @@ class ObjectsController {
     final String objectId;
     final String spaceId;
     final bool inspectExistingBlocks;
+    await _markLocalChangesPending();
     if (candidate != null) {
       objectId = candidate.id;
       spaceId = session.identity.spaceId;
@@ -458,7 +459,6 @@ class ObjectsController {
     _ref.invalidate(objectBlocksProvider(objectId));
     _ref.invalidate(objectDetailProvider(objectId));
     _ref.invalidate(objectRelationsProvider(objectId));
-    _markLocalChangesPending();
     return objectId;
   });
 
@@ -527,6 +527,7 @@ class ObjectsController {
     if (session == null) {
       return null;
     }
+    await _markLocalChangesPending();
     final result = await editOffline(
       objectId,
       session.db,
@@ -541,7 +542,6 @@ class ObjectsController {
     if (blockId == 'title') {
       _ref.invalidate(objectsProvider(session.identity.spaceId));
     }
-    _markLocalChangesPending();
     return result;
   });
 
@@ -559,9 +559,9 @@ class ObjectsController {
       if (session == null) {
         return null;
       }
+      await _markLocalChangesPending();
       final result = await deleteOffline(objectId, session.db, session.config);
       _ref.invalidate(objectsProvider(spaceId));
-      _markLocalChangesPending();
       return result;
     },
   );
@@ -578,6 +578,7 @@ class ObjectsController {
     if (session == null) {
       return null;
     }
+    await _markLocalChangesPending();
     final result = await insertBlockOffline(
       objectId,
       session.db,
@@ -587,7 +588,6 @@ class ObjectsController {
     );
     _ref.invalidate(objectBlocksProvider(objectId));
     _ref.invalidate(objectDetailProvider(objectId));
-    _markLocalChangesPending();
     return result;
   });
 
@@ -610,6 +610,7 @@ class ObjectsController {
     if (session == null) {
       return null;
     }
+    await _markLocalChangesPending();
     final result = await editRelationOffline(
       objectId,
       session.db,
@@ -624,14 +625,13 @@ class ObjectsController {
     );
     _ref.invalidate(objectRelationsProvider(objectId));
     _ref.invalidate(objectDetailProvider(objectId));
-    _markLocalChangesPending();
     return result;
   });
 
-  void _markLocalChangesPending() {
-    final accountId = _ref.read(currentAccountIdProvider).valueOrNull;
+  Future<void> _markLocalChangesPending() async {
+    final accountId = await _ref.read(currentAccountIdProvider.future);
     if (accountId == null) return;
-    _ref
+    await _ref
         .read(syncControllerProvider(accountId).notifier)
         .markLocalChangesPending();
   }

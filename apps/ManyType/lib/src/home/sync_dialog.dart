@@ -39,6 +39,15 @@ class _SyncDialog extends HookConsumerWidget {
     final commandCopied = useState(false);
     final syncController = ref.read(provider.notifier);
     final theme = MTheme.of(context);
+    final syncControlsEnabled =
+        state.supported && !state.busy && !state.restoring;
+
+    useEffect(() {
+      if (yamlController.value != state.networkConfigContent) {
+        yamlController.value = state.networkConfigContent;
+      }
+      return null;
+    }, <Object?>[state.networkConfigContent]);
 
     String? serverCommand;
     String? serverCommandError;
@@ -75,7 +84,9 @@ class _SyncDialog extends HookConsumerWidget {
 
     return MDialogContent(
       title: 'Sync',
-      description: state.configSummary == null
+      description: !state.supported
+          ? 'Browser workspaces are offline-only.'
+          : state.configSummary == null
           ? 'Connect this workspace to an any-sync coordinator.'
           : 'A network config is loaded. Probe it to verify availability or '
                 'start a real sync.',
@@ -83,28 +94,76 @@ class _SyncDialog extends HookConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          if (state.configSummary != null) ...<Widget>[
+          if (!state.supported) ...<Widget>[
+            const MAlert(
+              variant: MAlertVariant.neutral,
+              message:
+                  'Sync is disabled in the browser editor. Your recovery '
+                  'identity and documents stay in this browser; use the '
+                  'native ManyType app to configure and run device sync.',
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (state.supported) ...<Widget>[
             MInsetPanel(
               padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
+                  if (state.configSummary != null) ...<Widget>[
+                    MPropertyRow(
+                      label: 'Network',
+                      layout: MPropertyRowLayout.inline,
+                      value: Text(state.configSummary!.networkId),
+                    ),
+                    const SizedBox(height: 8),
+                    MPropertyRow(
+                      label: 'Coordinator',
+                      layout: MPropertyRowLayout.inline,
+                      valueStyle: theme.typography.code,
+                      value: Text(
+                        state.configSummary!.coordinatorAddress,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: MDivider(),
+                    ),
+                  ],
                   MPropertyRow(
-                    label: 'Network',
+                    label: 'Configured',
                     layout: MPropertyRowLayout.inline,
-                    value: Text(state.configSummary!.networkId),
+                    value: Text(_formatTimestamp(state.configuredAt)),
                   ),
                   const SizedBox(height: 8),
                   MPropertyRow(
-                    label: 'Coordinator',
+                    label: 'Last probe',
                     layout: MPropertyRowLayout.inline,
-                    valueStyle: theme.typography.code,
+                    value: Text(_formatTimestamp(state.lastProbeAt)),
+                  ),
+                  const SizedBox(height: 8),
+                  MPropertyRow(
+                    label: 'Last successful sync',
+                    layout: MPropertyRowLayout.inline,
+                    value: Text(_formatTimestamp(state.lastSuccessfulSyncAt)),
+                  ),
+                  const SizedBox(height: 8),
+                  MPropertyRow(
+                    label: 'Local changes',
+                    layout: MPropertyRowLayout.inline,
                     value: Text(
-                      state.configSummary!.coordinatorAddress,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.right,
+                      state.pendingLocalChanges ? 'Pending' : 'None pending',
                     ),
                   ),
+                  if (state.lastError != null) ...<Widget>[
+                    const SizedBox(height: 8),
+                    MPropertyRow(
+                      label: 'Last error',
+                      value: Text(state.lastError!, textAlign: TextAlign.right),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -116,7 +175,7 @@ class _SyncDialog extends HookConsumerWidget {
             label: 'Coordinator address',
             child: MTextField(
               controller: addressController,
-              enabled: !state.busy,
+              enabled: syncControlsEnabled,
               placeholder: '127.0.0.1:33020',
               semanticLabel: 'Coordinator address',
             ),
@@ -128,7 +187,7 @@ class _SyncDialog extends HookConsumerWidget {
                 label: 'Peer ID',
                 child: MTextField(
                   controller: peerController,
-                  enabled: !state.busy,
+                  enabled: syncControlsEnabled,
                   placeholder: 'Coordinator peer ID',
                   semanticLabel: 'Peer ID',
                 ),
@@ -137,7 +196,7 @@ class _SyncDialog extends HookConsumerWidget {
                 label: 'Network ID',
                 child: MTextField(
                   controller: networkController,
-                  enabled: !state.busy,
+                  enabled: syncControlsEnabled,
                   placeholder: 'local-net',
                   semanticLabel: 'Network ID',
                 ),
@@ -171,7 +230,7 @@ class _SyncDialog extends HookConsumerWidget {
             child: MButton(
               variant: MButtonVariant.outline,
               size: MButtonSize.sm,
-              onPressed: state.busy ? null : connectSelfHosted,
+              onPressed: syncControlsEnabled ? connectSelfHosted : null,
               child: const Text('Use configuration'),
             ),
           ),
@@ -190,13 +249,13 @@ class _SyncDialog extends HookConsumerWidget {
                       MField(
                         label: 'Network config YAML',
                         description: 'Paste an existing any-sync client.yml.',
-                        enabled: !state.busy,
+                        enabled: syncControlsEnabled,
                         errorText: state.validationError,
                         child: MTextField(
                           controller: yamlController,
                           minLines: 7,
                           maxLines: 10,
-                          enabled: !state.busy,
+                          enabled: syncControlsEnabled,
                           placeholder:
                               'id: local\nnetworkId: local-net\nnodes:',
                           semanticLabel: 'Network config YAML',
@@ -259,7 +318,7 @@ class _SyncDialog extends HookConsumerWidget {
               ),
             ],
           ),
-          if (state.message != null) ...<Widget>[
+          if (state.message != null && state.supported) ...<Widget>[
             const SizedBox(height: 12),
             MAlert(
               variant: state.status == SyncUiStatus.failed
@@ -300,4 +359,13 @@ class _SyncDialog extends HookConsumerWidget {
       ],
     );
   }
+}
+
+String _formatTimestamp(DateTime? value) {
+  if (value == null) return 'Never';
+  final local = value.toLocal();
+  String twoDigits(int part) => part.toString().padLeft(2, '0');
+  return '${local.year}-${twoDigits(local.month)}-${twoDigits(local.day)} '
+      '${twoDigits(local.hour)}:${twoDigits(local.minute)} '
+      '${local.timeZoneName}';
 }

@@ -204,6 +204,59 @@ void main() {
         _mnemonicA,
       );
     });
+
+    test('sync metadata is account-isolated and removed on forget', () async {
+      final profileA = await AccountRegistry.createAccount(
+        mnemonic: _mnemonicA,
+        displayName: 'work',
+      );
+      final profileB = await AccountRegistry.createAccount(
+        mnemonic: _mnemonicB,
+        displayName: 'personal',
+      );
+      final configuredAt = DateTime.utc(2026, 7, 13, 19);
+      await AccountRegistry.saveSyncMetadata(
+        profileA.id,
+        AccountSyncMetadata(
+          networkConfigContent: 'network-a',
+          configuredAt: configuredAt,
+          pendingLocalChanges: true,
+        ),
+      );
+      await AccountRegistry.saveSyncMetadata(
+        profileB.id,
+        AccountSyncMetadata(
+          networkConfigContent: 'network-b',
+          configuredAt: configuredAt,
+        ),
+      );
+
+      expect(
+        (await AccountRegistry.loadSyncMetadata(profileA.id))
+            .networkConfigContent,
+        'network-a',
+      );
+      expect(
+        (await AccountRegistry.loadSyncMetadata(profileB.id))
+            .networkConfigContent,
+        'network-b',
+      );
+
+      await AccountRegistry.removeAccount(profileA.id);
+      final restored = await AccountRegistry.createAccount(
+        mnemonic: _mnemonicA,
+        displayName: 'restored',
+      );
+      expect(
+        (await AccountRegistry.loadSyncMetadata(restored.id)).isConfigured,
+        isFalse,
+      );
+      expect(
+        (await AccountRegistry.loadSyncMetadata(profileB.id))
+            .networkConfigContent,
+        'network-b',
+      );
+    });
   });
 
   group(

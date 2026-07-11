@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:web/web.dart' as web;
 
 import 'account_profile.dart';
+import 'account_sync_metadata.dart';
 import 'config.dart';
 import 'recovery_phrase_store.dart';
 import 'store/database_web.dart' show deleteWebDatabaseForApp;
@@ -38,6 +39,7 @@ class AccountRegistry {
   static String get _currentKey => '$keyPrefix:current';
   static String _mnemonicKey(String id) => '$keyPrefix:account:$id:mnemonic';
   static String _serverKey(String id) => '$keyPrefix:account:$id:server';
+  static String _syncKey(String id) => '$keyPrefix:account:$id:sync';
 
   static web.Storage get _storage => web.window.localStorage;
 
@@ -87,6 +89,7 @@ class AccountRegistry {
     _writeAccounts(accounts.where((a) => a.id != id).toList());
     _storage.removeItem(_mnemonicKey(id));
     _storage.removeItem(_serverKey(id));
+    _storage.removeItem(_syncKey(id));
 
     final currentId = await getCurrentAccountId();
     if (currentId == id) {
@@ -149,6 +152,31 @@ class AccountRegistry {
       mnemonic: mnemonic,
       serverAddress: serverOverride ?? storedServer ?? '127.0.0.1:33020',
     );
+  }
+
+  static Future<AccountSyncMetadata> loadSyncMetadata(String id) async {
+    final accounts = await listAccounts();
+    if (accounts.every((account) => account.id != id)) {
+      throw StateError('no account registered with id $id');
+    }
+    final raw = _storage.getItem(_syncKey(id));
+    if (raw == null || raw.trim().isEmpty) {
+      return const AccountSyncMetadata();
+    }
+    return AccountSyncMetadata.fromJson(
+      jsonDecode(raw) as Map<String, Object?>,
+    );
+  }
+
+  static Future<void> saveSyncMetadata(
+    String id,
+    AccountSyncMetadata metadata,
+  ) async {
+    final accounts = await listAccounts();
+    if (accounts.every((account) => account.id != id)) {
+      throw StateError('no account registered with id $id');
+    }
+    _storage.setItem(_syncKey(id), jsonEncode(metadata.toJson()));
   }
 
   static Future<String?> getCurrentAccountId() async {

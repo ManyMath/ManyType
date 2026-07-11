@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'account_profile.dart';
+import 'account_sync_metadata.dart';
 import 'config.dart';
 import 'recovery_phrase_store.dart';
 
@@ -49,6 +50,8 @@ class AccountRegistry {
   static String accountDbPath(String id) => p.join(accountDir(id), 'store.db');
   static String accountDownloadsDir(String id) =>
       p.join(accountDir(id), 'downloads');
+  static String accountSyncMetadataPath(String id) =>
+      p.join(accountDir(id), 'sync.json');
 
   /// List all known account summaries, in the order they were registered.
   static Future<List<AccountSummary>> listAccounts() async {
@@ -269,6 +272,28 @@ class AccountRegistry {
       if (account.id == id) return account;
     }
     throw StateError('no account registered with id $id');
+  }
+
+  static Future<AccountSyncMetadata> loadSyncMetadata(String id) async {
+    await _requireSummary(id);
+    final file = File(accountSyncMetadataPath(id));
+    if (!await file.exists()) return const AccountSyncMetadata();
+    final content = await file.readAsString();
+    if (content.trim().isEmpty) return const AccountSyncMetadata();
+    final decoded = jsonDecode(content) as Map<String, Object?>;
+    return AccountSyncMetadata.fromJson(decoded);
+  }
+
+  static Future<void> saveSyncMetadata(
+    String id,
+    AccountSyncMetadata metadata,
+  ) async {
+    await _requireSummary(id);
+    await Directory(accountDir(id)).create(recursive: true);
+    await _writeFileAtomically(
+      accountSyncMetadataPath(id),
+      jsonEncode(metadata.toJson()),
+    );
   }
 
   static Future<String?> getCurrentAccountId() async {

@@ -46,8 +46,13 @@ marks that account as configured, probing the coordinator reports `Network OK`,
 and only a completed sync reports `Synced`. A later local edit returns the
 account to `Changes pending` until the next successful sync.
 
-Sync configuration and status are currently held in memory and scoped to the
-active account. Reloading therefore returns to **Not configured** rather than
-claiming stale readiness. When server deployment and configuration persistence
-are added, they must remain per-account and store real probe/sync timestamps;
-the app must not infer sync state from legacy account metadata.
+Network configuration, configuration/probe/success timestamps, pending local
+changes, and the last error persist with that account. A probe never advances
+the successful-sync timestamp, a failed sync preserves the prior success, and
+an edit that races a sync remains pending. Forgetting an account removes this
+metadata with its local workspace.
+
+Browser workspaces remain offline-only. They retain a browser-local recovery
+identity and editable documents, but sync controls are disabled before the
+native transport bridge can be instantiated. Configure and run device sync in
+a native ManyType app.

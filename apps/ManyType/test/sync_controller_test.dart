@@ -10,6 +10,7 @@ import 'package:manytype_cli/src/store/database_native.dart'
     show openDatabaseForTesting;
 
 import 'package:manytype/src/state/session_provider.dart';
+import 'package:manytype/src/state/accounts_providers.dart';
 import 'package:manytype/src/state/objects_providers.dart';
 import 'package:manytype/src/state/sync_controller.dart';
 
@@ -32,8 +33,12 @@ nodes:
 
 void main() {
   late ManytypeSession session;
+  late _MemorySyncMetadataStore metadataStore;
+  late DateTime now;
 
   setUp(() async {
+    metadataStore = _MemorySyncMetadataStore();
+    now = DateTime.utc(2026, 7, 13, 18, 30);
     session = ManytypeSession(
       db: ManytypeDatabase.forTesting(await openDatabaseForTesting()),
       config: CliConfig(mnemonic: _testMnemonic, serverAddress: '127.0.0.1:0'),
@@ -50,6 +55,9 @@ void main() {
     return ProviderContainer(
       overrides: <Override>[
         sessionProvider.overrideWith((ref) async => session),
+        currentAccountIdProvider.overrideWith((ref) async => _accountId),
+        syncMetadataStoreProvider.overrideWithValue(metadataStore),
+        syncClockProvider.overrideWithValue(() => now),
         if (probeRunner != null)
           syncProbeRunnerProvider.overrideWithValue(probeRunner),
         if (syncRunner != null)
@@ -82,7 +90,7 @@ void main() {
 
   test(
     'valid network config becomes configured without claiming reachability',
-    () {
+    () async {
       final container = buildContainer();
       addTearDown(container.dispose);
 
@@ -98,6 +106,13 @@ void main() {
       expect(state.configSummary?.coordinatorAddress, '127.0.0.1:1014');
       expect(state.message, contains('Probe the coordinator'));
       expect(state.message, isNot(contains('is ready')));
+      expect(state.configuredAt, now);
+      expect(state.lastProbeAt, isNull);
+      expect(state.lastSuccessfulSyncAt, isNull);
+      await container
+          .read(syncControllerProvider(_accountId).notifier)
+          .flushPersistence();
+      expect(metadataStore.values[_accountId]?.configuredAt, now);
     },
   );
 
@@ -194,6 +209,156 @@ void main() {
   });
 
   test(
+    'valid config and sync facts restore per account after restart',
+    () async {
+      final firstContainer = buildContainer(syncRunner: (_, __) async {});
+      final firstProvider = syncControllerProvider('first-account');
+      final first = firstContainer.read(firstProvider.notifier);
+      first.updateNetworkConfig(_networkConfig);
+      await first.sync(spaceId: 'space-id');
+      await first.flushPersistence();
+      firstContainer.dispose();
+
+      final restoredContainer = buildContainer();
+      addTearDown(restoredContainer.dispose);
+      final restoredProvider = syncControllerProvider('first-account');
+      final restoredController = restoredContainer.read(
+        restoredProvider.notifier,
+      );
+      await restoredController.initialized;
+      final restored = restoredContainer.read(restoredProvider);
+
+      expect(restored.status, SyncUiStatus.syncSucceeded);
+      expect(restored.networkConfigContent, _networkConfig);
+      expect(restored.configuredAt, now);
+      expect(restored.lastSuccessfulSyncAt, now);
+      expect(restored.lastProbeAt, isNull);
+
+      final unrelatedProvider = syncControllerProvider('second-account');
+      await restoredContainer.read(unrelatedProvider.notifier).initialized;
+      final unrelated = restoredContainer.read(unrelatedProvider);
+      expect(unrelated.status, SyncUiStatus.unconfigured);
+      expect(unrelated.networkConfigContent, isEmpty);
+      expect(unrelated.lastSuccessfulSyncAt, isNull);
+    },
+  );
+
+  test(
+    'a local edit remains pending while sync is unconfigured after restart',
+    () async {
+      final firstContainer = buildContainer();
+      final provider = syncControllerProvider(_accountId);
+      final first = firstContainer.read(provider.notifier);
+      await first.markLocalChangesPending();
+      await first.flushPersistence();
+
+      expect(firstContainer.read(provider).status, SyncUiStatus.unconfigured);
+      expect(firstContainer.read(provider).pendingLocalChanges, isTrue);
+      firstContainer.dispose();
+
+      final restoredContainer = buildContainer();
+      addTearDown(restoredContainer.dispose);
+      final restoredProvider = syncControllerProvider(_accountId);
+      await restoredContainer.read(restoredProvider.notifier).initialized;
+      final restored = restoredContainer.read(restoredProvider);
+      expect(restored.status, SyncUiStatus.unconfigured);
+      expect(restored.networkConfigContent, isEmpty);
+      expect(restored.pendingLocalChanges, isTrue);
+      expect(restored.lastSuccessfulSyncAt, isNull);
+    },
+  );
+
+  test(
+    'edit completion waits for a durable pending marker before restart',
+    () async {
+      final firstContainer = buildContainer();
+      final provider = syncControllerProvider(_accountId);
+      final controller = firstContainer.read(provider.notifier);
+      await controller.initialized;
+      final created = await createCommand(
+        'Before edit',
+        session.db,
+        session.config,
+      );
+      final saveGate = Completer<void>();
+      metadataStore.blockNextSave = saveGate;
+
+      var editCompleted = false;
+      final editCompletion = firstContainer
+          .read(objectsControllerProvider)
+          .editBlock(created.objectId, blockId: 'title', setText: 'After edit')
+          .then((_) {
+            editCompleted = true;
+          });
+      await metadataStore.nextSaveStarted.future;
+
+      expect(editCompleted, isFalse);
+      expect(
+        metadataStore.values[_accountId]?.pendingLocalChanges,
+        isNot(isTrue),
+      );
+      expect(firstContainer.read(provider).pendingLocalChanges, isTrue);
+      final blockedBlocks = await replayObjectBlocks(
+        session.db,
+        session.config,
+        created.objectId,
+      );
+      expect(
+        blockedBlocks!.blocks.singleWhere((block) => block.id == 'title').text,
+        'Before edit',
+      );
+
+      saveGate.complete();
+      await editCompletion;
+      expect(editCompleted, isTrue);
+      expect(metadataStore.values[_accountId]?.pendingLocalChanges, isTrue);
+      final editedBlocks = await replayObjectBlocks(
+        session.db,
+        session.config,
+        created.objectId,
+      );
+      expect(
+        editedBlocks!.blocks.singleWhere((block) => block.id == 'title').text,
+        'After edit',
+      );
+      firstContainer.dispose();
+
+      final restoredContainer = buildContainer();
+      addTearDown(restoredContainer.dispose);
+      final restoredProvider = syncControllerProvider(_accountId);
+      await restoredContainer.read(restoredProvider.notifier).initialized;
+      expect(
+        restoredContainer.read(restoredProvider).pendingLocalChanges,
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'invalid edits do not replace the last durable valid configuration',
+    () async {
+      final firstContainer = buildContainer();
+      final provider = syncControllerProvider(_accountId);
+      final first = firstContainer.read(provider.notifier);
+      first.updateNetworkConfig(_networkConfig);
+      await first.flushPersistence();
+      first.updateNetworkConfig('id: missing-nodes');
+      await first.flushPersistence();
+      expect(firstContainer.read(provider).validationError, isNotNull);
+      firstContainer.dispose();
+
+      final restoredContainer = buildContainer();
+      addTearDown(restoredContainer.dispose);
+      final restoredProvider = syncControllerProvider(_accountId);
+      await restoredContainer.read(restoredProvider.notifier).initialized;
+      final restored = restoredContainer.read(restoredProvider);
+      expect(restored.status, SyncUiStatus.ready);
+      expect(restored.networkConfigContent, _networkConfig);
+      expect(restored.validationError, isNull);
+    },
+  );
+
+  test(
     'probe uses the configured runner and reports coordinator response',
     () async {
       String? receivedConfig;
@@ -221,6 +386,10 @@ void main() {
       expect(state.status, SyncUiStatus.probeSucceeded);
       expect(state.configSummary?.networkId, 'live-net');
       expect(state.message, contains('3 nodes'));
+      expect(state.lastProbeAt, now);
+      expect(state.lastSuccessfulSyncAt, isNull);
+      expect(metadataStore.values[_accountId]?.lastProbeAt, now);
+      expect(metadataStore.values[_accountId]?.lastSuccessfulSyncAt, isNull);
     },
   );
 
@@ -243,7 +412,160 @@ void main() {
     expect(receivedConfig, _networkConfig.trim());
     expect(state.status, SyncUiStatus.syncSucceeded);
     expect(state.message, contains('Sync completed'));
+    expect(state.lastSuccessfulSyncAt, now);
+    expect(state.pendingLocalChanges, isFalse);
   });
+
+  test(
+    'failed sync preserves config, pending state, and prior success time',
+    () async {
+      var fail = false;
+      final container = buildContainer(
+        syncRunner: (_, __) async {
+          if (fail) throw StateError('coordinator unavailable');
+        },
+      );
+      addTearDown(container.dispose);
+      final provider = syncControllerProvider(_accountId);
+      final controller = container.read(provider.notifier);
+      controller.updateNetworkConfig(_networkConfig);
+      await controller.markLocalChangesPending();
+      await controller.sync(spaceId: 'space-id');
+      final successfulAt = container.read(provider).lastSuccessfulSyncAt;
+      expect(successfulAt, now);
+
+      await controller.markLocalChangesPending();
+      fail = true;
+      now = now.add(const Duration(minutes: 15));
+      await controller.sync(spaceId: 'space-id');
+
+      final failed = container.read(provider);
+      expect(failed.status, SyncUiStatus.failed);
+      expect(failed.networkConfigContent, _networkConfig);
+      expect(failed.lastSuccessfulSyncAt, successfulAt);
+      expect(failed.pendingLocalChanges, isTrue);
+      expect(failed.lastError, contains('coordinator unavailable'));
+      final durable = metadataStore.values[_accountId]!;
+      expect(durable.networkConfigContent, _networkConfig);
+      expect(durable.lastSuccessfulSyncAt, successfulAt);
+      expect(durable.pendingLocalChanges, isTrue);
+      expect(durable.lastError, contains('coordinator unavailable'));
+    },
+  );
+
+  test(
+    'failed probe records an attempt and error without claiming sync',
+    () async {
+      final container = buildContainer(
+        probeRunner: (_, __) async => throw StateError('no route'),
+      );
+      addTearDown(container.dispose);
+      final provider = syncControllerProvider(_accountId);
+      final controller = container.read(provider.notifier);
+      controller.updateNetworkConfig(_networkConfig);
+
+      await controller.probe();
+
+      final failed = container.read(provider);
+      expect(failed.status, SyncUiStatus.failed);
+      expect(failed.lastProbeAt, now);
+      expect(failed.lastSuccessfulSyncAt, isNull);
+      expect(failed.lastError, contains('no route'));
+      expect(metadataStore.values[_accountId]?.lastSuccessfulSyncAt, isNull);
+    },
+  );
+
+  test(
+    'successful probe is not mislabeled when result persistence fails',
+    () async {
+      final container = buildContainer(
+        probeRunner: (_, __) async => const NetworkProbeResult(
+          coordinatorAddress: '127.0.0.1:1014',
+          networkId: 'live-net',
+          configurationId: 'cfg-1',
+          nodeCount: 3,
+        ),
+      );
+      addTearDown(container.dispose);
+      final provider = syncControllerProvider(_accountId);
+      final controller = container.read(provider.notifier);
+      controller.updateNetworkConfig(_networkConfig);
+      await controller.flushPersistence();
+      metadataStore.failNextSave = StateError('disk full');
+
+      await controller.probe();
+
+      final state = container.read(provider);
+      expect(state.status, SyncUiStatus.failed);
+      expect(state.message, contains('network responded'));
+      expect(state.message, isNot(contains('Network probe failed')));
+      expect(state.configSummary?.networkId, 'live-net');
+      expect(state.lastProbeAt, now);
+      expect(state.lastSuccessfulSyncAt, isNull);
+      expect(state.lastError, contains('disk full'));
+    },
+  );
+
+  test(
+    'successful sync is not mislabeled when result persistence fails',
+    () async {
+      final container = buildContainer(syncRunner: (_, __) async {});
+      addTearDown(container.dispose);
+      final provider = syncControllerProvider(_accountId);
+      final controller = container.read(provider.notifier);
+      controller.updateNetworkConfig(_networkConfig);
+      await controller.flushPersistence();
+      await controller.markLocalChangesPending();
+      metadataStore.failNextSave = StateError('disk full');
+
+      await controller.sync(spaceId: 'space-id');
+
+      final state = container.read(provider);
+      expect(state.status, SyncUiStatus.failed);
+      expect(state.message, contains('Sync completed'));
+      expect(state.message, isNot(contains('Sync failed')));
+      expect(state.lastSuccessfulSyncAt, now);
+      expect(state.pendingLocalChanges, isFalse);
+      expect(state.lastError, contains('disk full'));
+    },
+  );
+
+  test(
+    'unsupported platform never invokes probe, sync, or session runners',
+    () async {
+      var probeCalls = 0;
+      var syncCalls = 0;
+      final container = ProviderContainer(
+        overrides: <Override>[
+          nativeSyncSupportedProvider.overrideWithValue(false),
+          syncMetadataStoreProvider.overrideWithValue(metadataStore),
+          syncProbeRunnerProvider.overrideWithValue((_, __) async {
+            probeCalls++;
+            throw StateError('must not run');
+          }),
+          syncRunnerProvider.overrideWithValue((_, __) async {
+            syncCalls++;
+            throw StateError('must not run');
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+      final provider = syncControllerProvider(_accountId);
+      final controller = container.read(provider.notifier);
+
+      controller.updateNetworkConfig(_networkConfig);
+      await controller.probe();
+      await controller.sync(spaceId: 'space-id');
+
+      final state = container.read(provider);
+      expect(state.status, SyncUiStatus.unsupported);
+      expect(state.canRun, isFalse);
+      expect(state.message, contains('disabled in the browser'));
+      expect(probeCalls, 0);
+      expect(syncCalls, 0);
+      expect(metadataStore.values, isEmpty);
+    },
+  );
 
   test('a local write after sync is reported as pending', () async {
     final container = buildContainer(syncRunner: (_, __) async {});
@@ -255,10 +577,11 @@ void main() {
     await controller.sync(spaceId: 'space-id');
     expect(container.read(provider).status, SyncUiStatus.syncSucceeded);
 
-    controller.markLocalChangesPending();
+    await controller.markLocalChangesPending();
 
     expect(container.read(provider).status, SyncUiStatus.localChangesPending);
     expect(container.read(provider).message, contains('next sync'));
+    expect(container.read(provider).pendingLocalChanges, isTrue);
   });
 
   test('a write made during sync prevents a stale success label', () async {
@@ -277,12 +600,17 @@ void main() {
 
     final sync = controller.sync(spaceId: 'space-id');
     await syncStarted.future;
-    controller.markLocalChangesPending();
+    await controller.markLocalChangesPending();
     finishSync.complete();
     await sync;
 
     expect(container.read(provider).status, SyncUiStatus.localChangesPending);
     expect(container.read(provider).message, contains('newer local changes'));
+    expect(container.read(provider).lastSuccessfulSyncAt, now);
+    expect(container.read(provider).pendingLocalChanges, isTrue);
+    await controller.flushPersistence();
+    expect(metadataStore.values[_accountId]?.lastSuccessfulSyncAt, now);
+    expect(metadataStore.values[_accountId]?.pendingLocalChanges, isTrue);
   });
 
   test(
@@ -359,4 +687,33 @@ void main() {
       expect(afterDetail!.lines.join('\n'), contains('After sync'));
     },
   );
+}
+
+class _MemorySyncMetadataStore implements SyncMetadataStore {
+  final Map<String, AccountSyncMetadata> values =
+      <String, AccountSyncMetadata>{};
+  Completer<void>? blockNextSave;
+  Completer<void> nextSaveStarted = Completer<void>();
+  Object? failNextSave;
+
+  @override
+  Future<AccountSyncMetadata> load(String accountId) async {
+    return values[accountId] ?? const AccountSyncMetadata();
+  }
+
+  @override
+  Future<void> save(String accountId, AccountSyncMetadata metadata) async {
+    final failure = failNextSave;
+    if (failure != null) {
+      failNextSave = null;
+      throw failure;
+    }
+    final gate = blockNextSave;
+    if (gate != null) {
+      blockNextSave = null;
+      if (!nextSaveStarted.isCompleted) nextSaveStarted.complete();
+      await gate.future;
+    }
+    values[accountId] = metadata;
+  }
 }

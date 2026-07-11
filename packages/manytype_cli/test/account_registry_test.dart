@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:manytype_cli/src/account_profile.dart' show AccountProfile;
 import 'package:manytype_cli/src/account_registry.dart';
+import 'package:manytype_cli/src/account_sync_metadata.dart';
 import 'package:manytype_cli/src/recovery_phrase_store.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -388,6 +389,65 @@ void main() {
         );
         expect(secureStore.values[profile.id], mnemonicB);
       });
+    });
+
+    test('sync metadata persists per account and forget removes it', () async {
+      final profileA = await AccountRegistry.createAccount(
+        mnemonic: mnemonicA,
+        displayName: 'work',
+      );
+      final profileB = await AccountRegistry.createAccount(
+        mnemonic: mnemonicB,
+        displayName: 'personal',
+      );
+      final configuredAt = DateTime.utc(2026, 7, 13, 19);
+      final syncedAt = configuredAt.add(const Duration(minutes: 5));
+      await AccountRegistry.saveSyncMetadata(
+        profileA.id,
+        AccountSyncMetadata(
+          networkConfigContent: 'network-a',
+          configuredAt: configuredAt,
+          lastSuccessfulSyncAt: syncedAt,
+          pendingLocalChanges: true,
+        ),
+      );
+      await AccountRegistry.saveSyncMetadata(
+        profileB.id,
+        AccountSyncMetadata(
+          networkConfigContent: 'network-b',
+          configuredAt: configuredAt,
+        ),
+      );
+
+      final metadataA = await AccountRegistry.loadSyncMetadata(profileA.id);
+      final metadataB = await AccountRegistry.loadSyncMetadata(profileB.id);
+      expect(metadataA.networkConfigContent, 'network-a');
+      expect(metadataA.lastSuccessfulSyncAt, syncedAt);
+      expect(metadataA.pendingLocalChanges, isTrue);
+      expect(metadataB.networkConfigContent, 'network-b');
+      expect(metadataB.lastSuccessfulSyncAt, isNull);
+
+      await AccountRegistry.removeAccount(profileA.id);
+      final restoredA = await AccountRegistry.createAccount(
+        mnemonic: mnemonicA,
+        displayName: 'restored',
+      );
+      expect(restoredA.id, profileA.id);
+      expect(
+        await AccountRegistry.loadSyncMetadata(restoredA.id),
+        isA<AccountSyncMetadata>()
+            .having((value) => value.isConfigured, 'configured', isFalse)
+            .having(
+              (value) => value.lastSuccessfulSyncAt,
+              'last successful sync',
+              isNull,
+            ),
+      );
+      expect(
+        (await AccountRegistry.loadSyncMetadata(profileB.id))
+            .networkConfigContent,
+        'network-b',
+      );
     });
 
     group('migrateLegacyAccount', () {
