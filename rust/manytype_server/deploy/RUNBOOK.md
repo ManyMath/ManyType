@@ -65,6 +65,14 @@ curl --fail http://127.0.0.1:33021/readyz
 journalctl -u manytype-server.service -o json-pretty
 ```
 
+Keep `max_sync_state_bytes` and `max_file_index_bytes` explicit in the deployed
+configuration. They bound logical durable sync payload/index growth and file
+binding metadata, including zero-byte blobs and repeated fresh file IDs. The
+server reconciles the file-index counter and rejects an already-over-limit
+database at startup. These are logical single-process budgets with conservative
+per-entry overhead; continue monitoring filesystem usage because Redb pages,
+filesystem allocation, and stale pages are not represented by the counters.
+
 The first start creates `/var/lib/manytype/identity.key` once with mode `0600`.
 Changing or deleting it changes the server peer identity and invalidates the
 address clients trust.

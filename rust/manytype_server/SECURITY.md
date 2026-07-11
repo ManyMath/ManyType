@@ -68,7 +68,7 @@ is one reason public deployment remains disabled.
 | Tampering | Signed and content-addressed space headers; immutable first owner; receipt validation; owner checks before scoped mutations | ACL record signatures and semantic permissions need complete validation; delete RPCs are stubs |
 | Repudiation | Structured tracing records method-level activity | No durable, principal-bound security audit log or retention policy |
 | Information disclosure | Owner-only reads; hidden space status and private blob availability | Public invite CIDs are bearer capabilities; metadata/log review and ACL member reads remain incomplete |
-| Denial of service | Bounded handshakes, DRPC frames, reassembled messages, blobs, connections, streams, and enforced storage quotas | No per-principal request-rate budget, comprehensive collection limits, or production capacity evidence |
+| Denial of service | Bounded handshakes, DRPC frames, reassembled messages, blobs, connections, streams, blob bytes, logical sync state, and file-index metadata | No per-principal request-rate budget, comprehensive transient collection limits, physical database-size quota, or production capacity evidence |
 | Elevation of privilege | Header account binding and immutable peer ownership close first-claim and ownership-replacement paths | No persisted ACL evaluator for readers/writers, invite redemption, revocation, or device authorization |
 
 ## Public-deployment blockers
@@ -78,8 +78,9 @@ Resolve and test all of these before reconsidering an Internet-facing service:
 1. Add method-specific limits for protobuf collections, object changes, store
    values, ACL records, and other work that can be expensive below the bounded
    message-size ceiling.
-2. Add durable quota accounting and reservation semantics that remain correct
-   across partial writes, cleanup failures, crashes, and multiple processes.
+2. Extend the single-process logical quota reservations to physical database
+   allocation, stale-page reclamation, crash recovery, cleanup failures, and
+   independently writing processes.
 3. Add per-principal request-rate and CPU budgets plus production capacity and
    idle-time evidence beyond the current connection and stream concurrency caps.
 4. Authenticate and bind `AccountDelete` to the credential account, verify its

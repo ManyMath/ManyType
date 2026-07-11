@@ -136,7 +136,10 @@ async fn serve(config_path: PathBuf) -> Result<()> {
     let local_identity_keypair = Keypair::ed25519_from_bytes(libp2p_seed.as_mut_slice())
         .map_err(|e| anyhow::anyhow!("failed to derive libp2p identity from seed: {e}"))?;
     let local_peer_id_libp2p = local_identity_keypair.public().to_peer_id().to_string();
-    let sync_state = sync_node::SharedSyncState::open(&storage_paths.sync_root)?;
+    let sync_state = sync_node::SharedSyncState::open_with_limit(
+        &storage_paths.sync_root,
+        config.limits.max_sync_state_bytes,
+    )?;
     let file_node = file_node::FileNodeState::open_with_limits(
         &storage_paths.files_root,
         config.limits.clone(),

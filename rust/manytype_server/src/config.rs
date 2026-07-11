@@ -51,6 +51,8 @@ pub struct ResourceLimits {
     pub max_space_storage_bytes: u64,
     pub max_account_storage_bytes: u64,
     pub max_total_storage_bytes: u64,
+    pub max_sync_state_bytes: u64,
+    pub max_file_index_bytes: u64,
 }
 
 impl Default for ResourceLimits {
@@ -64,6 +66,8 @@ impl Default for ResourceLimits {
             max_space_storage_bytes: 512 * 1024 * 1024,
             max_account_storage_bytes: 1024 * 1024 * 1024,
             max_total_storage_bytes: 2 * 1024 * 1024 * 1024,
+            max_sync_state_bytes: 512 * 1024 * 1024,
+            max_file_index_bytes: 256 * 1024 * 1024,
         }
     }
 }
@@ -205,6 +209,14 @@ impl ResourceLimits {
         );
         ensure!(self.max_blob_bytes > 0, "max_blob_bytes must be positive");
         ensure!(
+            self.max_sync_state_bytes > 0,
+            "max_sync_state_bytes must be positive"
+        );
+        ensure!(
+            self.max_file_index_bytes > 0,
+            "max_file_index_bytes must be positive"
+        );
+        ensure!(
             self.max_blob_bytes <= self.max_message_bytes as u64,
             "max_blob_bytes must not exceed max_message_bytes"
         );
@@ -338,6 +350,17 @@ mod tests {
     fn resource_limits_reject_unbounded_relationships() {
         let mut config: ServerConfig = toml::from_str(&private_config()).unwrap();
         config.limits.max_message_bytes = config.limits.max_frame_bytes - 1;
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn resource_limits_require_durable_metadata_budgets() {
+        let mut config: ServerConfig = toml::from_str(&private_config()).unwrap();
+        config.limits.max_sync_state_bytes = 0;
+        assert!(config.validate().is_err());
+
+        config.limits.max_sync_state_bytes = ResourceLimits::default().max_sync_state_bytes;
+        config.limits.max_file_index_bytes = 0;
         assert!(config.validate().is_err());
     }
 }

@@ -19,3 +19,5 @@ max_blob_bytes = 4194304
 max_space_storage_bytes = 536870912
 max_account_storage_bytes = 1073741824
 max_total_storage_bytes = 2147483648
+max_sync_state_bytes = 536870912
+max_file_index_bytes = 268435456

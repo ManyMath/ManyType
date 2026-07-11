@@ -43,7 +43,10 @@ impl FileNodeState {
         limits: ResourceLimits,
     ) -> anyhow::Result<Self> {
         Ok(Self {
-            blob_index: Arc::new(BlobIndex::open(config_path.as_ref())?),
+            blob_index: Arc::new(BlobIndex::open_with_limit(
+                config_path.as_ref(),
+                limits.max_file_index_bytes,
+            )?),
             blob_store: Arc::new(BlobStore::open(config_path.as_ref())?),
             limits,
             quota_lock: Arc::new(Mutex::new(())),
@@ -431,14 +434,25 @@ fn put_and_bind_block(
         &claimed_cid,
         data.len() as u64,
     )?;
+    let blob_preexisted = state.blob_store.has(&claimed_cid);
     state
         .blob_store
         .put(&claimed_cid, data)
         .map_err(FileNodeError::unexpected)?;
-    state
-        .blob_index
-        .bind_blob(space_id, file_id, &claimed_cid, data.len() as u64)
-        .map_err(FileNodeError::unexpected)?;
+    if let Err(error) =
+        state
+            .blob_index
+            .bind_blob(space_id, file_id, &claimed_cid, data.len() as u64)
+    {
+        if !blob_preexisted {
+            state.blob_store.remove(&claimed_cid).map_err(|cleanup| {
+                FileNodeError::unexpected(format!(
+                    "failed to bind blob: {error}; failed to remove orphan blob: {cleanup}"
+                ))
+            })?;
+        }
+        return Err(FileNodeError::unexpected(error));
+    }
     Ok(())
 }
 
@@ -1221,6 +1235,68 @@ mod tests {
         assert!(error.to_string().contains("quota exceeded"));
         assert!(state.blob_store.has(&first_cid));
         assert!(!state.blob_store.has(&second_cid));
+    }
+
+    #[test]
+    fn block_push_removes_new_blob_when_file_index_quota_is_exhausted() {
+        let temp_dir = TempDir::new().unwrap();
+        let sync_state = seeded_sync_state(&temp_dir);
+        let first = b"first".to_vec();
+        let first_cid = compute_cid(&first);
+        let index_usage = {
+            let state = file_node_state(&temp_dir);
+            handle_block_push(
+                &BlockPushRequest {
+                    space_id: "space-1".to_string(),
+                    file_id: "file-1".to_string(),
+                    cid: cid_string_to_bytes(&first_cid).unwrap(),
+                    data: first,
+                }
+                .encode_to_vec(),
+                &state,
+                &sync_state,
+                &owner_peer(),
+            )
+            .unwrap();
+            state
+                .blob_index
+                .get_global_usage()
+                .unwrap()
+                .index_usage_bytes
+        };
+
+        let limits = ResourceLimits {
+            max_file_index_bytes: index_usage,
+            ..ResourceLimits::default()
+        };
+        let state = file_node_state_with_limits(&temp_dir, limits);
+        let second = b"second".to_vec();
+        let second_cid = compute_cid(&second);
+        let error = handle_block_push(
+            &BlockPushRequest {
+                space_id: "space-1".to_string(),
+                file_id: "file-2".to_string(),
+                cid: cid_string_to_bytes(&second_cid).unwrap(),
+                data: second,
+            }
+            .encode_to_vec(),
+            &state,
+            &sync_state,
+            &owner_peer(),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("file index quota exceeded"));
+        assert!(state.blob_store.has(&first_cid));
+        assert!(!state.blob_store.has(&second_cid));
+        assert_eq!(
+            state
+                .blob_index
+                .get_global_usage()
+                .unwrap()
+                .index_usage_bytes,
+            index_usage
+        );
     }
 
     #[test]

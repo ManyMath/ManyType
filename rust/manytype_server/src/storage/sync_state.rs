@@ -2,11 +2,11 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, LockResult, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, LockResult, Mutex, RwLock, RwLockReadGuard};
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use manytype_core::crdt::cid::compute_cid;
 use manytype_proto::consensus::RawRecordWithId;
 use manytype_proto::spacesync::StoreKeyValue;
@@ -37,6 +37,7 @@ const META_IS_SHARED: &str = "is_shared";
 const META_OWNER_PEER_ID: &str = "owner_peer_id";
 const SCHEMA_VERSION_KEY: &str = "version";
 const CURRENT_SCHEMA_VERSION: &[u8] = b"1";
+const LOGICAL_ENTRY_OVERHEAD_BYTES: u64 = 64;
 
 #[derive(Clone, Debug, Default)]
 pub struct SpaceState {
@@ -55,11 +56,114 @@ pub struct SpaceState {
     pub store_key_values: HashMap<String, Vec<u8>>,
 }
 
+fn checked_add_bytes(total: &mut u64, bytes: u64) -> Result<()> {
+    *total = total
+        .checked_add(bytes)
+        .ok_or_else(|| anyhow::anyhow!("sync state logical size overflow"))?;
+    Ok(())
+}
+
+fn checked_len(value: usize) -> Result<u64> {
+    u64::try_from(value).map_err(|_| anyhow::anyhow!("sync state value length overflow"))
+}
+
+fn add_logical_entry(total: &mut u64, key_bytes: usize, value_bytes: usize) -> Result<()> {
+    checked_add_bytes(total, LOGICAL_ENTRY_OVERHEAD_BYTES)?;
+    checked_add_bytes(total, checked_len(key_bytes)?)?;
+    checked_add_bytes(total, checked_len(value_bytes)?)
+}
+
+fn encoded_string_list_bytes(values: &[String]) -> Result<usize> {
+    values.iter().try_fold(2usize, |size, value| {
+        size.checked_add(value.len().saturating_add(3))
+            .ok_or_else(|| anyhow::anyhow!("sync state string list length overflow"))
+    })
+}
+
+fn space_logical_bytes(space_id: &str, space: &SpaceState) -> Result<u64> {
+    let mut total = 0u64;
+
+    // Account for the global registration row and a conservative fixed
+    // storage-engine overhead for every durable table entry. Metadata rows are
+    // counted even when their current value is empty so tiny identifiers cannot
+    // create an effectively unbounded number of per-space databases.
+    add_logical_entry(&mut total, space_id.len(), 1)?;
+    add_logical_entry(
+        &mut total,
+        META_SPACE_HEADER.len(),
+        space.space_header.as_ref().map_or(0, Vec::len),
+    )?;
+    add_logical_entry(
+        &mut total,
+        META_ACL_ROOT.len(),
+        space.acl_root.as_ref().map_or(0, Vec::len),
+    )?;
+    add_logical_entry(&mut total, META_ACL_ROOT_ID.len(), space.acl_root_id.len())?;
+    add_logical_entry(
+        &mut total,
+        META_SETTINGS_PAYLOAD.len(),
+        space.settings_payload.as_ref().map_or(0, Vec::len),
+    )?;
+    add_logical_entry(
+        &mut total,
+        META_SETTINGS_PAYLOAD_ID.len(),
+        space.settings_payload_id.len(),
+    )?;
+    add_logical_entry(&mut total, META_IS_SHARED.len(), 1)?;
+    add_logical_entry(
+        &mut total,
+        META_OWNER_PEER_ID.len(),
+        space.owner_peer_id.len(),
+    )?;
+
+    for (object_id, heads) in &space.object_heads {
+        add_logical_entry(
+            &mut total,
+            object_id.len(),
+            encoded_string_list_bytes(heads)?,
+        )?;
+    }
+    for (object_id, change_ids) in &space.object_changes {
+        add_logical_entry(
+            &mut total,
+            object_id.len(),
+            encoded_string_list_bytes(change_ids)?,
+        )?;
+    }
+    for (change_id, raw_change) in &space.raw_changes {
+        add_logical_entry(&mut total, change_id.len(), raw_change.len())?;
+    }
+    for (key_peer_id, value) in &space.store_key_values {
+        add_logical_entry(&mut total, key_peer_id.len(), value.len())?;
+    }
+    for (index, record) in space.acl_records.iter().enumerate() {
+        add_logical_entry(&mut total, format!("{index:018}").len(), record.len())?;
+    }
+
+    Ok(total)
+}
+
+fn sync_state_logical_bytes(
+    spaces: &HashMap<String, SpaceState>,
+    deleted_accounts: &HashSet<String>,
+) -> Result<u64> {
+    let mut total = 0u64;
+    for (space_id, space) in spaces {
+        checked_add_bytes(&mut total, space_logical_bytes(space_id, space)?)?;
+    }
+    for account_key in deleted_accounts {
+        add_logical_entry(&mut total, account_key.len(), 1)?;
+    }
+    Ok(total)
+}
+
 #[derive(Clone)]
 pub struct SharedSyncState {
     inner: Arc<RwLock<HashMap<String, SpaceState>>>,
     deleted_accounts: Arc<RwLock<HashSet<String>>>,
     storage: Arc<SyncStateStorage>,
+    mutation_lock: Arc<Mutex<()>>,
+    max_logical_bytes: u64,
 }
 
 struct SyncStateStorage {
@@ -368,14 +472,52 @@ impl SyncStateStorage {
 
 impl SharedSyncState {
     pub fn open(config_path: impl AsRef<Path>) -> Result<Self> {
+        Self::open_with_limit(config_path, u64::MAX)
+    }
+
+    pub fn open_with_limit(config_path: impl AsRef<Path>, max_logical_bytes: u64) -> Result<Self> {
+        ensure!(max_logical_bytes > 0, "sync state quota must be positive");
         let storage = Arc::new(SyncStateStorage::open(config_path.as_ref())?);
         let spaces = storage.load_spaces()?;
         let deleted_accounts = storage.load_deleted_accounts()?;
+        let logical_bytes = sync_state_logical_bytes(&spaces, &deleted_accounts)?;
+        ensure!(
+            logical_bytes <= max_logical_bytes,
+            "sync state quota exceeded: existing state uses {logical_bytes} logical bytes, limit {max_logical_bytes} bytes"
+        );
         Ok(Self {
             inner: Arc::new(RwLock::new(spaces)),
             deleted_accounts: Arc::new(RwLock::new(deleted_accounts)),
             storage,
+            mutation_lock: Arc::new(Mutex::new(())),
+            max_logical_bytes,
         })
+    }
+
+    fn ensure_space_replacement_fits(
+        &self,
+        spaces: &HashMap<String, SpaceState>,
+        deleted_accounts: &HashSet<String>,
+        space_id: &str,
+        replacement: &SpaceState,
+    ) -> Result<()> {
+        let current = sync_state_logical_bytes(spaces, deleted_accounts)?;
+        let previous = spaces
+            .get(space_id)
+            .map(|space| space_logical_bytes(space_id, space))
+            .transpose()?
+            .unwrap_or_default();
+        let replacement = space_logical_bytes(space_id, replacement)?;
+        let requested = current
+            .checked_sub(previous)
+            .and_then(|usage| usage.checked_add(replacement))
+            .ok_or_else(|| anyhow::anyhow!("sync state logical size overflow"))?;
+        ensure!(
+            requested <= self.max_logical_bytes,
+            "sync state quota exceeded: requested {requested} logical bytes, limit {} bytes",
+            self.max_logical_bytes
+        );
+        Ok(())
     }
 
     /// Returns whether `AccountDelete` has already been accepted for this
@@ -390,21 +532,30 @@ impl SharedSyncState {
 
     pub fn mark_account_deleted(&self, account_identity: &[u8]) -> Result<()> {
         let key = hex::encode(account_identity);
-        {
-            let mut deleted = self.deleted_accounts.write().unwrap();
-            deleted.insert(key.clone());
+        let _mutation = self
+            .mutation_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("sync state mutation lock is poisoned"))?;
+        let mut deleted = self.deleted_accounts.write().unwrap();
+        if deleted.contains(&key) {
+            return Ok(());
         }
-        self.storage.persist_deleted_account(&key)
+        let spaces = self.inner.read().unwrap();
+        let current = sync_state_logical_bytes(&spaces, &deleted)?;
+        let mut requested = current;
+        add_logical_entry(&mut requested, key.len(), 1)?;
+        ensure!(
+            requested <= self.max_logical_bytes,
+            "sync state quota exceeded: requested {requested} logical bytes, limit {} bytes",
+            self.max_logical_bytes
+        );
+        self.storage.persist_deleted_account(&key)?;
+        deleted.insert(key);
+        Ok(())
     }
 
     pub fn read(&self) -> LockResult<RwLockReadGuard<'_, HashMap<String, SpaceState>>> {
         self.inner.read()
-    }
-
-    // Mirrors `read()`; no caller needs write access yet.
-    #[allow(dead_code)]
-    pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, HashMap<String, SpaceState>>> {
-        self.inner.write()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -420,38 +571,43 @@ impl SharedSyncState {
         owner_peer_id: Option<String>,
     ) -> Result<()> {
         validate_space_id(space_id)?;
-        {
-            let mut state = self.inner.write().unwrap();
-            let space = state.entry(space_id.to_string()).or_default();
-            if let Some(owner_peer_id) = owner_peer_id.as_deref() {
-                anyhow::ensure!(!owner_peer_id.is_empty(), "space owner peer id is empty");
-                anyhow::ensure!(
-                    space.owner_peer_id.is_empty() || space.owner_peer_id == owner_peer_id,
-                    "space ownership is immutable"
-                );
-            }
-            if let Some(space_header) = space_header.clone() {
-                space.space_header = Some(space_header);
-            }
-            if let Some(acl_root) = acl_root.clone() {
-                space.acl_root = Some(acl_root);
-            }
-            if let Some(acl_root_id) = acl_root_id.clone() {
-                space.acl_root_id = acl_root_id;
-            }
-            if let Some(settings_payload) = settings_payload.clone() {
-                space.settings_payload = Some(settings_payload);
-            }
-            if let Some(settings_payload_id) = settings_payload_id.clone() {
-                space.settings_payload_id = settings_payload_id;
-            }
-            if let Some(is_shared) = is_shared {
-                space.is_shared = is_shared;
-            }
-            if let Some(owner_peer_id) = owner_peer_id.clone() {
-                space.owner_peer_id = owner_peer_id;
-            }
+        let _mutation = self
+            .mutation_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("sync state mutation lock is poisoned"))?;
+        let mut state = self.inner.write().unwrap();
+        let mut replacement = state.get(space_id).cloned().unwrap_or_default();
+        if let Some(owner_peer_id) = owner_peer_id.as_deref() {
+            anyhow::ensure!(!owner_peer_id.is_empty(), "space owner peer id is empty");
+            anyhow::ensure!(
+                replacement.owner_peer_id.is_empty() || replacement.owner_peer_id == owner_peer_id,
+                "space ownership is immutable"
+            );
         }
+        if let Some(space_header) = space_header.clone() {
+            replacement.space_header = Some(space_header);
+        }
+        if let Some(acl_root) = acl_root.clone() {
+            replacement.acl_root = Some(acl_root);
+        }
+        if let Some(acl_root_id) = acl_root_id.clone() {
+            replacement.acl_root_id = acl_root_id;
+        }
+        if let Some(settings_payload) = settings_payload.clone() {
+            replacement.settings_payload = Some(settings_payload);
+        }
+        if let Some(settings_payload_id) = settings_payload_id.clone() {
+            replacement.settings_payload_id = settings_payload_id;
+        }
+        if let Some(is_shared) = is_shared {
+            replacement.is_shared = is_shared;
+        }
+        if let Some(owner_peer_id) = owner_peer_id.clone() {
+            replacement.owner_peer_id = owner_peer_id;
+        }
+
+        let deleted = self.deleted_accounts.read().unwrap();
+        self.ensure_space_replacement_fits(&state, &deleted, space_id, &replacement)?;
 
         self.storage.persist_space_metadata(
             space_id,
@@ -462,7 +618,9 @@ impl SharedSyncState {
             settings_payload_id.as_deref(),
             is_shared,
             owner_peer_id.as_deref(),
-        )
+        )?;
+        state.insert(space_id.to_string(), replacement);
+        Ok(())
     }
 
     /// Atomically assigns the first authenticated owner of a space.
@@ -473,12 +631,19 @@ impl SharedSyncState {
         validate_space_id(space_id)?;
         anyhow::ensure!(!peer_id.is_empty(), "space owner peer id is empty");
 
+        let _mutation = self
+            .mutation_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("sync state mutation lock is poisoned"))?;
         let mut state = self.inner.write().unwrap();
-        let space = state.entry(space_id.to_string()).or_default();
-        if !space.owner_peer_id.is_empty() {
-            anyhow::ensure!(space.owner_peer_id == peer_id, "space access denied");
+        let mut replacement = state.get(space_id).cloned().unwrap_or_default();
+        if !replacement.owner_peer_id.is_empty() {
+            anyhow::ensure!(replacement.owner_peer_id == peer_id, "space access denied");
             return Ok(());
         }
+        replacement.owner_peer_id = peer_id.to_string();
+        let deleted = self.deleted_accounts.read().unwrap();
+        self.ensure_space_replacement_fits(&state, &deleted, space_id, &replacement)?;
 
         self.storage.persist_space_metadata(
             space_id,
@@ -490,7 +655,7 @@ impl SharedSyncState {
             None,
             Some(peer_id),
         )?;
-        space.owner_peer_id = peer_id.to_string();
+        state.insert(space_id.to_string(), replacement);
         Ok(())
     }
 
@@ -505,6 +670,17 @@ impl SharedSyncState {
     }
 
     pub fn mark_space_shared(&self, space_id: &str) -> Result<()> {
+        validate_space_id(space_id)?;
+        let _mutation = self
+            .mutation_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("sync state mutation lock is poisoned"))?;
+        let mut state = self.inner.write().unwrap();
+        let mut replacement = state
+            .get(space_id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("space not found: {space_id}"))?;
+        replacement.is_shared = true;
         let (
             space_header,
             acl_root,
@@ -513,20 +689,18 @@ impl SharedSyncState {
             settings_payload_id,
             owner_peer_id,
         ) = {
-            let mut state = self.inner.write().unwrap();
-            let Some(space) = state.get_mut(space_id) else {
-                anyhow::bail!("space not found: {space_id}");
-            };
-            space.is_shared = true;
             (
-                space.space_header.clone(),
-                space.acl_root.clone(),
-                (!space.acl_root_id.is_empty()).then(|| space.acl_root_id.clone()),
-                space.settings_payload.clone(),
-                (!space.settings_payload_id.is_empty()).then(|| space.settings_payload_id.clone()),
-                (!space.owner_peer_id.is_empty()).then(|| space.owner_peer_id.clone()),
+                replacement.space_header.clone(),
+                replacement.acl_root.clone(),
+                (!replacement.acl_root_id.is_empty()).then(|| replacement.acl_root_id.clone()),
+                replacement.settings_payload.clone(),
+                (!replacement.settings_payload_id.is_empty())
+                    .then(|| replacement.settings_payload_id.clone()),
+                (!replacement.owner_peer_id.is_empty()).then(|| replacement.owner_peer_id.clone()),
             )
         };
+        let deleted = self.deleted_accounts.read().unwrap();
+        self.ensure_space_replacement_fits(&state, &deleted, space_id, &replacement)?;
 
         self.storage.persist_space_metadata(
             space_id,
@@ -537,7 +711,9 @@ impl SharedSyncState {
             settings_payload_id.as_deref(),
             Some(true),
             owner_peer_id.as_deref(),
-        )
+        )?;
+        state.insert(space_id.to_string(), replacement);
+        Ok(())
     }
 
     pub fn peer_owns_space(&self, space_id: &str, peer_id: &str) -> bool {
@@ -569,16 +745,34 @@ impl SharedSyncState {
         record_id: &str,
     ) -> Result<()> {
         validate_space_id(space_id)?;
-        let index = {
-            let mut state = self.inner.write().unwrap();
-            let space = state.entry(space_id.to_string()).or_default();
-            space.acl_records.push(raw_record_with_id.clone());
-            space.acl_head = record_id.to_string();
-            space.acl_records.len() - 1
-        };
+        validate_storage_key("ACL record id", record_id)?;
+        let _mutation = self
+            .mutation_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("sync state mutation lock is poisoned"))?;
+        let mut state = self.inner.write().unwrap();
+        let mut replacement = state.get(space_id).cloned().unwrap_or_default();
+        if let Some(existing) = replacement
+            .acl_records
+            .iter()
+            .find(|record| decode_acl_record_id(record).as_deref() == Some(record_id))
+        {
+            ensure!(
+                existing == &raw_record_with_id,
+                "ACL record id collision for {record_id}"
+            );
+            return Ok(());
+        }
+        replacement.acl_records.push(raw_record_with_id.clone());
+        replacement.acl_head = record_id.to_string();
+        let index = replacement.acl_records.len() - 1;
+        let deleted = self.deleted_accounts.read().unwrap();
+        self.ensure_space_replacement_fits(&state, &deleted, space_id, &replacement)?;
 
         self.storage
-            .persist_acl_record(space_id, index, &raw_record_with_id)
+            .persist_acl_record(space_id, index, &raw_record_with_id)?;
+        state.insert(space_id.to_string(), replacement);
+        Ok(())
     }
 
     pub fn list_acl_records(&self, space_id: &str, acl_head: &str) -> Vec<Vec<u8>> {
@@ -636,30 +830,43 @@ impl SharedSyncState {
             .and_then(|raw_tree| RootChange::decode(raw_tree.payload.as_slice()).ok())
             .is_some_and(|root| !root.space_id.is_empty() && !root.change_type.is_empty());
 
-        let (heads, object_changes) = {
-            let mut state = self.inner.write().unwrap();
-            let space = state.entry(space_id.to_string()).or_default();
-            if !space.raw_changes.contains_key(change_id) {
-                space
-                    .raw_changes
-                    .insert(change_id.to_string(), raw_change.clone());
-            }
+        let _mutation = self
+            .mutation_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("sync state mutation lock is poisoned"))?;
+        let mut state = self.inner.write().unwrap();
+        let mut replacement = state.get(space_id).cloned().unwrap_or_default();
+        if let Some(existing) = replacement.raw_changes.get(change_id) {
+            ensure!(
+                existing == &raw_change,
+                "object change id collision for {change_id}"
+            );
+        } else {
+            replacement
+                .raw_changes
+                .insert(change_id.to_string(), raw_change.clone());
+        }
 
-            let object_changes = space
-                .object_changes
-                .entry(object_id.to_string())
-                .or_default();
-            if !object_changes.iter().any(|existing| existing == change_id) {
-                object_changes.push(change_id.to_string());
-            }
+        let object_changes = replacement
+            .object_changes
+            .entry(object_id.to_string())
+            .or_default();
+        if !object_changes.iter().any(|existing| existing == change_id) {
+            object_changes.push(change_id.to_string());
+        }
 
-            let heads = space.object_heads.entry(object_id.to_string()).or_default();
-            heads.retain(|head| !parent_heads.iter().any(|parent| parent == head));
-            if !is_root_change && !heads.iter().any(|existing| existing == change_id) {
-                heads.push(change_id.to_string());
-            }
-            (heads.clone(), object_changes.clone())
-        };
+        let heads = replacement
+            .object_heads
+            .entry(object_id.to_string())
+            .or_default();
+        heads.retain(|head| !parent_heads.iter().any(|parent| parent == head));
+        if !is_root_change && !heads.iter().any(|existing| existing == change_id) {
+            heads.push(change_id.to_string());
+        }
+        let heads = heads.clone();
+        let object_changes = object_changes.clone();
+        let deleted = self.deleted_accounts.read().unwrap();
+        self.ensure_space_replacement_fits(&state, &deleted, space_id, &replacement)?;
 
         self.storage.persist_object_state(
             space_id,
@@ -668,7 +875,9 @@ impl SharedSyncState {
             &object_changes,
             Some(change_id),
             Some(&raw_change),
-        )
+        )?;
+        state.insert(space_id.to_string(), replacement);
+        Ok(())
     }
 
     pub fn list_object_changes(&self, space_id: &str, object_id: &str) -> Vec<Vec<u8>> {
@@ -689,15 +898,21 @@ impl SharedSyncState {
         validate_space_id(&entry.space_id)?;
         validate_storage_key("store peer id", &entry.key_peer_id)?;
         let encoded = entry.encode_to_vec();
-        {
-            let mut state = self.inner.write().unwrap();
-            let space = state.entry(entry.space_id.clone()).or_default();
-            space
-                .store_key_values
-                .insert(entry.key_peer_id.clone(), encoded.clone());
-        }
+        let _mutation = self
+            .mutation_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("sync state mutation lock is poisoned"))?;
+        let mut state = self.inner.write().unwrap();
+        let mut replacement = state.get(&entry.space_id).cloned().unwrap_or_default();
+        replacement
+            .store_key_values
+            .insert(entry.key_peer_id.clone(), encoded.clone());
+        let deleted = self.deleted_accounts.read().unwrap();
+        self.ensure_space_replacement_fits(&state, &deleted, &entry.space_id, &replacement)?;
         self.storage
-            .persist_store_key_value(&entry.space_id, &entry.key_peer_id, &encoded)
+            .persist_store_key_value(&entry.space_id, &entry.key_peer_id, &encoded)?;
+        state.insert(entry.space_id, replacement);
+        Ok(())
     }
 
     pub fn get_store_entry(&self, space_id: &str, key_peer_id: &str) -> Option<StoreKeyValue> {
@@ -784,9 +999,30 @@ fn decode_acl_record_id(raw_record_with_id: &[u8]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::thread;
+
     use tempfile::TempDir;
 
     use super::*;
+
+    fn test_store_entry(key_peer_id: &str) -> StoreKeyValue {
+        StoreKeyValue {
+            key_peer_id: key_peer_id.to_string(),
+            value: b"value".to_vec(),
+            identity_signature: b"identity".to_vec(),
+            peer_signature: b"peer".to_vec(),
+            space_id: "space-1".to_string(),
+        }
+    }
+
+    fn current_logical_usage(state: &SharedSyncState) -> u64 {
+        sync_state_logical_bytes(
+            &state.inner.read().unwrap(),
+            &state.deleted_accounts.read().unwrap(),
+        )
+        .unwrap()
+    }
 
     #[test]
     fn rejects_unsafe_space_id_before_creating_a_database_file() {
@@ -913,6 +1149,47 @@ mod tests {
     }
 
     #[test]
+    fn repeated_object_change_is_idempotent_and_collision_is_rejected() {
+        let state = new_shared_sync_state();
+        state
+            .record_object_change(
+                "space-1",
+                "object-1",
+                "change-1",
+                b"raw-change".to_vec(),
+                &[],
+            )
+            .unwrap();
+        state
+            .record_object_change(
+                "space-1",
+                "object-1",
+                "change-1",
+                b"raw-change".to_vec(),
+                &[],
+            )
+            .unwrap();
+        assert_eq!(
+            state.read().unwrap()["space-1"].object_changes["object-1"],
+            vec!["change-1".to_string()]
+        );
+
+        assert!(
+            state
+                .record_object_change(
+                    "space-1",
+                    "object-1",
+                    "change-1",
+                    b"different".to_vec(),
+                    &[],
+                )
+                .unwrap_err()
+                .to_string()
+                .contains("collision")
+        );
+    }
+
+    #[test]
     fn acl_records_persist_across_reopen() {
         let temp_dir = TempDir::new().unwrap();
         {
@@ -953,6 +1230,126 @@ mod tests {
             "cid-2"
         );
         assert_eq!(reopened.read().unwrap()["space-1"].acl_head, "cid-2");
+    }
+
+    #[test]
+    fn repeated_acl_record_is_idempotent_and_collision_is_rejected() {
+        let state = new_shared_sync_state();
+        let record = RawRecordWithId {
+            payload: b"record-1".to_vec(),
+            id: "cid-1".to_string(),
+        }
+        .encode_to_vec();
+
+        state
+            .append_acl_record("space-1", record.clone(), "cid-1")
+            .unwrap();
+        state.append_acl_record("space-1", record, "cid-1").unwrap();
+        assert_eq!(state.read().unwrap()["space-1"].acl_records.len(), 1);
+
+        let collision = RawRecordWithId {
+            payload: b"different".to_vec(),
+            id: "cid-1".to_string(),
+        }
+        .encode_to_vec();
+        assert!(
+            state
+                .append_acl_record("space-1", collision, "cid-1")
+                .unwrap_err()
+                .to_string()
+                .contains("collision")
+        );
+    }
+
+    #[test]
+    fn sync_quota_survives_restart_and_serializes_concurrent_growth() {
+        let calibration_dir = TempDir::new().unwrap();
+        let calibration = new_shared_sync_state_at(calibration_dir.path()).unwrap();
+        calibration
+            .claim_space_owner("space-1", "peer-owner")
+            .unwrap();
+        calibration
+            .upsert_store_entry(test_store_entry("peer-00"))
+            .unwrap();
+        calibration
+            .upsert_store_entry(test_store_entry("peer-01"))
+            .unwrap();
+        let usage_with_two = current_logical_usage(&calibration);
+        calibration
+            .upsert_store_entry(test_store_entry("peer-02"))
+            .unwrap();
+        let one_entry_growth = current_logical_usage(&calibration) - usage_with_two;
+        assert!(one_entry_growth > 0);
+
+        let state_dir = TempDir::new().unwrap();
+        {
+            let state = new_shared_sync_state_at(state_dir.path()).unwrap();
+            state.claim_space_owner("space-1", "peer-owner").unwrap();
+            state
+                .upsert_store_entry(test_store_entry("peer-00"))
+                .unwrap();
+            state
+                .upsert_store_entry(test_store_entry("peer-01"))
+                .unwrap();
+            assert_eq!(current_logical_usage(&state), usage_with_two);
+        }
+
+        let quota = usage_with_two + one_entry_growth;
+        let state = Arc::new(SharedSyncState::open_with_limit(state_dir.path(), quota).unwrap());
+        let attempts: Vec<_> = (2..10)
+            .map(|index| {
+                let state = Arc::clone(&state);
+                thread::spawn(move || {
+                    let key = format!("peer-{index:02}");
+                    let accepted = state.upsert_store_entry(test_store_entry(&key)).is_ok();
+                    (key, accepted)
+                })
+            })
+            .collect();
+        let results: Vec<_> = attempts
+            .into_iter()
+            .map(|attempt| attempt.join().unwrap())
+            .collect();
+        let accepted: Vec<_> = results
+            .iter()
+            .filter(|(_, accepted)| *accepted)
+            .map(|(key, _)| key.clone())
+            .collect();
+        assert_eq!(accepted.len(), 1);
+        assert_eq!(current_logical_usage(&state), quota);
+
+        let accepted_key = accepted[0].clone();
+        let retries: Vec<_> = (0..8)
+            .map(|_| {
+                let state = Arc::clone(&state);
+                let key = accepted_key.clone();
+                thread::spawn(move || state.upsert_store_entry(test_store_entry(&key)))
+            })
+            .collect();
+        for retry in retries {
+            retry.join().unwrap().unwrap();
+        }
+        assert_eq!(current_logical_usage(&state), quota);
+        assert!(
+            state
+                .upsert_store_entry(test_store_entry("peer-10"))
+                .unwrap_err()
+                .to_string()
+                .contains("sync state quota exceeded")
+        );
+        drop(state);
+
+        let reopened = SharedSyncState::open_with_limit(state_dir.path(), quota).unwrap();
+        assert_eq!(current_logical_usage(&reopened), quota);
+        assert_eq!(
+            reopened.read().unwrap()["space-1"].store_key_values.len(),
+            3
+        );
+        assert!(
+            reopened
+                .upsert_store_entry(test_store_entry("peer-10"))
+                .is_err()
+        );
     }
 
     #[test]

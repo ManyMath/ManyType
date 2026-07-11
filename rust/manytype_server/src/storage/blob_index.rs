@@ -1,10 +1,12 @@
 use std::path::Path;
+use std::sync::Mutex;
 
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
 
 use super::blob_store::file_node_root_from_config;
+use crate::input::{validate_space_id, validate_storage_key};
 
 const BLOBS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("blobs");
 const SPACE_CIDS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("space_cids");
@@ -16,6 +18,7 @@ const SCHEMA_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("schema"
 const GLOBAL_TOTALS_KEY: &str = "totals";
 const SCHEMA_VERSION_KEY: &str = "version";
 const CURRENT_SCHEMA_VERSION: &[u8] = b"1";
+const LOGICAL_ENTRY_OVERHEAD_BYTES: u64 = 64;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlobMetadata {
@@ -44,6 +47,8 @@ pub struct SpaceUsage {
 pub struct GlobalUsage {
     pub total_usage_bytes: u64,
     pub total_cids_count: u64,
+    #[serde(default)]
+    pub index_usage_bytes: u64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -55,17 +60,33 @@ pub struct BindOutcome {
 
 pub struct BlobIndex {
     db: Database,
+    mutation_lock: Mutex<()>,
+    max_logical_bytes: u64,
 }
 
 impl BlobIndex {
     pub fn open(config_path: impl AsRef<Path>) -> Result<Self> {
+        Self::open_with_limit(config_path, u64::MAX)
+    }
+
+    pub fn open_with_limit(config_path: impl AsRef<Path>, max_logical_bytes: u64) -> Result<Self> {
+        ensure!(max_logical_bytes > 0, "file index quota must be positive");
         let path = file_node_root_from_config(config_path.as_ref()).join("files.redb");
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let db = Database::create(path)?;
         ensure_tables(&db)?;
-        Ok(Self { db })
+        let logical_bytes = reconcile_index_usage(&db)?;
+        ensure!(
+            logical_bytes <= max_logical_bytes,
+            "file index quota exceeded: existing index uses {logical_bytes} logical bytes, limit {max_logical_bytes} bytes"
+        );
+        Ok(Self {
+            db,
+            mutation_lock: Mutex::new(()),
+            max_logical_bytes,
+        })
     }
 
     pub fn has_blob(&self, cid: &str) -> Result<bool> {
@@ -108,41 +129,71 @@ impl BlobIndex {
     }
 
     pub fn register_public_invite(&self, cid: &str, size_bytes: u64) -> Result<()> {
+        validate_storage_key("blob CID", cid)?;
+        let _mutation = self
+            .mutation_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("file index mutation lock is poisoned"))?;
         let write_txn = self.db.begin_write()?;
         {
             let mut blobs_table = write_txn.open_table(BLOBS_TABLE)?;
             let mut global_usage_table = write_txn.open_table(GLOBAL_USAGE_TABLE)?;
             let mut public_invites_table = write_txn.open_table(PUBLIC_INVITES_TABLE)?;
 
-            let existing: Option<BlobMetadata> = decode_optional(blobs_table.get(cid)?)?;
-            match existing {
-                Some(existing) => {
-                    if existing.size_bytes != size_bytes {
-                        bail!(
-                            "blob metadata mismatch for cid {cid}: existing size {} != {size_bytes}",
-                            existing.size_bytes
-                        );
-                    }
-                }
-                None => {
-                    blobs_table
-                        .insert(cid, encode_json(&BlobMetadata { size_bytes })?.as_slice())?;
-                    let mut global_usage: GlobalUsage =
-                        decode_optional(global_usage_table.get(GLOBAL_TOTALS_KEY)?)?
-                            .unwrap_or_default();
-                    global_usage.total_usage_bytes = global_usage
-                        .total_usage_bytes
-                        .checked_add(size_bytes)
-                        .ok_or_else(|| anyhow::anyhow!("global blob usage overflow"))?;
-                    global_usage.total_cids_count = global_usage
-                        .total_cids_count
-                        .checked_add(1)
-                        .ok_or_else(|| anyhow::anyhow!("global blob count overflow"))?;
-                    global_usage_table
-                        .insert(GLOBAL_TOTALS_KEY, encode_json(&global_usage)?.as_slice())?;
-                }
+            let existing_blob = blobs_table.get(cid)?.map(|value| value.value().to_vec());
+            let existing: Option<BlobMetadata> = existing_blob
+                .as_deref()
+                .map(serde_json::from_slice)
+                .transpose()?;
+            if let Some(existing) = &existing
+                && existing.size_bytes != size_bytes
+            {
+                bail!(
+                    "blob metadata mismatch for cid {cid}: existing size {} != {size_bytes}",
+                    existing.size_bytes
+                );
             }
-            public_invites_table.insert(cid, b"1".as_slice())?;
+            let blob_metadata = encode_json(&BlobMetadata { size_bytes })?;
+            let public_invite_exists = public_invites_table.get(cid)?.is_some();
+            let mut growth = 0u64;
+            if existing.is_none() {
+                checked_add_usage(
+                    &mut growth,
+                    logical_entry_growth(cid.len(), None, blob_metadata.len())?,
+                )?;
+            }
+            if !public_invite_exists {
+                checked_add_usage(&mut growth, logical_entry_growth(cid.len(), None, 1)?)?;
+            }
+
+            let mut global_usage: GlobalUsage =
+                decode_optional(global_usage_table.get(GLOBAL_TOTALS_KEY)?)?.unwrap_or_default();
+            let requested = global_usage
+                .index_usage_bytes
+                .checked_add(growth)
+                .ok_or_else(|| anyhow::anyhow!("file index logical size overflow"))?;
+            ensure!(
+                requested <= self.max_logical_bytes,
+                "file index quota exceeded: requested {requested} logical bytes, limit {} bytes",
+                self.max_logical_bytes
+            );
+
+            if existing.is_none() {
+                blobs_table.insert(cid, blob_metadata.as_slice())?;
+                global_usage.total_usage_bytes = global_usage
+                    .total_usage_bytes
+                    .checked_add(size_bytes)
+                    .ok_or_else(|| anyhow::anyhow!("global blob usage overflow"))?;
+                global_usage.total_cids_count = global_usage
+                    .total_cids_count
+                    .checked_add(1)
+                    .ok_or_else(|| anyhow::anyhow!("global blob count overflow"))?;
+            }
+            if !public_invite_exists {
+                public_invites_table.insert(cid, b"1".as_slice())?;
+            }
+            global_usage.index_usage_bytes = requested;
+            global_usage_table.insert(GLOBAL_TOTALS_KEY, encode_json(&global_usage)?.as_slice())?;
         }
         write_txn.commit()?;
         Ok(())
@@ -161,6 +212,13 @@ impl BlobIndex {
         cid: &str,
         size_bytes: u64,
     ) -> Result<BindOutcome> {
+        validate_space_id(space_id)?;
+        validate_storage_key("file id", file_id)?;
+        validate_storage_key("blob CID", cid)?;
+        let _mutation = self
+            .mutation_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("file index mutation lock is poisoned"))?;
         let write_txn = self.db.begin_write()?;
         let outcome = (|| -> Result<BindOutcome> {
             let mut blobs_table = write_txn.open_table(BLOBS_TABLE)?;
@@ -169,7 +227,11 @@ impl BlobIndex {
             let mut space_usage_table = write_txn.open_table(SPACE_USAGE_TABLE)?;
             let mut global_usage_table = write_txn.open_table(GLOBAL_USAGE_TABLE)?;
 
-            let blob_metadata: Option<BlobMetadata> = decode_optional(blobs_table.get(cid)?)?;
+            let existing_blob = blobs_table.get(cid)?.map(|value| value.value().to_vec());
+            let blob_metadata: Option<BlobMetadata> = existing_blob
+                .as_deref()
+                .map(serde_json::from_slice)
+                .transpose()?;
             let mut outcome = BindOutcome::default();
             if let Some(existing) = &blob_metadata {
                 if existing.size_bytes != size_bytes {
@@ -180,12 +242,18 @@ impl BlobIndex {
                 }
             } else {
                 outcome.new_blob = true;
-                blobs_table.insert(cid, encode_json(&BlobMetadata { size_bytes })?.as_slice())?;
             }
+            let blob_metadata_encoded = encode_json(&BlobMetadata { size_bytes })?;
 
             let space_key = space_cid_key(space_id, cid);
-            let mut space_binding: SpaceCidBinding =
-                decode_optional(space_cids_table.get(space_key.as_str())?)?.unwrap_or_default();
+            let existing_space_binding = space_cids_table
+                .get(space_key.as_str())?
+                .map(|value| value.value().to_vec());
+            let mut space_binding: SpaceCidBinding = existing_space_binding
+                .as_deref()
+                .map(serde_json::from_slice)
+                .transpose()?
+                .unwrap_or_default();
             if !space_binding
                 .file_ids
                 .iter()
@@ -194,52 +262,195 @@ impl BlobIndex {
                 space_binding.file_ids.push(file_id.to_string());
                 space_binding.file_ids.sort();
             }
-            let new_space_binding = space_cids_table.get(space_key.as_str())?.is_none();
+            let new_space_binding = existing_space_binding.is_none();
             if new_space_binding {
                 outcome.new_space_binding = true;
             }
-            space_cids_table.insert(space_key.as_str(), encode_json(&space_binding)?.as_slice())?;
+            let space_binding_encoded = encode_json(&space_binding)?;
 
             let file_key = space_file_key(space_id, file_id);
-            let existing_file_binding: FileCidBinding =
-                decode_optional(file_cids_table.get(file_key.as_str())?)?.unwrap_or_default();
-            let mut file_binding = existing_file_binding.clone();
-            let new_file_binding = existing_file_binding.cids.is_empty();
+            let existing_file_binding = file_cids_table
+                .get(file_key.as_str())?
+                .map(|value| value.value().to_vec());
+            let mut file_binding: FileCidBinding = existing_file_binding
+                .as_deref()
+                .map(serde_json::from_slice)
+                .transpose()?
+                .unwrap_or_default();
+            let new_file_binding = existing_file_binding.is_none();
             if !file_binding.cids.iter().any(|existing| existing == cid) {
                 file_binding.cids.push(cid.to_string());
                 file_binding.cids.sort();
-                file_binding.usage_bytes += size_bytes;
+                file_binding.usage_bytes = file_binding
+                    .usage_bytes
+                    .checked_add(size_bytes)
+                    .ok_or_else(|| anyhow::anyhow!("file blob usage overflow"))?;
             }
             if new_file_binding {
                 outcome.new_file_binding = true;
             }
-            file_cids_table.insert(file_key.as_str(), encode_json(&file_binding)?.as_slice())?;
+            let file_binding_encoded = encode_json(&file_binding)?;
 
-            let mut space_usage: SpaceUsage =
-                decode_optional(space_usage_table.get(space_id)?)?.unwrap_or_default();
+            let existing_space_usage = space_usage_table
+                .get(space_id)?
+                .map(|value| value.value().to_vec());
+            let mut space_usage: SpaceUsage = existing_space_usage
+                .as_deref()
+                .map(serde_json::from_slice)
+                .transpose()?
+                .unwrap_or_default();
             if outcome.new_space_binding {
-                space_usage.usage_bytes += size_bytes;
-                space_usage.cids_count += 1;
+                space_usage.usage_bytes = space_usage
+                    .usage_bytes
+                    .checked_add(size_bytes)
+                    .ok_or_else(|| anyhow::anyhow!("space blob usage overflow"))?;
+                space_usage.cids_count = space_usage
+                    .cids_count
+                    .checked_add(1)
+                    .ok_or_else(|| anyhow::anyhow!("space blob count overflow"))?;
             }
             if outcome.new_file_binding {
-                space_usage.files_count += 1;
+                space_usage.files_count = space_usage
+                    .files_count
+                    .checked_add(1)
+                    .ok_or_else(|| anyhow::anyhow!("space file count overflow"))?;
             }
-            space_usage_table.insert(space_id, encode_json(&space_usage)?.as_slice())?;
+            let space_usage_encoded = encode_json(&space_usage)?;
 
             let mut global_usage: GlobalUsage =
                 decode_optional(global_usage_table.get(GLOBAL_TOTALS_KEY)?)?.unwrap_or_default();
+            let mut growth = 0u64;
+            checked_add_usage(
+                &mut growth,
+                logical_entry_growth(
+                    cid.len(),
+                    existing_blob.as_ref().map(Vec::len),
+                    blob_metadata_encoded.len(),
+                )?,
+            )?;
+            checked_add_usage(
+                &mut growth,
+                logical_entry_growth(
+                    space_key.len(),
+                    existing_space_binding.as_ref().map(Vec::len),
+                    space_binding_encoded.len(),
+                )?,
+            )?;
+            checked_add_usage(
+                &mut growth,
+                logical_entry_growth(
+                    file_key.len(),
+                    existing_file_binding.as_ref().map(Vec::len),
+                    file_binding_encoded.len(),
+                )?,
+            )?;
+            checked_add_usage(
+                &mut growth,
+                logical_entry_growth(
+                    space_id.len(),
+                    existing_space_usage.as_ref().map(Vec::len),
+                    space_usage_encoded.len(),
+                )?,
+            )?;
+            let requested = global_usage
+                .index_usage_bytes
+                .checked_add(growth)
+                .ok_or_else(|| anyhow::anyhow!("file index logical size overflow"))?;
+            ensure!(
+                requested <= self.max_logical_bytes,
+                "file index quota exceeded: requested {requested} logical bytes, limit {} bytes",
+                self.max_logical_bytes
+            );
+
             if outcome.new_blob {
-                global_usage.total_usage_bytes += size_bytes;
-                global_usage.total_cids_count += 1;
-                global_usage_table
-                    .insert(GLOBAL_TOTALS_KEY, encode_json(&global_usage)?.as_slice())?;
+                global_usage.total_usage_bytes = global_usage
+                    .total_usage_bytes
+                    .checked_add(size_bytes)
+                    .ok_or_else(|| anyhow::anyhow!("global blob usage overflow"))?;
+                global_usage.total_cids_count = global_usage
+                    .total_cids_count
+                    .checked_add(1)
+                    .ok_or_else(|| anyhow::anyhow!("global blob count overflow"))?;
             }
+            global_usage.index_usage_bytes = requested;
+
+            blobs_table.insert(cid, blob_metadata_encoded.as_slice())?;
+            space_cids_table.insert(space_key.as_str(), space_binding_encoded.as_slice())?;
+            file_cids_table.insert(file_key.as_str(), file_binding_encoded.as_slice())?;
+            space_usage_table.insert(space_id, space_usage_encoded.as_slice())?;
+            global_usage_table.insert(GLOBAL_TOTALS_KEY, encode_json(&global_usage)?.as_slice())?;
 
             Ok(outcome)
         })()?;
         write_txn.commit()?;
         Ok(outcome)
     }
+}
+
+fn logical_entry_bytes(key_bytes: usize, value_bytes: usize) -> Result<u64> {
+    let key_bytes =
+        u64::try_from(key_bytes).map_err(|_| anyhow::anyhow!("file index key length overflow"))?;
+    let value_bytes = u64::try_from(value_bytes)
+        .map_err(|_| anyhow::anyhow!("file index value length overflow"))?;
+    LOGICAL_ENTRY_OVERHEAD_BYTES
+        .checked_add(key_bytes)
+        .and_then(|total| total.checked_add(value_bytes))
+        .ok_or_else(|| anyhow::anyhow!("file index logical size overflow"))
+}
+
+fn logical_entry_growth(
+    key_bytes: usize,
+    previous_value_bytes: Option<usize>,
+    replacement_value_bytes: usize,
+) -> Result<u64> {
+    let previous = previous_value_bytes
+        .map(|value_bytes| logical_entry_bytes(key_bytes, value_bytes))
+        .transpose()?
+        .unwrap_or_default();
+    let replacement = logical_entry_bytes(key_bytes, replacement_value_bytes)?;
+    replacement
+        .checked_sub(previous)
+        .ok_or_else(|| anyhow::anyhow!("file index replacement unexpectedly shrank"))
+}
+
+fn checked_add_usage(total: &mut u64, increase: u64) -> Result<()> {
+    *total = total
+        .checked_add(increase)
+        .ok_or_else(|| anyhow::anyhow!("file index logical size overflow"))?;
+    Ok(())
+}
+
+fn reconcile_index_usage(db: &Database) -> Result<u64> {
+    let read_txn = db.begin_read()?;
+    let mut logical_bytes = 0u64;
+    for definition in [
+        BLOBS_TABLE,
+        SPACE_CIDS_TABLE,
+        FILE_CIDS_TABLE,
+        SPACE_USAGE_TABLE,
+        PUBLIC_INVITES_TABLE,
+    ] {
+        let table = read_txn.open_table(definition)?;
+        for entry in table.iter()? {
+            let (key, value) = entry?;
+            checked_add_usage(
+                &mut logical_bytes,
+                logical_entry_bytes(key.value().len(), value.value().len())?,
+            )?;
+        }
+    }
+    drop(read_txn);
+
+    let write_txn = db.begin_write()?;
+    {
+        let mut table = write_txn.open_table(GLOBAL_USAGE_TABLE)?;
+        let mut usage: GlobalUsage =
+            decode_optional(table.get(GLOBAL_TOTALS_KEY)?)?.unwrap_or_default();
+        usage.index_usage_bytes = logical_bytes;
+        table.insert(GLOBAL_TOTALS_KEY, encode_json(&usage)?.as_slice())?;
+    }
+    write_txn.commit()?;
+    Ok(logical_bytes)
 }
 
 fn ensure_tables(db: &Database) -> Result<()> {
@@ -294,6 +505,9 @@ fn space_file_key(space_id: &str, file_id: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::thread;
+
     use tempfile::TempDir;
 
     use super::*;
@@ -344,13 +558,10 @@ mod tests {
                 files_count: 1,
             }
         );
-        assert_eq!(
-            reopened.get_global_usage().unwrap(),
-            GlobalUsage {
-                total_usage_bytes: 5,
-                total_cids_count: 1,
-            }
-        );
+        let global = reopened.get_global_usage().unwrap();
+        assert_eq!(global.total_usage_bytes, 5);
+        assert_eq!(global.total_cids_count, 1);
+        assert!(global.index_usage_bytes > 0);
     }
 
     #[test]
@@ -372,13 +583,10 @@ mod tests {
                 files_count: 2,
             }
         );
-        assert_eq!(
-            index.get_global_usage().unwrap(),
-            GlobalUsage {
-                total_usage_bytes: 5,
-                total_cids_count: 1,
-            }
-        );
+        let global = index.get_global_usage().unwrap();
+        assert_eq!(global.total_usage_bytes, 5);
+        assert_eq!(global.total_cids_count, 1);
+        assert!(global.index_usage_bytes > 0);
         assert_eq!(
             index.get_file_binding("space-1", "file-2").unwrap(),
             Some(FileCidBinding {
@@ -400,13 +608,10 @@ mod tests {
         assert!(!outcome.new_blob);
         assert!(outcome.new_space_binding);
         assert!(outcome.new_file_binding);
-        assert_eq!(
-            index.get_global_usage().unwrap(),
-            GlobalUsage {
-                total_usage_bytes: 5,
-                total_cids_count: 1,
-            }
-        );
+        let global = index.get_global_usage().unwrap();
+        assert_eq!(global.total_usage_bytes, 5);
+        assert_eq!(global.total_cids_count, 1);
+        assert!(global.index_usage_bytes > 0);
         assert_eq!(
             index.get_space_usage("space-2").unwrap(),
             SpaceUsage {
@@ -446,13 +651,114 @@ mod tests {
             index.get_blob_metadata("cid-1").unwrap(),
             Some(BlobMetadata { size_bytes: 5 })
         );
-        assert_eq!(
-            index.get_global_usage().unwrap(),
-            GlobalUsage {
-                total_usage_bytes: 5,
-                total_cids_count: 1,
-            }
-        );
+        let global = index.get_global_usage().unwrap();
+        assert_eq!(global.total_usage_bytes, 5);
+        assert_eq!(global.total_cids_count, 1);
+        assert!(global.index_usage_bytes > 0);
         assert!(index.register_public_invite("cid-1", 6).is_err());
+    }
+
+    #[test]
+    fn file_index_quota_survives_restart_and_serializes_rebindings() {
+        let calibration_dir = TempDir::new().unwrap();
+        let calibration = BlobIndex::open(calibration_dir.path()).unwrap();
+        calibration
+            .bind_blob("space-1", "file-00", "cid-1", 0)
+            .unwrap();
+        calibration
+            .bind_blob("space-1", "file-01", "cid-1", 0)
+            .unwrap();
+        let usage_with_two = calibration.get_global_usage().unwrap().index_usage_bytes;
+        calibration
+            .bind_blob("space-1", "file-02", "cid-1", 0)
+            .unwrap();
+        let one_binding_growth =
+            calibration.get_global_usage().unwrap().index_usage_bytes - usage_with_two;
+        assert!(one_binding_growth > 0);
+
+        let state_dir = TempDir::new().unwrap();
+        {
+            let index = BlobIndex::open(state_dir.path()).unwrap();
+            index.bind_blob("space-1", "file-00", "cid-1", 0).unwrap();
+            index.bind_blob("space-1", "file-01", "cid-1", 0).unwrap();
+            assert_eq!(
+                index.get_global_usage().unwrap().index_usage_bytes,
+                usage_with_two
+            );
+        }
+
+        let quota = usage_with_two + one_binding_growth;
+        let index = Arc::new(BlobIndex::open_with_limit(state_dir.path(), quota).unwrap());
+        let attempts: Vec<_> = (2..10)
+            .map(|number| {
+                let index = Arc::clone(&index);
+                thread::spawn(move || {
+                    let file_id = format!("file-{number:02}");
+                    let accepted = index.bind_blob("space-1", &file_id, "cid-1", 0).is_ok();
+                    (file_id, accepted)
+                })
+            })
+            .collect();
+        let results: Vec<_> = attempts
+            .into_iter()
+            .map(|attempt| attempt.join().unwrap())
+            .collect();
+        let accepted: Vec<_> = results
+            .iter()
+            .filter(|(_, accepted)| *accepted)
+            .map(|(file_id, _)| file_id.clone())
+            .collect();
+        assert_eq!(accepted.len(), 1);
+        assert_eq!(index.get_global_usage().unwrap().index_usage_bytes, quota);
+
+        let accepted_file_id = accepted[0].clone();
+        let retries: Vec<_> = (0..8)
+            .map(|_| {
+                let index = Arc::clone(&index);
+                let file_id = accepted_file_id.clone();
+                thread::spawn(move || index.bind_blob("space-1", &file_id, "cid-1", 0))
+            })
+            .collect();
+        for retry in retries {
+            retry.join().unwrap().unwrap();
+        }
+        assert_eq!(index.get_global_usage().unwrap().index_usage_bytes, quota);
+        assert!(
+            index
+                .bind_blob("space-1", "file-10", "cid-1", 0)
+                .unwrap_err()
+                .to_string()
+                .contains("file index quota exceeded")
+        );
+        drop(index);
+
+        let reopened = BlobIndex::open_with_limit(state_dir.path(), quota).unwrap();
+        assert_eq!(
+            reopened.get_global_usage().unwrap().index_usage_bytes,
+            quota
+        );
+        assert_eq!(reopened.get_space_usage("space-1").unwrap().files_count, 3);
+        assert!(
+            reopened
+                .bind_blob("space-1", "file-10", "cid-1", 0)
+                .is_err()
+        );
+        drop(reopened);
+        assert!(BlobIndex::open_with_limit(state_dir.path(), quota - 1).is_err());
+    }
+
+    #[test]
+    fn file_index_rejects_unbounded_identifiers() {
+        let temp_dir = TempDir::new().unwrap();
+        let index = BlobIndex::open(temp_dir.path()).unwrap();
+        let oversized_file_id = "x".repeat(257);
+
+        assert!(
+            index
+                .bind_blob("space-1", &oversized_file_id, "cid-1", 0)
+                .unwrap_err()
+                .to_string()
+                .contains("file id exceeds")
+        );
     }
 }
