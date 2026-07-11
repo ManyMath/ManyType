@@ -83,8 +83,10 @@ Resolve and test all of these before reconsidering an Internet-facing service:
    independently writing processes.
 3. Add per-principal request-rate and CPU budgets plus production capacity and
    idle-time evidence beyond the current connection and stream concurrency caps.
-4. Authenticate and bind `AccountDelete` to the credential account, verify its
-   signature, and implement real authorized deletion for spaces and files.
+4. Implement real authorized account, space, and file teardown plus an
+   authenticated `AccountRevertDeletion`; `AccountDelete` currently verifies
+   its signed, content-addressed, fresh credential-bound confirmation but only
+   persists the replay marker.
 5. Implement and persist ACL reader/writer evaluation, invitation redemption,
    expiry, revocation, and multi-device enrollment without making ownership
    mutable.

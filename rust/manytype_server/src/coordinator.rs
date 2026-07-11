@@ -34,6 +34,8 @@ pub struct CoordinatorConfig {
 }
 
 pub const SPACE_RECEIPT_TTL_SECS: u64 = 6 * 60 * 60;
+const ACCOUNT_DELETE_MAX_AGE_SECS: i64 = 5 * 60;
+const ACCOUNT_DELETE_MAX_FUTURE_SKEW_SECS: i64 = 60;
 
 /// Handle /coordinator.Coordinator/NetworkConfiguration
 ///
@@ -252,7 +254,8 @@ pub fn handle_space_delete(
 
 /// Handle /coordinator.Coordinator/AccountDelete
 ///
-/// No actual account teardown (that remains out of scope, same as
+/// The signed confirmation must be fresh and bound to the authenticated
+/// account, peer, and configured network. No actual account teardown (same as
 /// `SpaceDelete`), but a repeat call for the same account identity is
 /// rejected with "account is deleted": the one observable, replayable
 /// signal the official any-sync coordinator exposes for this RPC (there is
@@ -261,22 +264,84 @@ pub fn handle_space_delete(
 /// `test_vectors/phase50/oracle_account_delete.json`.
 pub fn handle_account_delete(
     request_bytes: &[u8],
+    config: &CoordinatorConfig,
+    authenticated_peer: &AuthenticatedPeer<'_>,
     sync_state: &SharedSyncState,
 ) -> Result<Vec<u8>> {
     let request = AccountDeleteRequest::decode(request_bytes)?;
-    let signed = DeletionConfirmPayloadWithSignature::decode(request.deletion_payload.as_slice())?;
-    let payload = AccountDeletionConfirmPayload::decode(signed.deletion_payload.as_slice())?;
+    let now = i64::try_from(unix_now_secs())
+        .map_err(|_| anyhow::anyhow!("current timestamp exceeds protocol range"))?;
+    validate_account_delete_confirmation(&request, config, authenticated_peer, now)?;
 
-    if sync_state.is_account_deleted(&payload.account_identity) {
+    if sync_state.is_account_deleted(authenticated_peer.account_identity()) {
         anyhow::bail!("account is deleted");
     }
-    sync_state.mark_account_deleted(&payload.account_identity)?;
+    sync_state.mark_account_deleted(authenticated_peer.account_identity())?;
 
     let response = AccountDeleteResponse {
-        to_be_deleted_timestamp: unix_now_secs() as i64,
+        to_be_deleted_timestamp: now,
     };
     tracing::info!("coordinator: AccountDelete accepted (no teardown, idempotency tracked)");
     Ok(response.encode_to_vec())
+}
+
+fn validate_account_delete_confirmation(
+    request: &AccountDeleteRequest,
+    config: &CoordinatorConfig,
+    authenticated_peer: &AuthenticatedPeer<'_>,
+    now: i64,
+) -> Result<()> {
+    anyhow::ensure!(
+        request.deletion_payload_id == compute_cid(&request.deletion_payload),
+        "account deletion payload id is incorrect"
+    );
+    let signed = DeletionConfirmPayloadWithSignature::decode(request.deletion_payload.as_slice())?;
+    let signature_bytes: [u8; 64] = signed
+        .signature
+        .as_slice()
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("account deletion signature must be 64 bytes"))?;
+    let verifying_key =
+        ed25519_dalek::VerifyingKey::from_bytes(authenticated_peer.account_identity())?;
+    verifying_key
+        .verify_strict(
+            &signed.deletion_payload,
+            &ed25519_dalek::Signature::from_bytes(&signature_bytes),
+        )
+        .map_err(|_| anyhow::anyhow!("account deletion signature verification failed"))?;
+
+    let payload = AccountDeletionConfirmPayload::decode(signed.deletion_payload.as_slice())?;
+    let identity = Key::decode(payload.account_identity.as_slice())?;
+    anyhow::ensure!(
+        identity.r#type == KeyType::Ed25519Public as i32,
+        "account deletion identity must be an Ed25519 public key"
+    );
+    let payload_identity: [u8; 32] = identity
+        .data
+        .as_slice()
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("account deletion identity must be 32 bytes"))?;
+    anyhow::ensure!(
+        &payload_identity == authenticated_peer.account_identity(),
+        "account deletion identity does not match authenticated account"
+    );
+    anyhow::ensure!(
+        payload.peer_id == authenticated_peer.id(),
+        "account deletion peer id does not match authenticated peer"
+    );
+    anyhow::ensure!(
+        payload.network_id == config.network_id,
+        "account deletion network id is incorrect"
+    );
+    anyhow::ensure!(
+        payload.timestamp >= now.saturating_sub(ACCOUNT_DELETE_MAX_AGE_SECS),
+        "account deletion timestamp is stale"
+    );
+    anyhow::ensure!(
+        payload.timestamp <= now.saturating_add(ACCOUNT_DELETE_MAX_FUTURE_SKEW_SECS),
+        "account deletion timestamp is too far in the future"
+    );
+    Ok(())
 }
 
 /// Handle /coordinator.Coordinator/DeletionLog
@@ -1170,55 +1235,241 @@ mod tests {
         assert!(response.to_be_deleted_timestamp > 0);
     }
 
-    fn account_delete_request(identity: &[u8]) -> AccountDeleteRequest {
-        let payload = AccountDeletionConfirmPayload {
-            peer_id: "peer-1".to_string(),
-            account_identity: identity.to_vec(),
-            network_id: "network-1".to_string(),
-            timestamp: unix_now_secs() as i64,
-        };
-        let signed = DeletionConfirmPayloadWithSignature {
-            deletion_payload: payload.encode_to_vec(),
-            signature: vec![],
-        };
-        AccountDeleteRequest {
-            deletion_payload_id: "payload-1".to_string(),
-            deletion_payload: signed.encode_to_vec(),
+    fn account_delete_config(network_id: &str) -> CoordinatorConfig {
+        CoordinatorConfig {
+            network_id: network_id.to_string(),
+            peer_id: "coordinator-peer".to_string(),
+            addresses: vec![],
         }
+    }
+
+    fn account_peer(seed: u8, peer_id: &'static str) -> AuthenticatedPeer<'static> {
+        AuthenticatedPeer::for_test_with_account(
+            peer_id,
+            ed25519::signing_key_from_seed(&[seed; 32])
+                .verifying_key()
+                .to_bytes(),
+        )
+    }
+
+    fn account_delete_request(
+        signer: &ed25519_dalek::SigningKey,
+        embedded_identity: [u8; 32],
+        peer_id: &str,
+        network_id: &str,
+        timestamp: i64,
+    ) -> AccountDeleteRequest {
+        let payload = AccountDeletionConfirmPayload {
+            peer_id: peer_id.to_string(),
+            account_identity: Key {
+                r#type: KeyType::Ed25519Public as i32,
+                data: embedded_identity.to_vec(),
+            }
+            .encode_to_vec(),
+            network_id: network_id.to_string(),
+            timestamp,
+        };
+        let deletion_payload = payload.encode_to_vec();
+        let signed = DeletionConfirmPayloadWithSignature {
+            signature: signer.sign(&deletion_payload).to_bytes().to_vec(),
+            deletion_payload,
+        };
+        let deletion_payload = signed.encode_to_vec();
+        AccountDeleteRequest {
+            deletion_payload_id: compute_cid(&deletion_payload),
+            deletion_payload,
+        }
+    }
+
+    fn valid_account_delete_request(seed: u8, peer_id: &str) -> AccountDeleteRequest {
+        let signer = ed25519::signing_key_from_seed(&[seed; 32]);
+        account_delete_request(
+            &signer,
+            signer.verifying_key().to_bytes(),
+            peer_id,
+            "network-1",
+            unix_now_secs() as i64,
+        )
+    }
+
+    fn assert_account_delete_error(
+        request: AccountDeleteRequest,
+        config: &CoordinatorConfig,
+        peer: &AuthenticatedPeer<'_>,
+        expected: &str,
+    ) {
+        let sync_state = new_shared_sync_state();
+        let error =
+            handle_account_delete(&request.encode_to_vec(), config, peer, &sync_state).unwrap_err();
+        assert!(
+            error.to_string().contains(expected),
+            "expected {expected:?}, got {error:#}"
+        );
+        assert!(!sync_state.is_account_deleted(peer.account_identity()));
     }
 
     #[test]
     fn account_delete_first_call_returns_timestamp() {
         let sync_state = new_shared_sync_state();
-        let request = account_delete_request(b"account-1");
-        let response_bytes = handle_account_delete(&request.encode_to_vec(), &sync_state).unwrap();
+        let config = account_delete_config("network-1");
+        let peer = account_peer(3, "peer-1");
+        let request = valid_account_delete_request(3, "peer-1");
+        let response_bytes =
+            handle_account_delete(&request.encode_to_vec(), &config, &peer, &sync_state).unwrap();
         let response = AccountDeleteResponse::decode(response_bytes.as_slice()).unwrap();
         assert!(response.to_be_deleted_timestamp > 0);
+        assert!(sync_state.is_account_deleted(peer.account_identity()));
     }
 
     #[test]
     fn account_delete_second_call_rejected() {
         let sync_state = new_shared_sync_state();
-        let request = account_delete_request(b"account-1");
-        handle_account_delete(&request.encode_to_vec(), &sync_state).unwrap();
+        let config = account_delete_config("network-1");
+        let peer = account_peer(3, "peer-1");
+        let request = valid_account_delete_request(3, "peer-1");
+        handle_account_delete(&request.encode_to_vec(), &config, &peer, &sync_state).unwrap();
 
-        let error = handle_account_delete(&request.encode_to_vec(), &sync_state).unwrap_err();
+        let error = handle_account_delete(&request.encode_to_vec(), &config, &peer, &sync_state)
+            .unwrap_err();
         assert!(error.to_string().contains("account is deleted"));
     }
 
     #[test]
     fn account_delete_tracks_identity_independently() {
         let sync_state = new_shared_sync_state();
+        let config = account_delete_config("network-1");
+        let first_peer = account_peer(3, "peer-1");
         handle_account_delete(
-            &account_delete_request(b"account-1").encode_to_vec(),
+            &valid_account_delete_request(3, "peer-1").encode_to_vec(),
+            &config,
+            &first_peer,
             &sync_state,
         )
         .unwrap();
 
-        let other = account_delete_request(b"account-2");
-        let response_bytes = handle_account_delete(&other.encode_to_vec(), &sync_state).unwrap();
+        let other_peer = account_peer(4, "peer-2");
+        let other = valid_account_delete_request(4, "peer-2");
+        let response_bytes =
+            handle_account_delete(&other.encode_to_vec(), &config, &other_peer, &sync_state)
+                .unwrap();
         let response = AccountDeleteResponse::decode(response_bytes.as_slice()).unwrap();
         assert!(response.to_be_deleted_timestamp > 0);
+    }
+
+    #[test]
+    fn authenticated_account_delete_survives_restart() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = account_delete_config("network-1");
+        let peer = account_peer(3, "peer-1");
+        let request = valid_account_delete_request(3, "peer-1");
+        {
+            let sync_state = new_shared_sync_state_at(temp_dir.path()).unwrap();
+            handle_account_delete(&request.encode_to_vec(), &config, &peer, &sync_state).unwrap();
+        }
+
+        let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        let error =
+            handle_account_delete(&request.encode_to_vec(), &config, &peer, &reopened).unwrap_err();
+        assert!(error.to_string().contains("account is deleted"));
+    }
+
+    #[test]
+    fn account_delete_rejects_forged_signature() {
+        let config = account_delete_config("network-1");
+        let peer = account_peer(3, "peer-1");
+        let mut request = valid_account_delete_request(3, "peer-1");
+        let mut signed =
+            DeletionConfirmPayloadWithSignature::decode(request.deletion_payload.as_slice())
+                .unwrap();
+        signed.signature[0] ^= 1;
+        request.deletion_payload = signed.encode_to_vec();
+        request.deletion_payload_id = compute_cid(&request.deletion_payload);
+
+        assert_account_delete_error(request, &config, &peer, "signature verification failed");
+    }
+
+    #[test]
+    fn account_delete_rejects_account_mismatch() {
+        let config = account_delete_config("network-1");
+        let peer = account_peer(3, "peer-1");
+        let signer = ed25519::signing_key_from_seed(&[3; 32]);
+        let other_identity = ed25519::signing_key_from_seed(&[4; 32])
+            .verifying_key()
+            .to_bytes();
+        let request = account_delete_request(
+            &signer,
+            other_identity,
+            "peer-1",
+            "network-1",
+            unix_now_secs() as i64,
+        );
+
+        assert_account_delete_error(
+            request,
+            &config,
+            &peer,
+            "does not match authenticated account",
+        );
+    }
+
+    #[test]
+    fn account_delete_rejects_peer_mismatch() {
+        let config = account_delete_config("network-1");
+        let peer = account_peer(3, "peer-1");
+        let request = valid_account_delete_request(3, "peer-2");
+
+        assert_account_delete_error(request, &config, &peer, "does not match authenticated peer");
+    }
+
+    #[test]
+    fn account_delete_rejects_network_mismatch() {
+        let config = account_delete_config("network-1");
+        let peer = account_peer(3, "peer-1");
+        let signer = ed25519::signing_key_from_seed(&[3; 32]);
+        let request = account_delete_request(
+            &signer,
+            signer.verifying_key().to_bytes(),
+            "peer-1",
+            "other-network",
+            unix_now_secs() as i64,
+        );
+
+        assert_account_delete_error(request, &config, &peer, "network id is incorrect");
+    }
+
+    #[test]
+    fn account_delete_rejects_stale_and_future_timestamps() {
+        let config = account_delete_config("network-1");
+        let peer = account_peer(3, "peer-1");
+        let signer = ed25519::signing_key_from_seed(&[3; 32]);
+        let now = unix_now_secs() as i64;
+        let stale = account_delete_request(
+            &signer,
+            signer.verifying_key().to_bytes(),
+            "peer-1",
+            "network-1",
+            now - ACCOUNT_DELETE_MAX_AGE_SECS - 10,
+        );
+        assert_account_delete_error(stale, &config, &peer, "timestamp is stale");
+
+        let future = account_delete_request(
+            &signer,
+            signer.verifying_key().to_bytes(),
+            "peer-1",
+            "network-1",
+            now + ACCOUNT_DELETE_MAX_FUTURE_SKEW_SECS + 10,
+        );
+        assert_account_delete_error(future, &config, &peer, "too far in the future");
+    }
+
+    #[test]
+    fn account_delete_rejects_payload_id_mismatch() {
+        let config = account_delete_config("network-1");
+        let peer = account_peer(3, "peer-1");
+        let mut request = valid_account_delete_request(3, "peer-1");
+        request.deletion_payload_id = compute_cid(b"different payload");
+
+        assert_account_delete_error(request, &config, &peer, "payload id is incorrect");
     }
 
     #[test]

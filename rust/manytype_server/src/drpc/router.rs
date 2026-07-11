@@ -313,7 +313,12 @@ where
         }
         "/coordinator.Coordinator/AccountDelete" => {
             let request_bytes = stream.read_message().await?;
-            match coordinator::handle_account_delete(&request_bytes, &state.sync_state) {
+            match coordinator::handle_account_delete(
+                &request_bytes,
+                &state.coordinator_config,
+                authenticated_peer,
+                &state.sync_state,
+            ) {
                 Ok(response_bytes) => {
                     write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
                         .await
@@ -898,6 +903,38 @@ mod tests {
         (space_id, raw_header, account_identity)
     }
 
+    fn valid_account_delete_request() -> manytype_proto::coordinator::AccountDeleteRequest {
+        use manytype_proto::coordinator::{
+            AccountDeleteRequest, AccountDeletionConfirmPayload,
+            DeletionConfirmPayloadWithSignature,
+        };
+
+        let account_key = ed25519::signing_key_from_seed(&[2; 32]);
+        let payload = AccountDeletionConfirmPayload {
+            peer_id: test_peer().id().to_string(),
+            account_identity: Key {
+                r#type: KeyType::Ed25519Public as i32,
+                data: account_key.verifying_key().to_bytes().to_vec(),
+            }
+            .encode_to_vec(),
+            network_id: "test-net".to_string(),
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64,
+        }
+        .encode_to_vec();
+        let signed = DeletionConfirmPayloadWithSignature {
+            signature: account_key.sign(&payload).to_bytes().to_vec(),
+            deletion_payload: payload,
+        }
+        .encode_to_vec();
+        AccountDeleteRequest {
+            deletion_payload_id: compute_cid(&signed),
+            deletion_payload: signed,
+        }
+    }
+
     fn test_state() -> ServerState {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1208,6 +1245,41 @@ mod tests {
         assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
         assert_eq!(close_frame.stream_id, 1);
         assert_eq!(close_frame.message_id, 2);
+
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_dispatch_authenticated_account_delete() {
+        use manytype_proto::coordinator::AccountDeleteResponse;
+
+        let (client, server) = duplex(4096);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+        let state = test_state();
+
+        let handle = tokio::spawn(async move {
+            dispatch(
+                1,
+                "/coordinator.Coordinator/AccountDelete",
+                &mut server_stream,
+                &state,
+                &test_peer(),
+            )
+            .await
+            .unwrap();
+        });
+
+        client_stream
+            .write_message(0, 0, &valid_account_delete_request().encode_to_vec())
+            .await
+            .unwrap();
+        let frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(frame.kind, KIND_MESSAGE);
+        let response = AccountDeleteResponse::decode(frame.data.as_ref()).unwrap();
+        assert!(response.to_be_deleted_timestamp > 0);
+        let close_frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
 
         handle.await.unwrap();
     }
