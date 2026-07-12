@@ -75,7 +75,7 @@ class ManytypeDatabase extends _$ManytypeDatabase {
   /// [onWebStorageDiagnostics], if given, is invoked once the storage
   /// backend resolves on web (ignored on native). Use it to warn callers
   /// when the browser fell back to an implementation that isn't durable
-  /// (`inMemory`) or isn't safe across multiple tabs (`unsafeIndexedDb`) : 
+  /// (`inMemory`) or isn't safe across multiple tabs (`unsafeIndexedDb`) :
   /// see [WebStorageDiagnostics].
   ManytypeDatabase(String dbPath,
       {WebStorageDiagnosticsCallback? onWebStorageDiagnostics})

@@ -92,7 +92,7 @@ Future<Map<String, Value>> replayObjectDetails({
         }
       }
     } catch (_) {
-      // Encrypted-without-key, corrupt, or otherwise unreadable change : 
+      // Encrypted-without-key, corrupt, or otherwise unreadable change :
       // skip silently and continue the replay (matches list.dart:199-201).
       continue;
     }

@@ -384,8 +384,7 @@ void main() {
     test(
         'a post-creation `color`-only edit is not shadowed by the stale '
         'creation-time `relationOptionColor` (BREADTH-05 regression: '
-        '`color` is the official-client canonical key and must win)',
-        () async {
+        '`color` is the official-client canonical key and must win)', () async {
       final input = OptionIndexInput(
         objectId: 'opt-recolor',
         rawTreeChanges: <Uint8List>[

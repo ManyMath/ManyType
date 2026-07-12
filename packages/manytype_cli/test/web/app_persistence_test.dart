@@ -50,8 +50,7 @@ void main() {
       await db2.close();
 
       if (implementation == WasmStorageImplementation.inMemory) {
-        printOnFailure(
-            'chosenImplementation was inMemory in this environment: '
+        printOnFailure('chosenImplementation was inMemory in this environment: '
             'cross-instance persistence cannot be observed here, but the '
             'production constructor completed without the UnsupportedError '
             'it used to throw unconditionally.');

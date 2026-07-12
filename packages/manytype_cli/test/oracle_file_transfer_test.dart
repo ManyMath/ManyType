@@ -87,8 +87,7 @@ void main() {
       // Content-addressed: the filenode dedups by CID across test runs, so
       // vary the payload per run or a repeat run "Skip"s the upload RPC
       // entirely and never exercises the upload path.
-      final uploadedContent =
-          'Phase 30 file transfer payload $mnemonic';
+      final uploadedContent = 'Phase 30 file transfer payload $mnemonic';
       await sourceFile.writeAsString(uploadedContent);
 
       final uploadResult = await Process.run(

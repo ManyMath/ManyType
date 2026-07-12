@@ -18,7 +18,7 @@ Future<void> configureWebTestDatabaseAssets() async {
 }
 
 /// Spawns the shared asset server and points
-/// [database_web.webAppAssetUriOverride] at it, so [openDatabaseForApp] : 
+/// [database_web.webAppAssetUriOverride] at it, so [openDatabaseForApp] :
 /// the production connection [ManytypeDatabase]'s default constructor uses
 /// on web: can resolve its assets under `dart test -p chrome`, which has
 /// no origin root to serve the relative-path defaults from.
