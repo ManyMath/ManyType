@@ -55,10 +55,14 @@ melos:
         real manytype_server themselves and race on port allocation under
         concurrent test-file execution (`-j 4` reproduced intermittent
         "Address already in use" failures; `-j 1` did not).
+        The Flutter product package is intentionally excluded here because
+        its `dart:ui` tests run with `flutter test` in product-web.yml.
       exec:
         concurrency: 1
       packageFilters:
         dirExists: test
+        ignore:
+          - manytype
     test:oracle:
       run: dart test --tags=round_trip -j 1
       description: |
