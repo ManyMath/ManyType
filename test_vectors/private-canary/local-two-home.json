@@ -1,0 +1,32 @@
+{
+  "captured_at": "2026-07-14T00:41:16Z",
+  "scope": "loopback native QUIC protocol evidence; not a ManyTier deployment",
+  "git_sha": "a111e53e586e35cab65739131232a2d56dcc0901",
+  "source_tree_clean": true,
+  "server_mode": "private_canary",
+  "manytier_network_reachable": false,
+  "server_binary_sha256": "dfad29b95bca37dcf8f06d425258b24f1ae0197f8b59ba6e3e590d31a6c93bd5",
+  "ffi_library_sha256": "0d09de6eb3fdac1a3e8eaa06ac6b9052744ad72a9cbe0aa2d551a1c440c1b62c",
+  "space_id": "bafyreihseun4pgublhvd5zltxrto5ns2rbjjaks2zguy2qv5yna44feqcu.151mt3x0ipg0b",
+  "client_peer_id": "12D3KooWRdEygdVsRZoGEwQsQnbX3x3BZdajEPcWDfQP6G1mE4xr",
+  "account_identity_hex": "ffae04d1d91f258d5498e7dfc38f9a9475986db3a26a662828f7f0827f692f0d",
+  "server_peer_id": "12D3KooWMuhLz5yXXRb2R73aeUnxGPkH6eBzmh1bh9depR4msaCu",
+  "object_id": "bafyreiaiply5mmefkieonbp2znd4v3hwlii6mvdjq5j7oga2jx3iqlkpfm",
+  "relation_id": "bafyreigatajsafmb5nayapvmr5ilqfxmzegx5zf5l6ijckzipdm5heiomy",
+  "file_object_id": "bafyreigaiqdlnv5pkjbujgx7ujoretku3wx4mbiagekoiuwminbivdwyue",
+  "attachment_cid": "bafyreic53ojg2hgjwxwv75cel2acea2dz32u2unrjz2kpqirxfa35p6w7u",
+  "attachment_sha256": "5ddb926d1cc9b5ed5ff4445e80220343cef54d51b14e74a7c111b941bebfd6fd",
+  "unauthorized_attempt_sha256": "639bdf35afcf66e520d5c33c020ac712401ac8857e10735d0255efecb0e64ae7",
+  "server_ready_events": 3,
+  "shutdown_complete_events": 3,
+  "checks": {
+    "fresh_b_replayed_a_crdt": true,
+    "b_attachment_bytes_matched": true,
+    "a_replayed_b_crdt": true,
+    "client_and_server_restart_replayed_crdt": true,
+    "unauthorized_identity_rejected": true,
+    "backup_restore_replayed_crdt": true,
+    "backup_restore_attachment_bytes_matched": true
+  },
+  "success": true
+}
