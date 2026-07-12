@@ -1,0 +1,91 @@
+{
+  "captured_at": "2026-07-14T01:51:56Z",
+  "event_window_started_at": "2026-07-14T01:36:53Z",
+  "scope": "native x86-64 QUIC canary over a private ManyTier overlay",
+  "client_topology": "two isolated client home volumes sharing one recovery-derived account configuration, invoked as fresh native processes in one Docker network namespace",
+  "physical_two_device_canary_proven": false,
+  "git_sha": "563a73b0f573ad2d8881cce30be85c916431c038",
+  "source_tree_clean_before_capture": true,
+  "server_mode": "private_canary",
+  "public_server_deployment_authorized": false,
+  "manytier": {
+    "git_sha": "8282a3847ba10b986e849d0ea3785f439f28e6ad",
+    "image_id": "sha256:50b72c0e37ff4402eb1f93c314f3edadfb3f87aac3c3277add3e7028cb037cb1",
+    "network_id": "2105b78c5f78ff8e",
+    "client_node_id": "1192dc467c",
+    "client_addresses": [
+      "10.88.0.13/24",
+      "10.88.0.13/32"
+    ],
+    "server_address": "10.88.0.12:33020",
+    "network_status": "OK",
+    "container_privileged": false,
+    "container_capabilities_added": [
+      "CAP_NET_ADMIN"
+    ],
+    "container_capabilities_dropped": [
+      "ALL"
+    ],
+    "published_ports": [],
+    "no_new_privileges": true
+  },
+  "server": {
+    "binary_sha256": "910150bc0ab58e7edd114cbc9304bfdeee71346a519a499cb484c2775378288c",
+    "peer_id": "12D3KooWJnMvAPsG8oCJrgES1HKdVcX2H77LWMJoh8u2kLz7L58w",
+    "quic_listener": "10.88.0.12:33020/udp",
+    "health_listener": "127.0.0.1:33021/tcp",
+    "service_enabled": true,
+    "service_active": true
+  },
+  "client": {
+    "runtime": "Dart 3.12.2 AOT linux_x64",
+    "cli_binary_sha256": "7b3d9a2e12de17afb53ee24a9a68cafca42d7104a083f03c1309fbc44bbe4036",
+    "ffi_library_sha256": "d459c4e1c0e3f31827281c2760ea2647d39b25ea6f3871ae01f794d4388b835f",
+    "runtime_image_id": "sha256:392f5119c7d369f4a6a68a059392671a3b134930a4f28f818300089ad4d42b4f",
+    "intended_sync_profile_count": 2,
+    "client_peer_id": "12D3KooWSja8NGPaiH7gUTggGY2pNXgzLZNN9uVNzEjGRaEA2JYm",
+    "account_identity_hex": "e3bb63b42476c24daa1e5a20b6dc09d16f61b39a1c6fb72e9e17802383331510",
+    "space_id": "bafyreidsttgra3tah6ezat3lr4eeiowkpsuaubenqo5xyzg5tmceztbkzy.w5tmu44lyekx"
+  },
+  "objects": {
+    "primary_object_id": "bafyreiewf4yjwr5rcrfj3z5grgtoqz3u27ct2spbxlgp5svdpyld3epulq",
+    "deleted_object_id": "bafyreif4ys6fbow6eqlks3pzuxn4cto43t5jncvqtghh25w6vnv5i57io4",
+    "relation_id": "bafyreidarux2svzu5r6lqjb73s6kwcdqa5wj6fejrsjo2lzodgxix26stq",
+    "file_object_id": "bafyreiagkg4tf62ssc7bki5sfhbcv3kplhcsw47dockyrcsgnpfktvw3ea",
+    "attachment_cid": "bafyreifqeqfmuqgke32qibfxta6g6saqybg2finqbukafgqjlahafmnxxe",
+    "attachment_sha256": "b0240aca40ca26f50404b7983c6f4810c04da2a1b00d14029a09580e02b1b7b9"
+  },
+  "backup": {
+    "path": "/srv/backups/manytype-private-canary/20260714T015015Z-563a73b",
+    "file_count": 5,
+    "bytes": 1183917,
+    "excluded_server_identity_key": true
+  },
+  "events": {
+    "connection_accepted": 46,
+    "credential_authenticated": 45,
+    "connection_rejected": 1,
+    "connection_rejected_access_policy": 1,
+    "server_ready": 2,
+    "shutdown_started": 2,
+    "shutdown_complete": 2
+  },
+  "unauthorized_attempt_sha256": "c8773029d2bec21c6e291cf02691885601ae7246804c1eca0dca897eb98e2572",
+  "checks": {
+    "manytier_network_reachable": true,
+    "fresh_b_replayed_a_crdt": true,
+    "b_attachment_bytes_matched": true,
+    "a_replayed_b_crdt": true,
+    "server_peer_stable_across_restart": true,
+    "a_to_b_crdt_after_restart": true,
+    "b_to_a_crdt_after_restart": true,
+    "fresh_client_processes_used": true,
+    "unauthorized_identity_rejected": true,
+    "server_recorded_access_policy_rejection": true,
+    "a_delete_converged_to_b": true,
+    "backup_restore_replayed_crdt": true,
+    "backup_restore_attachment_bytes_matched": true,
+    "backup_restore_preserved_delete": true
+  },
+  "success": true
+}

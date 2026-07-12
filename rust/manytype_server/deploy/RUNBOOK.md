@@ -119,22 +119,27 @@ create a new backup before relying on restore.
 
 ## Canary proof
 
-Use a disposable workspace with a text object and a small attachment. Configure
-device A, sync, then configure device B with the same account and confirm the
-object and attachment arrive. Edit on B and confirm the change arrives on A.
-Restart the service and both clients, repeat one edit in each direction, then
-capture timestamps and the `server_ready`, authorization failure (from a
-non-allowlisted test peer), and `shutdown_complete` journal events. Finally,
-perform an offline backup, delete only the disposable workspace data, restore,
-and confirm both devices converge again.
+Use a disposable workspace with a text object, a separate deletion target, and
+a small attachment. Configure device A, sync, then configure device B with the
+same account and confirm both objects and the attachment arrive. Edit on B and
+confirm the change arrives on A. Restart the service and both clients, repeat
+one edit in each direction, then delete the target on A and confirm the deletion
+arrives on B. Capture timestamps and the `server_ready`, authorization failure
+(from a non-allowlisted test peer), and `shutdown_complete` journal events.
+Finally, perform an offline backup, delete only the disposable server data,
+restore, clear B's local database, and confirm the surviving object, attachment,
+and deletion all replay from restored server state.
 
-Required external evidence that this repository cannot fabricate:
+[`manytier-overlay-two-home.json`](../../../test_vectors/private-canary/manytier-overlay-two-home.json)
+records this workflow over the private ManyTier network with two isolated client
+home volumes, fresh native processes, an overlay-only server listener, and a
+separate denied identity. It proves the locally controllable transport, CRDT,
+attachment, restart, deletion, authorization, and restore gates for one shared
+recovery-derived account configuration.
 
-- the real account identity and shared same-phrase device peer ID;
-- a private host or VPN address reachable by both devices over UDP;
-- firewall rules restricting UDP/33020 to those devices or that VPN;
-- the native client transport wired to this server configuration;
-- observed two-way object and attachment convergence across restart and restore.
-
-Until all five exist, the server is packaged and locally controllable, but a
-real two-device canary remains blocked and public deployment remains prohibited.
+That capture uses one Docker network namespace on one workstation, so it does
+not prove operation from two physical devices. Before calling the physical
+two-device trial complete, repeat the same workflow from two native devices and
+record their private-overlay reachability plus observed convergence. The
+automated capture does not authorize public deployment; public deployment
+remains prohibited.
