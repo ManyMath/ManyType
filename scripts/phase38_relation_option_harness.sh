@@ -34,6 +34,7 @@ MANYTYPE_HOME="$TMPDIR/manytype-home"
 MANYTYPE_HOME_2="$TMPDIR/manytype-home-2"
 NETWORK_YML="$TMPDIR/network.yml"
 SHARED_CONFIG="$TMPDIR/shared-config.toml"
+ARTIFACT_DIR="${MANYTYPE_ARTIFACT_DIR:-$ROOT_DIR/test_vectors/phase38}"
 SERVER_PID=""
 
 cleanup() {
@@ -49,7 +50,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$ROOT_DIR/test_vectors/phase38"
+mkdir -p "$ARTIFACT_DIR"
 mkdir -p "$MANYTYPE_HOME" "$MANYTYPE_HOME_2"
 
 export LD_LIBRARY_PATH="$ROOT_DIR/rust/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
@@ -223,8 +224,8 @@ if ! grep -q '\[status\] Done (red)' "$TMPDIR/read-a-home2.txt"; then
 fi
 
 # 7. Write scenario A artifact JSON + copy sync capture
-ARTIFACT_A="$ROOT_DIR/test_vectors/phase38/status-create.json"
-SYNC_A="$ROOT_DIR/test_vectors/phase38/status-create-sync.json"
+ARTIFACT_A="$ARTIFACT_DIR/status-create.json"
+SYNC_A="$ARTIFACT_DIR/status-create-sync.json"
 cp "$MANYTYPE_SYNC_CAPTURE_A" "$SYNC_A"
 python3 - "$ARTIFACT_A" "$TARGET_A" "$OPT_ID_A" "$SYNC_A" <<'PY'
 import datetime as dt, json, pathlib, sys
@@ -321,8 +322,8 @@ if ! grep -q '\[taglist\] Alpha, Beta, Gamma' "$TMPDIR/read-b-home2.txt"; then
 fi
 
 # 7. Write artifact + sync capture
-ARTIFACT_B="$ROOT_DIR/test_vectors/phase38/tag-multi.json"
-SYNC_B="$ROOT_DIR/test_vectors/phase38/tag-multi-sync.json"
+ARTIFACT_B="$ARTIFACT_DIR/tag-multi.json"
+SYNC_B="$ARTIFACT_DIR/tag-multi-sync.json"
 cp "$MANYTYPE_SYNC_CAPTURE_B" "$SYNC_B"
 python3 - "$ARTIFACT_B" "$TARGET_B" "$OPT_ALPHA" "$OPT_BETA" "$OPT_GAMMA" "$SYNC_B" <<'PY'
 import datetime as dt, json, pathlib, sys
@@ -413,8 +414,8 @@ if ! grep -q '\[taglist\] Alpha, Gamma, Delta' "$TMPDIR/read-c-home2.txt"; then
 fi
 
 # 6. Write artifact + sync capture
-ARTIFACT_C="$ROOT_DIR/test_vectors/phase38/tag-add-remove.json"
-SYNC_C="$ROOT_DIR/test_vectors/phase38/tag-add-remove-sync.json"
+ARTIFACT_C="$ARTIFACT_DIR/tag-add-remove.json"
+SYNC_C="$ARTIFACT_DIR/tag-add-remove-sync.json"
 cp "$MANYTYPE_SYNC_CAPTURE_C" "$SYNC_C"
 python3 - "$ARTIFACT_C" "$TARGET_C" "$OPT_ALPHA" "$OPT_BETA" "$OPT_GAMMA" "$OPT_DELTA" "$SYNC_C" <<'PY'
 import datetime as dt, json, pathlib, sys

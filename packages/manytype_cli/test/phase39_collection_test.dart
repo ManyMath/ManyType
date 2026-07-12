@@ -11,11 +11,23 @@ void main() {
     'phase39 harness + verifier green',
     () async {
       final repoRoot = _findRepoRoot();
+      final artifactDir = await Directory.systemTemp.createTemp(
+        'manytype_phase39_artifacts_',
+      );
+      addTearDown(() async {
+        if (await artifactDir.exists()) {
+          await artifactDir.delete(recursive: true);
+        }
+      });
 
       final harnessResult = await Process.run(
         'bash',
         ['scripts/phase39_collection_harness.sh'],
         workingDirectory: repoRoot,
+        environment: {
+          ...Platform.environment,
+          'MANYTYPE_ARTIFACT_DIR': artifactDir.path,
+        },
       );
       expect(
         harnessResult.exitCode,
@@ -32,7 +44,15 @@ void main() {
 
       final verifierResult = await Process.run(
         'python3',
-        ['scripts/verify_phase39_artifacts.py'],
+        [
+          'scripts/verify_phase39_artifacts.py',
+          '--scenario-a',
+          '${artifactDir.path}/scenario_a_create_add.json',
+          '--scenario-b',
+          '${artifactDir.path}/scenario_b_remove.json',
+          '--scenario-c',
+          '${artifactDir.path}/scenario_c_move.json',
+        ],
         workingDirectory: repoRoot,
       );
       expect(

@@ -21,6 +21,7 @@ MANYTYPE_HOME="$TMPDIR/manytype-home"
 MANYTYPE_HOME_2="$TMPDIR/manytype-home-2"
 NETWORK_YML="$TMPDIR/network.yml"
 SHARED_CONFIG="$TMPDIR/shared-config.toml"
+ARTIFACT_DIR="${MANYTYPE_ARTIFACT_DIR:-$ROOT_DIR/test_vectors/phase39}"
 SERVER_PID=""
 
 cleanup() {
@@ -36,7 +37,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$ROOT_DIR/test_vectors/phase39"
+mkdir -p "$ARTIFACT_DIR"
 mkdir -p "$MANYTYPE_HOME" "$MANYTYPE_HOME_2"
 
 export LD_LIBRARY_PATH="$ROOT_DIR/rust/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
@@ -254,8 +255,8 @@ assert_member_lines \
   "- Member 2 ($M2_ID)" \
   "- Member 1 ($M1_ID)"
 
-ARTIFACT_A="$ROOT_DIR/test_vectors/phase39/scenario_a_create_add.json"
-SYNC_A="$ROOT_DIR/test_vectors/phase39/scenario_a_create_add-sync.json"
+ARTIFACT_A="$ARTIFACT_DIR/scenario_a_create_add.json"
+SYNC_A="$ARTIFACT_DIR/scenario_a_create_add-sync.json"
 cp "$MANYTYPE_SYNC_CAPTURE_A" "$SYNC_A"
 python3 - "$ARTIFACT_A" "$COLL_ID" "$M1_ID" "$M2_ID" "$M3_ID" "$SYNC_A" <<'PY'
 import datetime as dt
@@ -311,8 +312,8 @@ assert_member_lines \
   "- Member 3 ($M3_ID)" \
   "- Member 1 ($M1_ID)"
 
-ARTIFACT_B="$ROOT_DIR/test_vectors/phase39/scenario_b_remove.json"
-SYNC_B="$ROOT_DIR/test_vectors/phase39/scenario_b_remove-sync.json"
+ARTIFACT_B="$ARTIFACT_DIR/scenario_b_remove.json"
+SYNC_B="$ARTIFACT_DIR/scenario_b_remove-sync.json"
 cp "$MANYTYPE_SYNC_CAPTURE_B" "$SYNC_B"
 python3 - "$ARTIFACT_B" "$COLL_ID" "$M1_ID" "$M2_ID" "$M3_ID" "$SYNC_B" <<'PY'
 import datetime as dt
@@ -370,8 +371,8 @@ assert_member_lines \
   "- Member 1 ($M1_ID)" \
   "- Member 3 ($M3_ID)"
 
-ARTIFACT_C="$ROOT_DIR/test_vectors/phase39/scenario_c_move.json"
-SYNC_C="$ROOT_DIR/test_vectors/phase39/scenario_c_move-sync.json"
+ARTIFACT_C="$ARTIFACT_DIR/scenario_c_move.json"
+SYNC_C="$ARTIFACT_DIR/scenario_c_move-sync.json"
 cp "$MANYTYPE_SYNC_CAPTURE_C" "$SYNC_C"
 python3 - "$ARTIFACT_C" "$COLL_ID" "$M1_ID" "$M3_ID" "$SYNC_C" <<'PY'
 import datetime as dt

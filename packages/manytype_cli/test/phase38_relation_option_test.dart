@@ -22,12 +22,24 @@ void main() {
     'phase38 harness + verifier green',
     () async {
       final repoRoot = _findRepoRoot();
+      final artifactDir = await Directory.systemTemp.createTemp(
+        'manytype_phase38_artifacts_',
+      );
+      addTearDown(() async {
+        if (await artifactDir.exists()) {
+          await artifactDir.delete(recursive: true);
+        }
+      });
 
       // 1. Run the two-home harness.
       final harnessResult = await Process.run(
         'bash',
         ['scripts/phase38_relation_option_harness.sh'],
         workingDirectory: repoRoot,
+        environment: {
+          ...Platform.environment,
+          'MANYTYPE_ARTIFACT_DIR': artifactDir.path,
+        },
       );
       expect(
         harnessResult.exitCode,
@@ -45,7 +57,15 @@ void main() {
       // 2. Run the offline verifier against the artifacts the harness wrote.
       final verifierResult = await Process.run(
         'python3',
-        ['scripts/verify_phase38_artifacts.py'],
+        [
+          'scripts/verify_phase38_artifacts.py',
+          '--status-create',
+          '${artifactDir.path}/status-create.json',
+          '--tag-multi',
+          '${artifactDir.path}/tag-multi.json',
+          '--tag-add-remove',
+          '${artifactDir.path}/tag-add-remove.json',
+        ],
         workingDirectory: repoRoot,
       );
       expect(
