@@ -20,6 +20,7 @@ TMPDIR="$(mktemp -d)"
 MANYTYPE_HOME="$TMPDIR/manytype-home"
 MANYTYPE_HOME_2="$TMPDIR/manytype-home-2"
 NETWORK_YML="$TMPDIR/network.yml"
+SHARED_CONFIG="$TMPDIR/shared-config.toml"
 SERVER_PID=""
 
 cleanup() {
@@ -43,12 +44,19 @@ export LD_LIBRARY_PATH="$ROOT_DIR/rust/target/release${LD_LIBRARY_PATH:+:$LD_LIB
 wait_for_server_ready() {
   local log_file="$1"
   for _ in $(seq 1 30); do
-    if rg -q 'Listening on QUIC' "$log_file" && rg -q 'Server peer ID:' "$log_file"; then
+    if python3 "$ROOT_DIR/scripts/read_server_ready.py" "$log_file" \
+      >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
   done
   return 1
+}
+
+prepare_second_home() {
+  rm -rf "$MANYTYPE_HOME_2/.manytype"
+  mkdir -p "$MANYTYPE_HOME_2/.manytype"
+  install -m 600 "$SHARED_CONFIG" "$MANYTYPE_HOME_2/.manytype/config.toml"
 }
 
 read_member_lines() {
@@ -114,6 +122,9 @@ if ! (cd "$RUST_DIR" && cargo build -p manytype_server --bin manytype_server 2>/
     "$RUST_DIR/target/debug/manytype_server"
 fi
 
+printf 'Building native QUIC bridge...\n'
+(cd "$RUST_DIR" && cargo build --release --locked -p manytype_quic_ffi)
+
 cat >"$TMPDIR/server.toml" <<EOF
 deployment_mode = "development"
 quic_listen = "127.0.0.1:$PORT"
@@ -131,8 +142,8 @@ if ! wait_for_server_ready "$TMPDIR/server.log"; then
   exit 1
 fi
 
-PEER_ID="$(sed -n 's/.*Server peer ID: //p' "$TMPDIR/server.log" | tail -1)"
-if [[ -z "$PEER_ID" ]]; then
+if ! PEER_ID="$(python3 "$ROOT_DIR/scripts/read_server_ready.py" \
+  "$TMPDIR/server.log")"; then
   printf 'FAIL: could not parse server peer id\n' >&2
   exit 1
 fi
@@ -169,6 +180,7 @@ EOF
 
 printf 'Preparing Manytype CLI temp home...\n'
 HOME="$MANYTYPE_HOME" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" init >/dev/null
+install -m 600 "$MANYTYPE_HOME/.manytype/config.toml" "$SHARED_CONFIG"
 
 printf '\n=== Phase 39 Scenario A: create collection + add 3 members ===\n'
 
@@ -230,7 +242,7 @@ assert_member_lines \
   "- Member 2 ($M2_ID)" \
   "- Member 1 ($M1_ID)"
 
-cp -r "$MANYTYPE_HOME/.manytype" "$MANYTYPE_HOME_2/.manytype"
+prepare_second_home
 HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --server "127.0.0.1:$PORT" --network-config "$NETWORK_YML" sync >/dev/null
 HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
@@ -271,8 +283,6 @@ pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
 printf 'Scenario A OK: %s\n' "$ARTIFACT_A"
 
-rm -rf "$MANYTYPE_HOME_2/.manytype"
-
 printf '\n=== Phase 39 Scenario B: remove 1 member ===\n'
 
 MANYTYPE_SYNC_CAPTURE_B="$TMPDIR/sync-collection-remove.json"
@@ -290,7 +300,7 @@ assert_member_lines \
   "- Member 3 ($M3_ID)" \
   "- Member 1 ($M1_ID)"
 
-cp -r "$MANYTYPE_HOME/.manytype" "$MANYTYPE_HOME_2/.manytype"
+prepare_second_home
 HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --server "127.0.0.1:$PORT" --network-config "$NETWORK_YML" sync >/dev/null
 HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
@@ -329,8 +339,6 @@ pathlib.Path(artifact_path).write_text(json.dumps(artifact, indent=2) + "\n")
 PY
 printf 'Scenario B OK: %s\n' "$ARTIFACT_B"
 
-rm -rf "$MANYTYPE_HOME_2/.manytype"
-
 printf '\n=== Phase 39 Scenario C: move/reorder 1 member ===\n'
 
 MANYTYPE_SYNC_CAPTURE_C="$TMPDIR/sync-collection-move.json"
@@ -351,7 +359,7 @@ assert_member_lines \
   "- Member 1 ($M1_ID)" \
   "- Member 3 ($M3_ID)"
 
-cp -r "$MANYTYPE_HOME/.manytype" "$MANYTYPE_HOME_2/.manytype"
+prepare_second_home
 HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
   --server "127.0.0.1:$PORT" --network-config "$NETWORK_YML" sync >/dev/null
 HOME="$MANYTYPE_HOME_2" dart run "$ROOT_DIR/packages/manytype_cli/bin/manytype.dart" \
