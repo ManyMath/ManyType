@@ -10,20 +10,13 @@ library;
 // NativeDatabase.createInBackground, a background isolate whose SendPort
 // replies never arrive inside testWidgets() in this environment.
 //
-// Scope note: only the initial empty-state render is asserted here.
-// Interaction-driven mutations (tapping Create/Delete, entering search text)
-// were attempted and are NOT covered -- isolated this session to an
-// environment-wide defect, not a app or test-file bug: ANY async Future
-// triggered from inside a testWidgets() callback body (a Provider read, a
-// tap handler, even a bare `await Directory.systemTemp.createTemp()` with
-// zero app code involved) hangs indefinitely in this machine's Flutter SDK
-// (3.44.4-0.0.pre-5, stable channel) -- confirmed reproducible in a
-// completely fresh `flutter create` scaffold, so it is not fixable from
-// this repo. The identical call from setUp()/tearDown() (outside
-// testWidgets' zone) works fine, which is what makes the pre-warming below
-// possible at all. See ROADMAP.md's ManyType section for the full
-// isolation writeup and the follow-up once this is unblocked (SDK
-// update/reinstall, on a different machine, or a future Flutter fix).
+// The tests intentionally share one read-only account/database fixture.
+// AccountRegistry's native lifecycle serializer retains the Future from the
+// zone that opened it; rebuilding the fixture in each testWidgets zone makes
+// the next zone wait on its predecessor indefinitely on this Flutter runner.
+// Pre-warming once in setUpAll avoids that cross-zone handoff. The tests do not
+// mutate persisted account or object data, each testWidgets call still creates
+// a fresh widget tree, and tearDownAll explicitly closes the shared session.
 
 import 'dart:io';
 
@@ -50,9 +43,10 @@ const _testMnemonic =
 void main() {
   late Directory tempBase;
   late ProviderContainer container;
+  late ManytypeSession session;
   late String spaceId;
 
-  setUp(() async {
+  setUpAll(() async {
     tempBase = await Directory.systemTemp.createTemp(
       'manytype_home_widget_test',
     );
@@ -68,18 +62,16 @@ void main() {
         .read(accountsControllerProvider)
         .createAndSelect(mnemonic: _testMnemonic, displayName: 'Guest');
     await container.read(currentAccountProvider.future);
-    // Pre-warm sessionProvider and objectsProvider here, outside
-    // testWidgets' zone -- see the file-level comment above for why any
-    // async Future awaited inside the test body itself never resolves in
-    // this environment. Riverpod caches the resolved futures, so the
-    // widget tree's own watch in the test below picks them up instantly.
-    final session = await container.read(sessionProvider.future);
-    spaceId = session!.identity.spaceId;
+    // Pre-warm the providers once outside the testWidgets zones. Riverpod
+    // caches the resolved futures for each fresh widget tree in this suite.
+    session = (await container.read(sessionProvider.future))!;
+    spaceId = session.identity.spaceId;
     await container.read(objectsProvider(spaceId).future);
   });
 
-  tearDown(() async {
+  tearDownAll(() async {
     container.dispose();
+    await session.close();
     AccountRegistry.testBaseDirOverride = null;
     await tempBase.delete(recursive: true);
   });
