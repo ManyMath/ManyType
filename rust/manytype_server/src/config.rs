@@ -1,5 +1,6 @@
 //! Fail-closed server configuration and durable path resolution.
 
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -37,11 +38,16 @@ pub struct ServerConfig {
     /// Legacy development-only deterministic identity used by protocol fixtures.
     pub identity_seed: Option<String>,
     #[serde(default)]
-    pub allowed_peer_ids: Vec<String>,
-    #[serde(default)]
-    pub allowed_account_identities: Vec<String>,
+    pub allowed_principals: Vec<AllowedPrincipal>,
     #[serde(default)]
     pub limits: ResourceLimits,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct AllowedPrincipal {
+    pub peer_id: String,
+    pub account_identity: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -143,12 +149,8 @@ impl ServerConfig {
                     "private_canary health_listen must stay on loopback"
                 );
                 ensure!(
-                    !self.allowed_peer_ids.is_empty(),
-                    "private_canary requires at least one allowed_peer_id"
-                );
-                ensure!(
-                    !self.allowed_account_identities.is_empty(),
-                    "private_canary requires at least one allowed_account_identity"
+                    !self.allowed_principals.is_empty(),
+                    "private_canary requires at least one allowed_principal"
                 );
             }
             DeploymentMode::Production => bail!(
@@ -156,16 +158,21 @@ impl ServerConfig {
             ),
         }
 
-        for peer_id in &self.allowed_peer_ids {
-            PeerId::from_str(peer_id)
-                .with_context(|| format!("invalid allowed_peer_id {peer_id}"))?;
-        }
-        for identity in &self.allowed_account_identities {
-            let decoded = hex::decode(identity)
-                .with_context(|| "allowed_account_identity must be hexadecimal")?;
+        let mut peer_ids = HashSet::new();
+        for principal in &self.allowed_principals {
+            PeerId::from_str(&principal.peer_id).with_context(|| {
+                format!("invalid allowed principal peer_id {}", principal.peer_id)
+            })?;
+            ensure!(
+                peer_ids.insert(principal.peer_id.as_str()),
+                "allowed principal peer_id {} is duplicated",
+                principal.peer_id
+            );
+            let decoded = hex::decode(&principal.account_identity)
+                .with_context(|| "allowed principal account_identity must be hexadecimal")?;
             ensure!(
                 decoded.len() == 32,
-                "allowed_account_identity must contain 32 bytes"
+                "allowed principal account_identity must contain 32 bytes"
             );
         }
 
@@ -302,8 +309,10 @@ mod tests {
                 health_listen = "127.0.0.1:33021"
                 network_id = "manytype-private-canary"
                 data_dir = "/var/lib/manytype"
-                allowed_peer_ids = ["{PEER_ONE}"]
-                allowed_account_identities = ["0303030303030303030303030303030303030303030303030303030303030303"]
+
+                [[allowed_principals]]
+                peer_id = "{PEER_ONE}"
+                account_identity = "0303030303030303030303030303030303030303030303030303030303030303"
             "#
         )
     }
@@ -334,6 +343,54 @@ mod tests {
         )
         .unwrap();
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn private_canary_rejects_legacy_cartesian_allowlists() {
+        let error = toml::from_str::<ServerConfig>(&format!(
+            r#"
+                deployment_mode = "private_canary"
+                quic_listen = "0.0.0.0:33020"
+                health_listen = "127.0.0.1:33021"
+                network_id = "manytype-private-canary"
+                data_dir = "/var/lib/manytype"
+                allowed_peer_ids = ["{PEER_ONE}"]
+                allowed_account_identities = ["0303030303030303030303030303030303030303030303030303030303030303"]
+            "#
+        ))
+        .unwrap_err();
+
+        assert!(error.to_string().contains("unknown field"));
+    }
+
+    #[test]
+    fn private_canary_rejects_multiple_accounts_for_one_peer() {
+        let config: ServerConfig = toml::from_str(&format!(
+            r#"
+                deployment_mode = "private_canary"
+                quic_listen = "0.0.0.0:33020"
+                health_listen = "127.0.0.1:33021"
+                network_id = "manytype-private-canary"
+                data_dir = "/var/lib/manytype"
+
+                [[allowed_principals]]
+                peer_id = "{PEER_ONE}"
+                account_identity = "0303030303030303030303030303030303030303030303030303030303030303"
+
+                [[allowed_principals]]
+                peer_id = "{PEER_ONE}"
+                account_identity = "0404040404040404040404040404040404040404040404040404040404040404"
+            "#
+        ))
+        .unwrap();
+
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("duplicated")
+        );
     }
 
     #[test]

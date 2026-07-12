@@ -14,6 +14,7 @@ use manytype_proto::treechange::{RawTreeChange, RootChange};
 use prost::Message;
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 
+use crate::auth::AuthenticatedPeer;
 use crate::input::{validate_space_id, validate_storage_key};
 
 const GLOBAL_SPACES_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("spaces");
@@ -35,8 +36,10 @@ const META_SETTINGS_PAYLOAD: &str = "settings_payload";
 const META_SETTINGS_PAYLOAD_ID: &str = "settings_payload_id";
 const META_IS_SHARED: &str = "is_shared";
 const META_OWNER_PEER_ID: &str = "owner_peer_id";
+const META_OWNER_ACCOUNT_IDENTITY: &str = "owner_account_identity";
 const SCHEMA_VERSION_KEY: &str = "version";
-const CURRENT_SCHEMA_VERSION: &[u8] = b"1";
+const CURRENT_SCHEMA_VERSION: &[u8] = b"2";
+const LEGACY_PEER_ONLY_SCHEMA_VERSION: &[u8] = b"1";
 const LOGICAL_ENTRY_OVERHEAD_BYTES: u64 = 64;
 
 #[derive(Clone, Debug, Default)]
@@ -53,6 +56,7 @@ pub struct SpaceState {
     pub settings_payload_id: String,
     pub is_shared: bool,
     pub owner_peer_id: String,
+    pub owner_account_identity: Option<[u8; 32]>,
     pub store_key_values: HashMap<String, Vec<u8>>,
 }
 
@@ -114,6 +118,11 @@ fn space_logical_bytes(space_id: &str, space: &SpaceState) -> Result<u64> {
         &mut total,
         META_OWNER_PEER_ID.len(),
         space.owner_peer_id.len(),
+    )?;
+    add_logical_entry(
+        &mut total,
+        META_OWNER_ACCOUNT_IDENTITY.len(),
+        space.owner_account_identity.map_or(0, |_| 32),
     )?;
 
     for (object_id, heads) in &space.object_heads {
@@ -281,6 +290,22 @@ impl SyncStateStorage {
             .get(META_OWNER_PEER_ID)?
             .map(|value| String::from_utf8_lossy(value.value()).into_owned())
             .unwrap_or_default();
+        let owner_account_identity = meta_table
+            .get(META_OWNER_ACCOUNT_IDENTITY)?
+            .map(|value| {
+                let bytes = value.value();
+                bytes.try_into().map_err(|_| {
+                    anyhow::anyhow!(
+                        "space {space_id} owner account identity must contain 32 bytes, got {}",
+                        bytes.len()
+                    )
+                })
+            })
+            .transpose()?;
+        ensure!(
+            owner_peer_id.is_empty() == owner_account_identity.is_none(),
+            "space {space_id} has an incomplete owner binding; peer-only owners cannot be migrated automatically"
+        );
 
         let mut object_heads = HashMap::new();
         for entry in heads_table.iter()?.flatten() {
@@ -328,6 +353,7 @@ impl SyncStateStorage {
             settings_payload_id,
             is_shared,
             owner_peer_id,
+            owner_account_identity,
             store_key_values,
         })
     }
@@ -345,6 +371,7 @@ impl SyncStateStorage {
         settings_payload_id: Option<&str>,
         is_shared: Option<bool>,
         owner_peer_id: Option<&str>,
+        owner_account_identity: Option<&[u8; 32]>,
     ) -> Result<()> {
         let _guard = self.persist_lock.lock().unwrap();
         self.ensure_space_registered_locked(space_id)?;
@@ -375,6 +402,12 @@ impl SyncStateStorage {
             }
             if let Some(owner_peer_id) = owner_peer_id {
                 table.insert(META_OWNER_PEER_ID, owner_peer_id.as_bytes())?;
+            }
+            if let Some(owner_account_identity) = owner_account_identity {
+                table.insert(
+                    META_OWNER_ACCOUNT_IDENTITY,
+                    owner_account_identity.as_slice(),
+                )?;
             }
         }
         write_txn.commit()?;
@@ -568,7 +601,7 @@ impl SharedSyncState {
         settings_payload: Option<Vec<u8>>,
         settings_payload_id: Option<String>,
         is_shared: Option<bool>,
-        owner_peer_id: Option<String>,
+        owner: Option<&AuthenticatedPeer<'_>>,
     ) -> Result<()> {
         validate_space_id(space_id)?;
         let _mutation = self
@@ -577,10 +610,9 @@ impl SharedSyncState {
             .map_err(|_| anyhow::anyhow!("sync state mutation lock is poisoned"))?;
         let mut state = self.inner.write().unwrap();
         let mut replacement = state.get(space_id).cloned().unwrap_or_default();
-        if let Some(owner_peer_id) = owner_peer_id.as_deref() {
-            anyhow::ensure!(!owner_peer_id.is_empty(), "space owner peer id is empty");
+        if let Some(owner) = owner {
             anyhow::ensure!(
-                replacement.owner_peer_id.is_empty() || replacement.owner_peer_id == owner_peer_id,
+                replacement.owner_peer_id.is_empty() || space_is_owned_by(&replacement, owner),
                 "space ownership is immutable"
             );
         }
@@ -602,8 +634,9 @@ impl SharedSyncState {
         if let Some(is_shared) = is_shared {
             replacement.is_shared = is_shared;
         }
-        if let Some(owner_peer_id) = owner_peer_id.clone() {
-            replacement.owner_peer_id = owner_peer_id;
+        if let Some(owner) = owner {
+            replacement.owner_peer_id = owner.id().to_string();
+            replacement.owner_account_identity = Some(*owner.account_identity());
         }
 
         let deleted = self.deleted_accounts.read().unwrap();
@@ -617,7 +650,8 @@ impl SharedSyncState {
             settings_payload.as_deref(),
             settings_payload_id.as_deref(),
             is_shared,
-            owner_peer_id.as_deref(),
+            owner.map(|principal| principal.id()),
+            owner.map(AuthenticatedPeer::account_identity),
         )?;
         state.insert(space_id.to_string(), replacement);
         Ok(())
@@ -625,11 +659,14 @@ impl SharedSyncState {
 
     /// Atomically assigns the first authenticated owner of a space.
     ///
-    /// Existing ownership may be reaffirmed by the same peer but can never be
+    /// Existing ownership may be reaffirmed by the same principal but can never be
     /// transferred through a later registration or metadata update.
-    pub fn claim_space_owner(&self, space_id: &str, peer_id: &str) -> Result<()> {
+    pub fn claim_space_owner(
+        &self,
+        space_id: &str,
+        authenticated_peer: &AuthenticatedPeer<'_>,
+    ) -> Result<()> {
         validate_space_id(space_id)?;
-        anyhow::ensure!(!peer_id.is_empty(), "space owner peer id is empty");
 
         let _mutation = self
             .mutation_lock
@@ -638,10 +675,14 @@ impl SharedSyncState {
         let mut state = self.inner.write().unwrap();
         let mut replacement = state.get(space_id).cloned().unwrap_or_default();
         if !replacement.owner_peer_id.is_empty() {
-            anyhow::ensure!(replacement.owner_peer_id == peer_id, "space access denied");
+            anyhow::ensure!(
+                space_is_owned_by(&replacement, authenticated_peer),
+                "space access denied"
+            );
             return Ok(());
         }
-        replacement.owner_peer_id = peer_id.to_string();
+        replacement.owner_peer_id = authenticated_peer.id().to_string();
+        replacement.owner_account_identity = Some(*authenticated_peer.account_identity());
         let deleted = self.deleted_accounts.read().unwrap();
         self.ensure_space_replacement_fits(&state, &deleted, space_id, &replacement)?;
 
@@ -653,18 +694,23 @@ impl SharedSyncState {
             None,
             None,
             None,
-            Some(peer_id),
+            Some(authenticated_peer.id()),
+            Some(authenticated_peer.account_identity()),
         )?;
         state.insert(space_id.to_string(), replacement);
         Ok(())
     }
 
-    pub fn authorize_space(&self, space_id: &str, peer_id: &str) -> Result<()> {
+    pub fn authorize_space(
+        &self,
+        space_id: &str,
+        authenticated_peer: &AuthenticatedPeer<'_>,
+    ) -> Result<()> {
         validate_space_id(space_id)?;
         let state = self.inner.read().unwrap();
         let authorized = state
             .get(space_id)
-            .is_some_and(|space| !peer_id.is_empty() && space.owner_peer_id == peer_id);
+            .is_some_and(|space| space_is_owned_by(space, authenticated_peer));
         anyhow::ensure!(authorized, "space access denied");
         Ok(())
     }
@@ -681,14 +727,7 @@ impl SharedSyncState {
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("space not found: {space_id}"))?;
         replacement.is_shared = true;
-        let (
-            space_header,
-            acl_root,
-            acl_root_id,
-            settings_payload,
-            settings_payload_id,
-            owner_peer_id,
-        ) = {
+        let (space_header, acl_root, acl_root_id, settings_payload, settings_payload_id) = {
             (
                 replacement.space_header.clone(),
                 replacement.acl_root.clone(),
@@ -696,7 +735,6 @@ impl SharedSyncState {
                 replacement.settings_payload.clone(),
                 (!replacement.settings_payload_id.is_empty())
                     .then(|| replacement.settings_payload_id.clone()),
-                (!replacement.owner_peer_id.is_empty()).then(|| replacement.owner_peer_id.clone()),
             )
         };
         let deleted = self.deleted_accounts.read().unwrap();
@@ -710,13 +748,18 @@ impl SharedSyncState {
             settings_payload.as_deref(),
             settings_payload_id.as_deref(),
             Some(true),
-            owner_peer_id.as_deref(),
+            None,
+            None,
         )?;
         state.insert(space_id.to_string(), replacement);
         Ok(())
     }
 
-    pub fn peer_owns_space(&self, space_id: &str, peer_id: &str) -> bool {
+    pub fn peer_owns_space(
+        &self,
+        space_id: &str,
+        authenticated_peer: &AuthenticatedPeer<'_>,
+    ) -> bool {
         if validate_space_id(space_id).is_err() {
             return false;
         }
@@ -724,14 +767,14 @@ impl SharedSyncState {
         let Some(space) = state.get(space_id) else {
             return false;
         };
-        !peer_id.is_empty() && space.owner_peer_id == peer_id
+        space_is_owned_by(space, authenticated_peer)
     }
 
-    pub fn owned_space_ids(&self, peer_id: &str) -> Vec<String> {
+    pub fn owned_space_ids(&self, authenticated_peer: &AuthenticatedPeer<'_>) -> Vec<String> {
         let state = self.inner.read().unwrap();
         let mut owned: Vec<_> = state
             .iter()
-            .filter(|(_, space)| !peer_id.is_empty() && space.owner_peer_id == peer_id)
+            .filter(|(_, space)| space_is_owned_by(space, authenticated_peer))
             .map(|(space_id, _)| space_id.clone())
             .collect();
         owned.sort();
@@ -962,6 +1005,10 @@ fn ensure_schema(db: &Database) -> Result<()> {
             .get(SCHEMA_VERSION_KEY)?
             .map(|version| version.value().to_vec());
         match existing_version.as_deref() {
+            Some(LEGACY_PEER_ONLY_SCHEMA_VERSION) => anyhow::bail!(
+                "sync schema version 1 stores peer-only owners and cannot be migrated automatically; recreate the private canary state with schema version {}",
+                String::from_utf8_lossy(CURRENT_SCHEMA_VERSION)
+            ),
             Some(version) => anyhow::ensure!(
                 version == CURRENT_SCHEMA_VERSION,
                 "unsupported sync schema version {} (expected {})",
@@ -975,6 +1022,12 @@ fn ensure_schema(db: &Database) -> Result<()> {
     }
     write_txn.commit()?;
     Ok(())
+}
+
+fn space_is_owned_by(space: &SpaceState, authenticated_peer: &AuthenticatedPeer<'_>) -> bool {
+    !space.owner_peer_id.is_empty()
+        && space.owner_peer_id == authenticated_peer.id()
+        && space.owner_account_identity.as_ref() == Some(authenticated_peer.account_identity())
 }
 
 fn ensure_space_tables(db: &Database) -> Result<()> {
@@ -999,12 +1052,16 @@ fn decode_acl_record_id(raw_record_with_id: &[u8]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::sync::{Arc, Barrier};
     use std::thread;
 
     use tempfile::TempDir;
 
     use super::*;
+
+    fn test_peer(peer_id: &str) -> AuthenticatedPeer<'_> {
+        AuthenticatedPeer::for_test(peer_id)
+    }
 
     fn test_store_entry(key_peer_id: &str) -> StoreKeyValue {
         StoreKeyValue {
@@ -1028,7 +1085,11 @@ mod tests {
     fn rejects_unsafe_space_id_before_creating_a_database_file() {
         let temp_dir = TempDir::new().unwrap();
         let state = new_shared_sync_state_at(temp_dir.path()).unwrap();
-        assert!(state.claim_space_owner("../outside", "peer-1").is_err());
+        assert!(
+            state
+                .claim_space_owner("../outside", &test_peer("peer-1"))
+                .is_err()
+        );
         assert!(
             !temp_dir
                 .path()
@@ -1064,6 +1125,61 @@ mod tests {
     }
 
     #[test]
+    fn rejects_legacy_peer_only_owner_schema_without_migration() {
+        let temp_dir = TempDir::new().unwrap();
+        let global_path = temp_dir.path().join("global.redb");
+        {
+            let db = Database::create(&global_path).unwrap();
+            let write_txn = db.begin_write().unwrap();
+            {
+                let mut table = write_txn.open_table(GLOBAL_SCHEMA_TABLE).unwrap();
+                table
+                    .insert(SCHEMA_VERSION_KEY, LEGACY_PEER_ONLY_SCHEMA_VERSION)
+                    .unwrap();
+            }
+            write_txn.commit().unwrap();
+        }
+
+        let error = match new_shared_sync_state_at(temp_dir.path()) {
+            Ok(_) => panic!("peer-only owner schema was accepted"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("cannot be migrated automatically")
+        );
+    }
+
+    #[test]
+    fn rejects_incomplete_owner_binding_in_current_schema() {
+        let temp_dir = TempDir::new().unwrap();
+        {
+            let state = new_shared_sync_state_at(temp_dir.path()).unwrap();
+            state
+                .storage
+                .persist_space_metadata(
+                    "space-1",
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some("peer-1"),
+                    None,
+                )
+                .unwrap();
+        }
+
+        let error = match new_shared_sync_state_at(temp_dir.path()) {
+            Ok(_) => panic!("incomplete owner binding was accepted"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("incomplete owner binding"));
+    }
+
+    #[test]
     fn sync_state_persists_space_metadata_and_changes_across_reopen() {
         let temp_dir = TempDir::new().unwrap();
         let store_entry = StoreKeyValue {
@@ -1084,7 +1200,7 @@ mod tests {
                     Some(b"settings".to_vec()),
                     Some("settings-id".to_string()),
                     Some(false),
-                    Some("peer-1".to_string()),
+                    Some(&test_peer("peer-1")),
                 )
                 .unwrap();
             state
@@ -1266,7 +1382,7 @@ mod tests {
         let calibration_dir = TempDir::new().unwrap();
         let calibration = new_shared_sync_state_at(calibration_dir.path()).unwrap();
         calibration
-            .claim_space_owner("space-1", "peer-owner")
+            .claim_space_owner("space-1", &test_peer("peer-owner"))
             .unwrap();
         calibration
             .upsert_store_entry(test_store_entry("peer-00"))
@@ -1284,7 +1400,9 @@ mod tests {
         let state_dir = TempDir::new().unwrap();
         {
             let state = new_shared_sync_state_at(state_dir.path()).unwrap();
-            state.claim_space_owner("space-1", "peer-owner").unwrap();
+            state
+                .claim_space_owner("space-1", &test_peer("peer-owner"))
+                .unwrap();
             state
                 .upsert_store_entry(test_store_entry("peer-00"))
                 .unwrap();
@@ -1466,7 +1584,7 @@ mod tests {
                     None,
                     None,
                     Some(false),
-                    Some("peer-1".to_string()),
+                    Some(&test_peer("peer-1")),
                 )
                 .unwrap();
             state.mark_space_shared("space-1").unwrap();
@@ -1493,11 +1611,23 @@ mod tests {
                     None,
                 )
                 .unwrap();
-            assert!(state.authorize_space("space-1", "peer-1").is_err());
+            assert!(
+                state
+                    .authorize_space("space-1", &test_peer("peer-1"))
+                    .is_err()
+            );
 
-            state.claim_space_owner("space-1", "peer-1").unwrap();
-            state.claim_space_owner("space-1", "peer-1").unwrap();
-            assert!(state.claim_space_owner("space-1", "peer-2").is_err());
+            state
+                .claim_space_owner("space-1", &test_peer("peer-1"))
+                .unwrap();
+            state
+                .claim_space_owner("space-1", &test_peer("peer-1"))
+                .unwrap();
+            assert!(
+                state
+                    .claim_space_owner("space-1", &test_peer("peer-2"))
+                    .is_err()
+            );
             assert!(
                 state
                     .upsert_space_metadata(
@@ -1508,15 +1638,66 @@ mod tests {
                         None,
                         None,
                         None,
-                        Some("peer-2".to_string()),
+                        Some(&test_peer("peer-2")),
                     )
                     .is_err()
             );
         }
 
         let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();
-        reopened.authorize_space("space-1", "peer-1").unwrap();
-        assert!(reopened.authorize_space("space-1", "peer-2").is_err());
-        assert_eq!(reopened.read().unwrap()["space-1"].owner_peer_id, "peer-1");
+        reopened
+            .authorize_space("space-1", &test_peer("peer-1"))
+            .unwrap();
+        assert!(
+            reopened
+                .authorize_space("space-1", &test_peer("peer-2"))
+                .is_err()
+        );
+        let snapshot = reopened.read().unwrap();
+        assert_eq!(snapshot["space-1"].owner_peer_id, "peer-1");
+        assert_eq!(snapshot["space-1"].owner_account_identity, Some([0; 32]));
+    }
+
+    #[test]
+    fn concurrent_first_claims_choose_one_durable_principal() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = Arc::new(new_shared_sync_state_at(temp_dir.path()).unwrap());
+        let barrier = Arc::new(Barrier::new(3));
+        let attempts: Vec<_> = [("peer-1", [1; 32]), ("peer-2", [2; 32])]
+            .into_iter()
+            .map(|(peer_id, account_identity)| {
+                let state = Arc::clone(&state);
+                let barrier = Arc::clone(&barrier);
+                thread::spawn(move || {
+                    let principal =
+                        AuthenticatedPeer::for_test_with_account(peer_id, account_identity);
+                    barrier.wait();
+                    (principal, state.claim_space_owner("space-1", &principal))
+                })
+            })
+            .collect();
+
+        barrier.wait();
+        let results: Vec<_> = attempts
+            .into_iter()
+            .map(|attempt| attempt.join().unwrap())
+            .collect();
+        assert_eq!(
+            results.iter().filter(|(_, result)| result.is_ok()).count(),
+            1
+        );
+        let winner = results
+            .iter()
+            .find_map(|(principal, result)| result.is_ok().then_some(*principal))
+            .unwrap();
+        let loser = results
+            .iter()
+            .find_map(|(principal, result)| result.is_err().then_some(*principal))
+            .unwrap();
+        drop(state);
+
+        let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        reopened.authorize_space("space-1", &winner).unwrap();
+        assert!(reopened.authorize_space("space-1", &loser).is_err());
     }
 }

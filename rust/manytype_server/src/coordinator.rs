@@ -96,7 +96,7 @@ pub fn handle_space_sign(
         &request.header,
         authenticated_peer.account_identity(),
     )?;
-    sync_state.claim_space_owner(&request.space_id, authenticated_peer.id())?;
+    sync_state.claim_space_owner(&request.space_id, authenticated_peer)?;
     let receipt = build_signed_space_receipt(
         &request.space_id,
         authenticated_peer.id(),
@@ -133,11 +133,9 @@ pub fn handle_space_status_check(
     authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = SpaceStatusCheckRequest::decode(request_bytes)?;
+    let owns_space = sync_state.peer_owns_space(&request.space_id, authenticated_peer);
     let state = sync_state.read().unwrap();
-    let payload = if let Some(space) = state
-        .get(&request.space_id)
-        .filter(|space| space.owner_peer_id == authenticated_peer.id())
-    {
+    let payload = if let Some(space) = state.get(&request.space_id).filter(|_| owns_space) {
         SpaceStatusPayload {
             status: SpaceStatus::Created as i32,
             permissions: SpacePermissions::Owner as i32,
@@ -165,7 +163,7 @@ pub fn handle_space_make_shareable(
     authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = SpaceMakeShareableRequest::decode(request_bytes)?;
-    sync_state.authorize_space(&request.space_id, authenticated_peer.id())?;
+    sync_state.authorize_space(&request.space_id, authenticated_peer)?;
     sync_state.mark_space_shared(&request.space_id)?;
     Ok(SpaceMakeShareableResponse::default().encode_to_vec())
 }
@@ -178,7 +176,7 @@ pub fn handle_acl_add_record(
     authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = AclAddRecordRequest::decode(request_bytes)?;
-    sync_state.authorize_space(&request.space_id, authenticated_peer.id())?;
+    sync_state.authorize_space(&request.space_id, authenticated_peer)?;
     let raw_record = RawRecord::decode(request.payload.as_slice())?;
 
     if consensus::ensure_log_exists_from_sync_state(&request.space_id, sync_state).is_none() {
@@ -214,7 +212,7 @@ pub fn handle_acl_get_records(
     authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = AclGetRecordsRequest::decode(request_bytes)?;
-    sync_state.authorize_space(&request.space_id, authenticated_peer.id())?;
+    sync_state.authorize_space(&request.space_id, authenticated_peer)?;
     let response = AclGetRecordsResponse {
         records: sync_state.list_acl_records(&request.space_id, &request.acl_head),
     };
@@ -244,7 +242,7 @@ pub fn handle_space_delete(
     authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = SpaceDeleteRequest::decode(request_bytes)?;
-    sync_state.authorize_space(&request.space_id, authenticated_peer.id())?;
+    sync_state.authorize_space(&request.space_id, authenticated_peer)?;
     let response = SpaceDeleteResponse {
         to_be_deleted_timestamp: unix_now_secs() as i64,
     };
@@ -802,8 +800,8 @@ mod tests {
         )
         .unwrap_err();
         assert!(second_peer.to_string().contains("space access denied"));
-        assert!(sync_state.peer_owns_space(&space_id, OWNER_PEER_ID));
-        assert!(!sync_state.peer_owns_space(&space_id, OTHER_PEER_ID));
+        assert!(sync_state.peer_owns_space(&space_id, &owner_peer()));
+        assert!(!sync_state.peer_owns_space(&space_id, &other_peer()));
     }
 
     #[test]
@@ -818,7 +816,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                Some(OWNER_PEER_ID.to_string()),
+                Some(&owner_peer()),
             )
             .unwrap();
 
@@ -915,7 +913,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                Some(OWNER_PEER_ID.to_string()),
+                Some(&owner_peer()),
             )
             .unwrap();
 
@@ -948,7 +946,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                Some(OWNER_PEER_ID.to_string()),
+                Some(&owner_peer()),
             )
             .unwrap();
 
@@ -993,7 +991,7 @@ mod tests {
                     None,
                     None,
                     Some(false),
-                    Some(OWNER_PEER_ID.to_string()),
+                    Some(&owner_peer()),
                 )
                 .unwrap();
 
@@ -1040,7 +1038,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                Some(OWNER_PEER_ID.to_string()),
+                Some(&owner_peer()),
             )
             .unwrap();
 
@@ -1076,7 +1074,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                Some(OWNER_PEER_ID.to_string()),
+                Some(&owner_peer()),
             )
             .unwrap();
 
@@ -1159,7 +1157,7 @@ mod tests {
                     None,
                     None,
                     Some(false),
-                    Some(OWNER_PEER_ID.to_string()),
+                    Some(&owner_peer()),
                 )
                 .unwrap();
 
@@ -1223,7 +1221,7 @@ mod tests {
     fn space_delete_stub_returns_timestamp() {
         let sync_state = new_shared_sync_state();
         sync_state
-            .claim_space_owner("space-1", OWNER_PEER_ID)
+            .claim_space_owner("space-1", &owner_peer())
             .unwrap();
         let request = SpaceDeleteRequest {
             space_id: "space-1".to_string(),

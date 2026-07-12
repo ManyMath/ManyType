@@ -7,9 +7,9 @@ an Internet-facing deployment.
 
 Run it on loopback, an authenticated overlay network, or a private interface
 protected by a firewall allowlist. Do not publish its QUIC port in public DNS or
-open that port to the Internet. The packaged runtime now enforces account and
-peer allowlists, bounded resources, structured lifecycle logs, and an explicit
-production-mode prohibition. It still lacks the complete ACL semantics and
+open that port to the Internet. The packaged runtime now enforces explicit
+account/peer principal pairs, bounded resources, structured lifecycle logs, and
+an explicit production-mode prohibition. It still lacks the complete ACL semantics and
 field evidence required for public operation. See `deploy/RUNBOOK.md` for the
 private-canary boundary.
 
@@ -34,13 +34,17 @@ private-canary boundary.
    - is signed by its embedded Ed25519 account key;
    - contains the account key proven by the credential handshake; and
    - has the expected content-addressed ID and base36 replication suffix.
-5. The first authenticated peer ID is persisted as owner. Repeating the claim
-   as that peer is idempotent; replacing it is rejected, including after restart.
+5. The first authenticated peer ID and account identity are persisted together
+   as the immutable owner principal. Repeating the claim as that exact pair is
+   idempotent; changing either identity is rejected, including after restart or
+   backup/restore.
 
 ## Current authorization model
 
-Authorization is deliberately conservative: the persisted owner peer is the
-only principal allowed to access a private space.
+Authorization is deliberately conservative: the persisted account/peer owner
+pair is the only principal allowed to access a private space. Sync schema v1
+peer-only owners are rejected rather than migrated without proof of the account
+binding.
 
 - Sync heads, store values, space payloads, object changes, subscriptions, and
   consensus log mutations require ownership.
@@ -66,12 +70,12 @@ is one reason public deployment remains disabled.
 
 | STRIDE area | Current control | Remaining exposure |
 | --- | --- | --- |
-| Spoofing | libp2p TLS peer authentication plus an account-signed credential handshake; space claims bind both identities | No account/device enrollment, recovery, rotation, or revocation workflow |
+| Spoofing | libp2p TLS peer authentication plus an account-signed credential handshake; allowlists and durable space ownership bind the complete pair | No account/device enrollment, recovery, rotation, or revocation workflow |
 | Tampering | Signed and content-addressed space headers; immutable first owner; receipt validation; owner checks before scoped mutations | ACL record signatures and semantic permissions need complete validation; delete RPCs are stubs |
 | Repudiation | Structured tracing records method-level activity | No durable, principal-bound security audit log or retention policy |
 | Information disclosure | Owner-only reads; hidden space status and private blob availability | Public invite CIDs are bearer capabilities; metadata/log review and ACL member reads remain incomplete |
 | Denial of service | Bounded connection/stream setup and complete-frame I/O deadlines; transport idle timeout; bounded handshakes, messages, blobs, connections, streams, logical sync state, and file-index metadata | No per-principal request/CPU budget; an allowed peer can sustain complete-frame or control traffic; transient collection limits, physical database-size quota, and production capacity evidence remain incomplete |
-| Elevation of privilege | Header account binding and immutable peer ownership close first-claim and ownership-replacement paths | No persisted ACL evaluator for readers/writers, invite redemption, revocation, or device authorization |
+| Elevation of privilege | Header account binding and immutable account/peer ownership close first-claim, cross-pair, and ownership-replacement paths | No persisted ACL evaluator for readers/writers, invite redemption, revocation, or device authorization |
 
 ## Public-deployment blockers
 

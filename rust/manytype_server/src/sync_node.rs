@@ -41,7 +41,7 @@ pub fn handle_head_sync(
 ) -> Result<Vec<u8>> {
     let request = HeadSyncRequest::decode(request_bytes)?;
     let space_id = &request.space_id;
-    sync_state.authorize_space(space_id, authenticated_peer.id())?;
+    sync_state.authorize_space(space_id, authenticated_peer)?;
 
     let state = sync_state.read().unwrap();
     let results = if let Some(space) = state.get(space_id) {
@@ -151,7 +151,7 @@ pub fn handle_store_diff(
 ) -> Result<Vec<u8>> {
     let request = StoreDiffRequest::decode(request_bytes)?;
     let space_id = &request.space_id;
-    sync_state.authorize_space(space_id, authenticated_peer.id())?;
+    sync_state.authorize_space(space_id, authenticated_peer)?;
 
     let state = sync_state.read().unwrap();
     let results = if let Some(space) = state.get(space_id) {
@@ -262,7 +262,7 @@ pub fn handle_space_push(
         coordinator_config,
         &signing_key.verifying_key(),
     )?;
-    sync_state.authorize_space(&space_id, authenticated_peer.id())?;
+    sync_state.authorize_space(&space_id, authenticated_peer)?;
 
     let acl_payload = (!payload.acl_payload.is_empty()).then_some(payload.acl_payload);
     let acl_payload_id = (!payload.acl_payload_id.is_empty()).then_some(payload.acl_payload_id);
@@ -294,7 +294,7 @@ pub fn handle_space_pull(
     authenticated_peer: &AuthenticatedPeer<'_>,
 ) -> Result<Vec<u8>> {
     let request = SpacePullRequest::decode(request_bytes)?;
-    sync_state.authorize_space(&request.id, authenticated_peer.id())?;
+    sync_state.authorize_space(&request.id, authenticated_peer)?;
     let state = sync_state.read().unwrap();
     let space = state
         .get(&request.id)
@@ -367,11 +367,11 @@ pub fn handle_object_sync_message(
         && let Ok(sub) = SpaceSubscription::decode(msg.payload.as_slice())
     {
         if !space_id.is_empty() {
-            sync_state.authorize_space(space_id, authenticated_peer.id())?;
+            sync_state.authorize_space(space_id, authenticated_peer)?;
         }
         anyhow::ensure!(!sub.space_ids.is_empty(), "space subscription is empty");
         for subscribed_space_id in &sub.space_ids {
-            sync_state.authorize_space(subscribed_space_id, authenticated_peer.id())?;
+            sync_state.authorize_space(subscribed_space_id, authenticated_peer)?;
         }
         tracing::info!(
             "sync: received SpaceSubscription for {} ({} spaceIds)",
@@ -386,7 +386,7 @@ pub fn handle_object_sync_message(
         return Ok(response.encode_to_vec());
     }
 
-    sync_state.authorize_space(space_id, authenticated_peer.id())?;
+    sync_state.authorize_space(space_id, authenticated_peer)?;
 
     fn store_change(
         sync_state: &SharedSyncState,
@@ -997,7 +997,7 @@ pub fn handle_store_elements_messages(
         let mut msg = StoreKeyValue::decode(message_bytes.as_slice())?;
 
         if !msg.space_id.is_empty() {
-            sync_state.authorize_space(&msg.space_id, authenticated_peer.id())?;
+            sync_state.authorize_space(&msg.space_id, authenticated_peer)?;
             active_space_id = msg.space_id.clone();
         }
 
@@ -1018,7 +1018,7 @@ pub fn handle_store_elements_messages(
         if msg.space_id.is_empty() {
             return Err(anyhow::anyhow!("missing space id for store element"));
         }
-        sync_state.authorize_space(&msg.space_id, authenticated_peer.id())?;
+        sync_state.authorize_space(&msg.space_id, authenticated_peer)?;
 
         if msg.value.is_empty() {
             requested.push((msg.space_id.clone(), msg.key_peer_id.clone()));
@@ -1160,7 +1160,7 @@ mod tests {
 
     fn owned_sync_state() -> SharedSyncState {
         let state = new_shared_sync_state();
-        state.claim_space_owner("space-1", TEST_PEER_ID).unwrap();
+        state.claim_space_owner("space-1", &test_peer()).unwrap();
         state
     }
 
@@ -1214,8 +1214,9 @@ mod tests {
         }
         .encode_to_vec();
         let space_id = format!("{}.16", compute_cid(&raw_header));
+        let authenticated_peer = remote_peer(remote_peer_id, account_seed);
         sync_state
-            .claim_space_owner(&space_id, remote_peer_id)
+            .claim_space_owner(&space_id, &authenticated_peer)
             .unwrap();
         let signed_receipt = coordinator::build_signed_space_receipt(
             &space_id,
@@ -2014,7 +2015,7 @@ mod tests {
         {
             let sync_state = new_shared_sync_state_at(temp_dir.path()).unwrap();
             sync_state
-                .claim_space_owner("space-1", TEST_PEER_ID)
+                .claim_space_owner("space-1", &test_peer())
                 .unwrap();
             let msg = ObjectSyncMessage {
                 space_id: "space-1".to_string(),
@@ -2039,6 +2040,31 @@ mod tests {
         assert_eq!(response.results[0].elements.len(), 1);
         assert_eq!(response.results[0].elements[0].id, "obj-1");
         assert_eq!(response.results[0].elements[0].head, change_id);
+    }
+
+    #[test]
+    fn reopened_space_rejects_same_peer_with_different_account() {
+        let temp_dir = TempDir::new().unwrap();
+        {
+            let sync_state = new_shared_sync_state_at(temp_dir.path()).unwrap();
+            sync_state
+                .claim_space_owner("space-1", &test_peer())
+                .unwrap();
+        }
+
+        let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        let different_account = AuthenticatedPeer::for_test_with_account(TEST_PEER_ID, [1; 32]);
+        let result = handle_head_sync(
+            &HeadSyncRequest {
+                space_id: "space-1".to_string(),
+                ..Default::default()
+            }
+            .encode_to_vec(),
+            &reopened,
+            &different_account,
+        );
+
+        assert!(result.is_err());
     }
 
     #[test]

@@ -110,8 +110,9 @@ network_id = "manytype-local-private-canary"
 quic_listen = "127.0.0.1:$quic_port"
 health_listen = "127.0.0.1:$health_port"
 data_dir = "$server_data"
-allowed_peer_ids = ["$client_peer"]
-allowed_account_identities = ["$account_identity"]
+[[allowed_principals]]
+peer_id = "$client_peer"
+account_identity = "$account_identity"
 
 [limits]
 max_connections = 8

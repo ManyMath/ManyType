@@ -364,6 +364,7 @@ fn unix_now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::AuthenticatedPeer;
     use crate::storage::blob_index::BlobIndex;
     use crate::storage::blob_store::BlobStore;
     use tempfile::TempDir;
@@ -379,13 +380,17 @@ mod tests {
         }
     }
 
+    fn owner_peer() -> AuthenticatedPeer<'static> {
+        AuthenticatedPeer::for_test_with_account("peer-1", [7; 32])
+    }
+
     #[test]
     fn snapshot_restore_reopens_semantic_state_and_blob_index() {
         let temp = TempDir::new().unwrap();
         let paths = paths(&temp);
         {
             let state = SharedSyncState::open(&paths.sync_root).unwrap();
-            state.claim_space_owner("space-1", "peer-1").unwrap();
+            state.claim_space_owner("space-1", &owner_peer()).unwrap();
             state
                 .upsert_space_metadata(
                     "space-1",
@@ -395,7 +400,7 @@ mod tests {
                     None,
                     None,
                     Some(false),
-                    Some("peer-1".to_string()),
+                    Some(&owner_peer()),
                 )
                 .unwrap();
             let blobs = BlobStore::open(&paths.files_root).unwrap();
@@ -413,7 +418,14 @@ mod tests {
         restore_backup(&paths, &backup, true).unwrap();
 
         let restored = SharedSyncState::open(&paths.sync_root).unwrap();
-        restored.authorize_space("space-1", "peer-1").unwrap();
+        restored.authorize_space("space-1", &owner_peer()).unwrap();
+        let different_account =
+            AuthenticatedPeer::for_test_with_account(owner_peer().id(), [8; 32]);
+        assert!(
+            restored
+                .authorize_space("space-1", &different_account)
+                .is_err()
+        );
         assert_eq!(
             restored.read().unwrap()["space-1"].space_header.as_deref(),
             Some(b"header".as_slice())
@@ -452,7 +464,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let paths = paths(&temp);
         let live = SharedSyncState::open(&paths.sync_root).unwrap();
-        live.claim_space_owner("space-1", "peer-1").unwrap();
+        live.claim_space_owner("space-1", &owner_peer()).unwrap();
         drop(live);
         FileNodeState::open(&paths.files_root).unwrap();
 
@@ -479,7 +491,7 @@ mod tests {
                 .contains("snapshot sync database is missing")
         );
         let reopened = SharedSyncState::open(&paths.sync_root).unwrap();
-        reopened.authorize_space("space-1", "peer-1").unwrap();
+        reopened.authorize_space("space-1", &owner_peer()).unwrap();
     }
 
     #[test]
@@ -487,7 +499,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let paths = paths(&temp);
         let live = SharedSyncState::open(&paths.sync_root).unwrap();
-        live.claim_space_owner("space-1", "peer-1").unwrap();
+        live.claim_space_owner("space-1", &owner_peer()).unwrap();
         drop(live);
         let blobs = BlobStore::open(&paths.files_root).unwrap();
         blobs.put("live-cid", b"live payload").unwrap();
@@ -502,7 +514,7 @@ mod tests {
 
         assert!(error.to_string().contains("previous data was reinstated"));
         let reopened = SharedSyncState::open(&paths.sync_root).unwrap();
-        reopened.authorize_space("space-1", "peer-1").unwrap();
+        reopened.authorize_space("space-1", &owner_peer()).unwrap();
         let reopened_blobs = BlobStore::open(&paths.files_root).unwrap();
         assert_eq!(
             reopened_blobs.get("live-cid").unwrap(),

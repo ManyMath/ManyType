@@ -11,29 +11,28 @@ use crate::config::{DeploymentMode, ServerConfig};
 #[derive(Clone, Debug)]
 pub struct AccessPolicy {
     restrict: bool,
-    peer_ids: HashSet<String>,
-    account_identities: HashSet<[u8; 32]>,
+    principals: HashSet<(String, [u8; 32])>,
 }
 
 impl AccessPolicy {
     pub fn from_config(config: &ServerConfig) -> Result<Self> {
-        let account_identities = config
-            .allowed_account_identities
+        let principals = config
+            .allowed_principals
             .iter()
-            .map(|identity| {
-                let decoded = hex::decode(identity)?;
-                decoded.try_into().map_err(|decoded: Vec<u8>| {
+            .map(|principal| {
+                let decoded = hex::decode(&principal.account_identity)?;
+                let account_identity = decoded.try_into().map_err(|decoded: Vec<u8>| {
                     anyhow::anyhow!(
-                        "allowed account identity must be 32 bytes, got {}",
+                        "allowed principal account identity must be 32 bytes, got {}",
                         decoded.len()
                     )
-                })
+                })?;
+                Ok((principal.peer_id.clone(), account_identity))
             })
             .collect::<Result<HashSet<_>>>()?;
         Ok(Self {
             restrict: config.deployment_mode != DeploymentMode::Development,
-            peer_ids: config.allowed_peer_ids.iter().cloned().collect(),
-            account_identities,
+            principals,
         })
     }
 
@@ -42,12 +41,9 @@ impl AccessPolicy {
             return Ok(());
         }
         ensure!(
-            self.peer_ids.contains(peer.id()),
-            "transport peer is not allowlisted"
-        );
-        ensure!(
-            self.account_identities.contains(peer.account_identity()),
-            "account identity is not allowlisted"
+            self.principals
+                .contains(&(peer.id().to_string(), *peer.account_identity())),
+            "authenticated principal is not allowlisted"
         );
         Ok(())
     }
@@ -116,8 +112,10 @@ mod tests {
                 health_listen = "127.0.0.1:33021"
                 network_id = "manytype-private-canary"
                 data_dir = "/var/lib/manytype"
-                allowed_peer_ids = ["{peer_id}"]
-                allowed_account_identities = ["{}"]
+
+                [[allowed_principals]]
+                peer_id = "{peer_id}"
+                account_identity = "{}"
             "#,
             hex::encode(account)
         ))
@@ -164,6 +162,65 @@ mod tests {
         assert!(
             policy
                 .authorize(&AuthenticatedPeer::from_connection(&other, &account).unwrap())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn private_policy_rejects_crossed_principal_pairs() {
+        let first_peer = libp2p_identity::Keypair::ed25519_from_bytes(&mut [11; 32])
+            .unwrap()
+            .public()
+            .to_peer_id()
+            .to_string();
+        let second_peer = libp2p_identity::Keypair::ed25519_from_bytes(&mut [12; 32])
+            .unwrap()
+            .public()
+            .to_peer_id()
+            .to_string();
+        let first_account = [21; 32];
+        let second_account = [22; 32];
+        let config: ServerConfig = toml::from_str(&format!(
+            r#"
+                deployment_mode = "private_canary"
+                quic_listen = "0.0.0.0:33020"
+                health_listen = "127.0.0.1:33021"
+                network_id = "manytype-private-canary"
+                data_dir = "/var/lib/manytype"
+
+                [[allowed_principals]]
+                peer_id = "{first_peer}"
+                account_identity = "{}"
+
+                [[allowed_principals]]
+                peer_id = "{second_peer}"
+                account_identity = "{}"
+            "#,
+            hex::encode(first_account),
+            hex::encode(second_account),
+        ))
+        .unwrap();
+        config.validate().unwrap();
+        let policy = AccessPolicy::from_config(&config).unwrap();
+
+        policy
+            .authorize(&AuthenticatedPeer::from_connection(&first_peer, &first_account).unwrap())
+            .unwrap();
+        policy
+            .authorize(&AuthenticatedPeer::from_connection(&second_peer, &second_account).unwrap())
+            .unwrap();
+        assert!(
+            policy
+                .authorize(
+                    &AuthenticatedPeer::from_connection(&first_peer, &second_account).unwrap(),
+                )
+                .is_err()
+        );
+        assert!(
+            policy
+                .authorize(
+                    &AuthenticatedPeer::from_connection(&second_peer, &first_account).unwrap(),
+                )
                 .is_err()
         );
     }

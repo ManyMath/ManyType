@@ -5,10 +5,11 @@ quic_listen = "0.0.0.0:33020"
 health_listen = "127.0.0.1:33021"
 data_dir = "DATA_DIR"
 
-# Same-phrase devices currently derive the same transport peer identity. A
-# connection must match both this peer ID and the account identity.
-allowed_peer_ids = ["ACCOUNT_DEVICE_PEER_ID"]
-allowed_account_identities = ["ACCOUNT_IDENTITY_HEX"]
+# Same-phrase devices currently derive the same transport peer identity. Each
+# admitted connection must match one complete principal pair exactly.
+[[allowed_principals]]
+peer_id = "ACCOUNT_DEVICE_PEER_ID"
+account_identity = "ACCOUNT_IDENTITY_HEX"
 
 [limits]
 max_connections = 32

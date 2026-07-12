@@ -26,10 +26,11 @@ readiness responses, proves that the data lock blocks a live backup, sends
 Record the authenticated account identity and transport peer ID from a device
 using the canary recovery phrase. `Identity.fromMnemonic` deterministically
 derives the same transport peer identity on both same-phrase devices, so that
-peer ID goes in `allowed_peer_ids` and the account identity goes in
-`allowed_account_identities`. These values are identifiers, not recovery
-phrases or private keys. Never put a recovery phrase, identity seed, or server
-`identity.key` in the configuration.
+peer ID and account identity go in one `[[allowed_principals]]` table. The
+server matches each connection against a complete pair; it never combines peer
+IDs and accounts from separate allowlists. The values are identifiers, not
+recovery phrases or private keys. Never put a recovery phrase, identity seed,
+or server `identity.key` in the configuration.
 
 This shared deterministic peer identity is what lets the current immutable
 owner check authorize devices A and B. A device with a genuinely distinct peer
@@ -109,6 +110,12 @@ sudo -u manytype manytype_server restore --config /etc/manytype/server.toml --in
 sudo systemctl start manytype-server.service
 curl --fail http://127.0.0.1:33021/readyz
 ```
+
+Sync schema version 2 persists the owner account identity together with the
+transport peer ID. Version 1 stored only the peer ID and is rejected at startup
+and restore because the missing account binding cannot be inferred safely. No
+automatic migration is provided: start this private canary with fresh state and
+create a new backup before relying on restore.
 
 ## Canary proof
 

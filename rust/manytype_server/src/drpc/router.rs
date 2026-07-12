@@ -393,7 +393,7 @@ where
                 if !msg.space_id.is_empty() {
                     state
                         .sync_state
-                        .authorize_space(&msg.space_id, authenticated_peer.id())?;
+                        .authorize_space(&msg.space_id, authenticated_peer)?;
                 }
 
                 // Terminator: empty StoreKeyValue (no spaceId + no key/value).
@@ -585,7 +585,7 @@ where
                 manytype_proto::consensus::LogAddRequest::decode(request_bytes.as_slice())?;
             state
                 .sync_state
-                .authorize_space(&request.log_id, authenticated_peer.id())?;
+                .authorize_space(&request.log_id, authenticated_peer)?;
             if consensus::has_persisted_space_linked_log(&request.log_id, &state.sync_state) {
                 anyhow::bail!("consensus log already exists");
             }
@@ -599,7 +599,7 @@ where
                 manytype_proto::consensus::RecordAddRequest::decode(request_bytes.as_slice())?;
             state
                 .sync_state
-                .authorize_space(&request.log_id, authenticated_peer.id())?;
+                .authorize_space(&request.log_id, authenticated_peer)?;
             consensus::ensure_log_exists_from_sync_state(&request.log_id, &state.sync_state);
             let response_bytes =
                 consensus::handle_record_add(&request_bytes, &state.local_signing_key)?;
@@ -879,6 +879,13 @@ mod tests {
         AuthenticatedPeer::for_test_with_account("peer", account_identity)
     }
 
+    fn other_peer() -> AuthenticatedPeer<'static> {
+        let account_identity = ed25519::signing_key_from_seed(&[3; 32])
+            .verifying_key()
+            .to_bytes();
+        AuthenticatedPeer::for_test_with_account("other-peer", account_identity)
+    }
+
     fn valid_space_header(seed: u8) -> (String, Vec<u8>, Vec<u8>) {
         use manytype_proto::spacesync::{RawSpaceHeader, SpaceHeader};
 
@@ -951,7 +958,7 @@ mod tests {
                 None,
                 None,
                 Some(false),
-                Some("peer".to_string()),
+                Some(&test_peer()),
             )
             .unwrap();
         ServerState {
@@ -986,6 +993,29 @@ mod tests {
             peer_signature: vec![5; 64],
             space_id: space_id.to_string(),
         }
+    }
+
+    async fn dispatch_single_request(
+        method: &'static str,
+        request: Vec<u8>,
+        state: ServerState,
+        peer: AuthenticatedPeer<'static>,
+    ) -> (anyhow::Result<()>, Vec<DrpcFrame>) {
+        let (client, server) = duplex(16 * 1024);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+        let handle =
+            tokio::spawn(
+                async move { dispatch(1, method, &mut server_stream, &state, &peer).await },
+            );
+
+        client_stream.write_message(0, 0, &request).await.unwrap();
+        let result = handle.await.unwrap();
+        let mut frames = Vec::new();
+        while let Some(frame) = client_stream.read_frame().await.unwrap() {
+            frames.push(frame);
+        }
+        (result, frames)
     }
 
     #[tokio::test]
@@ -1347,7 +1377,7 @@ mod tests {
         let (space_id, raw_header, account_identity) = valid_space_header(2);
         state
             .sync_state
-            .claim_space_owner(&space_id, test_peer().id())
+            .claim_space_owner(&space_id, &test_peer())
             .unwrap();
         let credential = coordinator::build_signed_space_receipt(
             &space_id,
@@ -1411,7 +1441,7 @@ mod tests {
         let state = test_state();
         state
             .sync_state
-            .claim_space_owner("sp-1", test_peer().id())
+            .claim_space_owner("sp-1", &test_peer())
             .unwrap();
 
         let handle = tokio::spawn(async move {
@@ -1505,7 +1535,7 @@ mod tests {
         let state = test_state();
         state
             .sync_state
-            .claim_space_owner("sp-1", test_peer().id())
+            .claim_space_owner("sp-1", &test_peer())
             .unwrap();
         state
             .sync_state
@@ -1558,7 +1588,7 @@ mod tests {
         let state = test_state();
         state
             .sync_state
-            .claim_space_owner("sp-1", test_peer().id())
+            .claim_space_owner("sp-1", &test_peer())
             .unwrap();
         state
             .sync_state
@@ -1628,6 +1658,330 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn authenticated_nonowner_cannot_read_private_sync_or_mutate_consensus() {
+        use manytype_proto::consensus::{
+            LogAddRequest, RawRecord, RawRecordWithId, RecordAddRequest,
+        };
+        use manytype_proto::spacesync::{ObjectSyncMessage, SpaceSubscription};
+
+        let log_payload = b"private-log-root".to_vec();
+        let cases = [
+            (
+                "ObjectSync pull",
+                "/spacesync.SpaceSync/ObjectSync",
+                ObjectSyncMessage {
+                    space_id: "space-1".to_string(),
+                    object_id: "private-object".to_string(),
+                    request_id: "pull-private".to_string(),
+                    ..Default::default()
+                }
+                .encode_to_vec(),
+            ),
+            (
+                "ObjectSync subscription",
+                "/spacesync.SpaceSync/ObjectSyncStream",
+                ObjectSyncMessage {
+                    request_id: "subscribe-private".to_string(),
+                    payload: SpaceSubscription {
+                        space_ids: vec!["space-1".to_string()],
+                        ..Default::default()
+                    }
+                    .encode_to_vec(),
+                    ..Default::default()
+                }
+                .encode_to_vec(),
+            ),
+            (
+                "StoreElements fetch",
+                "/spacesync.SpaceSync/StoreElements",
+                StoreKeyValue {
+                    space_id: "space-1".to_string(),
+                    key_peer_id: "private-settings".to_string(),
+                    ..Default::default()
+                }
+                .encode_to_vec(),
+            ),
+            (
+                "consensus LogAdd",
+                "/consensusProto.Consensus/LogAdd",
+                LogAddRequest {
+                    log_id: "space-1".to_string(),
+                    record: Some(RawRecordWithId {
+                        id: compute_cid(&log_payload),
+                        payload: log_payload,
+                    }),
+                }
+                .encode_to_vec(),
+            ),
+            (
+                "consensus RecordAdd",
+                "/consensusProto.Consensus/RecordAdd",
+                RecordAddRequest {
+                    log_id: "space-1".to_string(),
+                    record: Some(RawRecord {
+                        payload: b"private-record".to_vec(),
+                        ..Default::default()
+                    }),
+                }
+                .encode_to_vec(),
+            ),
+        ];
+
+        for (name, method, request) in cases {
+            let state = test_state();
+            let sync_state = state.sync_state.clone();
+            sync_state
+                .record_object_change(
+                    "space-1",
+                    "private-object",
+                    "private-change",
+                    b"private-change-payload".to_vec(),
+                    &[],
+                )
+                .unwrap();
+            let private_store = make_store_entry("space-1", "private-settings", 10);
+            sync_state
+                .upsert_store_entry(private_store.clone())
+                .unwrap();
+            let object_before = sync_state.list_object_changes("space-1", "private-object");
+            assert!(!consensus::has_persisted_space_linked_log(
+                "space-1",
+                &sync_state
+            ));
+
+            let (result, frames) =
+                dispatch_single_request(method, request, state, other_peer()).await;
+
+            let error = result.expect_err(name);
+            assert!(
+                error.to_string().contains("space access denied"),
+                "{name} returned the wrong error: {error:#}"
+            );
+            assert!(
+                frames.iter().all(|frame| frame.kind != KIND_MESSAGE),
+                "{name} disclosed a response message"
+            );
+            assert_eq!(
+                sync_state.list_object_changes("space-1", "private-object"),
+                object_before,
+                "{name} mutated object state"
+            );
+            assert_eq!(
+                sync_state.get_store_entry("space-1", "private-settings"),
+                Some(private_store),
+                "{name} mutated store state"
+            );
+            assert!(
+                !consensus::has_persisted_space_linked_log("space-1", &sync_state),
+                "{name} persisted consensus state"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn authenticated_nonowner_cannot_mutate_remaining_private_file_routes() {
+        use manytype_core::crdt::cid::cid_string_to_bytes;
+        use manytype_proto::filesync::{
+            AccountInfoRequest, AccountInfoResponse, AvailabilityStatus, Block,
+            BlockPushManyRequest, BlockPushRequest, BlocksBindRequest, BlocksCheckRequest,
+            BlocksCheckResponse, FileBlocks, FilesDeleteRequest,
+        };
+
+        enum Case {
+            BlockPushMany,
+            BlocksBind,
+            FilesDelete,
+        }
+
+        for case in [Case::BlockPushMany, Case::BlocksBind, Case::FilesDelete] {
+            let state = test_state();
+            let sync_state = state.sync_state.clone();
+            let file_state = state.file_node.clone();
+            let private_payload = b"owner-private-block".to_vec();
+            let private_cid = cid_string_to_bytes(&compute_cid(&private_payload)).unwrap();
+            file_node::handle_block_push(
+                &BlockPushRequest {
+                    space_id: "space-1".to_string(),
+                    file_id: "owner-file".to_string(),
+                    cid: private_cid.clone(),
+                    data: private_payload,
+                }
+                .encode_to_vec(),
+                &file_state,
+                &sync_state,
+                &test_peer(),
+            )
+            .unwrap();
+            let account_before = AccountInfoResponse::decode(
+                file_node::handle_account_info(
+                    &AccountInfoRequest {}.encode_to_vec(),
+                    &file_state,
+                    &sync_state,
+                    &test_peer(),
+                )
+                .unwrap()
+                .as_slice(),
+            )
+            .unwrap();
+
+            let attempted_payload = b"nonowner-block".to_vec();
+            let attempted_cid = cid_string_to_bytes(&compute_cid(&attempted_payload)).unwrap();
+            let (name, method, request, check_attempted_cid) = match case {
+                Case::BlockPushMany => (
+                    "BlockPushMany",
+                    "/filesync.File/BlockPushMany",
+                    BlockPushManyRequest {
+                        file_blocks: vec![FileBlocks {
+                            file_id: "nonowner-file".to_string(),
+                            space_id: "space-1".to_string(),
+                            blocks: vec![Block {
+                                cid: attempted_cid.clone(),
+                                data: attempted_payload,
+                            }],
+                        }],
+                    }
+                    .encode_to_vec(),
+                    true,
+                ),
+                Case::BlocksBind => (
+                    "BlocksBind",
+                    "/filesync.File/BlocksBind",
+                    BlocksBindRequest {
+                        space_id: "space-1".to_string(),
+                        file_id: "nonowner-file".to_string(),
+                        cids: vec![private_cid],
+                    }
+                    .encode_to_vec(),
+                    false,
+                ),
+                Case::FilesDelete => (
+                    "FilesDelete",
+                    "/filesync.File/FilesDelete",
+                    FilesDeleteRequest {
+                        space_id: "space-1".to_string(),
+                        file_ids: vec!["owner-file".to_string()],
+                    }
+                    .encode_to_vec(),
+                    false,
+                ),
+            };
+
+            let (result, frames) =
+                dispatch_single_request(method, request, state, other_peer()).await;
+            let error = result.expect_err(name);
+            assert!(
+                error.to_string().contains("Forbidden"),
+                "{name} returned the wrong error: {error:#}"
+            );
+            assert!(
+                frames.iter().all(|frame| frame.kind != KIND_MESSAGE),
+                "{name} disclosed a response message"
+            );
+            let error_frame = frames
+                .iter()
+                .find(|frame| frame.kind == KIND_ERROR)
+                .unwrap_or_else(|| panic!("{name} did not return an error frame"));
+            assert!(String::from_utf8_lossy(&error_frame.data).contains("Forbidden"));
+
+            let account_after = AccountInfoResponse::decode(
+                file_node::handle_account_info(
+                    &AccountInfoRequest {}.encode_to_vec(),
+                    &file_state,
+                    &sync_state,
+                    &test_peer(),
+                )
+                .unwrap()
+                .as_slice(),
+            )
+            .unwrap();
+            assert_eq!(account_after, account_before, "{name} mutated file state");
+
+            if check_attempted_cid {
+                let availability = BlocksCheckResponse::decode(
+                    file_node::handle_blocks_check(
+                        &BlocksCheckRequest {
+                            space_id: "space-1".to_string(),
+                            cids: vec![attempted_cid],
+                        }
+                        .encode_to_vec(),
+                        &file_state,
+                        &sync_state,
+                        &test_peer(),
+                    )
+                    .unwrap()
+                    .as_slice(),
+                )
+                .unwrap();
+                assert_eq!(
+                    availability.blocks_availability[0].status,
+                    AvailabilityStatus::NotExists as i32,
+                    "BlockPushMany stored the nonowner's block"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn account_info_is_scoped_to_the_authenticated_peer() {
+        use manytype_core::crdt::cid::cid_string_to_bytes;
+        use manytype_proto::filesync::{AccountInfoRequest, AccountInfoResponse, BlockPushRequest};
+
+        let state = test_state();
+        let sync_state = state.sync_state.clone();
+        let file_state = state.file_node.clone();
+        let private_payload = b"owner-private-block".to_vec();
+        file_node::handle_block_push(
+            &BlockPushRequest {
+                space_id: "space-1".to_string(),
+                file_id: "owner-file".to_string(),
+                cid: cid_string_to_bytes(&compute_cid(&private_payload)).unwrap(),
+                data: private_payload.clone(),
+            }
+            .encode_to_vec(),
+            &file_state,
+            &sync_state,
+            &test_peer(),
+        )
+        .unwrap();
+
+        let (result, frames) = dispatch_single_request(
+            "/filesync.File/AccountInfo",
+            AccountInfoRequest {}.encode_to_vec(),
+            state,
+            other_peer(),
+        )
+        .await;
+        result.unwrap();
+        let response_frame = frames
+            .iter()
+            .find(|frame| frame.kind == KIND_MESSAGE)
+            .expect("AccountInfo response message");
+        let response = AccountInfoResponse::decode(response_frame.data.as_ref()).unwrap();
+        assert_eq!(response.total_usage_bytes, 0);
+        assert_eq!(response.total_cids_count, 0);
+        assert!(response.spaces.is_empty());
+
+        let owner_response = AccountInfoResponse::decode(
+            file_node::handle_account_info(
+                &AccountInfoRequest {}.encode_to_vec(),
+                &file_state,
+                &sync_state,
+                &test_peer(),
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            owner_response.total_usage_bytes,
+            private_payload.len() as u64
+        );
+        assert_eq!(owner_response.total_cids_count, 1);
+        assert_eq!(owner_response.spaces.len(), 1);
+        assert_eq!(owner_response.spaces[0].space_id, "space-1");
+    }
+
+    #[tokio::test]
     async fn test_dispatch_log_add() {
         use manytype_proto::consensus::{LogAddRequest, Ok as ConsensusOk};
 
@@ -1638,7 +1992,7 @@ mod tests {
         let state = test_state();
         state
             .sync_state
-            .claim_space_owner("router-test-log-add", test_peer().id())
+            .claim_space_owner("router-test-log-add", &test_peer())
             .unwrap();
 
         let handle = tokio::spawn(async move {
@@ -1692,7 +2046,7 @@ mod tests {
         let state = test_state();
         state
             .sync_state
-            .claim_space_owner("sp1", test_peer().id())
+            .claim_space_owner("sp1", &test_peer())
             .unwrap();
         state
             .sync_state
@@ -1799,7 +2153,7 @@ mod tests {
         let sync_state = sync_node::new_shared_sync_state();
         let (space_id, raw_header, account_identity) = valid_space_header(2);
         sync_state
-            .claim_space_owner(&space_id, test_peer().id())
+            .claim_space_owner(&space_id, &test_peer())
             .unwrap();
 
         // Step 1: SpacePush
