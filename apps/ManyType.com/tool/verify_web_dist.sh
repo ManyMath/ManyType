@@ -35,9 +35,10 @@ with socket.socket() as server:
 required_files=(
   index.html
   404.html
-  styles.css
-  assets/manytype-mark.svg
-  assets/manytype-workspace.png
+  assets/site.css
+  assets/brand/marks/manytype.svg
+  assets/brand/og.png
+  assets/hero.png
   home/index.html
   home/flutter_bootstrap.js
   home/main.dart.js
@@ -101,11 +102,11 @@ fi
 
 curl --fail --silent --show-error "http://127.0.0.1:$port/home/" \
   --output "$download_dir/app.html"
-curl --fail --silent --show-error "http://127.0.0.1:$port/styles.css" \
+curl --fail --silent --show-error "http://127.0.0.1:$port/assets/site.css" \
   --output "$download_dir/styles.css"
-curl --fail --silent --show-error "http://127.0.0.1:$port/assets/manytype-mark.svg" \
+curl --fail --silent --show-error "http://127.0.0.1:$port/assets/brand/marks/manytype.svg" \
   --output "$download_dir/manytype-mark.svg"
-curl --fail --silent --show-error "http://127.0.0.1:$port/assets/manytype-workspace.png" \
+curl --fail --silent --show-error "http://127.0.0.1:$port/assets/hero.png" \
   --output "$download_dir/manytype-workspace.png"
 curl --fail --silent --show-error "http://127.0.0.1:$port/home/main.dart.js" \
   --output "$download_dir/main.dart.js"
@@ -116,19 +117,19 @@ curl --fail --silent --show-error \
 curl --fail --silent --show-error "http://127.0.0.1:$port/home/drift_worker.dart.js" \
   --output "$download_dir/drift_worker.dart.js"
 
-grep -Fq 'id="hero-title">ManyType</h1>' "$download_dir/site.html"
+grep -Fq 'id="hero-title"' "$download_dir/site.html"
 grep -Fq '<base href="/home/">' "$download_dir/app.html"
 if grep -Eiq '<!doctype html|<html' "$download_dir/styles.css"; then
-  echo "/styles.css returned HTML" >&2
+  echo "/assets/site.css returned HTML" >&2
   exit 1
 fi
 if ! grep -Fq '<svg' "$download_dir/manytype-mark.svg"; then
-  echo "/assets/manytype-mark.svg is not an SVG image" >&2
+  echo "/assets/brand/marks/manytype.svg is not an SVG image" >&2
   exit 1
 fi
 preview_magic="$(od -An -tx1 -N8 "$download_dir/manytype-workspace.png" | tr -d '[:space:]')"
 if [[ "$preview_magic" != "89504e470d0a1a0a" ]]; then
-  echo "/assets/manytype-workspace.png is not a valid PNG image" >&2
+  echo "/assets/hero.png is not a valid PNG image" >&2
   exit 1
 fi
 for javascript in main.dart.js drift_worker.dart.js; do

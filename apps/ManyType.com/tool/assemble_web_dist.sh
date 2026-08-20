@@ -17,9 +17,10 @@ trap cleanup EXIT
 required_site_assets=(
   index.html
   404.html
-  styles.css
-  assets/manytype-mark.svg
-  assets/manytype-workspace.png
+  assets/site.css
+  assets/brand/marks/manytype.svg
+  assets/brand/og.png
+  assets/hero.png
 )
 for relative_path in "${required_site_assets[@]}"; do
   test -s "$site_dir/$relative_path" || {
