@@ -57,8 +57,7 @@ SpaceDeleteAssessment assessSpaceDeleteContract({
       outcome: 'precondition-failed',
       supported: false,
       observedSurfaceLabel: 'precondition-failed',
-      reason:
-          'SpaceDelete can only delete the current ManyType owner space.',
+      reason: 'SpaceDelete can only delete the current ManyType owner space.',
     );
   }
   if (prePermissions != 'SpacePermissionsOwner') {

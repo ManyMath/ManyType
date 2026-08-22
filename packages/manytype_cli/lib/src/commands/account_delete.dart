@@ -78,8 +78,7 @@ AccountDeleteAssessment assessAccountDeleteContract({
       outcome: 'supported-and-verified',
       supported: true,
       observedSurfaceLabel: 'accepted-account-delete-idempotency-surface',
-      reason:
-          'The first AccountDelete request succeeded. A second request '
+      reason: 'The first AccountDelete request succeeded. A second request '
           'for the same identity was rejected with "account is '
           'deleted", confirming the expected response to a repeated '
           'AccountDelete request.',
