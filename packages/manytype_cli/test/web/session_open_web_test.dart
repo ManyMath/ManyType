@@ -4,7 +4,7 @@ library;
 // M017 follow-up: proves ManytypeSession.openWeb: the bootstrap that ties
 // AccountRegistry's localStorage-backed credentials to a real,
 // production-path ManytypeDatabase (see app_persistence_test.dart): is
-// actually usable end to end, not just individually-tested pieces.
+// usable end to end, not just individually-tested pieces.
 import 'package:manytype_cli/manytype_cli.dart';
 import 'package:manytype_cli/src/account_registry.dart';
 import 'package:manytype_cli/src/sync_service.dart';

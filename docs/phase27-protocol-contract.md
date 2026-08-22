@@ -1,12 +1,14 @@
 # Phase 27: Object Synchronization Protocol Contract
 
-This document specifies the contract for the object synchronization protocol used in Anytype.
+This document describes the Anytype object synchronization protocol used by ManyType.
 
 ## 1. Overview
 
-The Anytype synchronization protocol is designed to synchronize user data between multiple devices and the Anytype network. The protocol is built on the concept of "spaces," which are containers for "objects." Objects are modeled as Conflict-free Replicated Data Types (CRDTs), specifically as trees of changes. This allows for robust and consistent synchronization in a distributed environment.
+Anytype synchronizes objects between devices and servers. Objects belong to
+spaces and are represented as trees of changes, using conflict-free replicated
+data types (CRDTs) to merge changes from different peers.
 
-Synchronization is managed by the `SpaceSync` service, which facilitates the exchange of object changes between peers.
+The `SpaceSync` service exchanges object changes between peers.
 
 ## 2. Key Concepts
 

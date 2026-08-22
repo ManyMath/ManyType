@@ -31,7 +31,7 @@ Uint8List _encodeVarint(int value) {
 /// Protobuf encoding for anytype `model.ObjectChangePayload` with only
 /// `smartBlockType` set.
 ///
-/// We intentionally omit the `key` field when empty to match official
+/// We omit the `key` field when empty to match official
 /// marshaling behavior (empty strings are not serialized).
 Uint8List _encodeObjectChangePayloadSmartblockType(int smartBlockType) {
   // field 1 (varint): smartBlockType => tag = 0x08

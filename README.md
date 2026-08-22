@@ -1,4 +1,4 @@
-# Manytype
+# ManyType
 
 A Dart/Rust client for the Any-Sync protocol used by Anytype, targeting
 bidirectional interoperability with the official Anytype stack.
@@ -8,7 +8,7 @@ bidirectional interoperability with the official Anytype stack.
 - `packages/manytype_protocol`: protobuf-generated wire types.
 - `packages/manytype_core`: CRDT object model and sync logic shared across
   clients.
-- `packages/manytype_cli`: the Dart CLI/library surface (native + web),
+- `packages/manytype_cli`: the Dart CLI and library for native and web clients,
   including account, network-config, and file-relation handling.
 - `rust/`: Rust workspace: `manytype_core` (Rust-side CRDT engine),
   `manytype_proto`, `manytype_quic_ffi` (QUIC transport FFI), and

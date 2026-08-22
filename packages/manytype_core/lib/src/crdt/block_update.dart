@@ -39,7 +39,7 @@ Uint8List buildBlockSetStyleEvent(
 
 /// Accepted symbolic style names for the CLI `--set-style` flag (D-06).
 ///
-/// Deliberately curated subset: Title (7), Code (6), Description (12),
+/// curated subset: Title (7), Code (6), Description (12),
 /// Marked (9), ToggleHeader1-3 (14-16), Header4 (4) are excluded.
 const List<String> acceptedStyleNames = <String>[
   'paragraph',

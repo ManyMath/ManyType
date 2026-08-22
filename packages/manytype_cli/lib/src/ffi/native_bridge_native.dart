@@ -108,7 +108,7 @@ typedef FfiAbiVersionDart = int Function();
 
 /// Resolves locations used by the native QUIC bridge loader.
 ///
-/// The macOS bundle layout is intentionally kept here, next to the loader,
+/// The macOS bundle layout is kept here, next to the loader,
 /// so package verification exercises the same path contract as the app.
 class NativeLibraryLocator {
   static const macOSLibraryName = 'libmanytype_quic_ffi.dylib';
@@ -161,7 +161,7 @@ class NativeBridge {
 
   /// Load as if [executablePath] were the running macOS app executable.
   ///
-  /// This is intentionally exposed only from the package's internal FFI
+  /// This is exposed only from the package's internal FFI
   /// implementation so release tooling can probe an assembled `.app` using
   /// the exact production bundle-path resolver.
   NativeBridge.forExecutablePath(String executablePath)

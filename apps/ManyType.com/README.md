@@ -1,11 +1,11 @@
 # ManyType.com
 
-ManyType.com combines two web surfaces in one static distribution:
+ManyType.com packages its website and app in one static distribution:
 
 - `/` is the public ManyType ecosystem site.
 - `/home/` is the ManyType Flutter application.
 
-The site uses a current application screenshot from the reviewed ManyType UI.
+The site uses a screenshot of the ManyType app.
 The application build stays self-contained and serves its Drift worker and
 SQLite WebAssembly runtime beneath `/home/`.
 
@@ -25,13 +25,13 @@ From the ManyType repository root, build the Flutter application with a
 ```
 
 The build disables Flutter's service worker and assembles the complete static
-distribution at `apps/ManyType.com/build/dist`. Its route contract is:
+distribution at `apps/ManyType.com/build/dist`. The routes are:
 
 - `/` serves the product site from `apps/ManyType.com/site`.
 - `/home/` serves the Flutter application and its Drift worker and SQLite WASM
   runtime.
 
-To inspect that exact artifact locally:
+To preview the build locally:
 
 ```sh
 python3 -m http.server 8080 --directory apps/ManyType.com/build/dist
@@ -42,7 +42,7 @@ Open `http://127.0.0.1:8080/` for the public site and
 
 ## Deployment requirements
 
-Serve the distribution as literal static files. In particular:
+Serve the distribution as static files. In particular:
 
 - Do not rewrite missing JavaScript, worker, or WASM paths to an HTML entry point.
 - Serve `.wasm` files as `application/wasm` and JavaScript workers as JavaScript.

@@ -15,7 +15,7 @@ import 'config.dart';
 import 'identity.dart';
 import 'store/database.dart';
 
-/// Composition root for the library-facing API surface (M016).
+/// Composition root for the library-facing API (M016).
 ///
 /// Resolves the active account, opens its database, and derives its
 /// identity once, then exposes per-domain facades (`session.fileTransfer`,

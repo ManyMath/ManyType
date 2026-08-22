@@ -484,7 +484,7 @@ def main() -> None:
         validate_official_to_manytype_template(
             artifact_dir / "official_to_manytype_template.json"
         ),
-        # validate_official_to_manytype_option_recolor is intentionally not
+        # validate_official_to_manytype_option_recolor is not
         # wired in yet -- see docs/m039-status-tag-option-recolor-breadth05.md.
         # The official-authored rename+recolor scenario (harness scenario
         # 12/12) hit a transient upstream any-sync propagation delay in this

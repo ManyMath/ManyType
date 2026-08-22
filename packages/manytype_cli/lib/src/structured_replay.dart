@@ -56,7 +56,7 @@ const _structuralRelationKeys = <String>{
 
 /// Structural block IDs from `createMinimalPageSnapshotBase` that every page
 /// object carries as scaffolding with no text content of its own. `title`
-/// is deliberately NOT included here even though `read.dart`'s line-based
+/// is NOT included here even though `read.dart`'s line-based
 /// report skips it too: `title` holds the object's actual display name as
 /// an editable text block, and a structured caller (unlike a human skimming
 /// the CLI report) wants to bind an editor to it.

@@ -41,7 +41,7 @@ private-canary boundary.
 
 ## Current authorization model
 
-Authorization is deliberately conservative: the persisted account/peer owner
+Authorization is conservative: the persisted account/peer owner
 pair is the only principal allowed to access a private space. Sync schema v1
 peer-only owners are rejected rather than migrated without proof of the account
 binding.

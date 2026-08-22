@@ -32,7 +32,7 @@ Future<RawTreeChangeWithId> buildDerivedRootChange({
 
   final rawTreeChange = RawTreeChange(
     payload: payload,
-    // Signature intentionally omitted for derived roots.
+    // Signature omitted for derived roots.
   );
 
   final rawBytes = Uint8List.fromList(rawTreeChange.writeToBuffer());

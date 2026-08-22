@@ -11,7 +11,7 @@ import 'package:manytype_protocol/coordinator.dart';
 const String kAcceptedSpaceDeleteTruthSurface = 'self-hosted-official';
 const String kAcceptedSpaceDeleteProofMode = 'coordinator-status-reread';
 const List<String> kAcceptedSpaceDeletePreconditions = <String>[
-  'bounded owner space already seeded live on the self-hosted official stack',
+  'the current owner space already exists on the self-hosted official stack',
   'the requested space must match the current Manytype owner space',
   'the coordinator status proof is based on status reread, not object-tree disappearance',
 ];
@@ -58,7 +58,7 @@ SpaceDeleteAssessment assessSpaceDeleteContract({
       supported: false,
       observedSurfaceLabel: 'precondition-failed',
       reason:
-          'Bounded SpaceDelete only supports deleting the current Manytype owner space.',
+          'SpaceDelete can only delete the current ManyType owner space.',
     );
   }
   if (prePermissions != 'SpacePermissionsOwner') {
@@ -67,7 +67,7 @@ SpaceDeleteAssessment assessSpaceDeleteContract({
       supported: false,
       observedSurfaceLabel: 'precondition-failed',
       reason:
-          'Bounded SpaceDelete requires owner permissions, observed ${prePermissions ?? 'unknown'}.',
+          'SpaceDelete requires owner permissions; received ${prePermissions ?? 'unknown'}.',
     );
   }
   if (preStatus != 'SpaceStatusCreated') {
@@ -76,7 +76,7 @@ SpaceDeleteAssessment assessSpaceDeleteContract({
       supported: false,
       observedSurfaceLabel: 'precondition-failed',
       reason:
-          'Bounded SpaceDelete requires a live created space before deletion, observed ${preStatus ?? 'unknown'}.',
+          'SpaceDelete requires a space with Created status; received ${preStatus ?? 'unknown'}.',
     );
   }
   if (!responseOk) {
@@ -85,7 +85,7 @@ SpaceDeleteAssessment assessSpaceDeleteContract({
       supported: false,
       observedSurfaceLabel: 'unsupported-surface-or-scenario',
       reason:
-          'SpaceDelete RPC did not complete successfully on the observed surface: ${responseError ?? 'unknown error'}.',
+          'SpaceDelete request failed: ${responseError ?? 'unknown error'}.',
     );
   }
   if (postStatus == 'SpaceStatusPendingDeletion' &&
@@ -95,7 +95,7 @@ SpaceDeleteAssessment assessSpaceDeleteContract({
       supported: true,
       observedSurfaceLabel: 'accepted-space-delete-surface',
       reason:
-          'Observed the accepted Created -> PendingDeletion -> Deleted contract through reconnect-backed coordinator status reread.',
+          'Status changed from Created to PendingDeletion, then to Deleted after reconnecting.',
     );
   }
   if (postStatus == 'SpaceStatusCreated' &&
@@ -105,7 +105,7 @@ SpaceDeleteAssessment assessSpaceDeleteContract({
       supported: false,
       observedSurfaceLabel: 'stub-no-op-surface',
       reason:
-          'The delete request returned, but status stayed Created before and after reconnect. This matches the unsupported stub/no-op surface rather than the accepted contract.',
+          'The delete request returned, but status remained Created after reconnecting. Deletion could not be verified.',
     );
   }
   return SpaceDeleteAssessment(
@@ -113,7 +113,7 @@ SpaceDeleteAssessment assessSpaceDeleteContract({
     supported: false,
     observedSurfaceLabel: 'unsupported-surface-or-scenario',
     reason:
-        'The accepted contract requires Created -> PendingDeletion -> Deleted via reconnect-backed coordinator status reread; observed '
+        'Expected Created -> PendingDeletion -> Deleted, with the final check after reconnecting; received '
         '${preStatus ?? 'unknown'} -> ${postStatus ?? 'unknown'} -> ${reconnectStatus ?? 'unknown'}.',
   );
 }
@@ -353,7 +353,7 @@ Future<_InitialDeleteCapture> _captureInitialDelete({
       );
     } else {
       response = _CapturedResult.failure(
-        'SpaceDelete request skipped because bounded preconditions were not met.',
+        'SpaceDelete was skipped because its preconditions were not met.',
       );
     }
 

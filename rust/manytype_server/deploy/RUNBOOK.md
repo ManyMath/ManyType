@@ -33,7 +33,7 @@ recovery phrases or private keys. Never put a recovery phrase, identity seed,
 or server `identity.key` in the configuration.
 
 This shared deterministic peer identity is what lets the current immutable
-owner check authorize devices A and B. A device with a genuinely distinct peer
+owner check authorize devices A and B. A device with a distinct peer
 identity remains denied even if it proves the same account identity. Supporting
 that case requires an explicit authenticated device-admission or ownership
 transfer protocol; do not weaken the owner check to work around it.

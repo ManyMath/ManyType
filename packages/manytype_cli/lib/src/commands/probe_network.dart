@@ -25,7 +25,7 @@ class NetworkProbeResult {
 
 /// Connect to a coordinator and perform only the NetworkConfiguration exchange.
 ///
-/// This is intentionally narrower than `sync` so live production validation can
+/// This is narrower than `sync` so live production validation can
 /// stop at the first coordinator RPC without attempting object or store sync.
 Future<NetworkProbeResult> probeNetworkCommand(
   CliConfig config, {

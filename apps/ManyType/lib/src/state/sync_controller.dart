@@ -183,7 +183,7 @@ final syncProbeRunnerProvider = Provider<ManyTypeProbeRunner>((ref) {
 
 /// Durable sync setup and results, isolated by account ID.
 ///
-/// Network configuration is deliberately not inferred from the account's
+/// Network configuration is not inferred from the account's
 /// legacy `serverAddress` field. A new account remains
 /// [SyncUiStatus.unconfigured] until the user supplies a real any-sync network
 /// configuration. Browser builds remain offline-only and never reach either

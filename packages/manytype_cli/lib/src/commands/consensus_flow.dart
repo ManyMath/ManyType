@@ -13,7 +13,7 @@ import '../session.dart';
 
 const String kConsensusBackendLabel = 'manytype_server';
 const List<String> kConsensusBackendRequirements = <String>[
-  'requires a reachable manytype_server coordinator and consensus surface via --server',
+  'requires a reachable manytype_server coordinator and consensus service via --server',
   'continuation requires the state JSON written by consensus-bootstrap',
 ];
 

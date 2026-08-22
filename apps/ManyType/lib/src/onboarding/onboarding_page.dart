@@ -251,8 +251,8 @@ class _WelcomeCard extends StatelessWidget {
             const MSectionHeader(
               title: 'Welcome to ManyType',
               description:
-                  'An offline-first Any-Sync client. Encrypted document '
-                  'changes stay local and belong to your recovery identity.',
+                  'Organize pages with types, properties, and links. Your '
+                  'changes are encrypted and stored on this device.',
               descriptionMaxLines: 5,
             ),
             const SizedBox(height: 24),

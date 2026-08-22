@@ -64,7 +64,7 @@ Uint8List curve25519PublicKeyFromPrivateKey(Uint8List curvePrivKey) {
 /// Output format: `ephemeralPublicKey(32) || nacl_box(ciphertext)`
 ///
 /// Note: any-sync currently derives the nonce as `nonce = epk[0:24]`
-/// (see `util/crypto/x25519.go`). We intentionally match that behavior.
+/// (see `util/crypto/x25519.go`). We match that behavior.
 Uint8List encryptX25519({
   required Uint8List recipientCurvePublicKey,
   required Uint8List message,

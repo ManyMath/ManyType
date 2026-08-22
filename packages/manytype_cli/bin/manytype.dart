@@ -203,7 +203,7 @@ void _printSpaceDeleteReport(SpaceDeleteReport report) {
 
   print('Command: space-delete');
   print('Space: ${report.spaceId}');
-  print('Accepted truth surface: $kAcceptedSpaceDeleteTruthSurface');
+  print('Reference environment: $kAcceptedSpaceDeleteTruthSurface');
   print('Proof mode: $kAcceptedSpaceDeleteProofMode');
   print(
       'Observed status path: $initialPre -> $initialPost -> $reconnectStatus');
@@ -371,11 +371,11 @@ Future<void> main(List<String> arguments) async {
   final spaceDeleteParser = ArgParser()
     ..addOption('space-id',
         help:
-            'Space ID to delete; defaults to the current owner space and must match it for the bounded flow')
+            'Space ID to delete; must match the current owner space, which is the default')
     ..addOption('wait-seconds',
         defaultsTo: '6',
         help:
-            'Seconds to wait before the reconnect-backed status reread (default: 6)')
+            'Seconds to wait before reconnecting and checking status (default: 6)')
     ..addOption('deletion-duration-minutes',
         defaultsTo: '0',
         help: 'Deletion duration sent to the coordinator request (default: 0)')

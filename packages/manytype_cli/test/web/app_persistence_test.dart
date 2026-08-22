@@ -3,7 +3,7 @@ library;
 
 // R041: proves ManytypeDatabase's *production* default constructor
 // (`ManytypeDatabase(dbPath)`, routed through openConnectionForApp ->
-// openDatabaseForApp -> WasmDatabase.open) is actually usable on web.
+// openDatabaseForApp -> WasmDatabase.open) is usable on web.
 // persistence_test.dart (M014/S02) proved persistence is possible in
 // principle by hand-building an IndexedDbFileSystem executor and feeding it
 // to ManytypeDatabase.forTesting; that path is never reached by real

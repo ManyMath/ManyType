@@ -49,7 +49,7 @@ class FileNodeProbeResult {
 /// Connect to a coordinator, resolve the FileAPI node, and attempt a narrow
 /// set of file RPCs against it.
 ///
-/// This is intentionally a contract/probe command, not a full upload/download
+/// This is a contract/probe command, not a full upload/download
 /// workflow. It verifies that FileAPI discovery works and that the CLI can
 /// route file RPCs to the selected file node while recording a reusable
 /// artifact for later interop phases.

@@ -43,7 +43,7 @@ class FileRelationWriteResult {
 }
 
 /// Result of [editCommand]. Only the fields relevant to the edit(s)
-/// actually requested are non-null/non-empty.
+/// requested are non-null/non-empty.
 class EditResult {
   const EditResult({
     required this.objectId,
@@ -636,7 +636,7 @@ class EditOfflineResult {
 ///
 /// Phase 1 scope: mutation only, exactly like `editCommand`'s own
 /// `--block-id` branch -- inserting new typed blocks is `create.dart`'s
-/// block-factory territory instead and is deliberately out of scope here.
+/// block-factory territory instead and is out of scope here.
 /// Exactly one of [setText]/[setChecked]/[setStyle] must be non-null.
 Future<EditOfflineResult> editOffline(
   String objectId,
@@ -893,7 +893,7 @@ class EditRelationOfflineResult {
 /// [stringValue], [stringListValue] (full replace, e.g. tag lists),
 /// [boolValue], [dateValue] (unix seconds), [objectIdValue], and [status]
 /// (single-value status write). File-relation values and tag-delta
-/// (add/remove against the existing list) are deliberately out of scope
+/// (add/remove against the existing list) are out of scope
 /// here, same as they'd need a network round-trip or an extra replay read
 /// respectively -- callers needing those still go through `editCommand`.
 /// Exactly one of the typed value parameters must be non-null.

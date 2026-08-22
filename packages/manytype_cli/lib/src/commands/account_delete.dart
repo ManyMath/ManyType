@@ -67,7 +67,7 @@ AccountDeleteAssessment assessAccountDeleteContract({
       supported: false,
       observedSurfaceLabel: 'request-rejected',
       reason:
-          'AccountDelete RPC did not complete successfully on the observed surface: ${responseError ?? 'unknown error'}.',
+          'AccountDelete request failed: ${responseError ?? 'unknown error'}.',
     );
   }
 
@@ -79,10 +79,10 @@ AccountDeleteAssessment assessAccountDeleteContract({
       supported: true,
       observedSurfaceLabel: 'accepted-account-delete-idempotency-surface',
       reason:
-          'The first AccountDelete request returned ok, and a second request '
-          'for the same identity was independently rejected with "account is '
-          'deleted": the one observable signal any-sync exposes for '
-          'AccountDelete. This satisfies the bounded acceptance contract.',
+          'The first AccountDelete request succeeded. A second request '
+          'for the same identity was rejected with "account is '
+          'deleted", confirming the expected response to a repeated '
+          'AccountDelete request.',
     );
   }
 

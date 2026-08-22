@@ -14,7 +14,7 @@ import '../session.dart';
 
 const String kSpacePullBackendLabel = 'manytype_server';
 const List<String> kSpacePullBackendRequirements = <String>[
-  'requires a reachable manytype_server tree/coordinator surface',
+  'requires reachable manytype_server tree and coordinator services',
   'bootstrap uses --network-config to seed a fresh ephemeral space before the fetch',
   'refetch requires the state JSON written by space-pull-bootstrap',
 ];

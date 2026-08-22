@@ -14,7 +14,7 @@ const demoTemplatePageTitle = 'Welcome to your ManyType workspace';
 
 @visibleForTesting
 const demoTemplateIntroText =
-    'This local-first page is yours to edit, organize, or delete.';
+    'Use this sample page to try editing, organizing, and deleting content.';
 
 @visibleForTesting
 const demoTemplateTaskText = 'Create your first page';

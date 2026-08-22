@@ -2379,7 +2379,7 @@ mod tests {
         };
         RawTreeChange {
             payload: root_change.encode_to_vec(),
-            // Derived roots intentionally omit signatures.
+            // Derived roots omit signatures.
             signature: Vec::new(),
         }
         .encode_to_vec()

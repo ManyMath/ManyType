@@ -1,6 +1,6 @@
 /// Platform secret storage used by native application hosts.
 ///
-/// `manytype_cli` deliberately does not depend on Flutter, so a host such as
+/// `manytype_cli` does not depend on Flutter, so a host such as
 /// the ManyType app injects a Keychain/credential-store implementation. The
 /// command-line binary leaves this unset and retains its existing plaintext
 /// `config.toml` compatibility.

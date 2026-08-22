@@ -1,7 +1,7 @@
 @TestOn('browser')
 library;
 
-// Proves ManytypeDatabase's onWebStorageDiagnostics callback actually fires
+// Proves ManytypeDatabase's onWebStorageDiagnostics callback fires
 // with a value derived from the resolved WasmDatabaseResult, closing the gap
 // M017 left open: nothing surfaced chosenImplementation to callers of the
 // public constructor before this (only the test-only openWasmDatabaseForApp
@@ -40,7 +40,7 @@ void main() {
     printOnFailure('diagnostics=$seen');
     expect(seen!.implementationName, isNotEmpty);
     if (seen!.implementationName == 'inMemory') {
-      // The only implementation dart test -p chrome can actually reach (see
+      // The only implementation dart test -p chrome can reach (see
       // R041): confirm the mapping marks it correctly as non-durable and
       // not multi-tab safe.
       expect(seen!.isDurable, isFalse);

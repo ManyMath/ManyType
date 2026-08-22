@@ -141,7 +141,7 @@ class AccountsController {
     try {
       await AccountRegistry.removeAccount(id);
     } catch (_) {
-      // Storage deletion is deliberately attempted before registry removal.
+      // Storage deletion is attempted before registry removal.
       // If it fails, reopen the closed current session and leave the account
       // fully registered so the user can retry.
       if (current == id) {

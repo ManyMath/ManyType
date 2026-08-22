@@ -56,7 +56,7 @@ your mnemonic and database live at the legacy top-level
 `~/.manytype/config.toml`/`store.db`. The first time any account-aware
 command runs afterward, this legacy install is automatically registered as a
 real account profile (named `default`): **without moving or copying any
-files**; the registered profile simply points at your existing config/db in
+files**; the registered profile points at your existing config/db in
 place. This is idempotent (safe to run repeatedly) and preserves your data
 exactly as-is. You can then create additional accounts normally with
 `manytype account create --name <name>`.

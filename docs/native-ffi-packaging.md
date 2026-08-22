@@ -19,7 +19,7 @@ apps/ManyType/tool/build_macos_app.sh
 apps/ManyType/tool/verify_macos_quic_ffi.sh
 ```
 
-The ad-hoc build is a portable packaging check only. It deliberately uses
+The ad-hoc build is a portable packaging check only. It uses
 `DebugProfileAdHoc.entitlements` or `ReleaseAdHoc.entitlements`, which omit
 Keychain Sharing. It must not be used as evidence that recovery phrases persist
 through the operating-system credential store.
@@ -48,7 +48,7 @@ apps/ManyType/tool/run_macos_native_smoke.sh
 ```
 
 The verifier checks the app and nested-library signatures, architectures,
-install name, system-only dynamic dependencies, exported FFI surface, network
+install name, system-only dynamic dependencies, exported FFI API, network
 entitlement, and ABI call through Dart's production bundle-path resolver.
 
 ## Current signed-canary blocker

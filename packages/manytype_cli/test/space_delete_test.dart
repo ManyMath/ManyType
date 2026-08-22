@@ -33,7 +33,7 @@ void main() {
       expect(result.supported, isFalse);
       expect(result.outcome, 'unsupported-surface-or-scenario');
       expect(result.observedSurfaceLabel, 'stub-no-op-surface');
-      expect(result.reason, contains('stub/no-op surface'));
+      expect(result.reason, contains('Deletion could not be verified'));
     });
 
     test('rejects non-owner preconditions before claiming parity', () {

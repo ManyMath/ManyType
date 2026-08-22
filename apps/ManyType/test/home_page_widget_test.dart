@@ -10,7 +10,7 @@ library;
 // NativeDatabase.createInBackground, a background isolate whose SendPort
 // replies never arrive inside testWidgets() in this environment.
 //
-// The tests intentionally share one read-only account/database fixture.
+// The tests share one read-only account/database fixture.
 // AccountRegistry's native lifecycle serializer retains the Future from the
 // zone that opened it; rebuilding the fixture in each testWidgets zone makes
 // the next zone wait on its predecessor indefinitely on this Flutter runner.

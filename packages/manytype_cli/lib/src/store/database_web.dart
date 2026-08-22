@@ -33,12 +33,12 @@ WebStorageDiagnostics webStorageDiagnosticsFromWasmResult(
 /// web app serves `sqlite3.wasm`/`drift_worker.dart.js` at its own origin
 /// root, so the relative-path defaults below resolve correctly; `dart test
 /// -p chrome` has no such root to serve them from, so tests point this at
-/// wherever they've actually served the assets (e.g.
+/// wherever they've served the assets (e.g.
 /// test/web/asset_server.dart) instead. See [webTestSqlite3Uri] for the
 /// analogous override on [openDatabaseForTesting].
 ({Uri sqlite3, Uri driftWorker})? webAppAssetUriOverride;
 
-/// Test seam for browser storage deletion. Production always uses drift's
+/// Test hook for browser storage deletion. Production always uses drift's
 /// storage probe so both OPFS and IndexedDB databases are covered.
 Future<void> Function(String databaseName)? webDatabaseDeleteOverride;
 

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Local native-protocol proof only. This exercises the real QUIC FFI, server,
-# CRDT, and file paths but deliberately does not claim a ManyTier deployment.
+# CRDT, and file paths but does not claim a ManyTier deployment.
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 artifact_path="${1:-$root_dir/build/private-canary/local-two-home.json}"
@@ -189,7 +189,7 @@ nodes:
       - file
 EOF
 
-# The network-config path intentionally uses the official multi-node discovery
+# The network-config path uses the official multi-node discovery
 # flow, whose preflight requires an already-live space. Establish immutable
 # ownership once through the single-node private endpoint before exercising the
 # network-config path for every synchronized mutation below.

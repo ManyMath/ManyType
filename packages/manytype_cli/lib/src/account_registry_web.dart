@@ -26,7 +26,7 @@ class AccountRegistry {
   static String keyPrefix = 'manytype';
 
   /// Unused on web (there is no native filesystem base dir); declared to
-  /// keep the conditional-export API surface identical to
+  /// keep the conditional-export API identical to
   /// account_registry_native.dart's [testBaseDirOverride].
   static String? testBaseDirOverride;
 

@@ -1,5 +1,5 @@
 // Verifies which WasmStorageImplementation a *real* same-origin web
-// deployment of manytype_cli actually resolves to.
+// deployment of manytype_cli resolves to.
 //
 // `dart test -p chrome` cannot answer this: it has no origin root to serve
 // `drift_worker.dart.js` from same-origin as the test page, so

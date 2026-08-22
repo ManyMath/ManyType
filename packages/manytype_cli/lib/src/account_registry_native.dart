@@ -46,11 +46,11 @@ class AccountRegistry {
   static String? testBaseDirOverride;
   static RecoveryPhraseStore? _recoveryPhraseStore;
 
-  /// Test-only fault seam invoked after a removal stage is durable.
+  /// Test-only fault injection hook invoked after a removal stage is durable.
   static Future<void> Function(AccountRemovalStage stage)?
       testAccountRemovalStageHook;
 
-  /// Test-only fault seam invoked after an atomic temporary file is flushed
+  /// Test-only fault injection hook invoked after an atomic temporary file is flushed
   /// but before it replaces [path]. Throwing leaves the prior file untouched.
   static Future<void> Function(String path)? testBeforeAtomicReplaceHook;
 
@@ -101,7 +101,7 @@ class AccountRegistry {
     }();
   }
 
-  /// Clears native lifecycle fault seams between isolated filesystem tests.
+  /// Clears native lifecycle fault injection hooks between isolated filesystem tests.
   /// Call only after all registry futures from the prior test have completed.
   static void resetLifecycleTestState() {
     if (_activeRecovery != null || _queuedLifecycleOperations != 0) {
