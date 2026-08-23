@@ -269,7 +269,7 @@ Future<Uint8List?> _tryDeriveSpaceKey(CliConfig config) async {
     final accountPrivRaw = Uint8List(64)
       ..setRange(0, 32, identity.accountSeed)
       ..setRange(32, 64, identity.accountKeyPair.publicKey);
-    return deriveSpaceKey(accountPrivRaw);
+    return await deriveSpaceKey(accountPrivRaw);
   } catch (_) {
     return null;
   }
