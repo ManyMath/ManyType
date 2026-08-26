@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: sneurlax/manyui
-          ref: 7d0fc083eff35c2b5c035d4328f5ed2d6845ced2
+          ref: e6aa5314b47868ac8d0d8b44474545fed6004226
           path: ManyUI
           token: ${{ secrets.DEPENDENCY_CHECKOUT_TOKEN }}
 
