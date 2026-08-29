@@ -18,8 +18,6 @@ dependency_overrides:
     path: ../ManyUI/manyui
 melos:
   name: manytype
-  packages:
-    - packages/**
   sdkPath: auto
   command:
     bootstrap:
@@ -31,6 +29,8 @@ melos:
         concurrency: 1
       packageFilters:
         dirExists: test
+        ignore:
+          - manytype
     test:web:
       run: |
         if [ -f tool/fetch_web_test_assets.dart ]; then
@@ -42,6 +42,8 @@ melos:
         concurrency: 1
       packageFilters:
         dirExists: test
+        ignore:
+          - manytype
     test:ci:
       run: dart test --exclude-tags=round_trip -j 1
       description: |
