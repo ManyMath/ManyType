@@ -25,6 +25,12 @@ def require_keys(data: dict, keys: set[str], label: str) -> None:
         raise SystemExit(f"[{label}] missing keys: {missing}")
 
 
+def is_purged_planning_path(value: str) -> bool:
+    # .planning/ was removed from the repository; artifacts captured before
+    # that still list the Phase 41 verification notes among their evidence.
+    return ".planning" in pathlib.PurePath(value).parts
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Offline verifier for the Phase 62 collection scope-freeze artifact."
@@ -113,6 +119,8 @@ def main() -> None:
               f"[phase62 candidate ranking] empty evidence_paths for {candidate['candidate']}"
           )
       for evidence_path in candidate["evidence_paths"]:
+          if is_purged_planning_path(evidence_path):
+              continue
           if not pathlib.Path(evidence_path).exists():
               raise SystemExit(
                   f"[phase62 candidate ranking] missing evidence for {candidate['candidate']}: {evidence_path}"
@@ -175,13 +183,14 @@ def main() -> None:
             "phase38_status_path",
             "phase38_tag_path",
             "phase40_file_relation_path",
-            "phase41_template_verification_path",
             "phase42_manytype_to_official_template_path",
             "phase42_official_to_manytype_template_path",
         },
         "phase62 evidence references",
     )
     for value in evidence.values():
+        if is_purged_planning_path(value):
+            continue
         if not pathlib.Path(value).exists():
             raise SystemExit(f"[phase62 evidence references] missing referenced file: {value}")
 

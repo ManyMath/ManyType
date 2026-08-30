@@ -21,7 +21,6 @@ PHASE38_TAG_ARTIFACT="$ROOT_DIR/test_vectors/phase38/tag-multi.json"
 PHASE40_FILE_ARTIFACT="$ROOT_DIR/test_vectors/phase40/file-relation-roundtrip.json"
 PHASE42_M2O_TEMPLATE="$ROOT_DIR/test_vectors/phase42/manytype_to_official_template.json"
 PHASE42_O2M_TEMPLATE="$ROOT_DIR/test_vectors/phase42/official_to_manytype_template.json"
-PHASE41_VERIFICATION="$ROOT_DIR/.planning/milestones/v2.5-phases/41-templates-creation-and-application/41-VERIFICATION.md"
 TMPDIR="$(mktemp -d)"
 PROBE_BIN="$TMPDIR/official_client_grpc_probe"
 
@@ -54,8 +53,7 @@ for required_path in \
   "$PHASE38_TAG_ARTIFACT" \
   "$PHASE40_FILE_ARTIFACT" \
   "$PHASE42_M2O_TEMPLATE" \
-  "$PHASE42_O2M_TEMPLATE" \
-  "$PHASE41_VERIFICATION"; do
+  "$PHASE42_O2M_TEMPLATE"; do
   [[ -f "$required_path" ]] || fail "missing evidence file: $required_path"
 done
 
@@ -83,7 +81,6 @@ python3 - \
   "$PHASE40_FILE_ARTIFACT" \
   "$PHASE42_M2O_TEMPLATE" \
   "$PHASE42_O2M_TEMPLATE" \
-  "$PHASE41_VERIFICATION" \
   "$NETWORK_CONFIG_SRC" \
   "$RUNTIME_METADATA_PATH" <<'PY'
 from __future__ import annotations
@@ -106,7 +103,6 @@ import sys
     phase40_file_path,
     phase42_m2o_template_path,
     phase42_o2m_template_path,
-    phase41_verification_path,
     network_config,
     metadata_path,
 ) = sys.argv[1:]
@@ -188,7 +184,6 @@ artifact = {
                 "than collection membership/order."
             ),
             "evidence_paths": [
-                phase41_verification_path,
                 phase42_m2o_template_path,
                 phase42_o2m_template_path,
             ],
@@ -242,7 +237,6 @@ artifact = {
         "phase38_status_path": phase38_status_path,
         "phase38_tag_path": phase38_tag_path,
         "phase40_file_relation_path": phase40_file_path,
-        "phase41_template_verification_path": phase41_verification_path,
         "phase42_manytype_to_official_template_path": phase42_m2o_template_path,
         "phase42_official_to_manytype_template_path": phase42_o2m_template_path,
     },
