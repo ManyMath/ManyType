@@ -42,6 +42,20 @@ to skip melos's package picker prompt, e.g. `melos run test:web --no-select`.
   intermittent "Address already in use" failures in testing, `-j 1` did
   not.
 
+## Self-hosted oracle stack
+
+The oracle tests and harnesses expect the docker any-sync stack and the
+official Anytype CLI image pinned by `docker/any-sync/oracle.lock.env`:
+
+```sh
+bash scripts/self_hosted_oracle_pin.sh   # writes docker/any-sync/.env.override, pulls the pinned anytype-cli image
+(cd docker/any-sync && make start)
+bash scripts/self_hosted_oracle_preflight.sh
+```
+
+Without the pin step, `make start` resolves the `prod` any-sync versions
+and the preflight rejects the stack.
+
 ## CI
 
 `.github/workflows/web-tests.yml` runs `melos run test:web` and

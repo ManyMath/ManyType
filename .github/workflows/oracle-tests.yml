@@ -59,6 +59,10 @@ jobs:
         working-directory: ManyType
         run: timeout --signal=TERM --kill-after=30s 15m dart pub global run melos bootstrap
 
+      - name: Pin oracle versions and official CLI image
+        working-directory: ManyType
+        run: timeout --signal=TERM --kill-after=30s 15m bash scripts/self_hosted_oracle_pin.sh
+
       - name: Start self-hosted any-sync oracle stack
         working-directory: ManyType/docker/any-sync
         run: timeout --signal=TERM --kill-after=30s 45m make -s start
@@ -85,9 +89,17 @@ jobs:
       - name: Start manytype_server (required by round_trip_test.dart)
         working-directory: ManyType/rust
         run: |
-          ./target/release/manytype_server manytype_server/test_config.toml &
+          ./target/release/manytype_server manytype_server/test_config.toml >/tmp/manytype_server.log 2>&1 &
           echo $! > /tmp/manytype_server.pid
-          sleep 2
+          for _ in $(seq 1 30); do
+            if python3 ../scripts/read_server_ready.py /tmp/manytype_server.log >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "manytype_server did not become ready" >&2
+          cat /tmp/manytype_server.log >&2
+          exit 1
 
       - name: melos run test:oracle
         working-directory: ManyType
