@@ -32,13 +32,14 @@ fail() {
 printf '=== Phase 58: bounded delete tranche freeze and oracle baseline ===\n\n'
 
 mkdir -p "$ARTIFACT_DIR"
-rm -f "$ARTIFACT_DIR"/*.json
 
 [[ -f "$PHASE50_ARTIFACT" ]] || fail "missing Phase 50 artifact: $PHASE50_ARTIFACT"
 [[ -f "$PHASE47_ARTIFACT" ]] || fail "missing Phase 47 artifact: $PHASE47_ARTIFACT"
 
 oracle_run_preflight
 oracle_export_runtime_env
+
+rm -f "$ARTIFACT_DIR"/*.json
 
 printf 'Building probe binary for runtime metadata...\n'
 oracle_build_probe_binary "$PROBE_BIN"

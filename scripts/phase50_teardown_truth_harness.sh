@@ -137,11 +137,12 @@ capture_teardown() {
 printf '=== Phase 50: teardown truth capture ===\n\n'
 
 mkdir -p "$ARTIFACT_DIR"
-rm -f "$TOP_LEVEL_ARTIFACT" "$RUNTIME_METADATA_PATH"
-rm -f "$ARTIFACT_DIR"/*.json
 
 oracle_run_preflight
 oracle_export_runtime_env
+
+rm -f "$TOP_LEVEL_ARTIFACT" "$RUNTIME_METADATA_PATH"
+rm -f "$ARTIFACT_DIR"/*.json
 
 printf 'Building release binaries...\n'
 (cd "$ROOT_DIR/rust" && cargo build -p manytype_quic_ffi -p manytype_server --release >/dev/null)

@@ -106,10 +106,11 @@ wait_for_manytype_read() {
 printf '=== Phase 56: official -> Manytype compatibility ===\n\n'
 
 mkdir -p "$ARTIFACT_DIR" "$MANYTYPE_HOME" "$MANYTYPE_REOPEN_HOME/.manytype" "$OFFICIAL_ROOT"
-rm -f "$ARTIFACT_DIR"/*.json "$ARTIFACT_DIR"/*.txt
 
 oracle_run_preflight
 oracle_export_runtime_env
+
+rm -f "$ARTIFACT_DIR"/*.json "$ARTIFACT_DIR"/*.txt
 
 printf 'Building binaries...\n'
 (cd "$ROOT_DIR/rust" && cargo build -p manytype_quic_ffi --release >/dev/null)

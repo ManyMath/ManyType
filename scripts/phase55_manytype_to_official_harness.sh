@@ -34,10 +34,11 @@ fail() {
 printf '=== Phase 55: Manytype -> official self-hosted compatibility ===\n\n'
 
 mkdir -p "$ARTIFACT_DIR"
-rm -f "$ARTIFACT_DIR"/*.json
 
 oracle_run_preflight
 oracle_export_runtime_env
+
+rm -f "$ARTIFACT_DIR"/*.json
 
 printf 'Building probe binary for runtime metadata...\n'
 oracle_build_probe_binary "$PROBE_BIN"

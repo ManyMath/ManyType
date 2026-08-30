@@ -32,13 +32,14 @@ fail() {
 printf '=== Phase 54: compatibility slice freeze and oracle baseline ===\n\n'
 
 mkdir -p "$ARTIFACT_DIR"
-rm -f "$ARTIFACT_DIR"/*.json
 
 [[ -f "$PHASE50_ARTIFACT" ]] || fail "missing Phase 50 artifact: $PHASE50_ARTIFACT"
 [[ -f "$PHASE46_ARTIFACT" ]] || fail "missing Phase 46 artifact: $PHASE46_ARTIFACT"
 
 oracle_run_preflight
 oracle_export_runtime_env
+
+rm -f "$ARTIFACT_DIR"/*.json
 
 printf 'Building probe binary for runtime metadata...\n'
 oracle_build_probe_binary "$PROBE_BIN"

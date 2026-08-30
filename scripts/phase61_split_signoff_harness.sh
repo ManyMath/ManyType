@@ -12,7 +12,6 @@ SIGNOFF_STARTED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 source "$LOCK_FILE"
 
 mkdir -p "$ARTIFACT_DIR"
-rm -f "$ARTIFACT_PATH"
 
 printf '=== Phase 61: wider matrix and split sign-off ===\n\n'
 
@@ -34,6 +33,7 @@ python3 "$ROOT_DIR/scripts/verify_phase60_manytype_server_delete.py"
 python3 "$ROOT_DIR/scripts/verify_self_hosted_oracle_metadata.py" \
   --metadata "$ROOT_DIR/test_vectors/phase60/runtime-metadata.json"
 
+rm -f "$ARTIFACT_PATH"
 python3 - "$ROOT_DIR" "$ARTIFACT_PATH" "$SIGNOFF_STARTED_AT" <<'PY'
 from __future__ import annotations
 
