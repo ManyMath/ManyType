@@ -6,25 +6,27 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+import 'support/oracle_preflight.dart';
+import 'support/repo_root.dart';
+
 void main() {
   test(
     'phase64 harness + verifier green',
     () async {
       if (Platform.environment['MANYTYPE_RUN_PHASE64'] != '1') {
-        print(
-          'Skipping phase64 harness test: set MANYTYPE_RUN_PHASE64=1 once '
+        markTestSkipped(
+          'set MANYTYPE_RUN_PHASE64=1 once '
           'the official-cli and local-server prerequisites are available',
         );
         return;
       }
-      if (!await _oraclePrereqsAvailable()) {
-        print(
-          'Skipping phase64 harness test: docker oracle prerequisites unavailable',
-        );
+      final skipReason = await oracleSkipReason();
+      if (skipReason != null) {
+        markTestSkipped(skipReason);
         return;
       }
 
-      final repoRoot = _findRepoRoot();
+      final repoRoot = findRepoRoot();
 
       final harnessResult = await Process.run(
         'bash',
@@ -62,32 +64,5 @@ void main() {
     },
     timeout: const Timeout(Duration(minutes: 45)),
     tags: ['slow', 'harness'],
-  );
-}
-
-Future<bool> _oraclePrereqsAvailable() async {
-  final result = await Process.run(
-    'bash',
-    ['scripts/self_hosted_oracle_preflight.sh', '--quiet'],
-  );
-  return result.exitCode == 0;
-}
-
-String _findRepoRoot() {
-  Directory dir = Directory.current;
-  for (var i = 0; i < 6; i++) {
-    if (File('${dir.path}/scripts/phase64_official_to_manytype_collection_harness.sh')
-            .existsSync() &&
-        Directory('${dir.path}/packages').existsSync()) {
-      return dir.path;
-    }
-    final parent = dir.parent;
-    if (parent.path == dir.path) break;
-    dir = parent;
-  }
-  throw StateError(
-    'Could not locate repo root - '
-    'scripts/phase64_official_to_manytype_collection_harness.sh not found '
-    'walking up from ${Directory.current.path}',
   );
 }

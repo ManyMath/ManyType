@@ -6,16 +6,17 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+import 'support/repo_root.dart';
+
 void main() {
   test('docker oracle round-trip uploads, downloads, and reopens from cache',
       () async {
-    if (!await _oraclePrereqsAvailable()) {
-      print(
-          'Skipping docker oracle round-trip test: prerequisites unavailable');
+    final rootDir = findRepoRoot();
+    if (!await _oraclePrereqsAvailable(rootDir)) {
+      markTestSkipped('docker oracle round-trip prerequisites unavailable');
       return;
     }
 
-    final rootDir = Directory.current.path;
     final tempHome = await Directory.systemTemp.createTemp('manytype_oracle_');
     addTearDown(() => tempHome.delete(recursive: true));
 
@@ -92,18 +93,19 @@ void main() {
   });
 }
 
-Future<bool> _oraclePrereqsAvailable() async {
-  if (!await File('docker/any-sync/etc/client.yml').exists()) {
+Future<bool> _oraclePrereqsAvailable(String rootDir) async {
+  if (!await File('$rootDir/docker/any-sync/etc/client.yml').exists()) {
     return false;
   }
-  if (!await File('rust/target/release/libmanytype_quic_ffi.so').exists()) {
+  if (!await File('$rootDir/rust/target/release/libmanytype_quic_ffi.so')
+      .exists()) {
     return false;
   }
 
   final dockerPs = await Process.run(
     'docker',
     ['ps', '--format', '{{.Names}}'],
-    workingDirectory: Directory.current.path,
+    workingDirectory: rootDir,
   );
   if (dockerPs.exitCode != 0) {
     return false;
