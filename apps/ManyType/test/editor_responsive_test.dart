@@ -40,6 +40,7 @@ void main() {
       'manytype_editor_widget_test',
     );
     AccountRegistry.testBaseDirOverride = tempBase.path;
+    CliConfig.testConfigDirOverride = tempBase.path;
     container = ProviderContainer(
       overrides: <Override>[
         sessionTestDbOverrideProvider.overrideWithValue(
@@ -95,6 +96,7 @@ void main() {
   tearDown(() async {
     container.dispose();
     AccountRegistry.testBaseDirOverride = null;
+    CliConfig.testConfigDirOverride = null;
     await tempBase.delete(recursive: true);
   });
 

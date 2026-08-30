@@ -11,6 +11,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:manytype_cli/manytype_cli.dart' show CliConfig;
 import 'package:manytype_cli/src/account_registry.dart';
 
 import 'package:manytype/src/state/accounts_providers.dart';
@@ -28,6 +29,7 @@ void main() {
   setUp(() async {
     tempBase = await Directory.systemTemp.createTemp('manytype_app_test');
     AccountRegistry.testBaseDirOverride = tempBase.path;
+    CliConfig.testConfigDirOverride = tempBase.path;
     container = ProviderContainer();
   });
 
@@ -38,6 +40,7 @@ void main() {
     // unix, this just avoids noisy late writes).
     await Future<void>.delayed(const Duration(milliseconds: 100));
     AccountRegistry.testBaseDirOverride = null;
+    CliConfig.testConfigDirOverride = null;
     await tempBase.delete(recursive: true);
   });
 

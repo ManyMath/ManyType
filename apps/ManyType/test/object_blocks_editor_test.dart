@@ -39,6 +39,7 @@ void main() {
   setUp(() async {
     tempBase = await Directory.systemTemp.createTemp('manytype_app_test');
     AccountRegistry.testBaseDirOverride = tempBase.path;
+    CliConfig.testConfigDirOverride = tempBase.path;
     container = ProviderContainer(
       overrides: <Override>[
         syncRunnerProvider.overrideWithValue((_, __) async {}),
@@ -53,6 +54,7 @@ void main() {
     container.dispose();
     await Future<void>.delayed(const Duration(milliseconds: 100));
     AccountRegistry.testBaseDirOverride = null;
+    CliConfig.testConfigDirOverride = null;
     await tempBase.delete(recursive: true);
   });
 
@@ -451,6 +453,7 @@ nodes:
       'manytype_app_test_nosession_relation',
     );
     AccountRegistry.testBaseDirOverride = freshBase.path;
+    CliConfig.testConfigDirOverride = freshBase.path;
     final freshContainer = ProviderContainer();
     try {
       final result = await freshContainer
@@ -474,6 +477,7 @@ nodes:
       'manytype_app_test_nosession_insert',
     );
     AccountRegistry.testBaseDirOverride = freshBase.path;
+    CliConfig.testConfigDirOverride = freshBase.path;
     final freshContainer = ProviderContainer();
     try {
       final result = await freshContainer
@@ -496,6 +500,7 @@ nodes:
       'manytype_app_test_nosession',
     );
     AccountRegistry.testBaseDirOverride = freshBase.path;
+    CliConfig.testConfigDirOverride = freshBase.path;
     final freshContainer = ProviderContainer();
     try {
       final result = await freshContainer
