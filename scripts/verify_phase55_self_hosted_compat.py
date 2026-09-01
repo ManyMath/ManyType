@@ -8,6 +8,8 @@ import argparse
 import json
 import pathlib
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACT = ROOT / "test_vectors" / "phase55" / "self-hosted-compatibility.json"
@@ -123,8 +125,8 @@ def main() -> None:
         raise SystemExit("[phase55 manytype_to_official] unexpected featuredRelations")
 
     for show_path, label in (
-        (pathlib.Path(scenario["show_path"]), "initial show"),
-        (pathlib.Path(scenario["restart_show_path"]), "restart show"),
+        (repo_path(scenario["show_path"]), "initial show"),
+        (repo_path(scenario["restart_show_path"]), "restart show"),
     ):
         show = load_json(show_path)
         root = show.get("root_details", {})
@@ -134,13 +136,13 @@ def main() -> None:
             raise SystemExit(f"[phase55 compatibility] {label} featuredRelations mismatch")
 
     validate_manytype_sync_artifact(
-        pathlib.Path(scenario["sync_capture_path"]),
+        repo_path(scenario["sync_capture_path"]),
         "phase55 manytype_to_official sync",
     )
 
     for path in (
-        pathlib.Path(artifact["phase46_bundle_path"]),
-        pathlib.Path(artifact["metadata_path"]),
+        repo_path(artifact["phase46_bundle_path"]),
+        repo_path(artifact["metadata_path"]),
     ):
         if not path.exists():
             raise SystemExit(f"[phase55 compatibility] missing referenced file: {path}")

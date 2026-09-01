@@ -8,6 +8,8 @@ import argparse
 import json
 import pathlib
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TEST_VECTORS = ROOT / "test_vectors" / "phase42"
@@ -96,8 +98,8 @@ def validate_manytype_to_official_blockupdate(path: pathlib.Path) -> str:
     if data.get("success") is not True:
         raise SystemExit(f"[{label}] success != True")
 
-    checked_show = load_json(pathlib.Path(data["checked_show_path"]))
-    style_show = load_json(pathlib.Path(data["style_show_path"]))
+    checked_show = load_json(repo_path(data["checked_show_path"]))
+    style_show = load_json(repo_path(data["style_show_path"]))
 
     if not any(
         block.get("id") == data["checkbox_block_id"]
@@ -140,7 +142,7 @@ def validate_manytype_to_official_status_tag(path: pathlib.Path) -> str:
     if data.get("success") is not True:
         raise SystemExit(f"[{label}] success != True")
 
-    target_show = load_json(pathlib.Path(data["target_show_path"]))
+    target_show = load_json(repo_path(data["target_show_path"]))
     root_details = target_show.get("root_details", {})
     if root_details.get(data["status_key"]) != data["status_option_id"]:
         raise SystemExit(f"[{label}] status root detail mismatch")
@@ -152,7 +154,7 @@ def validate_manytype_to_official_status_tag(path: pathlib.Path) -> str:
         "tag_option_a_show_path",
         "tag_option_b_show_path",
     ):
-        option_show = load_json(pathlib.Path(data[key]))
+        option_show = load_json(repo_path(data[key]))
         details = option_show.get("root_details", {})
         if not details.get("name"):
             raise SystemExit(f"[{label}] missing name in option show {key}")
@@ -173,7 +175,7 @@ def validate_manytype_to_official_collection(path: pathlib.Path) -> str:
     if data.get("success") is not True:
         raise SystemExit(f"[{label}] success != True")
 
-    show = load_json(pathlib.Path(data["show_path"]))
+    show = load_json(repo_path(data["show_path"]))
     expected = data["expected_member_ids"]
     found = False
     for dataview in show.get("dataviews", []):
@@ -214,8 +216,8 @@ def validate_manytype_to_official_file_relation(path: pathlib.Path) -> str:
     if data.get("success") is not True:
         raise SystemExit(f"[{label}] success != True")
 
-    target_show = load_json(pathlib.Path(data["target_show_path"]))
-    file_show = load_json(pathlib.Path(data["file_show_path"]))
+    target_show = load_json(repo_path(data["target_show_path"]))
+    file_show = load_json(repo_path(data["file_show_path"]))
 
     if target_show.get("root_details", {}).get(data["relation_key"]) != data["file_object_id"]:
         raise SystemExit(f"[{label}] target relation detail mismatch")
@@ -257,9 +259,9 @@ def validate_manytype_to_official_template(path: pathlib.Path) -> str:
     if data.get("success") is not True:
         raise SystemExit(f"[{label}] success != True")
 
-    template_show = load_json(pathlib.Path(data["template_show_path"]))
-    applied_show = load_json(pathlib.Path(data["applied_show_path"]))
-    list_text = read_text(pathlib.Path(data["list_path"]))
+    template_show = load_json(repo_path(data["template_show_path"]))
+    applied_show = load_json(repo_path(data["applied_show_path"]))
+    list_text = read_text(repo_path(data["list_path"]))
 
     if template_show.get("smart_block_type") != "Template":
         raise SystemExit(f"[{label}] template show smart_block_type != Template")
@@ -293,14 +295,14 @@ def validate_manytype_to_official_option_recolor(path: pathlib.Path) -> str:
     if data.get("success") is not True:
         raise SystemExit(f"[{label}] success != True")
 
-    option_show = load_json(pathlib.Path(data["option_show_path"]))
+    option_show = load_json(repo_path(data["option_show_path"]))
     option_details = option_show.get("root_details", {})
     if option_details.get("name") != data["renamed_name"]:
         raise SystemExit(f"[{label}] official option show name mismatch after rename")
     if option_details.get("color") != data["expected_color"]:
         raise SystemExit(f"[{label}] official option show color mismatch after recolor")
 
-    target_read = read_text(pathlib.Path(data["target_read_path"]))
+    target_read = read_text(repo_path(data["target_read_path"]))
     expected_line = f"[{data['status_key']}] {data['renamed_name']} ({data['expected_color']})"
     if expected_line not in target_read:
         raise SystemExit(f"[{label}] Manytype's own re-read missing renamed+recolored option")
@@ -314,7 +316,7 @@ def validate_official_to_manytype_blockupdate(path: pathlib.Path) -> str:
     require_keys(data, {"updated_text", "read_path", "success"}, label)
     if data.get("success") is not True:
         raise SystemExit(f"[{label}] success != True")
-    read_output = read_text(pathlib.Path(data["read_path"]))
+    read_output = read_text(repo_path(data["read_path"]))
     if data["updated_text"] not in read_output:
         raise SystemExit(f"[{label}] updated text missing from Manytype read output")
     return f"[{label}] ok"
@@ -330,7 +332,7 @@ def validate_official_to_manytype_status_tag(path: pathlib.Path) -> str:
     )
     if data.get("success") is not True:
         raise SystemExit(f"[{label}] success != True")
-    read_output = read_text(pathlib.Path(data["read_path"]))
+    read_output = read_text(repo_path(data["read_path"]))
     if f"[{data['status_key']}]" not in read_output:
         raise SystemExit(f"[{label}] status relation missing from read output")
     if f"[{data['tag_key']}]" not in read_output:
@@ -348,7 +350,7 @@ def validate_official_to_manytype_collection(path: pathlib.Path) -> str:
     )
     if data.get("success") is not True:
         raise SystemExit(f"[{label}] success != True")
-    read_output = read_text(pathlib.Path(data["read_path"]))
+    read_output = read_text(repo_path(data["read_path"]))
     members_section = extract_markdown_section(read_output, "Members", label)
     expected = data["expected_member_ids"]
     for member_id in expected:
@@ -376,7 +378,7 @@ def validate_official_to_manytype_file_relation(path: pathlib.Path) -> str:
     )
     if data.get("success") is not True:
         raise SystemExit(f"[{label}] success != True")
-    read_output = read_text(pathlib.Path(data["read_path"]))
+    read_output = read_text(repo_path(data["read_path"]))
     expected_lines = [f"[{data['relation_key']}] {data['file_name']}"]
     file_stem = pathlib.Path(data["file_name"]).stem
     if file_stem != data["file_name"]:
@@ -404,7 +406,7 @@ def validate_official_to_manytype_option_recolor(path: pathlib.Path) -> str:
     )
     if data.get("success") is not True:
         raise SystemExit(f"[{label}] success != True")
-    target_read = read_text(pathlib.Path(data["target_read_path"]))
+    target_read = read_text(repo_path(data["target_read_path"]))
     expected_line = f"[{data['status_key']}] {data['renamed_name']} ({data['expected_color']})"
     if expected_line not in target_read:
         raise SystemExit(f"[{label}] Manytype re-read missing official-authored rename+recolor")
@@ -426,8 +428,8 @@ def validate_official_to_manytype_template(path: pathlib.Path) -> str:
     )
     if data.get("success") is not True:
         raise SystemExit(f"[{label}] success != True")
-    template_read = read_text(pathlib.Path(data["template_read_path"]))
-    applied_read = read_text(pathlib.Path(data["applied_read_path"]))
+    template_read = read_text(repo_path(data["template_read_path"]))
+    applied_read = read_text(repo_path(data["applied_read_path"]))
     if "Kind: [Template]" not in template_read:
         raise SystemExit(f"[{label}] template read missing template kind")
     if (

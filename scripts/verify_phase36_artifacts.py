@@ -5,6 +5,8 @@ import json
 import pathlib
 import sys
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TEST_VECTORS = ROOT / "test_vectors"
@@ -88,7 +90,7 @@ def validate_deletion_manytype_authored(path: pathlib.Path) -> str:
     delete_sync_path = data.get("manytype_delete_sync_capture_path", "")
     if delete_sync_path:
         validate_manytype_sync_artifact(
-            pathlib.Path(delete_sync_path), "phase36 deletion (manytype-authored) delete sync"
+            repo_path(delete_sync_path), "phase36 deletion (manytype-authored) delete sync"
         )
 
     return "phase36 deletion (manytype-authored) ok"
@@ -122,7 +124,7 @@ def validate_deletion_official_authored(path: pathlib.Path) -> str:
     sync_path_str = data.get("manytype_sync_capture_path", "")
     if sync_path_str:
         validate_manytype_sync_artifact(
-            pathlib.Path(sync_path_str), "phase36 deletion (official-authored) sync"
+            repo_path(sync_path_str), "phase36 deletion (official-authored) sync"
         )
 
     return "phase36 deletion (official-authored) ok"
@@ -158,7 +160,7 @@ def validate_type_manytype_authored(path: pathlib.Path) -> str:
     if not data.get("success"):
         raise SystemExit("phase36 type/relation (manytype-authored) success is false")
 
-    sync_path = pathlib.Path(data["manytype_sync_capture_path"])
+    sync_path = repo_path(data["manytype_sync_capture_path"])
     validate_manytype_sync_artifact(sync_path, "phase36 type/relation (manytype-authored) sync")
 
     return "phase36 type/relation (manytype-authored) ok"
@@ -187,7 +189,7 @@ def validate_type_official_authored(path: pathlib.Path) -> str:
     if not data.get("success"):
         raise SystemExit("phase36 type/relation (official-authored) success is false")
 
-    sync_path = pathlib.Path(data["manytype_sync_capture_path"])
+    sync_path = repo_path(data["manytype_sync_capture_path"])
     validate_manytype_sync_artifact(sync_path, "phase36 type/relation (official-authored) sync")
 
     return "phase36 type/relation (official-authored) ok"
@@ -228,7 +230,7 @@ def validate_fields_roundtrip(path: pathlib.Path) -> str:
     if not data.get("success"):
         raise SystemExit("phase36 fields roundtrip success is false")
 
-    sync_path = pathlib.Path(data["manytype_sync_capture_path"])
+    sync_path = repo_path(data["manytype_sync_capture_path"])
     validate_manytype_sync_artifact(sync_path, "phase36 fields roundtrip sync")
 
     return "phase36 fields roundtrip ok"
@@ -263,7 +265,7 @@ def validate_listing_type_filter(path: pathlib.Path) -> str:
     if not data.get("success"):
         raise SystemExit("phase36 listing type-filter success is false")
 
-    sync_path = pathlib.Path(data["manytype_sync_capture_path"])
+    sync_path = repo_path(data["manytype_sync_capture_path"])
     validate_manytype_sync_artifact(sync_path, "phase36 listing type-filter sync")
 
     return "phase36 listing type-filter ok"

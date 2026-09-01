@@ -30,5 +30,5 @@ Ensure Docker is installed and the daemon is running.
 ## Replaying vs. Regenerating
 
 Artifacts are already checked into the `test_vectors/` directory. 
-- **Verifiers** (Python scripts) only require the checked-in artifacts and can run offline.
+- **Verifiers** (Python scripts) only require the checked-in artifacts and can run offline. Absolute paths recorded in artifacts are mapped back onto the current checkout (`scripts/artifact_paths.py`). The exceptions are `verify_phase49_signoff.py` and `verify_phase53_signoff.py`, which also compare locally built `rust/target` binaries against the hashes recorded at sign-off.
 - **Regenerators** (Shell scripts) are only needed if you are performing protocol-level research, updating contracts, or investigating regressions that require a fresh capture from a live or containerized environment.

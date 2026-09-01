@@ -9,6 +9,8 @@ import json
 import pathlib
 import re
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACT = ROOT / "test_vectors" / "phase60" / "manytype-server-delete-compatibility.json"
@@ -181,43 +183,43 @@ def main() -> None:
     if int(scenario["reopen_observed_attempt"]) < 1:
         raise SystemExit("[phase60 official_to_manytype] invalid reopen observed attempt")
 
-    validate_official_delete(pathlib.Path(scenario["delete_output_path"]), scenario["object_id"])
+    validate_official_delete(repo_path(scenario["delete_output_path"]), scenario["object_id"])
 
-    predelete_text = read_text(pathlib.Path(scenario["predelete_read_path"]))
+    predelete_text = read_text(repo_path(scenario["predelete_read_path"]))
     if f"Object: {scenario['object_id']}" not in predelete_text and scenario["object_name"] not in predelete_text:
         raise SystemExit("[phase60 compatibility] predelete read never surfaced the object")
 
     validate_manytype_list_absence(
-        pathlib.Path(scenario["list_absence_path"]),
+        repo_path(scenario["list_absence_path"]),
         scenario["object_id"],
         "phase60 current-home list",
     )
     validate_manytype_read_absence(
-        pathlib.Path(scenario["read_refusal_path"]),
+        repo_path(scenario["read_refusal_path"]),
         scenario["object_id"],
         "phase60 current-home read",
     )
     validate_manytype_list_absence(
-        pathlib.Path(scenario["reopen_list_absence_path"]),
+        repo_path(scenario["reopen_list_absence_path"]),
         scenario["object_id"],
         "phase60 reopen-home list",
     )
     validate_manytype_read_absence(
-        pathlib.Path(scenario["reopen_read_refusal_path"]),
+        repo_path(scenario["reopen_read_refusal_path"]),
         scenario["object_id"],
         "phase60 reopen-home read",
     )
 
     validate_manytype_sync_artifact(
-        pathlib.Path(scenario["main_sync_capture_path"]),
+        repo_path(scenario["main_sync_capture_path"]),
         "phase60 main sync",
     )
     validate_manytype_sync_artifact(
-        pathlib.Path(scenario["reopen_sync_capture_path"]),
+        repo_path(scenario["reopen_sync_capture_path"]),
         "phase60 reopen sync",
     )
 
-    diagnostics = load_json(pathlib.Path(scenario["diagnostics_path"]))
+    diagnostics = load_json(repo_path(scenario["diagnostics_path"]))
     require_keys(
         diagnostics,
         {"stored_changes", "full_sync_responses"},
@@ -232,7 +234,7 @@ def main() -> None:
     if not any(response.get("change_ids") for response in responses):
         raise SystemExit("[phase60 diagnostics] expected at least one response with change_ids")
 
-    metadata_path = pathlib.Path(artifact["metadata_path"])
+    metadata_path = repo_path(artifact["metadata_path"])
     if not metadata_path.exists():
         raise SystemExit(f"[phase60 compatibility] missing metadata: {metadata_path}")
 

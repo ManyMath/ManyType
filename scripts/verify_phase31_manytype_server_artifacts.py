@@ -5,6 +5,8 @@ import json
 import pathlib
 import sys
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TEST_VECTORS = ROOT / "test_vectors"
@@ -192,13 +194,13 @@ def main(argv: list[str] | None = None) -> int:
     artifact_path = pathlib.Path(args.artifact)
     artifact, results = validate_top_level(artifact_path)
 
-    official_show_path = pathlib.Path(
+    official_show_path = repo_path(
         args.official_show or artifact["official_probe"]["show_result_path"]
     )
-    manytype_seed_path = pathlib.Path(
+    manytype_seed_path = repo_path(
         args.manytype_seed or artifact["manytype_seed_sync_capture_path"]
     )
-    manytype_edit_path = pathlib.Path(
+    manytype_edit_path = repo_path(
         args.manytype_edit or artifact["manytype_edit_sync_capture_path"]
     )
     official_join_path = pathlib.Path(args.official_join)

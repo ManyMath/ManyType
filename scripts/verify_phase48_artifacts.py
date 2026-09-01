@@ -8,6 +8,8 @@ import argparse
 import json
 import pathlib
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ARTIFACT_DIR = ROOT / "test_vectors" / "phase48"
@@ -235,16 +237,16 @@ def validate_bundle(path: pathlib.Path) -> str:
         {"space_id", "invite_record_id", "bootstrap_path", "refetch_path"},
         f"{label} local_space_pull",
     )
-    validate_oracle_acl(pathlib.Path(oracle_acl["artifact_path"]))
+    validate_oracle_acl(repo_path(oracle_acl["artifact_path"]))
     validate_local_consensus(
-        pathlib.Path(local_consensus["bootstrap_path"]),
-        pathlib.Path(local_consensus["continue_path"]),
+        repo_path(local_consensus["bootstrap_path"]),
+        repo_path(local_consensus["continue_path"]),
     )
     validate_local_space_pull(
-        pathlib.Path(local_space_pull["bootstrap_path"]),
-        pathlib.Path(local_space_pull["refetch_path"]),
+        repo_path(local_space_pull["bootstrap_path"]),
+        repo_path(local_space_pull["refetch_path"]),
     )
-    validate_runtime_metadata(pathlib.Path(data["metadata_path"]))
+    validate_runtime_metadata(repo_path(data["metadata_path"]))
     return f"[{label}] ok"
 
 

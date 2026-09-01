@@ -6,6 +6,8 @@ import argparse
 import json
 import pathlib
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TEST_VECTORS = ROOT / "test_vectors" / "phase40"
@@ -173,8 +175,8 @@ def validate_roundtrip_artifact(path: pathlib.Path) -> str:
         raise SystemExit(f"[{label}] cid is empty")
 
     expected_render = data["expected_render"]
-    read_home1 = pathlib.Path(data["read_home1_path"])
-    read_home2 = pathlib.Path(data["read_home2_path"])
+    read_home1 = repo_path(data["read_home1_path"])
+    read_home2 = repo_path(data["read_home2_path"])
     for name, read_path in (("home1", read_home1), ("home2", read_home2)):
         if not read_path.exists():
             raise SystemExit(f"[{label}] missing {name} read artifact: {read_path}")
@@ -186,14 +188,14 @@ def validate_roundtrip_artifact(path: pathlib.Path) -> str:
             )
 
     validate_manytype_sync_artifact(
-        pathlib.Path(data["manytype_sync_capture_path"]),
+        repo_path(data["manytype_sync_capture_path"]),
         f"{label} sync",
     )
     validate_file_transfer_artifact(
-        pathlib.Path(data["file_transfer_capture_path"]),
+        repo_path(data["file_transfer_capture_path"]),
         f"{label} transfer",
     )
-    validate_runtime_metadata(pathlib.Path(data["metadata_path"]), f"{label} metadata")
+    validate_runtime_metadata(repo_path(data["metadata_path"]), f"{label} metadata")
 
     return f"[{label}] artifact ok ({data['target_object_id']})"
 

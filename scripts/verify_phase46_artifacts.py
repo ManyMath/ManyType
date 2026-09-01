@@ -8,6 +8,8 @@ import argparse
 import json
 import pathlib
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ARTIFACT_DIR = ROOT / "test_vectors" / "phase46"
@@ -137,8 +139,8 @@ def validate_bundle(path: pathlib.Path) -> str:
         {"object_id", "description", "show_path", "restart_show_path", "sync_capture_path"},
         f"{label} manytype_to_official",
     )
-    first_show = load_json(pathlib.Path(manytype_to_official["show_path"]))
-    restart_show = load_json(pathlib.Path(manytype_to_official["restart_show_path"]))
+    first_show = load_json(repo_path(manytype_to_official["show_path"]))
+    restart_show = load_json(repo_path(manytype_to_official["restart_show_path"]))
     for show, show_label in (
         (first_show, "initial show"),
         (restart_show, "restart show"),
@@ -150,7 +152,7 @@ def validate_bundle(path: pathlib.Path) -> str:
             raise SystemExit(f"[{label}] {show_label} featuredRelations mismatch")
 
     validate_manytype_sync_artifact(
-        pathlib.Path(manytype_to_official["sync_capture_path"]),
+        repo_path(manytype_to_official["sync_capture_path"]),
         f"{label} manytype_to_official sync",
     )
 
@@ -165,17 +167,17 @@ def validate_bundle(path: pathlib.Path) -> str:
         (official_to_manytype["read_path"], "Manytype read"),
         (official_to_manytype["reopen_read_path"], "Manytype reopen read"),
     ):
-        text = read_text(pathlib.Path(read_path))
+        text = read_text(repo_path(read_path))
         if f"[description] {expected_description}" not in text:
             raise SystemExit(f"[{label}] {read_label} missing description line")
         if "[featuredRelations] description, sourceObject" not in text:
             raise SystemExit(f"[{label}] {read_label} missing featuredRelations line")
 
     validate_manytype_sync_artifact(
-        pathlib.Path(official_to_manytype["sync_capture_path"]),
+        repo_path(official_to_manytype["sync_capture_path"]),
         f"{label} official_to_manytype sync",
     )
-    validate_runtime_metadata(pathlib.Path(data["metadata_path"]))
+    validate_runtime_metadata(repo_path(data["metadata_path"]))
     return f"[{label}] ok"
 
 

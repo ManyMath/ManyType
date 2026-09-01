@@ -11,9 +11,15 @@ import json
 import pathlib
 import subprocess
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_REPORT = ROOT / "test_vectors" / "phase53" / "v27-signoff.json"
+BINARY_HINT = (
+    "the sign-off pins the locally built binaries it was captured with; "
+    "rerun scripts/phase53_regression_lock_harness.sh to re-sign against this build"
+)
 
 
 def load_json(path: pathlib.Path) -> dict:
@@ -69,14 +75,14 @@ def compare_binary_record(record: dict, actual_path: pathlib.Path, label: str) -
     if record.get("exists") is not True:
         raise SystemExit(f"[{label}] exists is not true")
     if not actual_path.exists():
-        raise SystemExit(f"[{label}] current file missing: {actual_path}")
+        raise SystemExit(f"[{label}] current file missing: {actual_path} ({BINARY_HINT})")
     expected_path = str(actual_path.relative_to(ROOT))
     if record["path"] != expected_path:
         raise SystemExit(f"[{label}] path mismatch: {record['path']!r} != {expected_path!r}")
     if record["sha256"] != sha256(actual_path):
-        raise SystemExit(f"[{label}] sha256 mismatch")
+        raise SystemExit(f"[{label}] sha256 mismatch ({BINARY_HINT})")
     if record["size"] != actual_path.stat().st_size:
-        raise SystemExit(f"[{label}] size mismatch")
+        raise SystemExit(f"[{label}] size mismatch ({BINARY_HINT})")
 
 
 def verify_runtime_metadata_against_current(path: pathlib.Path, current_lock: dict[str, str]) -> None:
@@ -125,11 +131,11 @@ def verify_runtime_metadata_against_current(path: pathlib.Path, current_lock: di
     )
     ffi_path = ROOT / "rust" / "target" / "release" / "libmanytype_quic_ffi.so"
     if binaries["manytype_quic_ffi"].get("sha256") != sha256(ffi_path):
-        raise SystemExit(f"[{label}] manytype_quic_ffi drift detected")
+        raise SystemExit(f"[{label}] manytype_quic_ffi drift detected ({BINARY_HINT})")
 
     debug_path = ROOT / "rust" / "target" / "debug" / "manytype_server"
     if binaries["manytype_server_debug"].get("sha256") != sha256(debug_path):
-        raise SystemExit(f"[{label}] manytype_server_debug drift detected")
+        raise SystemExit(f"[{label}] manytype_server_debug drift detected ({BINARY_HINT})")
 
 
 def verify_freshness(report: dict, paths: list[pathlib.Path], label: str) -> None:
@@ -265,10 +271,10 @@ def main() -> None:
     if account_delete["reason"] != phase50["account_delete"]["reason"]:
         raise SystemExit("[phase53 account_delete] reason drift detected")
     expected_official_account = str(
-        pathlib.Path(phase50["account_delete"]["official_capture_path"]).relative_to(ROOT)
+        repo_path(phase50["account_delete"]["official_capture_path"]).relative_to(ROOT)
     )
     expected_local_account = str(
-        pathlib.Path(phase50["account_delete"]["local_capture_path"]).relative_to(ROOT)
+        repo_path(phase50["account_delete"]["local_capture_path"]).relative_to(ROOT)
     )
     if account_delete["official_capture_path"] != expected_official_account:
         raise SystemExit("[phase53 account_delete] official_capture_path drift detected")
@@ -327,25 +333,25 @@ def main() -> None:
 
     expected_artifacts = {
         "teardown truth capture and scope freeze": str(
-            pathlib.Path(phase50["space_delete"]["official_capture_path"]).relative_to(ROOT)
+            repo_path(phase50["space_delete"]["official_capture_path"]).relative_to(ROOT)
         ),
         "bounded space delete parity": str(
-            pathlib.Path(phase51["official_supported_flow"]["artifact_path"]).relative_to(ROOT)
+            repo_path(phase51["official_supported_flow"]["artifact_path"]).relative_to(ROOT)
         ),
         "oracle acl lifecycle cli": str(
-            pathlib.Path(phase52["oracle_acl"]["artifact_path"]).relative_to(ROOT)
+            repo_path(phase52["oracle_acl"]["artifact_path"]).relative_to(ROOT)
         ),
         "local teardown truth capture": str(
-            pathlib.Path(phase50["space_delete"]["local_capture_path"]).relative_to(ROOT)
+            repo_path(phase50["space_delete"]["local_capture_path"]).relative_to(ROOT)
         ),
         "local space-delete rejection": str(
-            pathlib.Path(phase51["local_rejected_flow"]["artifact_path"]).relative_to(ROOT)
+            repo_path(phase51["local_rejected_flow"]["artifact_path"]).relative_to(ROOT)
         ),
         "local consensus restart continuation": str(
-            pathlib.Path(phase52["local_consensus"]["continue_path"]).relative_to(ROOT)
+            repo_path(phase52["local_consensus"]["continue_path"]).relative_to(ROOT)
         ),
         "local space pull continuity": str(
-            pathlib.Path(phase52["local_space_pull"]["refetch_path"]).relative_to(ROOT)
+            repo_path(phase52["local_space_pull"]["refetch_path"]).relative_to(ROOT)
         ),
     }
     for track in (official_track, manytype_track):

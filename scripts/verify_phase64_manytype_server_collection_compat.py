@@ -8,6 +8,8 @@ import argparse
 import json
 import pathlib
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACT = (
@@ -204,36 +206,36 @@ def main() -> None:
         raise SystemExit("[phase64 official_to_manytype] invalid reopen_observed_attempt")
 
     validate_action_output(
-        pathlib.Path(scenario["official_convert_path"]),
+        repo_path(scenario["official_convert_path"]),
         "object-to-collection",
         collection_id,
     )
     validate_action_output(
-        pathlib.Path(scenario["official_add_path"]),
+        repo_path(scenario["official_add_path"]),
         "object-collection-add",
         collection_id,
         member_ids_created,
     )
     validate_action_output(
-        pathlib.Path(scenario["official_sort_path"]),
+        repo_path(scenario["official_sort_path"]),
         "object-collection-sort",
         collection_id,
         [member_ids_created[2], member_ids_created[1], member_ids_created[0]],
     )
     validate_action_output(
-        pathlib.Path(scenario["official_remove_path"]),
+        repo_path(scenario["official_remove_path"]),
         "object-collection-remove",
         collection_id,
         removed_member_ids,
     )
 
-    show = load_json(pathlib.Path(scenario["official_show_path"]))
+    show = load_json(repo_path(scenario["official_show_path"]))
     if not show_contains_expected_members(show, expected_member_ids, removed_member_ids):
         raise SystemExit("[phase64 compatibility] official show missing expected final member order")
 
     for path, label in (
-        (pathlib.Path(scenario["read_path"]), "main Manytype read"),
-        (pathlib.Path(scenario["reopen_read_path"]), "reopen Manytype read"),
+        (repo_path(scenario["read_path"]), "main Manytype read"),
+        (repo_path(scenario["reopen_read_path"]), "reopen Manytype read"),
     ):
         section = extract_members_section(read_text(path), label)
         ordered_positions = [section.index(member_id) for member_id in expected_member_ids]
@@ -247,15 +249,15 @@ def main() -> None:
                 raise SystemExit(f"[phase64 compatibility] {label} still contains removed member {member_id}")
 
     validate_manytype_sync_artifact(
-        pathlib.Path(scenario["main_sync_capture_path"]),
+        repo_path(scenario["main_sync_capture_path"]),
         "phase64 main sync",
     )
     validate_manytype_sync_artifact(
-        pathlib.Path(scenario["reopen_sync_capture_path"]),
+        repo_path(scenario["reopen_sync_capture_path"]),
         "phase64 reopen sync",
     )
 
-    diagnostics = load_json(pathlib.Path(scenario["diagnostics_path"]))
+    diagnostics = load_json(repo_path(scenario["diagnostics_path"]))
     require_keys(
         diagnostics,
         {"stored_changes", "full_sync_responses"},
@@ -270,7 +272,7 @@ def main() -> None:
     if not any(response.get("change_ids") for response in responses):
         raise SystemExit("[phase64 diagnostics] expected at least one response with change_ids")
 
-    metadata_path = pathlib.Path(artifact["metadata_path"])
+    metadata_path = repo_path(artifact["metadata_path"])
     if not metadata_path.exists():
         raise SystemExit(f"[phase64 compatibility] missing metadata: {metadata_path}")
 

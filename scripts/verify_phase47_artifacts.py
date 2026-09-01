@@ -9,6 +9,8 @@ import json
 import pathlib
 import re
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ARTIFACT_DIR = ROOT / "test_vectors" / "phase47"
@@ -261,32 +263,32 @@ def validate_bundle(path: pathlib.Path) -> str:
         },
         f"{label} manytype_to_official",
     )
-    delete_text = read_text(pathlib.Path(manytype_to_official["delete_output_path"]))
+    delete_text = read_text(repo_path(manytype_to_official["delete_output_path"]))
     if f"Deleted {manytype_to_official['object_id']}" not in delete_text:
         raise SystemExit(f"[{label}] Manytype delete output missing deleted id")
     validate_official_search(
-        pathlib.Path(manytype_to_official["presence_search_path"]),
+        repo_path(manytype_to_official["presence_search_path"]),
         manytype_to_official["object_id"],
         manytype_to_official["object_name"],
         True,
         f"{label} manytype_to_official presence search",
     )
     validate_official_search(
-        pathlib.Path(manytype_to_official["absence_search_path"]),
+        repo_path(manytype_to_official["absence_search_path"]),
         manytype_to_official["object_id"],
         manytype_to_official["object_name"],
         False,
         f"{label} manytype_to_official absence search",
     )
     validate_official_search(
-        pathlib.Path(manytype_to_official["restart_absence_search_path"]),
+        repo_path(manytype_to_official["restart_absence_search_path"]),
         manytype_to_official["object_id"],
         manytype_to_official["object_name"],
         False,
         f"{label} manytype_to_official restart absence search",
     )
     validate_manytype_sync_artifact(
-        pathlib.Path(manytype_to_official["delete_sync_capture_path"]),
+        repo_path(manytype_to_official["delete_sync_capture_path"]),
         f"{label} manytype_to_official sync",
     )
 
@@ -308,45 +310,45 @@ def validate_bundle(path: pathlib.Path) -> str:
         f"{label} official_to_manytype",
     )
     validate_official_create(
-        pathlib.Path(official_to_manytype["create_output_path"]),
+        repo_path(official_to_manytype["create_output_path"]),
         official_to_manytype["object_id"],
         official_to_manytype["object_name"],
     )
     validate_manytype_read_contains(
-        pathlib.Path(official_to_manytype["predelete_read_path"]),
+        repo_path(official_to_manytype["predelete_read_path"]),
         f"Object: {official_to_manytype['object_id']}",
         f"{label} official_to_manytype predelete read",
     )
     validate_official_delete(
-        pathlib.Path(official_to_manytype["delete_output_path"]),
+        repo_path(official_to_manytype["delete_output_path"]),
         official_to_manytype["object_id"],
     )
     validate_manytype_sync_artifact(
-        pathlib.Path(official_to_manytype["sync_capture_path"]),
+        repo_path(official_to_manytype["sync_capture_path"]),
         f"{label} official_to_manytype sync",
     )
     validate_manytype_list_absence(
-        pathlib.Path(official_to_manytype["list_absence_path"]),
+        repo_path(official_to_manytype["list_absence_path"]),
         official_to_manytype["object_id"],
         f"{label} official_to_manytype list absence",
     )
     validate_manytype_read_absence(
-        pathlib.Path(official_to_manytype["read_refusal_path"]),
+        repo_path(official_to_manytype["read_refusal_path"]),
         official_to_manytype["object_id"],
         f"{label} official_to_manytype read refusal",
     )
     validate_manytype_list_absence(
-        pathlib.Path(official_to_manytype["reopen_list_absence_path"]),
+        repo_path(official_to_manytype["reopen_list_absence_path"]),
         official_to_manytype["object_id"],
         f"{label} official_to_manytype reopen list absence",
     )
     validate_manytype_read_absence(
-        pathlib.Path(official_to_manytype["reopen_read_refusal_path"]),
+        repo_path(official_to_manytype["reopen_read_refusal_path"]),
         official_to_manytype["object_id"],
         f"{label} official_to_manytype reopen read refusal",
     )
 
-    validate_runtime_metadata(pathlib.Path(data["metadata_path"]))
+    validate_runtime_metadata(repo_path(data["metadata_path"]))
     return f"[{label}] ok"
 
 

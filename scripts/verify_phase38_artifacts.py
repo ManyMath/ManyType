@@ -13,6 +13,8 @@ import json
 import pathlib
 import sys
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TEST_VECTORS = ROOT / "test_vectors" / "phase38"
@@ -135,7 +137,7 @@ def validate_phase38_status_create(path: pathlib.Path) -> str:
     sync_capture_path = data.get("manytype_sync_capture_path", "")
     if not sync_capture_path:
         raise SystemExit(f"[{label}] manytype_sync_capture_path is empty")
-    validate_manytype_sync_artifact(pathlib.Path(sync_capture_path), f"{label} sync")
+    validate_manytype_sync_artifact(repo_path(sync_capture_path), f"{label} sync")
     return f"[{label}] artifact ok ({data['target_object_id']})"
 
 
@@ -186,7 +188,7 @@ def validate_phase38_tag_multi(path: pathlib.Path) -> str:
     sync_capture_path = data.get("manytype_sync_capture_path", "")
     if not sync_capture_path:
         raise SystemExit(f"[{label}] manytype_sync_capture_path is empty")
-    validate_manytype_sync_artifact(pathlib.Path(sync_capture_path), f"{label} sync")
+    validate_manytype_sync_artifact(repo_path(sync_capture_path), f"{label} sync")
     return f"[{label}] artifact ok ({data['target_object_id']})"
 
 
@@ -270,7 +272,7 @@ def validate_phase38_tag_add_remove(path: pathlib.Path) -> str:
     sync_capture_path = data.get("manytype_sync_capture_path", "")
     if not sync_capture_path:
         raise SystemExit(f"[{label}] manytype_sync_capture_path is empty")
-    validate_manytype_sync_artifact(pathlib.Path(sync_capture_path), f"{label} sync")
+    validate_manytype_sync_artifact(repo_path(sync_capture_path), f"{label} sync")
     return f"[{label}] artifact ok ({data['target_object_id']})"
 
 

@@ -14,6 +14,10 @@ import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_REPORT = ROOT / "test_vectors" / "phase49" / "v26-signoff.json"
+BINARY_HINT = (
+    "the sign-off pins the locally built binaries it was captured with; "
+    "rerun scripts/phase49_regression_lock_harness.sh to re-sign against this build"
+)
 
 
 def load_json(path: pathlib.Path) -> dict:
@@ -69,15 +73,15 @@ def compare_binary_record(record: dict, actual_path: pathlib.Path, label: str) -
     if record.get("exists") is not True:
         raise SystemExit(f"[{label}] exists is not true")
     if not actual_path.exists():
-        raise SystemExit(f"[{label}] current file missing: {actual_path}")
+        raise SystemExit(f"[{label}] current file missing: {actual_path} ({BINARY_HINT})")
     expected_path = str(actual_path.relative_to(ROOT))
     if record["path"] != expected_path:
         raise SystemExit(f"[{label}] path mismatch: {record['path']!r} != {expected_path!r}")
     actual_sha = sha256(actual_path)
     if record["sha256"] != actual_sha:
-        raise SystemExit(f"[{label}] sha256 mismatch")
+        raise SystemExit(f"[{label}] sha256 mismatch ({BINARY_HINT})")
     if record["size"] != actual_path.stat().st_size:
-        raise SystemExit(f"[{label}] size mismatch")
+        raise SystemExit(f"[{label}] size mismatch ({BINARY_HINT})")
 
 
 def verify_runtime_metadata_against_current(path: pathlib.Path, current_lock: dict[str, str]) -> None:
@@ -126,11 +130,11 @@ def verify_runtime_metadata_against_current(path: pathlib.Path, current_lock: di
     )
     ffi_path = ROOT / "rust" / "target" / "release" / "libmanytype_quic_ffi.so"
     if binaries["manytype_quic_ffi"].get("sha256") != sha256(ffi_path):
-        raise SystemExit(f"[{label}] manytype_quic_ffi drift detected")
+        raise SystemExit(f"[{label}] manytype_quic_ffi drift detected ({BINARY_HINT})")
 
     debug_path = ROOT / "rust" / "target" / "debug" / "manytype_server"
     if binaries["manytype_server_debug"].get("sha256") != sha256(debug_path):
-        raise SystemExit(f"[{label}] manytype_server_debug drift detected")
+        raise SystemExit(f"[{label}] manytype_server_debug drift detected ({BINARY_HINT})")
 
 
 def verify_freshness(report: dict, paths: list[pathlib.Path], label: str) -> None:

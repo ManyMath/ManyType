@@ -7,6 +7,8 @@ import json
 import pathlib
 import sys
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TEST_VECTORS = ROOT / "test_vectors"
@@ -110,7 +112,7 @@ def _validate_blockupdate_common(
     sync_capture_path = data.get("manytype_sync_capture_path", "")
     if not sync_capture_path:
         raise SystemExit(f"{label} manytype_sync_capture_path is empty")
-    validate_manytype_sync_artifact(pathlib.Path(sync_capture_path), f"{label} sync")
+    validate_manytype_sync_artifact(repo_path(sync_capture_path), f"{label} sync")
 
     return data
 

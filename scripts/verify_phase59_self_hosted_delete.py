@@ -8,6 +8,8 @@ import argparse
 import json
 import pathlib
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACT = ROOT / "test_vectors" / "phase59" / "self-hosted-delete-compatibility.json"
@@ -155,39 +157,39 @@ def main() -> None:
     )
 
     validate_official_search(
-        pathlib.Path(scenario["presence_search_path"]),
+        repo_path(scenario["presence_search_path"]),
         scenario["object_id"],
         scenario["object_name"],
         True,
         "phase59 presence search",
     )
     validate_official_search(
-        pathlib.Path(scenario["absence_search_path"]),
+        repo_path(scenario["absence_search_path"]),
         scenario["object_id"],
         scenario["object_name"],
         False,
         "phase59 post-delete search",
     )
     validate_official_search(
-        pathlib.Path(scenario["restart_absence_search_path"]),
+        repo_path(scenario["restart_absence_search_path"]),
         scenario["object_id"],
         scenario["object_name"],
         False,
         "phase59 restart search",
     )
 
-    delete_output = read_text(pathlib.Path(scenario["delete_output_path"]))
+    delete_output = read_text(repo_path(scenario["delete_output_path"]))
     if f"Deleted {scenario['object_id']}" not in delete_output:
         raise SystemExit("[phase59 compatibility] delete output missing deleted confirmation")
 
     validate_manytype_sync_artifact(
-        pathlib.Path(scenario["delete_sync_capture_path"]),
+        repo_path(scenario["delete_sync_capture_path"]),
         "phase59 manytype_to_official sync",
     )
 
     for path in (
-        pathlib.Path(artifact["phase47_bundle_path"]),
-        pathlib.Path(artifact["metadata_path"]),
+        repo_path(artifact["phase47_bundle_path"]),
+        repo_path(artifact["metadata_path"]),
     ):
         if not path.exists():
             raise SystemExit(f"[phase59 compatibility] missing referenced file: {path}")

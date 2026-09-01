@@ -8,6 +8,8 @@ import argparse
 import json
 import pathlib
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACT = (
@@ -158,21 +160,21 @@ def main() -> None:
     removed_member_ids = [member_ids_created[0]]
 
     for show_path, label in (
-        (pathlib.Path(scenario["show_path"]), "initial show"),
-        (pathlib.Path(scenario["restart_show_path"]), "restart show"),
+        (repo_path(scenario["show_path"]), "initial show"),
+        (repo_path(scenario["restart_show_path"]), "restart show"),
     ):
         show = load_json(show_path)
         if not show_contains_expected_members(show, expected_member_ids, removed_member_ids):
             raise SystemExit(f"[phase63 compatibility] {label} missing expected collection order")
 
     for capture_path, label in (
-        (pathlib.Path(scenario["add_sync_capture_path"]), "add sync"),
-        (pathlib.Path(scenario["move_sync_capture_path"]), "move sync"),
-        (pathlib.Path(scenario["remove_sync_capture_path"]), "remove sync"),
+        (repo_path(scenario["add_sync_capture_path"]), "add sync"),
+        (repo_path(scenario["move_sync_capture_path"]), "move sync"),
+        (repo_path(scenario["remove_sync_capture_path"]), "remove sync"),
     ):
         validate_manytype_sync_artifact(capture_path, f"phase63 {label}")
 
-    metadata_path = pathlib.Path(artifact["metadata_path"])
+    metadata_path = repo_path(artifact["metadata_path"])
     if not metadata_path.exists():
         raise SystemExit(f"[phase63 compatibility] missing metadata: {metadata_path}")
 

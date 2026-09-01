@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 import pathlib
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ARTIFACT_DIR = ROOT / "test_vectors" / "phase51"
@@ -175,9 +177,9 @@ def validate_bundle(path: pathlib.Path) -> str:
     if local.get("observed_surface_label") != "stub-no-op-surface":
         raise SystemExit(f"[{label}] local rejection label mismatch")
 
-    validate_official(pathlib.Path(official["artifact_path"]))
-    validate_local_rejection(pathlib.Path(local["artifact_path"]))
-    validate_runtime_metadata(pathlib.Path(data["metadata_path"]))
+    validate_official(repo_path(official["artifact_path"]))
+    validate_local_rejection(repo_path(local["artifact_path"]))
+    validate_runtime_metadata(repo_path(data["metadata_path"]))
     return f"[{label}] ok"
 
 

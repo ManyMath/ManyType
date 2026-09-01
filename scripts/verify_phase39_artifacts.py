@@ -6,6 +6,8 @@ import argparse
 import json
 import pathlib
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TEST_VECTORS = ROOT / "test_vectors" / "phase39"
@@ -100,7 +102,7 @@ def validate_scenario_a(path: pathlib.Path) -> str:
     if len(data.get("expected_member_lines", [])) != 3:
         raise SystemExit(f"[{label}] expected_member_lines length != 3")
     validate_manytype_sync_artifact(
-        pathlib.Path(data["manytype_sync_capture_path"]),
+        repo_path(data["manytype_sync_capture_path"]),
         f"{label} sync",
     )
     return f"[{label}] artifact ok ({data['collection_id']})"
@@ -136,7 +138,7 @@ def validate_scenario_b(path: pathlib.Path) -> str:
     if len(data.get("expected_member_lines", [])) != 2:
         raise SystemExit(f"[{label}] expected_member_lines length != 2")
     validate_manytype_sync_artifact(
-        pathlib.Path(data["manytype_sync_capture_path"]),
+        repo_path(data["manytype_sync_capture_path"]),
         f"{label} sync",
     )
     return f"[{label}] artifact ok ({data['collection_id']})"
@@ -173,7 +175,7 @@ def validate_scenario_c(path: pathlib.Path) -> str:
     if len(data.get("expected_member_lines", [])) != 2:
         raise SystemExit(f"[{label}] expected_member_lines length != 2")
     validate_manytype_sync_artifact(
-        pathlib.Path(data["manytype_sync_capture_path"]),
+        repo_path(data["manytype_sync_capture_path"]),
         f"{label} sync",
     )
     return f"[{label}] artifact ok ({data['collection_id']})"

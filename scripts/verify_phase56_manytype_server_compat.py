@@ -8,6 +8,8 @@ import argparse
 import json
 import pathlib
 
+from artifact_paths import repo_path
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACT = ROOT / "test_vectors" / "phase56" / "manytype-server-compatibility.json"
@@ -136,7 +138,7 @@ def main() -> None:
     if int(scenario["reopen_observed_attempt"]) < 1:
         raise SystemExit("[phase56 official_to_manytype] invalid reopen observed attempt")
 
-    show = load_json(pathlib.Path(scenario["official_show_path"]))
+    show = load_json(repo_path(scenario["official_show_path"]))
     root = show.get("root_details", {})
     if root.get("description") != scenario["description"]:
         raise SystemExit("[phase56 compatibility] official show description mismatch")
@@ -144,8 +146,8 @@ def main() -> None:
         raise SystemExit("[phase56 compatibility] official show featuredRelations mismatch")
 
     for path, label in (
-        (pathlib.Path(scenario["read_path"]), "main Manytype read"),
-        (pathlib.Path(scenario["reopen_read_path"]), "reopen Manytype read"),
+        (repo_path(scenario["read_path"]), "main Manytype read"),
+        (repo_path(scenario["reopen_read_path"]), "reopen Manytype read"),
     ):
         text = read_text(path)
         if f"[description] {scenario['description']}" not in text:
@@ -154,15 +156,15 @@ def main() -> None:
             raise SystemExit(f"[phase56 compatibility] {label} missing featuredRelations line")
 
     validate_manytype_sync_artifact(
-        pathlib.Path(scenario["main_sync_capture_path"]),
+        repo_path(scenario["main_sync_capture_path"]),
         "phase56 main sync",
     )
     validate_manytype_sync_artifact(
-        pathlib.Path(scenario["reopen_sync_capture_path"]),
+        repo_path(scenario["reopen_sync_capture_path"]),
         "phase56 reopen sync",
     )
 
-    diagnostics = load_json(pathlib.Path(scenario["diagnostics_path"]))
+    diagnostics = load_json(repo_path(scenario["diagnostics_path"]))
     require_keys(
         diagnostics,
         {"stored_changes", "full_sync_responses"},
@@ -177,7 +179,7 @@ def main() -> None:
     if not any(response.get("change_ids") for response in responses):
         raise SystemExit("[phase56 diagnostics] expected at least one response with change_ids")
 
-    metadata_path = pathlib.Path(artifact["metadata_path"])
+    metadata_path = repo_path(artifact["metadata_path"])
     if not metadata_path.exists():
         raise SystemExit(f"[phase56 compatibility] missing metadata: {metadata_path}")
 
