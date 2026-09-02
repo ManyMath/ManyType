@@ -51,6 +51,13 @@ jobs:
       - name: Test canonical app
         working-directory: ManyType/apps/ManyType
         run: timeout --signal=TERM --kill-after=30s 20m flutter test
+      - name: Verify Chrome is available
+        run: google-chrome --version
+      - name: Test canonical app browser-only behavior
+        working-directory: ManyType/apps/ManyType
+        run: >-
+          timeout --signal=TERM --kill-after=30s 15m
+          flutter test --platform chrome test/sync_controller_web_test.dart
       - name: Build canonical site and app
         working-directory: ManyType
         run: >-
