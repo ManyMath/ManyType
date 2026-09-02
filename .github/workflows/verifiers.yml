@@ -1,0 +1,37 @@
+name: Offline artifact verifiers
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verifier unit tests
+        run: |
+          python3 scripts/verify_file_artifacts_test.py
+          python3 scripts/verify_nyquist_artifacts_test.py
+
+      - name: Verify checked-in artifacts
+        run: |
+          for verifier in scripts/verify_*.py; do
+            case "$verifier" in
+              *_test.py) continue ;;
+              # Sign-off verifiers compare locally built rust/target binaries.
+              scripts/verify_phase49_signoff.py|scripts/verify_phase53_signoff.py) continue ;;
+              scripts/verify_self_hosted_oracle_metadata.py) continue ;;
+            esac
+            echo "::group::$verifier"
+            python3 "$verifier"
+            echo "::endgroup::"
+          done
+          for metadata in test_vectors/*/runtime-metadata.json; do
+            python3 scripts/verify_self_hosted_oracle_metadata.py --metadata "$metadata"
+          done
