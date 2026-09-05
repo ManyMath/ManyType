@@ -6,13 +6,20 @@ set -euo pipefail
 #   1. docker compose up -d in docker/any-sync/ (oracle stack must be running)
 #   2. cargo build -p manytype_quic_ffi --release (FFI lib must be built)
 #   3. dart pub get in packages/manytype_cli/ (Dart deps resolved)
+#
+# Output goes to a fresh temp dir. To refresh the checked-in fixture, set
+# ORACLE_ARTIFACT_PATH to the absolute path of
+# test_vectors/oracle-capture-artifact.json (and ORACLE_METADATA_PATH).
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck disable=SC1091
 source "$ROOT_DIR/scripts/lib/self_hosted_oracle.sh"
 
-ORACLE_ARTIFACT_PATH="${ORACLE_ARTIFACT_PATH:-$ROOT_DIR/test_vectors/oracle-capture-artifact.json}"
-ORACLE_METADATA_PATH="${ORACLE_METADATA_PATH:-$ROOT_DIR/test_vectors/oracle-capture-metadata.json}"
+if [[ -z "${ORACLE_ARTIFACT_PATH:-}" || -z "${ORACLE_METADATA_PATH:-}" ]]; then
+  OUTPUT_DIR="$(mktemp -d)"
+fi
+ORACLE_ARTIFACT_PATH="${ORACLE_ARTIFACT_PATH:-$OUTPUT_DIR/oracle-capture-artifact.json}"
+ORACLE_METADATA_PATH="${ORACLE_METADATA_PATH:-$OUTPUT_DIR/oracle-capture-metadata.json}"
 TMPDIR="$(mktemp -d)"
 
 cleanup() {
@@ -22,6 +29,7 @@ trap cleanup EXIT
 
 oracle_run_preflight
 oracle_export_runtime_env
+rm -f "$ORACLE_ARTIFACT_PATH"
 export ROOT_DIR
 export TMPDIR
 export ORACLE_ARTIFACT_PATH

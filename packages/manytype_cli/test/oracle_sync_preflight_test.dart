@@ -38,7 +38,7 @@ void main() {
     final configPath = p.join(manytypeDir.path, 'config.toml');
     final dbPath = p.join(manytypeDir.path, 'store.db');
     final capturePath = Platform.environment['ORACLE_ARTIFACT_PATH'] ??
-        p.join(repoRoot, 'test_vectors', 'oracle-capture-artifact.json');
+        p.join(tempHome.path, 'oracle-capture-artifact.json');
     final networkConfigPath =
         p.join(repoRoot, 'docker', 'any-sync', 'etc', 'client.yml');
 
@@ -68,6 +68,9 @@ void main() {
       'ORACLE_ARTIFACT_PATH': capturePath,
     };
 
+    final captureFile = File(capturePath);
+    if (captureFile.existsSync()) captureFile.deleteSync();
+
     final result = await Process.run(
       'dart',
       [
@@ -82,7 +85,6 @@ void main() {
     );
 
     expect(result.exitCode, equals(0), reason: 'sync failed: ${result.stderr}');
-    final captureFile = File(capturePath);
     expect(captureFile.existsSync(), isTrue, reason: 'capture not written');
 
     final capture =

@@ -6,9 +6,13 @@ set -euo pipefail
 #   1. cargo build -p manytype_quic_ffi --release
 #   2. dart pub get in packages/manytype_cli/
 #   3. network.anytype.io.yml exists at repo root
+#
+# Output goes to a fresh temp dir. To refresh the checked-in fixture, set
+# LIVE_ARTIFACT_PATH to the absolute path of
+# test_vectors/live-file-node-probe-artifact.json.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LIVE_ARTIFACT_PATH="${LIVE_ARTIFACT_PATH:-$ROOT_DIR/test_vectors/live-file-node-probe-artifact.json}"
+LIVE_ARTIFACT_PATH="${LIVE_ARTIFACT_PATH:-$(mktemp -d)/live-file-node-probe-artifact.json}"
 TMPDIR="$(mktemp -d)"
 
 cleanup() {
@@ -20,6 +24,7 @@ if [[ ! -f "$ROOT_DIR/network.anytype.io.yml" ]]; then
   printf 'FAIL: network.anytype.io.yml not found\n' >&2
   exit 1
 fi
+rm -f "$LIVE_ARTIFACT_PATH"
 
 export LD_LIBRARY_PATH="$ROOT_DIR/rust/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export ROOT_DIR
