@@ -62,7 +62,12 @@ pub struct FfiResult {
 
 impl FfiResult {
     fn success(data: Vec<u8>) -> *mut FfiResult {
-        let len = data.len() as u32;
+        let Ok(len) = u32::try_from(data.len()) else {
+            return Self::error(format!(
+                "result of {} bytes exceeds the FFI size limit",
+                data.len()
+            ));
+        };
         let mut boxed = data.into_boxed_slice();
         let ptr = boxed.as_mut_ptr();
         std::mem::forget(boxed);

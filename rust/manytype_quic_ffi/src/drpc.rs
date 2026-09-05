@@ -14,6 +14,7 @@ use manytype_server::drpc::stream::DrpcStream;
 
 const STREAM_ID: u64 = 1;
 const EMPTY_UNARY_RESPONSE_TIMEOUT: Duration = Duration::from_secs(2);
+const MAX_STREAM_RESPONSE_BYTES: usize = 64 * 1024 * 1024;
 
 fn trace(message: impl FnOnce() -> String) {
     if std::env::var_os("MANYTYPE_QUIC_TRACE").is_some() {
@@ -87,9 +88,7 @@ where
         "/spacesync.SpaceSync/SpacePush" | "/coordinator.Coordinator/SpaceMakeShareable"
     );
 
-    let mut response = Vec::new();
-    let mut saw_message = false;
-    let mut first_frame = if allow_empty_timeout {
+    let first_frame = if allow_empty_timeout {
         match timeout(EMPTY_UNARY_RESPONSE_TIMEOUT, drpc_stream.read_frame()).await {
             Ok(result) => result.context("failed to read unary response frame")?,
             Err(_) => {
@@ -109,37 +108,25 @@ where
             .context("failed to read unary response frame")?
     };
 
-    loop {
-        let next_frame = match first_frame.take() {
-            Some(frame) => Some(frame),
-            None => drpc_stream
-                .read_frame()
-                .await
-                .context("failed to read unary response frame")?,
-        };
-        let Some(frame) = next_frame else {
-            break;
-        };
-
-        match frame.kind {
+    let (response, saw_message) = match first_frame {
+        Some(frame) => match frame.kind {
             KIND_MESSAGE => {
-                response.extend_from_slice(&frame.data);
-                if frame.done {
-                    saw_message = true;
-                    break;
-                }
+                let response = drpc_stream
+                    .read_message_after_first(frame)
+                    .await
+                    .context("failed to read unary response message")?;
+                (response, true)
             }
-            KIND_CLOSE_SEND | KIND_CLOSE => {
-                break;
-            }
+            KIND_CLOSE_SEND | KIND_CLOSE => (Vec::new(), false),
             KIND_ERROR => {
                 anyhow::bail!("remote error: {}", String::from_utf8_lossy(&frame.data));
             }
             other => {
                 anyhow::bail!("unexpected frame kind={other} while reading unary response");
             }
-        }
-    }
+        },
+        None => (Vec::new(), false),
+    };
     trace(|| {
         format!(
             "invoke read response method={method} response_len={}",
@@ -271,6 +258,7 @@ where
     trace(|| format!("exchange_stream wrote KIND_CLOSE_SEND method={method}"));
 
     let mut responses = Vec::new();
+    let mut response_bytes = 0usize;
     loop {
         let frame = drpc_stream
             .read_frame()
@@ -306,6 +294,13 @@ where
             .read_message_after_first(frame)
             .await
             .context("failed to read stream message")?;
+        response_bytes = response_bytes
+            .saturating_add(message.len())
+            .saturating_add(std::mem::size_of::<u32>());
+        anyhow::ensure!(
+            response_bytes <= MAX_STREAM_RESPONSE_BYTES,
+            "stream responses exceed {MAX_STREAM_RESPONSE_BYTES} byte limit"
+        );
         responses.push(message);
     }
 
@@ -394,6 +389,38 @@ mod tests {
             .await
             .unwrap();
         assert!(response.is_empty());
+
+        server_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_invoke_rejects_response_over_message_limit() {
+        let (client_io, server_io) = duplex(8192);
+        let mut client_stream = DrpcStream::with_limits(client_io, 1024, 8);
+        let mut server_stream = DrpcStream::new(server_io);
+
+        let server_handle = tokio::spawn(async move {
+            server_stream.read_invoke().await.unwrap();
+            server_stream.read_message().await.unwrap();
+            for (chunk, done) in [(&b"12345"[..], false), (&b"6789"[..], true)] {
+                server_stream
+                    .write_frame(DrpcFrame {
+                        kind: KIND_MESSAGE,
+                        done,
+                        control: false,
+                        stream_id: 1,
+                        message_id: 1,
+                        data: Bytes::copy_from_slice(chunk),
+                    })
+                    .await
+                    .unwrap();
+            }
+        });
+
+        let error = invoke(&mut client_stream, "/test.Svc/Large", b"request")
+            .await
+            .unwrap_err();
+        assert!(format!("{error:#}").contains("8 byte limit"));
 
         server_handle.await.unwrap();
     }
@@ -522,6 +549,49 @@ mod tests {
             vec![b"first-message-body".to_vec(), b"second".to_vec()]
         );
 
+        server_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_exchange_stream_rejects_responses_over_total_limit() {
+        let (client_io, server_io) = duplex(1024 * 1024);
+        let mut client_stream = DrpcStream::new(client_io);
+        let mut server_stream = DrpcStream::new(server_io);
+
+        let server_handle = tokio::spawn(async move {
+            server_stream.read_invoke().await.unwrap();
+            server_stream.read_frame().await.unwrap().unwrap();
+
+            let chunk = Bytes::from(vec![0u8; 2 * 1024 * 1024]);
+            for message_id in 1..=9 {
+                for part in 0..4 {
+                    let written = server_stream
+                        .write_frame(DrpcFrame {
+                            kind: KIND_MESSAGE,
+                            done: part == 3,
+                            control: false,
+                            stream_id: 1,
+                            message_id,
+                            data: chunk.clone(),
+                        })
+                        .await;
+                    if written.is_err() {
+                        return;
+                    }
+                }
+            }
+        });
+
+        let error = exchange_stream(
+            &mut client_stream,
+            "/spacesync.SpaceSync/StoreElements",
+            &[],
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("stream responses exceed"));
+
+        drop(client_stream);
         server_handle.await.unwrap();
     }
 
