@@ -113,15 +113,7 @@ PY
 }
 
 printf 'Building manytype_server...\n'
-if ! (cd "$RUST_DIR" && cargo build -p manytype_server --bin manytype_server 2>/dev/null); then
-  if [[ ! -x "$RUST_DIR/target/debug/manytype_server" ]]; then
-    printf 'FAIL: cargo build failed and no existing binary at %s\n' \
-      "$RUST_DIR/target/debug/manytype_server" >&2
-    exit 1
-  fi
-  printf '  cargo build failed (pre-existing on main); using cached binary at %s\n' \
-    "$RUST_DIR/target/debug/manytype_server"
-fi
+(cd "$RUST_DIR" && cargo build -p manytype_server --bin manytype_server)
 
 printf 'Building native QUIC bridge...\n'
 (cd "$RUST_DIR" && cargo build --release --locked -p manytype_quic_ffi)

@@ -74,20 +74,7 @@ prepare_second_home() {
 }
 
 printf 'Building manytype_server...\n'
-# Phase 38-04 note: if `cargo build` fails on main (e.g. pre-existing
-# type-mismatch in unrelated file_node/drpc router code), fall back to an
-# existing target/debug/manytype_server binary so the harness can still
-# exercise the Phase 38 CLI surfaces. Out-of-scope build breakage is
-# logged to deferred-items.md, not auto-fixed from this plan.
-if ! (cd "$RUST_DIR" && cargo build -p manytype_server --bin manytype_server 2>/dev/null); then
-  if [[ ! -x "$RUST_DIR/target/debug/manytype_server" ]]; then
-    printf 'FAIL: cargo build failed and no existing binary at %s\n' \
-      "$RUST_DIR/target/debug/manytype_server" >&2
-    exit 1
-  fi
-  printf '  cargo build failed (pre-existing on main); using cached binary at %s\n' \
-    "$RUST_DIR/target/debug/manytype_server"
-fi
+(cd "$RUST_DIR" && cargo build -p manytype_server --bin manytype_server)
 
 printf 'Building native QUIC bridge...\n'
 (cd "$RUST_DIR" && cargo build --release --locked -p manytype_quic_ffi)
