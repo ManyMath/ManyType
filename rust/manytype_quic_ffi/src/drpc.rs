@@ -214,7 +214,8 @@ where
 /// Exchange protobuf messages over an arbitrary bidirectional DRPC stream.
 ///
 /// Sends all request messages, closes the client send side, then collects all
-/// server MESSAGE frames until the server closes the stream.
+/// server messages until the server closes the stream. A message may span
+/// several MESSAGE frames; it is complete once a frame has done=true.
 pub async fn exchange_stream<T>(
     drpc_stream: &mut DrpcStream<T>,
     method: &str,
@@ -301,7 +302,11 @@ where
             "expected MESSAGE or CLOSE_SEND from server, got kind={}",
             frame.kind
         );
-        responses.push(frame.data.to_vec());
+        let message = drpc_stream
+            .read_message_after_first(frame)
+            .await
+            .context("failed to read stream message")?;
+        responses.push(message);
     }
 
     Ok(responses)
@@ -417,11 +422,11 @@ mod tests {
                 assert_eq!(frame.kind, KIND_MESSAGE);
                 received.push(frame.data.to_vec());
 
-                // Send confirmation (non-final)
+                // Send confirmation
                 server_stream
                     .write_frame(DrpcFrame {
                         kind: KIND_MESSAGE,
-                        done: false,
+                        done: true,
                         control: false,
                         stream_id: 0,
                         message_id: 0,
@@ -454,6 +459,68 @@ mod tests {
         assert_eq!(responses.len(), 2);
         assert_eq!(responses[0], b"ack");
         assert_eq!(responses[1], b"ack");
+
+        server_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_exchange_stream_reassembles_split_messages() {
+        let (client_io, server_io) = duplex(8192);
+        let mut client_stream = DrpcStream::new(client_io);
+        let mut server_stream = DrpcStream::new(server_io);
+
+        let server_handle = tokio::spawn(async move {
+            let (_, method) = server_stream.read_invoke().await.unwrap();
+            assert_eq!(method, "/spacesync.SpaceSync/StoreElements");
+
+            let request = server_stream.read_message().await.unwrap();
+            assert_eq!(request, b"request");
+
+            let close_frame = server_stream.read_frame().await.unwrap().unwrap();
+            assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+
+            for (message_id, chunk, done) in [
+                (1, &b"first-"[..], false),
+                (1, &b"message-"[..], false),
+                (1, &b"body"[..], true),
+                (2, &b"second"[..], true),
+            ] {
+                server_stream
+                    .write_frame(DrpcFrame {
+                        kind: KIND_MESSAGE,
+                        done,
+                        control: false,
+                        stream_id: 1,
+                        message_id,
+                        data: Bytes::copy_from_slice(chunk),
+                    })
+                    .await
+                    .unwrap();
+            }
+            server_stream
+                .write_frame(DrpcFrame {
+                    kind: KIND_CLOSE_SEND,
+                    done: true,
+                    control: false,
+                    stream_id: 1,
+                    message_id: 3,
+                    data: Bytes::new(),
+                })
+                .await
+                .unwrap();
+        });
+
+        let responses = exchange_stream(
+            &mut client_stream,
+            "/spacesync.SpaceSync/StoreElements",
+            &[b"request".to_vec()],
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            responses,
+            vec![b"first-message-body".to_vec(), b"second".to_vec()]
+        );
 
         server_handle.await.unwrap();
     }
