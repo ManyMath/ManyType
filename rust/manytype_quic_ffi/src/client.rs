@@ -2,14 +2,19 @@
 
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use libp2p_identity::Keypair;
 
+use manytype_server::deadline::{self, DeadlineStage};
 use manytype_server::drpc::stream::DrpcStream;
 
 use super::handshake::{client_handshake, client_proto_handshake};
 use crate::incoming::{ServedTreeCache, new_served_tree_cache, spawn_incoming_stream_server};
+
+const CONNECTION_SETUP_TIMEOUT: Duration = Duration::from_secs(30);
+const STREAM_SETUP_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn trace(message: impl FnOnce() -> String) {
     if std::env::var_os("MANYTYPE_QUIC_TRACE").is_some() {
@@ -43,6 +48,19 @@ pub struct ConnHandle {
 
 /// Connect to a QUIC server, perform credential handshake, return a ConnHandle.
 pub async fn connect(
+    addr: &str,
+    peer_signing_key: &ed25519_dalek::SigningKey,
+    account_signing_key: &ed25519_dalek::SigningKey,
+) -> Result<ConnHandle> {
+    deadline::result(
+        DeadlineStage::ConnectionSetup,
+        CONNECTION_SETUP_TIMEOUT,
+        connect_and_handshake(addr, peer_signing_key, account_signing_key),
+    )
+    .await
+}
+
+async fn connect_and_handshake(
     addr: &str,
     peer_signing_key: &ed25519_dalek::SigningKey,
     account_signing_key: &ed25519_dalek::SigningKey,
@@ -128,6 +146,17 @@ async fn resolve_target(addr: &str) -> Result<(SocketAddr, String)> {
 }
 
 pub async fn open_drpc_stream(
+    connection: &quinn::Connection,
+) -> Result<DrpcStream<tokio::io::Join<quinn::RecvStream, quinn::SendStream>>> {
+    deadline::result(
+        DeadlineStage::StreamSetup,
+        STREAM_SETUP_TIMEOUT,
+        open_and_negotiate(connection),
+    )
+    .await
+}
+
+async fn open_and_negotiate(
     connection: &quinn::Connection,
 ) -> Result<DrpcStream<tokio::io::Join<quinn::RecvStream, quinn::SendStream>>> {
     let (send, recv) = connection
