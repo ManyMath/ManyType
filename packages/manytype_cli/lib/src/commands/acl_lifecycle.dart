@@ -84,6 +84,8 @@ Future<AclLifecycleReport> aclLifecycleCommand({
   );
   final coordinatorAddress =
       chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
+  final coordinatorPeerId =
+      expectedPeerIdForAddress(coordinatorAddress, config: networkConfig);
   final ownerFixture = await createEphemeralSpaceFixture(
     networkConfigPath: networkConfigPath,
     networkConfigContent: networkConfigContent,
@@ -101,11 +103,13 @@ Future<AclLifecycleReport> aclLifecycleCommand({
       coordinatorAddress,
       ownerFixture.identity.seed,
       ownerFixture.identity.accountSeed,
+      expectedPeerId: coordinatorPeerId,
     );
     joinerHandle = joinerBridge.connect(
       coordinatorAddress,
       joinerIdentity.seed,
       joinerIdentity.accountSeed,
+      expectedPeerId: coordinatorPeerId,
     );
 
     final ownerService = AclSyncService(invoker: ownerBridge.invoke);

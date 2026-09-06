@@ -428,8 +428,13 @@ Future<int> _connectToFileNode({
   );
   final coordinatorAddress =
       chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
-  final coordinatorHandleId =
-      bridge.connect(coordinatorAddress, identity.seed, identity.accountSeed);
+  final coordinatorHandleId = bridge.connect(
+    coordinatorAddress,
+    identity.seed,
+    identity.accountSeed,
+    expectedPeerId:
+        expectedPeerIdForAddress(coordinatorAddress, config: networkConfig),
+  );
   capture.recordConnection(role: 'coordinator', address: coordinatorAddress);
 
   try {
@@ -458,8 +463,16 @@ Future<int> _connectToFileNode({
       },
     );
 
-    final fileHandleId =
-        bridge.connect(fileAddress, identity.seed, identity.accountSeed);
+    final fileHandleId = bridge.connect(
+      fileAddress,
+      identity.seed,
+      identity.accountSeed,
+      expectedPeerId: expectedPeerIdForAddress(
+        fileAddress,
+        config: networkConfig,
+        nodes: response.nodes,
+      ),
+    );
     capture.recordConnection(role: 'file-node', address: fileAddress);
     return fileHandleId;
   } finally {

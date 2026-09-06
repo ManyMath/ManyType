@@ -146,8 +146,13 @@ Future<AccountDeleteReport> accountDeleteCommand({
       chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
 
   final bridge = NativeBridge();
-  final handleId =
-      bridge.connect(coordinatorAddress, identity.seed, identity.accountSeed);
+  final handleId = bridge.connect(
+    coordinatorAddress,
+    identity.seed,
+    identity.accountSeed,
+    expectedPeerId:
+        expectedPeerIdForAddress(coordinatorAddress, config: networkConfig),
+  );
   final coordinator = CoordinatorService(invoker: bridge.invoke);
 
   Map<String, Object?> responseJson;

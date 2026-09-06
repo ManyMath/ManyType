@@ -29,6 +29,20 @@ String encodeLibp2pPeerId(Uint8List ed25519PublicKey) {
   return _base58Encode(multihash);
 }
 
+/// Whether [value] is a base58btc libp2p peer ID: an identity or sha2-256
+/// multihash.
+bool isLibp2pPeerId(String value) {
+  final bytes = _base58Decode(value);
+  if (bytes == null || bytes.length < 2) {
+    return false;
+  }
+  return switch (bytes[0]) {
+    0x00 => bytes[1] == bytes.length - 2 && bytes[1] <= 42,
+    0x12 => bytes[1] == 32 && bytes.length == 34,
+    _ => false,
+  };
+}
+
 String _base58Encode(Uint8List input) {
   if (input.isEmpty) {
     return '';
@@ -61,4 +75,37 @@ String _base58Encode(Uint8List input) {
     buffer.write(_base58Alphabet[digits[i]]);
   }
   return buffer.toString();
+}
+
+Uint8List? _base58Decode(String input) {
+  if (input.isEmpty) {
+    return null;
+  }
+
+  var zeroCount = 0;
+  while (zeroCount < input.length && input[zeroCount] == _base58Alphabet[0]) {
+    zeroCount++;
+  }
+
+  final bytes = <int>[];
+  for (var i = 0; i < input.length; i++) {
+    var carry = _base58Alphabet.indexOf(input[i]);
+    if (carry < 0) {
+      return null;
+    }
+    for (var j = 0; j < bytes.length; j++) {
+      final value = bytes[j] * 58 + carry;
+      bytes[j] = value & 0xff;
+      carry = value >> 8;
+    }
+    while (carry > 0) {
+      bytes.add(carry & 0xff);
+      carry >>= 8;
+    }
+  }
+
+  return Uint8List.fromList([
+    ...List.filled(zeroCount, 0),
+    ...bytes.reversed,
+  ]);
 }

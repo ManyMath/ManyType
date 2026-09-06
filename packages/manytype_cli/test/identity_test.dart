@@ -34,6 +34,27 @@ void main() {
       expect(peerId.length, greaterThan(40));
     });
 
+    test('recognises libp2p peer IDs and rejects placeholders', () async {
+      final identity = await Identity.fromMnemonic(testMnemonic);
+      expect(
+        isLibp2pPeerId(encodeLibp2pPeerId(identity.keyPair.publicKey)),
+        isTrue,
+      );
+      expect(
+        isLibp2pPeerId('QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N'),
+        isTrue,
+      );
+      for (final placeholder in [
+        '',
+        'local',
+        'coordinator',
+        'tree-peer',
+        '12D3KooW',
+      ]) {
+        expect(isLibp2pPeerId(placeholder), isFalse, reason: placeholder);
+      }
+    });
+
     test('derivation is deterministic', () async {
       final identity1 = await Identity.fromMnemonic(testMnemonic);
       final identity2 = await Identity.fromMnemonic(testMnemonic);

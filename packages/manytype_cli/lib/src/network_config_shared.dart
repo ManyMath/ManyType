@@ -1,6 +1,8 @@
 import 'package:manytype_protocol/coordinator.dart';
 import 'package:yaml/yaml.dart';
 
+import 'peer_id.dart';
+
 class NetworkConfigNode {
   final String peerId;
   final List<String> addresses;
@@ -136,6 +138,31 @@ NetworkConfigNode requireNodeByType(
         node.types.map((value) => value.toLowerCase()).contains(normalized),
     orElse: () => throw StateError('No $nodeType node found in network config'),
   );
+}
+
+/// Returns the peer ID to verify when connecting to [address], taken from the
+/// first node in [config] or [nodes] that advertises it.
+///
+/// Placeholder IDs that are not libp2p peer IDs (such as `local` in test
+/// configs) are skipped, so those connections stay unverified.
+String? expectedPeerIdForAddress(
+  String address, {
+  NetworkConfigFile? config,
+  Iterable<Node> nodes = const [],
+}) {
+  final target = normalizeQuicAddress(address);
+  final candidates = [
+    for (final node in config?.nodes ?? const <NetworkConfigNode>[])
+      (peerId: node.peerId, addresses: node.addresses),
+    for (final node in nodes) (peerId: node.peerId, addresses: node.addresses),
+  ];
+  for (final candidate in candidates) {
+    if (candidate.addresses.map(normalizeQuicAddress).contains(target) &&
+        isLibp2pPeerId(candidate.peerId)) {
+      return candidate.peerId;
+    }
+  }
+  return null;
 }
 
 String? chooseTreeAddressFromResponse(Iterable<Node> nodes) {

@@ -70,8 +70,13 @@ Future<FileNodeProbeResult> probeFileNodeCommand(
   final capture = _FileProbeCapture.start(readOnly: readOnly);
   final attempts = <FileNodeProbeAttempt>[];
 
-  final coordinatorHandleId =
-      bridge.connect(coordinatorAddress, identity.seed, identity.accountSeed);
+  final coordinatorHandleId = bridge.connect(
+    coordinatorAddress,
+    identity.seed,
+    identity.accountSeed,
+    expectedPeerId:
+        expectedPeerIdForAddress(coordinatorAddress, config: networkConfig),
+  );
   capture.recordConnection(role: 'coordinator', address: coordinatorAddress);
 
   try {
@@ -100,8 +105,16 @@ Future<FileNodeProbeResult> probeFileNodeCommand(
       'node_count': response.nodes.length,
     });
 
-    final fileHandleId =
-        bridge.connect(fileAddress, identity.seed, identity.accountSeed);
+    final fileHandleId = bridge.connect(
+      fileAddress,
+      identity.seed,
+      identity.accountSeed,
+      expectedPeerId: expectedPeerIdForAddress(
+        fileAddress,
+        config: networkConfig,
+        nodes: response.nodes,
+      ),
+    );
     capture.recordConnection(role: 'file-node', address: fileAddress);
 
     try {

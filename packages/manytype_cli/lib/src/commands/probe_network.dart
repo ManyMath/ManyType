@@ -41,8 +41,13 @@ Future<NetworkProbeResult> probeNetworkCommand(
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final bridge = NativeBridge();
 
-  final handleId =
-      bridge.connect(coordinatorAddress, identity.seed, identity.accountSeed);
+  final handleId = bridge.connect(
+    coordinatorAddress,
+    identity.seed,
+    identity.accountSeed,
+    expectedPeerId:
+        expectedPeerIdForAddress(coordinatorAddress, config: networkConfig),
+  );
 
   try {
     final requestBytes =

@@ -3,8 +3,10 @@
 library;
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:manytype_cli/src/network_config.dart';
+import 'package:manytype_cli/src/peer_id.dart';
 import 'package:manytype_protocol/coordinator.dart';
 import 'package:test/test.dart';
 
@@ -156,6 +158,42 @@ nodes:
       ]);
 
       expect(address, '127.0.0.1:1015');
+    });
+
+    test('expects the peer ID of the node advertising an address', () {
+      final coordinatorPeerId =
+          encodeLibp2pPeerId(Uint8List(32)..fillRange(0, 32, 1));
+      final treePeerId = encodeLibp2pPeerId(Uint8List(32)..fillRange(0, 32, 2));
+      final config = parseNetworkConfig('''
+id: test
+networkId: test-net
+nodes:
+  - peerId: $coordinatorPeerId
+    addresses:
+      - quic://127.0.0.1:1004
+    types:
+      - coordinator
+  - peerId: local
+    addresses:
+      - 127.0.0.1:1005
+    types:
+      - file
+''');
+      final nodes = [
+        Node(
+          peerId: treePeerId,
+          addresses: ['quic://127.0.0.1:1011'],
+          types: [NodeType.TreeAPI],
+        ),
+      ];
+
+      String? expected(String address) =>
+          expectedPeerIdForAddress(address, config: config, nodes: nodes);
+
+      expect(expected('127.0.0.1:1004'), coordinatorPeerId);
+      expect(expected('127.0.0.1:1011'), treePeerId);
+      expect(expected('127.0.0.1:1005'), isNull);
+      expect(expected('127.0.0.1:9999'), isNull);
     });
   });
 }

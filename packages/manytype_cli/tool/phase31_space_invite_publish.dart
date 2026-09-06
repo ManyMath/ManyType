@@ -114,8 +114,13 @@ Future<void> main(List<String> argv) async {
       chooseBestAddress(requireFileNode(networkConfig).addresses);
 
   final bridge = NativeBridge();
-  final coordinatorHandle =
-      bridge.connect(coordinatorAddress, identity.seed, identity.accountSeed);
+  final coordinatorHandle = bridge.connect(
+    coordinatorAddress,
+    identity.seed,
+    identity.accountSeed,
+    expectedPeerId:
+        expectedPeerIdForAddress(coordinatorAddress, config: networkConfig),
+  );
 
   var uploadedViaCoordinator = false;
   try {
@@ -183,8 +188,13 @@ Future<void> main(List<String> argv) async {
     return;
   }
 
-  final fileHandle =
-      bridge.connect(fileAddress, identity.seed, identity.accountSeed);
+  final fileHandle = bridge.connect(
+    fileAddress,
+    identity.seed,
+    identity.accountSeed,
+    expectedPeerId:
+        expectedPeerIdForAddress(fileAddress, config: networkConfig),
+  );
   try {
     final cidBytes = cidToBytes(invite.inviteFileCid);
     final checkRequest = filesync.BlocksCheckRequest(

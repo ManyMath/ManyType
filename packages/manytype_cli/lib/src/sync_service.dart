@@ -73,17 +73,17 @@ class SyncService {
       ..setRange(0, 32, identity.accountSeed)
       ..setRange(32, 64, identity.accountKeyPair.publicKey);
     final spaceKey = await deriveSpaceKey(accountPrivRaw);
+    final networkConfig = officialInteropMode
+        ? await resolveNetworkConfig(
+            networkConfigPath: networkConfigPath,
+            networkConfigContent: networkConfigContent,
+          )
+        : null;
     final capture = _SessionCapture.start(
       officialInteropMode: officialInteropMode,
       spaceId: spaceId,
-      coordinatorAddress: officialInteropMode
-          ? chooseBestAddress(
-              requireCoordinatorNode(await resolveNetworkConfig(
-                networkConfigPath: networkConfigPath,
-                networkConfigContent: networkConfigContent,
-              ))
-                  .addresses,
-            )
+      coordinatorAddress: networkConfig != null
+          ? chooseBestAddress(requireCoordinatorNode(networkConfig).addresses)
           : config.serverAddress,
       networkConfigPath: networkConfigPath,
     );
@@ -95,8 +95,13 @@ class SyncService {
     final coordinatorAddress = capture.coordinatorAddress;
 
     print('Connecting to coordinator at $coordinatorAddress...');
-    coordinatorHandleId =
-        bridge.connect(coordinatorAddress, identity.seed, identity.accountSeed);
+    coordinatorHandleId = bridge.connect(
+      coordinatorAddress,
+      identity.seed,
+      identity.accountSeed,
+      expectedPeerId:
+          expectedPeerIdForAddress(coordinatorAddress, config: networkConfig),
+    );
     print('Connected to coordinator (handle: $coordinatorHandleId)');
     capture.recordConnection(role: 'coordinator', address: coordinatorAddress);
 
@@ -163,8 +168,16 @@ class SyncService {
         }
         for (final address in syncAddresses) {
           print('Connecting to sync node at $address...');
-          final handleId =
-              bridge.connect(address, identity.seed, identity.accountSeed);
+          final handleId = bridge.connect(
+            address,
+            identity.seed,
+            identity.accountSeed,
+            expectedPeerId: expectedPeerIdForAddress(
+              address,
+              config: networkConfig,
+              nodes: netConfig.nodes,
+            ),
+          );
           syncHandleIds.add(handleId);
           print('Connected to sync node (handle: $handleId)');
           capture.recordConnection(role: 'sync-node', address: address);
@@ -511,19 +524,23 @@ class SyncService {
   }) async {
     final identity = await Identity.fromMnemonic(config.mnemonic);
     final bridge = NativeBridge();
-    final coordinatorAddress = chooseBestAddress(
-      requireCoordinatorNode(await resolveNetworkConfig(
-        networkConfigPath: networkConfigPath,
-        networkConfigContent: networkConfigContent,
-      ))
-          .addresses,
+    final networkConfig = await resolveNetworkConfig(
+      networkConfigPath: networkConfigPath,
+      networkConfigContent: networkConfigContent,
     );
+    final coordinatorAddress =
+        chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
     int? coordinatorHandleId;
     final syncHandleIds = <int>[];
 
     try {
       coordinatorHandleId = bridge.connect(
-          coordinatorAddress, identity.seed, identity.accountSeed);
+        coordinatorAddress,
+        identity.seed,
+        identity.accountSeed,
+        expectedPeerId:
+            expectedPeerIdForAddress(coordinatorAddress, config: networkConfig),
+      );
       final netConfigBytes = bridge.invoke(
         coordinatorHandleId,
         '/coordinator.Coordinator/NetworkConfiguration',
@@ -550,8 +567,16 @@ class SyncService {
       );
 
       for (final address in syncAddresses) {
-        final handleId =
-            bridge.connect(address, identity.seed, identity.accountSeed);
+        final handleId = bridge.connect(
+          address,
+          identity.seed,
+          identity.accountSeed,
+          expectedPeerId: expectedPeerIdForAddress(
+            address,
+            config: networkConfig,
+            nodes: netConfig.nodes,
+          ),
+        );
         syncHandleIds.add(handleId);
       }
 

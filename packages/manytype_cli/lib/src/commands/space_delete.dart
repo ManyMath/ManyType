@@ -190,10 +190,13 @@ Future<SpaceDeleteReport> spaceDeleteCommand({
   );
   final coordinatorAddress =
       chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
+  final coordinatorPeerId =
+      expectedPeerIdForAddress(coordinatorAddress, config: networkConfig);
 
   final initialCapture = await _captureInitialDelete(
     identity: identity,
     coordinatorAddress: coordinatorAddress,
+    coordinatorPeerId: coordinatorPeerId,
     spaceId: spaceId,
     deletionDurationMinutes: deletionDurationMinutes,
     ownerSpaceMatches: spaceId == identity.spaceId,
@@ -206,6 +209,7 @@ Future<SpaceDeleteReport> spaceDeleteCommand({
   final reconnectCapture = await _captureReconnectStatus(
     identity: identity,
     coordinatorAddress: coordinatorAddress,
+    coordinatorPeerId: coordinatorPeerId,
     spaceId: spaceId,
   );
 
@@ -307,13 +311,18 @@ class _ReconnectCapture {
 Future<_InitialDeleteCapture> _captureInitialDelete({
   required Identity identity,
   required String coordinatorAddress,
+  required String? coordinatorPeerId,
   required String spaceId,
   required int deletionDurationMinutes,
   required bool ownerSpaceMatches,
 }) async {
   final bridge = NativeBridge();
-  final handleId =
-      bridge.connect(coordinatorAddress, identity.seed, identity.accountSeed);
+  final handleId = bridge.connect(
+    coordinatorAddress,
+    identity.seed,
+    identity.accountSeed,
+    expectedPeerId: coordinatorPeerId,
+  );
   final coordinator = CoordinatorService(invoker: bridge.invoke);
 
   try {
@@ -379,11 +388,16 @@ Future<_InitialDeleteCapture> _captureInitialDelete({
 Future<_ReconnectCapture> _captureReconnectStatus({
   required Identity identity,
   required String coordinatorAddress,
+  required String? coordinatorPeerId,
   required String spaceId,
 }) async {
   final bridge = NativeBridge();
-  final handleId =
-      bridge.connect(coordinatorAddress, identity.seed, identity.accountSeed);
+  final handleId = bridge.connect(
+    coordinatorAddress,
+    identity.seed,
+    identity.accountSeed,
+    expectedPeerId: coordinatorPeerId,
+  );
   final coordinator = CoordinatorService(invoker: bridge.invoke);
 
   try {
