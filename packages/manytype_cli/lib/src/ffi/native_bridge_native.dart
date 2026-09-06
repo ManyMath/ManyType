@@ -149,6 +149,9 @@ class NativeLibraryLocator {
 }
 
 class NativeBridge {
+  /// C ABI version these bindings are written against.
+  static const expectedAbiVersion = 2;
+
   final DynamicLibrary _lib;
   late final FfiAbiVersionDart _abiVersion;
   late final FfiConnectDart _connect;
@@ -172,6 +175,12 @@ class NativeBridge {
   NativeBridge._(this._lib) {
     _abiVersion = _lib.lookupFunction<FfiAbiVersionNative, FfiAbiVersionDart>(
         'ffi_abi_version');
+    final loadedAbiVersion = _abiVersion();
+    if (loadedAbiVersion != expectedAbiVersion) {
+      throw StateError(
+          'ManyType QUIC FFI ABI $loadedAbiVersion does not match the '
+          'expected ABI $expectedAbiVersion; rebuild manytype_quic_ffi');
+    }
     _connect =
         _lib.lookupFunction<FfiConnectNative, FfiConnectDart>('ffi_connect');
     _invoke = _lib.lookupFunction<FfiInvokeNative, FfiInvokeDart>('ffi_invoke');

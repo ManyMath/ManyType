@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 class NativeBridge {
+  static const expectedAbiVersion = 2;
+
   NativeBridge() {
     throw UnsupportedError('NativeBridge is not available on web');
   }
