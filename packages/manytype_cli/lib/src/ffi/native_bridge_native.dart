@@ -261,25 +261,32 @@ class NativeBridge {
         ? nullptr
         : expectedPeerId.toNativeUtf8();
     final peerSeedPtr = calloc<Uint8>(peerSeed.length);
-    peerSeedPtr.asTypedList(peerSeed.length).setAll(0, peerSeed);
     final accountSeedPtr = calloc<Uint8>(accountSeed.length);
-    accountSeedPtr.asTypedList(accountSeed.length).setAll(0, accountSeed);
 
-    final result = _connect(
-      addrPtr,
-      expectedPeerIdPtr,
-      peerSeedPtr,
-      peerSeed.length,
-      accountSeedPtr,
-      accountSeed.length,
-    );
-
-    calloc.free(addrPtr);
-    if (expectedPeerIdPtr != nullptr) {
-      calloc.free(expectedPeerIdPtr);
+    final Pointer<FfiResult> result;
+    try {
+      peerSeedPtr.asTypedList(peerSeed.length).setAll(0, peerSeed);
+      accountSeedPtr.asTypedList(accountSeed.length).setAll(0, accountSeed);
+      result = _connect(
+        addrPtr,
+        expectedPeerIdPtr,
+        peerSeedPtr,
+        peerSeed.length,
+        accountSeedPtr,
+        accountSeed.length,
+      );
+    } finally {
+      peerSeedPtr.asTypedList(peerSeed.length).fillRange(0, peerSeed.length, 0);
+      accountSeedPtr
+          .asTypedList(accountSeed.length)
+          .fillRange(0, accountSeed.length, 0);
+      calloc.free(addrPtr);
+      if (expectedPeerIdPtr != nullptr) {
+        calloc.free(expectedPeerIdPtr);
+      }
+      calloc.free(peerSeedPtr);
+      calloc.free(accountSeedPtr);
     }
-    calloc.free(peerSeedPtr);
-    calloc.free(accountSeedPtr);
 
     return _processHandleResult(result);
   }
