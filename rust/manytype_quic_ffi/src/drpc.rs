@@ -22,6 +22,19 @@ fn trace(message: impl FnOnce() -> String) {
     }
 }
 
+/// Decode a KIND_ERROR payload: an 8-byte big-endian error code followed by
+/// the message, as drpcwire.MarshalError writes it.
+fn remote_error(prefix: &str, data: &[u8]) -> anyhow::Error {
+    match data.split_first_chunk::<8>() {
+        Some((code, message)) => anyhow::anyhow!(
+            "{prefix} (code {}): {}",
+            u64::from_be_bytes(*code),
+            String::from_utf8_lossy(message)
+        ),
+        None => anyhow::anyhow!("{prefix}: {}", String::from_utf8_lossy(data)),
+    }
+}
+
 /// Invoke a unary RPC: send INVOKE+MESSAGE, then read the server response.
 ///
 /// Most Any-Sync unary handlers reply with a MESSAGE frame, including empty
@@ -118,9 +131,7 @@ where
                 (response, true)
             }
             KIND_CLOSE_SEND | KIND_CLOSE => (Vec::new(), false),
-            KIND_ERROR => {
-                anyhow::bail!("remote error: {}", String::from_utf8_lossy(&frame.data));
-            }
+            KIND_ERROR => return Err(remote_error("remote error", &frame.data)),
             other => {
                 anyhow::bail!("unexpected frame kind={other} while reading unary response");
             }
@@ -279,10 +290,7 @@ where
         }
 
         if frame.kind == KIND_ERROR {
-            anyhow::bail!(
-                "remote stream error: {}",
-                String::from_utf8_lossy(frame.data.as_ref())
-            );
+            return Err(remote_error("remote stream error", &frame.data));
         }
 
         anyhow::ensure!(
@@ -389,6 +397,71 @@ mod tests {
             .await
             .unwrap();
         assert!(response.is_empty());
+
+        server_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_invoke_reports_remote_error_code() {
+        let (client_io, server_io) = duplex(8192);
+        let mut client_stream = DrpcStream::new(client_io);
+        let mut server_stream = DrpcStream::new(server_io);
+
+        let server_handle = tokio::spawn(async move {
+            server_stream.read_invoke().await.unwrap();
+            server_stream.read_message().await.unwrap();
+            let mut data = 100u64.to_be_bytes().to_vec();
+            data.extend_from_slice(b"account is deleted");
+            server_stream
+                .write_frame(DrpcFrame {
+                    kind: KIND_ERROR,
+                    done: true,
+                    control: false,
+                    stream_id: 1,
+                    message_id: 1,
+                    data: Bytes::from(data),
+                })
+                .await
+                .unwrap();
+        });
+
+        let error = invoke(&mut client_stream, "/test.Svc/Delete", b"request")
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "remote error (code 100): account is deleted"
+        );
+
+        server_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_exchange_stream_reports_short_remote_error() {
+        let (client_io, server_io) = duplex(8192);
+        let mut client_stream = DrpcStream::new(client_io);
+        let mut server_stream = DrpcStream::new(server_io);
+
+        let server_handle = tokio::spawn(async move {
+            server_stream.read_invoke().await.unwrap();
+            server_stream.read_frame().await.unwrap().unwrap();
+            server_stream
+                .write_frame(DrpcFrame {
+                    kind: KIND_ERROR,
+                    done: true,
+                    control: false,
+                    stream_id: 1,
+                    message_id: 1,
+                    data: Bytes::from_static(b"oops"),
+                })
+                .await
+                .unwrap();
+        });
+
+        let error = exchange_stream(&mut client_stream, "/test.Svc/Stream", &[])
+            .await
+            .unwrap_err();
+        assert_eq!(error.to_string(), "remote stream error: oops");
 
         server_handle.await.unwrap();
     }
