@@ -91,11 +91,12 @@ async fn connect_and_handshake(
     let mut stream = tokio::io::join(recv, send);
 
     // Perform client-side credential handshake
-    let _server_peer_id = client_handshake(
+    let _server_identity = client_handshake(
         &mut stream,
         &peer_keypair,
         account_signing_key,
         &server_peer_id,
+        true,
     )
     .await
     .context("credential handshake failed")?;

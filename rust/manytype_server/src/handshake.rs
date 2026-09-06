@@ -200,7 +200,10 @@ pub async fn perform_proto_handshake(
     Ok(chosen)
 }
 
-fn verify_signed_peer_ids(
+/// Verify a remote peer's signature over `{remote_peer_id}{local_peer_id}`.
+///
+/// Returns the remote peer's raw Ed25519 identity key on success.
+pub fn verify_signed_peer_ids(
     signed_peer_ids: &PayloadSignedPeerIds,
     remote_peer_id: &str,
     local_peer_id: &str,
