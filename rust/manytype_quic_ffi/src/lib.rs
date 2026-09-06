@@ -18,13 +18,14 @@ use std::sync::{LazyLock, Mutex};
 
 use client::ConnHandle;
 use incoming::cache_tree_payload;
+use libp2p_identity::PeerId;
 use manytype_core::crypto::ed25519;
 use manytype_proto::spacesync::{ObjectSyncMessage, ObjectType};
 use prost::Message;
 use runtime::RUNTIME;
 
 /// Version of the exported C ABI used by native ManyType clients.
-pub const FFI_ABI_VERSION: u32 = 1;
+pub const FFI_ABI_VERSION: u32 = 2;
 
 /// Return the C ABI version without allocating or initializing a connection.
 ///
@@ -93,6 +94,8 @@ impl FfiResult {
 /// Connect to a QUIC server and perform credential handshake.
 ///
 /// `addr`: C string, e.g. "127.0.0.1:4830"
+/// `expected_peer_id`: C string with the server's libp2p peer ID; null or
+/// empty connects without verifying which peer answers
 /// `peer_seed`: 32-byte Ed25519 peer seed used for libp2p TLS/peer ID
 /// `account_seed`: 32-byte Ed25519 account seed used for Any-sync credentials
 ///
@@ -101,10 +104,12 @@ impl FfiResult {
 /// # Safety
 ///
 /// - `addr` must be a valid, NUL-terminated C string.
+/// - `expected_peer_id` must be null or a valid, NUL-terminated C string.
 /// - `peer_seed` and `account_seed` must point to at least 32 readable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ffi_connect(
     addr: *const c_char,
+    expected_peer_id: *const c_char,
     peer_seed: *const u8,
     peer_seed_len: u32,
     account_seed: *const u8,
@@ -113,6 +118,18 @@ pub unsafe extern "C" fn ffi_connect(
     let addr_str = match unsafe { CStr::from_ptr(addr) }.to_str() {
         Ok(s) => s.to_string(),
         Err(e) => return FfiResult::error(format!("invalid addr string: {e}")),
+    };
+    let expected_peer_id = if expected_peer_id.is_null() {
+        None
+    } else {
+        match unsafe { CStr::from_ptr(expected_peer_id) }.to_str() {
+            Ok("") => None,
+            Ok(s) => match s.parse::<PeerId>() {
+                Ok(peer_id) => Some(peer_id),
+                Err(e) => return FfiResult::error(format!("invalid expected peer ID: {e}")),
+            },
+            Err(e) => return FfiResult::error(format!("invalid expected peer ID string: {e}")),
+        }
     };
 
     if peer_seed_len != 32 {
@@ -135,6 +152,7 @@ pub unsafe extern "C" fn ffi_connect(
 
     match RUNTIME.block_on(client::connect(
         &addr_str,
+        expected_peer_id,
         &peer_signing_key,
         &account_signing_key,
     )) {
@@ -493,6 +511,6 @@ mod tests {
 
     #[test]
     fn exported_abi_version_is_stable() {
-        assert_eq!(ffi_abi_version(), 1);
+        assert_eq!(ffi_abi_version(), 2);
     }
 }

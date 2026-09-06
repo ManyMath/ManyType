@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use libp2p_identity::Keypair;
+use libp2p_identity::{Keypair, PeerId};
 
 use manytype_server::deadline::{self, DeadlineStage};
 use manytype_server::drpc::stream::DrpcStream;
@@ -23,8 +23,13 @@ fn trace(message: impl FnOnce() -> String) {
 }
 
 /// Build a quinn ClientConfig with libp2p TLS and ALPN "anysync".
-fn make_client_config(identity_keypair: &Keypair) -> Result<quinn::ClientConfig> {
-    let mut tls_config = libp2p_tls::make_client_config(identity_keypair, None)
+///
+/// When `expected_peer_id` is set, the TLS handshake rejects any other server.
+fn make_client_config(
+    identity_keypair: &Keypair,
+    expected_peer_id: Option<PeerId>,
+) -> Result<quinn::ClientConfig> {
+    let mut tls_config = libp2p_tls::make_client_config(identity_keypair, expected_peer_id)
         .context("failed to build libp2p TLS client config")?;
 
     tls_config.alpn_protocols = vec![b"anysync".to_vec()];
@@ -47,29 +52,38 @@ pub struct ConnHandle {
 }
 
 /// Connect to a QUIC server, perform credential handshake, return a ConnHandle.
+///
+/// Without `expected_peer_id` the server's identity is not pinned.
 pub async fn connect(
     addr: &str,
+    expected_peer_id: Option<PeerId>,
     peer_signing_key: &ed25519_dalek::SigningKey,
     account_signing_key: &ed25519_dalek::SigningKey,
 ) -> Result<ConnHandle> {
     deadline::result(
         DeadlineStage::ConnectionSetup,
         CONNECTION_SETUP_TIMEOUT,
-        connect_and_handshake(addr, peer_signing_key, account_signing_key),
+        connect_and_handshake(
+            addr,
+            expected_peer_id,
+            peer_signing_key,
+            account_signing_key,
+        ),
     )
     .await
 }
 
 async fn connect_and_handshake(
     addr: &str,
+    expected_peer_id: Option<PeerId>,
     peer_signing_key: &ed25519_dalek::SigningKey,
     account_signing_key: &ed25519_dalek::SigningKey,
 ) -> Result<ConnHandle> {
-    trace(|| format!("connect start addr={addr}"));
+    trace(|| format!("connect start addr={addr} expected_peer_id={expected_peer_id:?}"));
     let mut peer_seed = peer_signing_key.to_bytes();
     let peer_keypair = Keypair::ed25519_from_bytes(peer_seed.as_mut_slice())
         .map_err(|e| anyhow::anyhow!("failed to derive libp2p identity from seed: {e}"))?;
-    let client_config = make_client_config(&peer_keypair)?;
+    let client_config = make_client_config(&peer_keypair, expected_peer_id)?;
 
     let (remote_addrs, server_name) = resolve_target(addr).await?;
     let (endpoint, connection) = connect_quic(&remote_addrs, &server_name, client_config).await?;
@@ -96,7 +110,7 @@ async fn connect_and_handshake(
         &peer_keypair,
         account_signing_key,
         &server_peer_id,
-        true,
+        expected_peer_id.is_none(),
     )
     .await
     .context("credential handshake failed")?;
@@ -244,13 +258,13 @@ mod tests {
     const SERVER_SEED: [u8; 32] = [7u8; 32];
 
     /// Accept connections and run the server side of the credential handshake.
-    async fn spawn_handshake_server(bind_addr: &str) -> Result<(SocketAddr, String)> {
+    async fn spawn_handshake_server(bind_addr: &str) -> Result<(SocketAddr, PeerId)> {
         let endpoint = run_quic_listener(bind_addr, make_server_config(&SERVER_SEED)?).await?;
         let local_addr = endpoint.local_addr()?;
         let mut seed = SERVER_SEED;
         let identity = Keypair::ed25519_from_bytes(seed.as_mut_slice())?;
-        let peer_id = identity.public().to_peer_id().to_string();
-        let local_peer_id = peer_id.clone();
+        let peer_id = identity.public().to_peer_id();
+        let local_peer_id = peer_id.to_string();
 
         tokio::spawn(async move {
             while let Some(incoming) = endpoint.accept().await {
@@ -282,7 +296,7 @@ mod tests {
             return;
         };
 
-        let handle = connect(&server_addr.to_string(), &client_key(), &client_key())
+        let handle = connect(&server_addr.to_string(), None, &client_key(), &client_key())
             .await
             .unwrap();
         assert_eq!(handle.connection.remote_address(), server_addr);
@@ -294,12 +308,52 @@ mod tests {
 
         let handle = connect(
             &format!("localhost:{}", server_addr.port()),
+            None,
             &client_key(),
             &client_key(),
         )
         .await
         .unwrap();
         assert_eq!(handle.connection.remote_address(), server_addr);
+    }
+
+    #[tokio::test]
+    async fn connects_when_server_matches_expected_peer_id() {
+        let (server_addr, server_peer_id) = spawn_handshake_server("127.0.0.1:0").await.unwrap();
+
+        let handle = connect(
+            &server_addr.to_string(),
+            Some(server_peer_id),
+            &client_key(),
+            &client_key(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            tls_peer_id(&handle.connection).unwrap(),
+            server_peer_id.to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_server_with_unexpected_peer_id() {
+        let (server_addr, _) = spawn_handshake_server("127.0.0.1:0").await.unwrap();
+        let mut other_seed = [9u8; 32];
+        let other_peer_id = Keypair::ed25519_from_bytes(other_seed.as_mut_slice())
+            .unwrap()
+            .public()
+            .to_peer_id();
+
+        let error = connect(
+            &server_addr.to_string(),
+            Some(other_peer_id),
+            &client_key(),
+            &client_key(),
+        )
+        .await
+        .err()
+        .expect("connect should reject the server");
+        assert!(format!("{error:#}").contains("invalid peer certificate"));
     }
 
     #[tokio::test]

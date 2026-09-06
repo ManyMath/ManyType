@@ -13,7 +13,12 @@ class NativeBridge {
     throw UnsupportedError('NativeBridge.abiVersion is not available on web');
   }
 
-  int connect(String addr, Uint8List peerSeed, Uint8List accountSeed) {
+  int connect(
+    String addr,
+    Uint8List peerSeed,
+    Uint8List accountSeed, {
+    String? expectedPeerId,
+  }) {
     throw UnsupportedError('NativeBridge.connect is not available on web');
   }
 

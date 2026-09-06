@@ -71,7 +71,7 @@ for phase in write read; do
   launcher_pid=""
   output="$(cat "$RESULT_PATH" 2>/dev/null || true)"
   printf '%s\n' "$output"
-  expected="NATIVE_PACKAGE_SMOKE phase=$phase ffi_abi=1 secure_storage=ok"
+  expected="NATIVE_PACKAGE_SMOKE phase=$phase ffi_abi=2 secure_storage=ok"
   if ! grep -Fq "$expected" <<<"$output"; then
     echo "native package smoke did not report success for $phase" >&2
     exit 1

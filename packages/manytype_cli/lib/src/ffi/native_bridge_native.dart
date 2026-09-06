@@ -20,6 +20,7 @@ final class FfiResult extends Struct {
 // Native (C ABI) function signatures.
 typedef FfiConnectNative = Pointer<FfiResult> Function(
   Pointer<Utf8> addr,
+  Pointer<Utf8> expectedPeerId,
   Pointer<Uint8> peerSeed,
   Uint32 peerSeedLen,
   Pointer<Uint8> accountSeed,
@@ -27,6 +28,7 @@ typedef FfiConnectNative = Pointer<FfiResult> Function(
 );
 typedef FfiConnectDart = Pointer<FfiResult> Function(
   Pointer<Utf8> addr,
+  Pointer<Utf8> expectedPeerId,
   Pointer<Uint8> peerSeed,
   int peerSeedLen,
   Pointer<Uint8> accountSeed,
@@ -236,9 +238,19 @@ class NativeBridge {
   /// [addr] is the server address (e.g. "127.0.0.1:4830").
   /// [peerSeed] is the 32-byte Ed25519 peer seed for libp2p TLS.
   /// [accountSeed] is the 32-byte Ed25519 account seed for credentials.
+  /// [expectedPeerId] is the server's libp2p peer ID; when null or empty the
+  /// server's identity is not verified.
   /// Returns a handle ID for subsequent calls.
-  int connect(String addr, Uint8List peerSeed, Uint8List accountSeed) {
+  int connect(
+    String addr,
+    Uint8List peerSeed,
+    Uint8List accountSeed, {
+    String? expectedPeerId,
+  }) {
     final addrPtr = addr.toNativeUtf8();
+    final expectedPeerIdPtr = expectedPeerId == null || expectedPeerId.isEmpty
+        ? nullptr
+        : expectedPeerId.toNativeUtf8();
     final peerSeedPtr = calloc<Uint8>(peerSeed.length);
     peerSeedPtr.asTypedList(peerSeed.length).setAll(0, peerSeed);
     final accountSeedPtr = calloc<Uint8>(accountSeed.length);
@@ -246,6 +258,7 @@ class NativeBridge {
 
     final result = _connect(
       addrPtr,
+      expectedPeerIdPtr,
       peerSeedPtr,
       peerSeed.length,
       accountSeedPtr,
@@ -253,6 +266,9 @@ class NativeBridge {
     );
 
     calloc.free(addrPtr);
+    if (expectedPeerIdPtr != nullptr) {
+      calloc.free(expectedPeerIdPtr);
+    }
     calloc.free(peerSeedPtr);
     calloc.free(accountSeedPtr);
 

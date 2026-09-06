@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:manytype_cli/src/ffi/native_bridge.dart';
 
-const expectedAbiVersion = 1;
+const expectedAbiVersion = 2;
 
 void main(List<String> arguments) {
   if (arguments.length != 1) {

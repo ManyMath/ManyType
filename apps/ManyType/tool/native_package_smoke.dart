@@ -18,10 +18,10 @@ Future<void> main() async {
 
   try {
     final bridge = NativeBridge();
-    if (bridge.abiVersion != 1) {
+    if (bridge.abiVersion != 2) {
       await _fail('unexpected QUIC FFI ABI ${bridge.abiVersion}');
     }
-    await _progress('phase=$phase ffi_abi=1');
+    await _progress('phase=$phase ffi_abi=2');
 
     // Desktop plugin registration completes as the Flutter view is attached.
     await Future<void>.delayed(const Duration(milliseconds: 500));
@@ -48,7 +48,7 @@ Future<void> main() async {
       await storage.delete(key: _key).timeout(const Duration(seconds: 10));
     }
 
-    await _progress('phase=$phase ffi_abi=1 secure_storage=ok');
+    await _progress('phase=$phase ffi_abi=2 secure_storage=ok');
     exit(0);
   } catch (error, stackTrace) {
     await _fail('$error\n$stackTrace');
