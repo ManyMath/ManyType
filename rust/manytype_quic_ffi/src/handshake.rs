@@ -20,7 +20,9 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 /// Perform client-side credential handshake.
 ///
-/// Returns the server's peer identity bytes on success.
+/// Returns the server's account identity key once its signed peer IDs verify,
+/// or empty bytes when the server skipped verification and
+/// `allow_skip_verify` permits it.
 pub async fn client_handshake(
     stream: &mut (impl AsyncRead + AsyncWrite + Unpin),
     peer_keypair: &Keypair,
@@ -30,7 +32,7 @@ pub async fn client_handshake(
 ) -> Result<Vec<u8>> {
     let local_peer_id = peer_keypair.public().to_peer_id().to_string();
 
-    // 1. Client sends Credentials (empty remote_peer_id -- don't know server yet)
+    // 1. Client sends Credentials signed over its own and the server's TLS peer IDs
     let creds = build_client_credentials(account_signing_key, &local_peer_id, remote_peer_id);
     write_handshake_msg(stream, 1, &creds).await?;
 
