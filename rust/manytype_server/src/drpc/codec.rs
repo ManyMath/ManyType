@@ -107,6 +107,22 @@ impl Encoder<DrpcFrame> for DrpcCodec {
     }
 }
 
+/// Longest valid varint encoding of a u64.
+const MAX_VARINT_BYTES: usize = 10;
+
+/// Decode one header varint, returning `None` while it may still be incomplete.
+fn decode_header_varint(cursor: &mut std::io::Cursor<&[u8]>) -> std::io::Result<Option<u64>> {
+    let available = cursor.remaining();
+    match decode_varint(cursor) {
+        Ok(value) => Ok(Some(value)),
+        Err(_) if available < MAX_VARINT_BYTES => Ok(None),
+        Err(_) => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "DRPC frame header contains a malformed varint",
+        )),
+    }
+}
+
 impl Decoder for DrpcCodec {
     type Item = DrpcFrame;
     type Error = std::io::Error;
@@ -128,35 +144,27 @@ impl Decoder for DrpcCodec {
         let (control, kind, done) = decode_header(header);
 
         // Decode three varints: stream_id, message_id, length
-        let stream_id = match decode_varint(&mut cursor) {
-            Ok(v) => v,
-            Err(_) => {
-                // Incomplete varint -- need more data
-                src.reserve(1);
-                return Ok(None);
-            }
+        let Some(stream_id) = decode_header_varint(&mut cursor)? else {
+            // Incomplete varint -- need more data
+            src.reserve(1);
+            return Ok(None);
         };
 
-        let message_id = match decode_varint(&mut cursor) {
-            Ok(v) => v,
-            Err(_) => {
-                src.reserve(1);
-                return Ok(None);
-            }
+        let Some(message_id) = decode_header_varint(&mut cursor)? else {
+            src.reserve(1);
+            return Ok(None);
         };
 
-        let data_len = match decode_varint(&mut cursor) {
-            Ok(value) => usize::try_from(value).map_err(|_| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "DRPC frame length does not fit in memory",
-                )
-            })?,
-            Err(_) => {
-                src.reserve(1);
-                return Ok(None);
-            }
+        let Some(data_len) = decode_header_varint(&mut cursor)? else {
+            src.reserve(1);
+            return Ok(None);
         };
+        let data_len = usize::try_from(data_len).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "DRPC frame length does not fit in memory",
+            )
+        })?;
 
         if data_len > self.max_frame_bytes {
             return Err(std::io::Error::new(
@@ -361,6 +369,33 @@ mod tests {
         let error = codec.decode(&mut buf).unwrap_err();
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
         assert!(error.to_string().contains("exceeds"));
+    }
+
+    #[test]
+    fn rejects_malformed_header_varints() {
+        for field in 0..3 {
+            for last_byte in [0xFF, 0x02] {
+                let mut codec = DrpcCodec::new();
+                let mut buf = BytesMut::new();
+                buf.put_u8(encode_header(KIND_MESSAGE, true, false));
+                for _ in 0..field {
+                    encode_varint(1, &mut buf);
+                }
+                buf.put_slice(&[0xFF; MAX_VARINT_BYTES - 1]);
+                assert!(
+                    codec.decode(&mut buf).unwrap().is_none(),
+                    "field {field} should wait for the rest of its varint"
+                );
+
+                buf.put_u8(last_byte);
+                let error = codec.decode(&mut buf).unwrap_err();
+                assert_eq!(
+                    error.kind(),
+                    std::io::ErrorKind::InvalidData,
+                    "field {field} last byte {last_byte:#04x}"
+                );
+            }
+        }
     }
 
     #[test]
