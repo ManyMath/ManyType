@@ -382,28 +382,21 @@ where
                     Err(_) => continue,
                 };
 
-                if !msg.space_id.is_empty() {
-                    active_space_id = msg.space_id.clone();
+                // Terminator: empty StoreKeyValue (no spaceId + no key/value).
+                if msg.space_id.is_empty() && msg.key_peer_id.is_empty() && msg.value.is_empty() {
+                    break;
                 }
 
                 if msg.space_id.is_empty() {
                     msg.space_id = active_space_id.clone();
+                } else {
+                    active_space_id = msg.space_id.clone();
                 }
 
                 if !msg.space_id.is_empty() {
                     state
                         .sync_state
                         .authorize_space(&msg.space_id, authenticated_peer)?;
-                }
-
-                // Terminator: empty StoreKeyValue (no spaceId + no key/value).
-                if msg.space_id.is_empty()
-                    && msg.key_peer_id.is_empty()
-                    && msg.value.is_empty()
-                    && msg.identity_signature.is_empty()
-                    && msg.peer_signature.is_empty()
-                {
-                    break;
                 }
 
                 // Initial "spaceId only" message: no-op, but keeps active space.
@@ -1623,17 +1616,6 @@ mod tests {
                 .await
                 .unwrap();
         }
-        client_stream
-            .write_frame(DrpcFrame {
-                kind: KIND_CLOSE_SEND,
-                done: true,
-                control: false,
-                stream_id: 0,
-                message_id: 0,
-                data: Bytes::new(),
-            })
-            .await
-            .unwrap();
 
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_MESSAGE);
@@ -1655,6 +1637,73 @@ mod tests {
         assert_eq!(close_frame.message_id, 3);
 
         handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn store_elements_ends_request_at_empty_message_before_close_send() {
+        let (client, server) = duplex(4096);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+
+        let state = test_state();
+        let sync_state = state.sync_state.clone();
+        sync_state.claim_space_owner("sp-1", &test_peer()).unwrap();
+        sync_state
+            .upsert_store_entry(make_store_entry("sp-1", "settings-peer-1", 10))
+            .unwrap();
+
+        let handle = tokio::spawn(async move {
+            dispatch(
+                1,
+                "/spacesync.SpaceSync/StoreElements",
+                &mut server_stream,
+                &state,
+                &test_peer(),
+            )
+            .await
+        });
+
+        // Official keyvalue sync: space id, upserts, lookups, then `{}`. It
+        // reads every reply before its deferred CloseSend.
+        for message in [
+            StoreKeyValue {
+                space_id: "sp-1".to_string(),
+                ..Default::default()
+            },
+            make_store_entry("", "settings-peer-2", 20),
+            StoreKeyValue {
+                key_peer_id: "settings-peer-1".to_string(),
+                ..Default::default()
+            },
+            StoreKeyValue::default(),
+        ] {
+            client_stream
+                .write_message(0, 0, &message.encode_to_vec())
+                .await
+                .unwrap();
+        }
+
+        let mut replies = Vec::new();
+        loop {
+            let frame = client_stream.read_frame().await.unwrap().unwrap();
+            assert_eq!(frame.kind, KIND_MESSAGE);
+            let reply = StoreKeyValue::decode(frame.data.as_ref()).unwrap();
+            if reply.key_peer_id.is_empty() {
+                break;
+            }
+            replies.push(reply.key_peer_id);
+        }
+        assert_eq!(replies, ["settings-peer-1"]);
+        assert_eq!(
+            sync_state
+                .get_store_entry("sp-1", "settings-peer-2")
+                .map(|entry| entry.space_id),
+            Some("sp-1".to_string())
+        );
+
+        let close_frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+        handle.await.unwrap().unwrap();
     }
 
     #[tokio::test]
