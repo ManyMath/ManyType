@@ -9,6 +9,7 @@ use super::stream::DrpcStream;
 use crate::auth::AuthenticatedPeer;
 use crate::consensus;
 use crate::coordinator::{self, CoordinatorConfig};
+use crate::deadline::{self, DeadlineStage};
 use crate::file_node;
 use crate::sync_node::{self, SharedSyncState};
 use manytype_proto::spacesync::ObjectSyncMessage;
@@ -239,611 +240,481 @@ where
         }
     }
 
-    match method {
-        "/coordinator.Coordinator/NetworkConfiguration" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = coordinator::handle_network_configuration(
-                &request_bytes,
-                &state.coordinator_config,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/coordinator.Coordinator/SpaceSign" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = coordinator::handle_space_sign(
-                &request_bytes,
-                &state.coordinator_config,
-                &state.local_signing_key,
-                authenticated_peer,
-                &state.sync_state,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/coordinator.Coordinator/SpaceStatusCheck" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = coordinator::handle_space_status_check(
-                &request_bytes,
-                &state.sync_state,
-                authenticated_peer,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/coordinator.Coordinator/SpaceMakeShareable" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = coordinator::handle_space_make_shareable(
-                &request_bytes,
-                &state.sync_state,
-                authenticated_peer,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/coordinator.Coordinator/AclAddRecord" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = coordinator::handle_acl_add_record(
-                &request_bytes,
-                &state.sync_state,
-                &state.local_signing_key,
-                authenticated_peer,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/coordinator.Coordinator/AclGetRecords" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = coordinator::handle_acl_get_records(
-                &request_bytes,
-                &state.sync_state,
-                authenticated_peer,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/coordinator.Coordinator/AclUploadInvite" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes =
-                coordinator::handle_acl_upload_invite(&request_bytes, &state.file_node)?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/coordinator.Coordinator/SpaceDelete" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = coordinator::handle_space_delete(
-                &request_bytes,
-                &state.sync_state,
-                authenticated_peer,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/coordinator.Coordinator/AccountDelete" => {
-            let request_bytes = stream.read_message().await?;
-            match coordinator::handle_account_delete(
-                &request_bytes,
-                &state.coordinator_config,
-                authenticated_peer,
-                &state.sync_state,
-            ) {
-                Ok(response_bytes) => {
-                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
-                        .await
-                }
-                Err(error) => {
-                    write_error_response(
-                        stream,
-                        stream_id,
-                        &mut next_message_id,
-                        &error.to_string(),
-                    )
-                    .await?;
-                    bail!("{error}");
-                }
+    let result = async {
+        match method {
+            "/coordinator.Coordinator/NetworkConfiguration" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = coordinator::handle_network_configuration(
+                    &request_bytes,
+                    &state.coordinator_config,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-        }
-        "/coordinator.Coordinator/DeletionLog" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = coordinator::handle_deletion_log(&request_bytes)?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/spacesync.SpaceSync/HeadSync" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes =
-                sync_node::handle_head_sync(&request_bytes, &state.sync_state, authenticated_peer)?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/spacesync.SpaceSync/StoreDiff" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = sync_node::handle_store_diff(
-                &request_bytes,
-                &state.sync_state,
-                authenticated_peer,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/spacesync.SpaceSync/StoreElements" => {
-            // Bidirectional stream: official clients expect the server to
-            // respond while the request stream is still open (they may not
-            // send CLOSE_SEND until after reading responses). Implement a
-            // minimal interactive StoreElements loop: accept upserts and reply
-            // to lookup requests immediately.
-            let mut active_space_id = String::new();
+            "/coordinator.Coordinator/SpaceSign" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = coordinator::handle_space_sign(
+                    &request_bytes,
+                    &state.coordinator_config,
+                    &state.local_signing_key,
+                    authenticated_peer,
+                    &state.sync_state,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/coordinator.Coordinator/SpaceStatusCheck" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = coordinator::handle_space_status_check(
+                    &request_bytes,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/coordinator.Coordinator/SpaceMakeShareable" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = coordinator::handle_space_make_shareable(
+                    &request_bytes,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/coordinator.Coordinator/AclAddRecord" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = coordinator::handle_acl_add_record(
+                    &request_bytes,
+                    &state.sync_state,
+                    &state.local_signing_key,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/coordinator.Coordinator/AclGetRecords" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = coordinator::handle_acl_get_records(
+                    &request_bytes,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/coordinator.Coordinator/AclUploadInvite" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes =
+                    coordinator::handle_acl_upload_invite(&request_bytes, &state.file_node)?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/coordinator.Coordinator/SpaceDelete" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = coordinator::handle_space_delete(
+                    &request_bytes,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/coordinator.Coordinator/AccountDelete" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = coordinator::handle_account_delete(
+                    &request_bytes,
+                    &state.coordinator_config,
+                    authenticated_peer,
+                    &state.sync_state,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/coordinator.Coordinator/DeletionLog" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = coordinator::handle_deletion_log(&request_bytes)?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/spacesync.SpaceSync/HeadSync" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = sync_node::handle_head_sync(
+                    &request_bytes,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/spacesync.SpaceSync/StoreDiff" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = sync_node::handle_store_diff(
+                    &request_bytes,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/spacesync.SpaceSync/StoreElements" => {
+                // Bidirectional stream: official clients expect the server to
+                // respond while the request stream is still open (they may not
+                // send CLOSE_SEND until after reading responses). Implement a
+                // minimal interactive StoreElements loop: accept upserts and reply
+                // to lookup requests immediately.
+                let mut active_space_id = String::new();
 
-            loop {
-                let frame = match stream.read_frame().await {
-                    Ok(Some(frame)) => frame,
-                    Ok(None) => break,
-                    Err(error) if is_benign_disconnect(&error) => break,
-                    Err(error) => return Err(error),
-                };
+                loop {
+                    let frame = match stream.read_frame().await {
+                        Ok(Some(frame)) => frame,
+                        Ok(None) => break,
+                        Err(error) if is_benign_disconnect(&error) => break,
+                        Err(error) => return Err(error),
+                    };
 
-                if frame.kind == KIND_CLOSE_SEND {
-                    break;
-                }
+                    if frame.kind == KIND_CLOSE_SEND {
+                        break;
+                    }
 
-                let msg_bytes = stream.read_message_after_first(frame).await?;
+                    let msg_bytes = stream.read_message_after_first(frame).await?;
 
-                let mut msg = match StoreKeyValue::decode(msg_bytes.as_slice()) {
-                    Ok(msg) => msg,
-                    Err(_) => continue,
-                };
+                    let mut msg = match StoreKeyValue::decode(msg_bytes.as_slice()) {
+                        Ok(msg) => msg,
+                        Err(_) => continue,
+                    };
 
-                // Terminator: empty StoreKeyValue (no spaceId + no key/value).
-                if msg.space_id.is_empty() && msg.key_peer_id.is_empty() && msg.value.is_empty() {
-                    break;
-                }
-
-                if msg.space_id.is_empty() {
-                    msg.space_id = active_space_id.clone();
-                } else {
-                    active_space_id = msg.space_id.clone();
-                }
-
-                if !msg.space_id.is_empty() {
-                    state
-                        .sync_state
-                        .authorize_space(&msg.space_id, authenticated_peer)?;
-                }
-
-                // Initial "spaceId only" message: no-op, but keeps active space.
-                if msg.key_peer_id.is_empty() {
-                    continue;
-                }
-
-                if msg.space_id.is_empty() {
-                    bail!("missing space id for StoreElements");
-                }
-
-                if msg.value.is_empty() {
-                    if let Some(entry) = state
-                        .sync_state
-                        .get_store_entry(&msg.space_id, &msg.key_peer_id)
+                    // Terminator: empty StoreKeyValue (no spaceId + no key/value).
+                    if msg.space_id.is_empty() && msg.key_peer_id.is_empty() && msg.value.is_empty()
                     {
+                        break;
+                    }
+
+                    if msg.space_id.is_empty() {
+                        msg.space_id = active_space_id.clone();
+                    } else {
+                        active_space_id = msg.space_id.clone();
+                    }
+
+                    if !msg.space_id.is_empty() {
+                        state
+                            .sync_state
+                            .authorize_space(&msg.space_id, authenticated_peer)?;
+                    }
+
+                    // Initial "spaceId only" message: no-op, but keeps active space.
+                    if msg.key_peer_id.is_empty() {
+                        continue;
+                    }
+
+                    if msg.space_id.is_empty() {
+                        bail!("missing space id for StoreElements");
+                    }
+
+                    if msg.value.is_empty() {
+                        if let Some(entry) = state
+                            .sync_state
+                            .get_store_entry(&msg.space_id, &msg.key_peer_id)
+                        {
+                            tracing::info!(
+                                "store: serve space_id={} key_peer_id={} value_len={}",
+                                msg.space_id,
+                                msg.key_peer_id,
+                                entry.value.len()
+                            );
+                            write_frame(
+                                stream,
+                                stream_id,
+                                &mut next_message_id,
+                                super::codec::KIND_MESSAGE,
+                                true,
+                                bytes::Bytes::from(entry.encode_to_vec()),
+                            )
+                            .await?;
+                        } else {
+                            tracing::warn!(
+                                "store: missing entry space_id={} key_peer_id={}",
+                                msg.space_id,
+                                msg.key_peer_id
+                            );
+                        }
+                    } else {
                         tracing::info!(
-                            "store: serve space_id={} key_peer_id={} value_len={}",
+                            "store: upsert space_id={} key_peer_id={} value_len={}",
                             msg.space_id,
                             msg.key_peer_id,
-                            entry.value.len()
+                            msg.value.len()
                         );
+                        state.sync_state.upsert_store_entry(msg)?;
+                    }
+                }
+
+                // Always terminate the response stream with an empty StoreKeyValue.
+                write_frame(
+                    stream,
+                    stream_id,
+                    &mut next_message_id,
+                    super::codec::KIND_MESSAGE,
+                    true,
+                    bytes::Bytes::from(StoreKeyValue::default().encode_to_vec()),
+                )
+                .await?;
+
+                write_close_send(stream, stream_id, &mut next_message_id).await?;
+                write_close(stream, stream_id, &mut next_message_id).await
+            }
+            "/spacesync.SpaceSync/ObjectSync" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = sync_node::handle_object_sync_message(
+                    &request_bytes,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/spacesync.SpaceSync/ObjectSyncStream" => {
+                // Bidirectional stream: read messages in a loop until the
+                // client signals close. For each message, process it and
+                // send back a confirmation.
+                loop {
+                    let frame = match stream.read_frame().await {
+                        Ok(Some(frame)) => frame,
+                        Ok(None) => break,
+                        Err(error) if is_benign_disconnect(&error) => break,
+                        Err(error) => return Err(error),
+                    };
+
+                    if frame.kind == KIND_CLOSE_SEND {
+                        break;
+                    }
+
+                    let msg_bytes = stream.read_message_after_first(frame).await?;
+
+                    let response_bytes = sync_node::handle_object_sync_message(
+                        &msg_bytes,
+                        &state.sync_state,
+                        authenticated_peer,
+                    )?;
+                    // Official Anytype clients treat server->client stream messages
+                    // as semantic updates, not per-message acks. Avoid sending
+                    // empty responses for push-style requests, but still respond
+                    // to SpaceSubscription control messages (objectId empty).
+                    let should_write = match ObjectSyncMessage::decode(response_bytes.as_slice()) {
+                        Ok(msg) => !msg.payload.is_empty() || msg.object_id.is_empty(),
+                        Err(_) => true,
+                    };
+                    if should_write {
                         write_frame(
                             stream,
                             stream_id,
                             &mut next_message_id,
                             super::codec::KIND_MESSAGE,
                             true,
-                            bytes::Bytes::from(entry.encode_to_vec()),
+                            bytes::Bytes::from(response_bytes),
                         )
                         .await?;
-                    } else {
-                        tracing::warn!(
-                            "store: missing entry space_id={} key_peer_id={}",
-                            msg.space_id,
-                            msg.key_peer_id
-                        );
                     }
-                } else {
-                    tracing::info!(
-                        "store: upsert space_id={} key_peer_id={} value_len={}",
-                        msg.space_id,
-                        msg.key_peer_id,
-                        msg.value.len()
-                    );
-                    state.sync_state.upsert_store_entry(msg)?;
                 }
+
+                // Send close-send to signal we're done
+                write_close_send(stream, stream_id, &mut next_message_id).await?;
+                write_close(stream, stream_id, &mut next_message_id).await
             }
-
-            // Always terminate the response stream with an empty StoreKeyValue.
-            write_frame(
-                stream,
-                stream_id,
-                &mut next_message_id,
-                super::codec::KIND_MESSAGE,
-                true,
-                bytes::Bytes::from(StoreKeyValue::default().encode_to_vec()),
-            )
-            .await?;
-
-            write_close_send(stream, stream_id, &mut next_message_id).await?;
-            write_close(stream, stream_id, &mut next_message_id).await
-        }
-        "/spacesync.SpaceSync/ObjectSync" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = sync_node::handle_object_sync_message(
-                &request_bytes,
-                &state.sync_state,
-                authenticated_peer,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/spacesync.SpaceSync/ObjectSyncStream" => {
-            // Bidirectional stream: read messages in a loop until the
-            // client signals close. For each message, process it and
-            // send back a confirmation.
-            loop {
-                let frame = match stream.read_frame().await {
-                    Ok(Some(frame)) => frame,
-                    Ok(None) => break,
-                    Err(error) if is_benign_disconnect(&error) => break,
-                    Err(error) => return Err(error),
-                };
-
-                if frame.kind == KIND_CLOSE_SEND {
-                    break;
-                }
-
-                let msg_bytes = stream.read_message_after_first(frame).await?;
-
+            "/spacesync.SpaceSync/ObjectSyncRequestStream" => {
+                let request_bytes = stream.read_message().await?;
                 let response_bytes = sync_node::handle_object_sync_message(
-                    &msg_bytes,
+                    &request_bytes,
                     &state.sync_state,
                     authenticated_peer,
                 )?;
-                // Official Anytype clients treat server->client stream messages
-                // as semantic updates, not per-message acks. Avoid sending
-                // empty responses for push-style requests, but still respond
-                // to SpaceSubscription control messages (objectId empty).
-                let should_write = match ObjectSyncMessage::decode(response_bytes.as_slice()) {
-                    Ok(msg) => !msg.payload.is_empty() || msg.object_id.is_empty(),
-                    Err(_) => true,
-                };
-                if should_write {
-                    write_frame(
-                        stream,
-                        stream_id,
-                        &mut next_message_id,
-                        super::codec::KIND_MESSAGE,
-                        true,
-                        bytes::Bytes::from(response_bytes),
-                    )
-                    .await?;
+                if let Some(error_message) = object_sync_error_message(&response_bytes) {
+                    bail!("{error_message}");
                 }
+                write_response(stream, stream_id, &mut next_message_id, &response_bytes).await?;
+                write_close_send(stream, stream_id, &mut next_message_id).await?;
+                write_close(stream, stream_id, &mut next_message_id).await
             }
-
-            // Send close-send to signal we're done
-            write_close_send(stream, stream_id, &mut next_message_id).await?;
-            write_close(stream, stream_id, &mut next_message_id).await
-        }
-        "/spacesync.SpaceSync/ObjectSyncRequestStream" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = sync_node::handle_object_sync_message(
-                &request_bytes,
-                &state.sync_state,
-                authenticated_peer,
-            )?;
-            if let Some(error_message) = object_sync_error_message(&response_bytes) {
-                write_error_response(stream, stream_id, &mut next_message_id, &error_message)
-                    .await?;
-                bail!("{error_message}");
+            "/spacesync.SpaceSync/AclAddRecord" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = coordinator::handle_acl_add_record(
+                    &request_bytes,
+                    &state.sync_state,
+                    &state.local_signing_key,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-            write_response(stream, stream_id, &mut next_message_id, &response_bytes).await?;
-            write_close_send(stream, stream_id, &mut next_message_id).await?;
-            write_close(stream, stream_id, &mut next_message_id).await
-        }
-        "/spacesync.SpaceSync/AclAddRecord" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = coordinator::handle_acl_add_record(
-                &request_bytes,
-                &state.sync_state,
-                &state.local_signing_key,
-                authenticated_peer,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/spacesync.SpaceSync/AclGetRecords" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = coordinator::handle_acl_get_records(
-                &request_bytes,
-                &state.sync_state,
-                authenticated_peer,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/spacesync.SpaceSync/SpacePush" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = sync_node::handle_space_push(
-                &request_bytes,
-                &state.sync_state,
-                &state.coordinator_config,
-                &state.local_signing_key,
-                authenticated_peer,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/spacesync.SpaceSync/SpacePull" => {
-            let request_bytes = stream.read_message().await?;
-            let response_bytes = sync_node::handle_space_pull(
-                &request_bytes,
-                &state.sync_state,
-                authenticated_peer,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/consensusProto.Consensus/LogAdd" => {
-            let request_bytes = stream.read_message().await?;
-            let request =
-                manytype_proto::consensus::LogAddRequest::decode(request_bytes.as_slice())?;
-            state
-                .sync_state
-                .authorize_space(&request.log_id, authenticated_peer)?;
-            if consensus::has_persisted_space_linked_log(&request.log_id, &state.sync_state) {
-                anyhow::bail!("consensus log already exists");
+            "/spacesync.SpaceSync/AclGetRecords" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = coordinator::handle_acl_get_records(
+                    &request_bytes,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-            let response_bytes = consensus::handle_log_add(&request_bytes)?;
-            consensus::persist_space_linked_log_add(&request, &state.sync_state)?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/consensusProto.Consensus/RecordAdd" => {
-            let request_bytes = stream.read_message().await?;
-            let request =
-                manytype_proto::consensus::RecordAddRequest::decode(request_bytes.as_slice())?;
-            state
-                .sync_state
-                .authorize_space(&request.log_id, authenticated_peer)?;
-            consensus::ensure_log_exists_from_sync_state(&request.log_id, &state.sync_state);
-            let response_bytes =
-                consensus::handle_record_add(&request_bytes, &state.local_signing_key)?;
-            let raw_with_id =
-                manytype_proto::consensus::RawRecordWithId::decode(response_bytes.as_slice())?;
-            consensus::persist_space_linked_record_add(
-                &request.log_id,
-                response_bytes.as_slice(),
-                &raw_with_id.id,
-                &state.sync_state,
-            )?;
-            write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
-        }
-        "/filesync.File/BlocksCheck" => {
-            let request_bytes = stream.read_message().await?;
-            match file_node::handle_blocks_check(
-                &request_bytes,
-                &state.file_node,
-                &state.sync_state,
-                authenticated_peer,
-            ) {
-                Ok(response_bytes) => {
-                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
-                        .await
-                }
-                Err(error) => {
-                    write_error_response(
-                        stream,
-                        stream_id,
-                        &mut next_message_id,
-                        &error.to_string(),
-                    )
-                    .await?;
-                    bail!("{error}");
-                }
+            "/spacesync.SpaceSync/SpacePush" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = sync_node::handle_space_push(
+                    &request_bytes,
+                    &state.sync_state,
+                    &state.coordinator_config,
+                    &state.local_signing_key,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-        }
-        "/filesync.File/BlockGet" => {
-            let request_bytes = stream.read_message().await?;
-            match file_node::handle_block_get(
-                &request_bytes,
-                &state.file_node,
-                &state.sync_state,
-                authenticated_peer,
-            ) {
-                Ok(response_bytes) => {
-                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
-                        .await
-                }
-                Err(error) => {
-                    write_error_response(
-                        stream,
-                        stream_id,
-                        &mut next_message_id,
-                        &error.to_string(),
-                    )
-                    .await?;
-                    bail!("{error}");
-                }
+            "/spacesync.SpaceSync/SpacePull" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = sync_node::handle_space_pull(
+                    &request_bytes,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-        }
-        "/filesync.File/BlockPush" => {
-            let request_bytes = stream.read_message().await?;
-            match file_node::handle_block_push(
-                &request_bytes,
-                &state.file_node,
-                &state.sync_state,
-                authenticated_peer,
-            ) {
-                Ok(response_bytes) => {
-                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
-                        .await
+            "/consensusProto.Consensus/LogAdd" => {
+                let request_bytes = stream.read_message().await?;
+                let request =
+                    manytype_proto::consensus::LogAddRequest::decode(request_bytes.as_slice())?;
+                state
+                    .sync_state
+                    .authorize_space(&request.log_id, authenticated_peer)?;
+                if consensus::has_persisted_space_linked_log(&request.log_id, &state.sync_state) {
+                    anyhow::bail!("consensus log already exists");
                 }
-                Err(error) => {
-                    write_error_response(
-                        stream,
-                        stream_id,
-                        &mut next_message_id,
-                        &error.to_string(),
-                    )
-                    .await?;
-                    bail!("{error}");
-                }
+                let response_bytes = consensus::handle_log_add(&request_bytes)?;
+                consensus::persist_space_linked_log_add(&request, &state.sync_state)?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-        }
-        "/filesync.File/BlockPushMany" => {
-            let request_bytes = stream.read_message().await?;
-            match file_node::handle_block_push_many(
-                &request_bytes,
-                &state.file_node,
-                &state.sync_state,
-                authenticated_peer,
-            ) {
-                Ok(response_bytes) => {
-                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
-                        .await
-                }
-                Err(error) => {
-                    write_error_response(
-                        stream,
-                        stream_id,
-                        &mut next_message_id,
-                        &error.to_string(),
-                    )
-                    .await?;
-                    bail!("{error}");
-                }
+            "/consensusProto.Consensus/RecordAdd" => {
+                let request_bytes = stream.read_message().await?;
+                let request =
+                    manytype_proto::consensus::RecordAddRequest::decode(request_bytes.as_slice())?;
+                state
+                    .sync_state
+                    .authorize_space(&request.log_id, authenticated_peer)?;
+                consensus::ensure_log_exists_from_sync_state(&request.log_id, &state.sync_state);
+                let response_bytes =
+                    consensus::handle_record_add(&request_bytes, &state.local_signing_key)?;
+                let raw_with_id =
+                    manytype_proto::consensus::RawRecordWithId::decode(response_bytes.as_slice())?;
+                consensus::persist_space_linked_record_add(
+                    &request.log_id,
+                    response_bytes.as_slice(),
+                    &raw_with_id.id,
+                    &state.sync_state,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-        }
-        "/filesync.File/BlocksBind" => {
-            let request_bytes = stream.read_message().await?;
-            match file_node::handle_blocks_bind(
-                &request_bytes,
-                &state.file_node,
-                &state.sync_state,
-                authenticated_peer,
-            ) {
-                Ok(response_bytes) => {
-                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
-                        .await
-                }
-                Err(error) => {
-                    write_error_response(
-                        stream,
-                        stream_id,
-                        &mut next_message_id,
-                        &error.to_string(),
-                    )
-                    .await?;
-                    bail!("{error}");
-                }
+            "/filesync.File/BlocksCheck" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = file_node::handle_blocks_check(
+                    &request_bytes,
+                    &state.file_node,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-        }
-        "/filesync.File/Check" => {
-            let request_bytes = stream.read_message().await?;
-            match file_node::handle_check(&request_bytes, &state.sync_state, authenticated_peer) {
-                Ok(response_bytes) => {
-                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
-                        .await
-                }
-                Err(error) => {
-                    write_error_response(
-                        stream,
-                        stream_id,
-                        &mut next_message_id,
-                        &error.to_string(),
-                    )
-                    .await?;
-                    bail!("{error}");
-                }
+            "/filesync.File/BlockGet" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = file_node::handle_block_get(
+                    &request_bytes,
+                    &state.file_node,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-        }
-        "/filesync.File/FilesDelete" => {
-            let request_bytes = stream.read_message().await?;
-            match file_node::handle_files_delete(
-                &request_bytes,
-                &state.file_node,
-                &state.sync_state,
-                authenticated_peer,
-            ) {
-                Ok(response_bytes) => {
-                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
-                        .await
-                }
-                Err(error) => {
-                    write_error_response(
-                        stream,
-                        stream_id,
-                        &mut next_message_id,
-                        &error.to_string(),
-                    )
-                    .await?;
-                    bail!("{error}");
-                }
+            "/filesync.File/BlockPush" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = file_node::handle_block_push(
+                    &request_bytes,
+                    &state.file_node,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-        }
-        "/filesync.File/SpaceInfo" => {
-            let request_bytes = stream.read_message().await?;
-            match file_node::handle_space_info(
-                &request_bytes,
-                &state.file_node,
-                &state.sync_state,
-                authenticated_peer,
-            ) {
-                Ok(response_bytes) => {
-                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
-                        .await
-                }
-                Err(error) => {
-                    write_error_response(
-                        stream,
-                        stream_id,
-                        &mut next_message_id,
-                        &error.to_string(),
-                    )
-                    .await?;
-                    bail!("{error}");
-                }
+            "/filesync.File/BlockPushMany" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = file_node::handle_block_push_many(
+                    &request_bytes,
+                    &state.file_node,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-        }
-        "/filesync.File/AccountInfo" => {
-            let request_bytes = stream.read_message().await?;
-            match file_node::handle_account_info(
-                &request_bytes,
-                &state.file_node,
-                &state.sync_state,
-                authenticated_peer,
-            ) {
-                Ok(response_bytes) => {
-                    write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes)
-                        .await
-                }
-                Err(error) => {
-                    write_error_response(
-                        stream,
-                        stream_id,
-                        &mut next_message_id,
-                        &error.to_string(),
-                    )
-                    .await?;
-                    bail!("{error}");
-                }
+            "/filesync.File/BlocksBind" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = file_node::handle_blocks_bind(
+                    &request_bytes,
+                    &state.file_node,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-        }
-        "/coordinator.Coordinator/NotifySubscribe" => {
-            let _request_bytes = stream.read_message().await?;
-            loop {
-                let Some(frame) = stream.read_frame().await? else {
-                    break;
-                };
-                if matches!(
-                    frame.kind,
-                    super::codec::KIND_CLOSE | super::codec::KIND_CANCEL
-                ) {
-                    break;
-                }
+            "/filesync.File/Check" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes =
+                    file_node::handle_check(&request_bytes, &state.sync_state, authenticated_peer)?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
             }
-            Ok(())
-        }
-        unknown => {
-            tracing::warn!("drpc: unknown method: {unknown}");
-            stream
-                .write_error(
-                    stream_id,
-                    next_message_id,
-                    &format!("unknown method: {unknown}"),
-                )
-                .await?;
-            bail!("unknown method: {unknown}");
+            "/filesync.File/FilesDelete" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = file_node::handle_files_delete(
+                    &request_bytes,
+                    &state.file_node,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/filesync.File/SpaceInfo" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = file_node::handle_space_info(
+                    &request_bytes,
+                    &state.file_node,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/filesync.File/AccountInfo" => {
+                let request_bytes = stream.read_message().await?;
+                let response_bytes = file_node::handle_account_info(
+                    &request_bytes,
+                    &state.file_node,
+                    &state.sync_state,
+                    authenticated_peer,
+                )?;
+                write_unary_response(stream, stream_id, &mut next_message_id, &response_bytes).await
+            }
+            "/coordinator.Coordinator/NotifySubscribe" => {
+                let _request_bytes = stream.read_message().await?;
+                loop {
+                    let Some(frame) = stream.read_frame().await? else {
+                        break;
+                    };
+                    if matches!(
+                        frame.kind,
+                        super::codec::KIND_CLOSE | super::codec::KIND_CANCEL
+                    ) {
+                        break;
+                    }
+                }
+                Ok(())
+            }
+            unknown => {
+                tracing::warn!("drpc: unknown method: {unknown}");
+                bail!("unknown method: {unknown}");
+            }
         }
     }
+    .await;
+
+    // Like drpc's server, answer a failed handler with an error frame so the
+    // client is not left waiting for its I/O deadline.
+    if let Err(error) = &result
+        && !is_benign_disconnect(error)
+        && deadline::exceeded(error)
+            .is_none_or(|exceeded| exceeded.stage() != DeadlineStage::StreamWrite)
+    {
+        write_error_response(stream, stream_id, &mut next_message_id, &error.to_string()).await?;
+    }
+    result
 }
 
 #[cfg(test)]
@@ -1357,6 +1228,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn failed_handler_writes_error_frame_and_keeps_stream_open() {
+        use manytype_proto::spacesync::HeadSyncRequest;
+
+        let (client, server) = duplex(4096);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+        let state = test_state();
+
+        let handle = tokio::spawn(async move {
+            let result = dispatch(
+                1,
+                "/spacesync.SpaceSync/HeadSync",
+                &mut server_stream,
+                &state,
+                &other_peer(),
+            )
+            .await;
+            // Keep the transport open like the connection loop does, so the
+            // client only sees a reply if dispatch wrote one.
+            (result, server_stream)
+        });
+
+        let request = HeadSyncRequest {
+            space_id: "space-1".to_string(),
+            ..Default::default()
+        };
+        client_stream
+            .write_message(0, 0, &request.encode_to_vec())
+            .await
+            .unwrap();
+
+        let frame = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            client_stream.read_frame(),
+        )
+        .await
+        .expect("error frame should arrive before the I/O deadline")
+        .unwrap()
+        .unwrap();
+        assert_eq!(frame.kind, KIND_ERROR);
+        assert!(frame.done);
+        assert_eq!(frame.stream_id, 1);
+        assert_eq!(frame.message_id, 1);
+        assert!(String::from_utf8_lossy(&frame.data).contains("space access denied"));
+
+        let (result, _server_stream) = handle.await.unwrap();
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("space access denied")
+        );
+    }
+
+    #[tokio::test]
     async fn test_dispatch_space_push() {
         use manytype_proto::spacesync::{
             RawSpaceHeaderWithId, SpacePayload, SpacePushRequest, SpacePushResponse,
@@ -1810,6 +1736,11 @@ mod tests {
                 frames.iter().all(|frame| frame.kind != KIND_MESSAGE),
                 "{name} disclosed a response message"
             );
+            let error_frame = frames
+                .iter()
+                .find(|frame| frame.kind == KIND_ERROR)
+                .unwrap_or_else(|| panic!("{name} did not return an error frame"));
+            assert!(String::from_utf8_lossy(&error_frame.data).contains("space access denied"));
             assert_eq!(
                 sync_state.list_object_changes("space-1", "private-object"),
                 object_before,
