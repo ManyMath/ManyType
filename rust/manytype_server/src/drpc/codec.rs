@@ -58,6 +58,26 @@ pub fn decode_header(h: u8) -> (bool, u8, bool) {
     (control, kind, done)
 }
 
+/// Encode a KIND_ERROR payload like `drpcwire.MarshalError`: an 8-byte
+/// big-endian error code followed by the message. Code 0 means no code.
+pub fn marshal_error(code: u64, message: &str) -> Bytes {
+    let mut data = BytesMut::with_capacity(8 + message.len());
+    data.put_u64(code);
+    data.put_slice(message.as_bytes());
+    data.freeze()
+}
+
+/// Decode a KIND_ERROR payload into its error code and message.
+pub fn unmarshal_error(data: &[u8]) -> (u64, String) {
+    match data.split_first_chunk::<8>() {
+        Some((code, message)) => (
+            u64::from_be_bytes(*code),
+            String::from_utf8_lossy(message).into_owned(),
+        ),
+        None => (0, String::from_utf8_lossy(data).into_owned()),
+    }
+}
+
 /// Tokio codec for DRPC frames.
 pub const DEFAULT_MAX_FRAME_BYTES: usize = 2 * 1024 * 1024;
 
@@ -233,6 +253,18 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn error_payload_carries_big_endian_code_prefix() {
+        let data = marshal_error(201, "CIDNotFound: cid not found");
+        assert_eq!(&data[..8], &[0, 0, 0, 0, 0, 0, 0, 201]);
+        assert_eq!(&data[8..], b"CIDNotFound: cid not found");
+        assert_eq!(
+            unmarshal_error(&data),
+            (201, "CIDNotFound: cid not found".to_string())
+        );
+        assert_eq!(unmarshal_error(b"short"), (0, "short".to_string()));
     }
 
     #[test]

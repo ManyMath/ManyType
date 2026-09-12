@@ -13,7 +13,7 @@ use crate::deadline::{self, DeadlineStage};
 
 use super::codec::{
     DEFAULT_MAX_FRAME_BYTES, DrpcCodec, DrpcFrame, KIND_CANCEL, KIND_CLOSE, KIND_CLOSE_SEND,
-    KIND_ERROR, KIND_INVOKE, KIND_INVOKE_METADATA, KIND_MESSAGE,
+    KIND_ERROR, KIND_INVOKE, KIND_INVOKE_METADATA, KIND_MESSAGE, marshal_error, unmarshal_error,
 };
 
 const DEFAULT_MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
@@ -176,8 +176,8 @@ where
                     }
                 }
                 KIND_ERROR => {
-                    let msg = String::from_utf8_lossy(&frame.data);
-                    bail!("remote error: {msg}");
+                    let (code, msg) = unmarshal_error(&frame.data);
+                    bail!("remote error (code {code}): {msg}");
                 }
                 other => {
                     bail!("unexpected frame kind={other} while reading message");
@@ -204,11 +204,23 @@ where
         .await
     }
 
-    /// Write a KIND_ERROR frame.
+    /// Write a KIND_ERROR frame without a specific error code.
     pub async fn write_error(
         &mut self,
         stream_id: u64,
         message_id: u64,
+        message: &str,
+    ) -> Result<()> {
+        self.write_error_with_code(stream_id, message_id, 0, message)
+            .await
+    }
+
+    /// Write a KIND_ERROR frame carrying an Any-Sync error code.
+    pub async fn write_error_with_code(
+        &mut self,
+        stream_id: u64,
+        message_id: u64,
+        code: u64,
         message: &str,
     ) -> Result<()> {
         self.write_frame(DrpcFrame {
@@ -217,7 +229,7 @@ where
             control: false,
             stream_id,
             message_id,
-            data: Bytes::copy_from_slice(message.as_bytes()),
+            data: marshal_error(code, message),
         })
         .await
     }

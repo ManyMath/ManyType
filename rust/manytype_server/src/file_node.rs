@@ -68,6 +68,10 @@ impl FileNodeError {
         }
     }
 
+    pub fn code(&self) -> ErrCodes {
+        self.code
+    }
+
     fn unexpected(error: impl fmt::Display) -> Self {
         Self::new(ErrCodes::Unexpected, error.to_string())
     }

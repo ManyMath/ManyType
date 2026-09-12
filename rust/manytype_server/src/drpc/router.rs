@@ -1,5 +1,7 @@
 //! DRPC method router -- dispatches incoming RPC calls to handler functions.
 
+use std::fmt;
+
 use anyhow::{Result, bail};
 use prost::Message;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -12,6 +14,7 @@ use crate::coordinator::{self, CoordinatorConfig};
 use crate::deadline::{self, DeadlineStage};
 use crate::file_node;
 use crate::sync_node::{self, SharedSyncState};
+use manytype_proto::filesync;
 use manytype_proto::spacesync::ObjectSyncMessage;
 use manytype_proto::spacesync::StoreKeyValue;
 use manytype_proto::treechange::{self, TreeSyncMessage};
@@ -24,6 +27,45 @@ pub struct ServerState {
     pub sync_state: SharedSyncState,
     pub file_node: file_node::FileNodeState,
     pub local_signing_key: ed25519_dalek::SigningKey,
+}
+
+/// A handler failure carrying the Any-Sync error code to send to the client.
+#[derive(Debug)]
+pub struct RpcError {
+    code: u64,
+    message: String,
+}
+
+impl RpcError {
+    pub fn new(code: u64, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
+}
+
+impl fmt::Display for RpcError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for RpcError {}
+
+/// The Any-Sync error code for a handler failure, or 0 when it has none.
+fn rpc_error_code(error: &anyhow::Error) -> u64 {
+    error
+        .chain()
+        .find_map(|cause| {
+            if let Some(error) = cause.downcast_ref::<RpcError>() {
+                return Some(error.code);
+            }
+            cause
+                .downcast_ref::<file_node::FileNodeError>()
+                .map(|error| filesync::ErrCodes::ErrorOffset as u64 + error.code() as u64)
+        })
+        .unwrap_or(0)
 }
 
 /// Dispatch an RPC call to the appropriate handler based on method path.
@@ -172,6 +214,7 @@ where
         stream: &mut DrpcStream<T>,
         stream_id: u64,
         next_message_id: &mut u64,
+        code: u64,
         message: &str,
     ) -> Result<()>
     where
@@ -179,7 +222,10 @@ where
     {
         let message_id = *next_message_id;
         *next_message_id += 1;
-        if let Err(error) = stream.write_error(stream_id, message_id, message).await {
+        if let Err(error) = stream
+            .write_error_with_code(stream_id, message_id, code, message)
+            .await
+        {
             if is_benign_disconnect(&error) {
                 return Ok(());
             }
@@ -220,7 +266,7 @@ where
         Ok(())
     }
 
-    fn object_sync_error_message(response_bytes: &[u8]) -> Option<String> {
+    fn object_sync_error(response_bytes: &[u8]) -> Option<RpcError> {
         let msg = ObjectSyncMessage::decode(response_bytes).ok()?;
         if msg.payload.is_empty() {
             return None;
@@ -233,10 +279,20 @@ where
             return None;
         };
 
-        if err.error.is_empty() {
-            Some(format!("tree sync error code {}", err.err_code))
+        // Official nodes put the registered code (offset included) here.
+        let offset = treechange::ErrorCodes::ErrorOffset as u64;
+        let code = if err.err_code < offset {
+            offset + err.err_code
         } else {
-            Some(err.error)
+            err.err_code
+        };
+        if err.error.is_empty() {
+            Some(RpcError::new(
+                code,
+                format!("tree sync error code {}", err.err_code),
+            ))
+        } else {
+            Some(RpcError::new(code, err.error))
         }
     }
 
@@ -516,8 +572,8 @@ where
                     &state.sync_state,
                     authenticated_peer,
                 )?;
-                if let Some(error_message) = object_sync_error_message(&response_bytes) {
-                    bail!("{error_message}");
+                if let Some(error) = object_sync_error(&response_bytes) {
+                    return Err(error.into());
                 }
                 write_response(stream, stream_id, &mut next_message_id, &response_bytes).await?;
                 write_close_send(stream, stream_id, &mut next_message_id).await?;
@@ -570,7 +626,12 @@ where
                     .sync_state
                     .authorize_space(&request.log_id, authenticated_peer)?;
                 if consensus::has_persisted_space_linked_log(&request.log_id, &state.sync_state) {
-                    anyhow::bail!("consensus log already exists");
+                    return Err(RpcError::new(
+                        manytype_proto::consensus::ErrCodes::ErrorOffset as u64
+                            + manytype_proto::consensus::ErrCodes::LogExists as u64,
+                        "consensus log already exists",
+                    )
+                    .into());
                 }
                 let response_bytes = consensus::handle_log_add(&request_bytes)?;
                 consensus::persist_space_linked_log_add(&request, &state.sync_state)?;
@@ -712,7 +773,14 @@ where
         && deadline::exceeded(error)
             .is_none_or(|exceeded| exceeded.stage() != DeadlineStage::StreamWrite)
     {
-        write_error_response(stream, stream_id, &mut next_message_id, &error.to_string()).await?;
+        write_error_response(
+            stream,
+            stream_id,
+            &mut next_message_id,
+            rpc_error_code(error),
+            &error.to_string(),
+        )
+        .await?;
     }
     result
 }
@@ -727,7 +795,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
     use tokio::io::duplex;
 
-    use crate::drpc::codec::{DrpcFrame, KIND_ERROR, KIND_MESSAGE};
+    use crate::drpc::codec::{DrpcFrame, KIND_ERROR, KIND_MESSAGE, unmarshal_error};
     use ed25519_dalek::Signer;
     use manytype_core::crdt::cid::compute_cid;
     use manytype_core::crypto::ed25519;
@@ -911,7 +979,8 @@ mod tests {
         // Client side: read the error frame that dispatch sends
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_ERROR);
-        let error_text = String::from_utf8(frame.data.to_vec()).unwrap();
+        let (code, error_text) = unmarshal_error(&frame.data);
+        assert_eq!(code, 0);
         assert!(
             error_text.contains("unknown method"),
             "error frame should contain 'unknown method', got: {error_text}"
@@ -1084,7 +1153,12 @@ mod tests {
 
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_ERROR);
-        let error_text = String::from_utf8(frame.data.to_vec()).unwrap();
+        let (code, error_text) = unmarshal_error(&frame.data);
+        assert_eq!(
+            code,
+            treechange::ErrorCodes::ErrorOffset as u64
+                + treechange::ErrorCodes::GetTreeError as u64
+        );
         assert!(error_text.contains("tree not found"));
 
         handle.await.unwrap();
@@ -1271,7 +1345,9 @@ mod tests {
         assert!(frame.done);
         assert_eq!(frame.stream_id, 1);
         assert_eq!(frame.message_id, 1);
-        assert!(String::from_utf8_lossy(&frame.data).contains("space access denied"));
+        let (code, error_text) = unmarshal_error(&frame.data);
+        assert_eq!(code, 0);
+        assert!(error_text.contains("space access denied"));
 
         let (result, _server_stream) = handle.await.unwrap();
         assert!(
@@ -1740,7 +1816,11 @@ mod tests {
                 .iter()
                 .find(|frame| frame.kind == KIND_ERROR)
                 .unwrap_or_else(|| panic!("{name} did not return an error frame"));
-            assert!(String::from_utf8_lossy(&error_frame.data).contains("space access denied"));
+            assert!(
+                unmarshal_error(&error_frame.data)
+                    .1
+                    .contains("space access denied")
+            );
             assert_eq!(
                 sync_state.list_object_changes("space-1", "private-object"),
                 object_before,
@@ -1764,7 +1844,7 @@ mod tests {
         use manytype_proto::filesync::{
             AccountInfoRequest, AccountInfoResponse, AvailabilityStatus, Block,
             BlockPushManyRequest, BlockPushRequest, BlocksBindRequest, BlocksCheckRequest,
-            BlocksCheckResponse, FileBlocks, FilesDeleteRequest,
+            BlocksCheckResponse, ErrCodes, FileBlocks, FilesDeleteRequest,
         };
 
         enum Case {
@@ -1861,7 +1941,13 @@ mod tests {
                 .iter()
                 .find(|frame| frame.kind == KIND_ERROR)
                 .unwrap_or_else(|| panic!("{name} did not return an error frame"));
-            assert!(String::from_utf8_lossy(&error_frame.data).contains("Forbidden"));
+            let (code, error_text) = unmarshal_error(&error_frame.data);
+            assert_eq!(
+                code,
+                ErrCodes::ErrorOffset as u64 + ErrCodes::Forbidden as u64,
+                "{name} returned the wrong error code"
+            );
+            assert!(error_text.contains("Forbidden"));
 
             let account_after = AccountInfoResponse::decode(
                 file_node::handle_account_info(
@@ -2015,6 +2101,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn duplicate_log_add_returns_log_exists_code() {
+        use manytype_proto::consensus::{ErrCodes, LogAddRequest, RawRecordWithId};
+
+        let state = test_state();
+        state
+            .sync_state
+            .upsert_space_metadata(
+                "space-1",
+                None,
+                Some(b"root".to_vec()),
+                Some(compute_cid(b"root")),
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let request = LogAddRequest {
+            log_id: "space-1".to_string(),
+            record: Some(RawRecordWithId {
+                payload: b"root".to_vec(),
+                id: compute_cid(b"root"),
+            }),
+        };
+
+        let (result, frames) = dispatch_single_request(
+            "/consensusProto.Consensus/LogAdd",
+            request.encode_to_vec(),
+            state,
+            test_peer(),
+        )
+        .await;
+        assert!(result.unwrap_err().to_string().contains("already exists"));
+        let error_frame = frames
+            .iter()
+            .find(|frame| frame.kind == KIND_ERROR)
+            .expect("LogAdd error frame");
+        assert_eq!(
+            unmarshal_error(&error_frame.data).0,
+            ErrCodes::ErrorOffset as u64 + ErrCodes::LogExists as u64
+        );
+    }
+
+    #[tokio::test]
     async fn test_dispatch_block_push() {
         use manytype_core::crdt::cid::cid_string_to_bytes;
         use manytype_proto::filesync::{BlockPushRequest, Ok as FilesyncOk};
@@ -2084,7 +2214,7 @@ mod tests {
     #[tokio::test]
     async fn test_dispatch_block_get_missing_returns_error_frame() {
         use manytype_core::crdt::cid::cid_string_to_bytes;
-        use manytype_proto::filesync::BlockGetRequest;
+        use manytype_proto::filesync::{BlockGetRequest, ErrCodes};
 
         let (client, server) = duplex(4096);
         let mut server_stream = DrpcStream::new(server);
@@ -2117,7 +2247,11 @@ mod tests {
 
         let frame = client_stream.read_frame().await.unwrap().unwrap();
         assert_eq!(frame.kind, KIND_ERROR);
-        let error_text = String::from_utf8(frame.data.to_vec()).unwrap();
+        let (code, error_text) = unmarshal_error(&frame.data);
+        assert_eq!(
+            code,
+            ErrCodes::ErrorOffset as u64 + ErrCodes::CidNotFound as u64
+        );
         assert!(error_text.contains("CIDNotFound"));
 
         handle.await.unwrap();
