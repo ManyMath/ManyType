@@ -16,12 +16,9 @@ use tokio_util::codec::{Decoder, Encoder};
 pub const KIND_INVOKE: u8 = 1;
 pub const KIND_MESSAGE: u8 = 2;
 pub const KIND_ERROR: u8 = 3;
-#[allow(dead_code)] // DRPC protocol spec constants -- may be needed for future protocol features
 pub const KIND_CANCEL: u8 = 4;
-#[allow(dead_code)]
 pub const KIND_CLOSE: u8 = 5;
 pub const KIND_CLOSE_SEND: u8 = 6;
-#[allow(dead_code)]
 pub const KIND_INVOKE_METADATA: u8 = 7;
 
 /// A single DRPC wire frame.
@@ -78,9 +75,9 @@ pub fn unmarshal_error(data: &[u8]) -> (u64, String) {
     }
 }
 
-/// Tokio codec for DRPC frames.
 pub const DEFAULT_MAX_FRAME_BYTES: usize = 2 * 1024 * 1024;
 
+/// Tokio codec for DRPC frames.
 #[derive(Debug)]
 pub struct DrpcCodec {
     max_frame_bytes: usize,

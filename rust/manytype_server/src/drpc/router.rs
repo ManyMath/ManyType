@@ -515,8 +515,8 @@ where
             }
             "/spacesync.SpaceSync/ObjectSyncStream" => {
                 // Bidirectional stream: read messages in a loop until the
-                // client signals close. For each message, process it and
-                // send back a confirmation.
+                // client signals close, processing each one and replying only
+                // when there is something to send back (see below).
                 loop {
                     let frame = match stream.read_frame().await {
                         Ok(Some(frame)) => frame,
@@ -1471,7 +1471,7 @@ mod tests {
         // A per-object push-style message with a payload the server can't
         // interpret as a recognized tree message produces no ack: official
         // clients treat these as semantic updates, not per-message acks
-        // (see handle_object_sync_message's should_write comment above).
+        // (see the should_write comment in dispatch).
         // Send it followed directly by close-send; the server's close-send
         // response is the first frame we expect back.
         let push_msg = ObjectSyncMessage {
