@@ -467,13 +467,11 @@ where
                                 msg.key_peer_id,
                                 entry.value.len()
                             );
-                            write_frame(
+                            write_response(
                                 stream,
                                 stream_id,
                                 &mut next_message_id,
-                                super::codec::KIND_MESSAGE,
-                                true,
-                                bytes::Bytes::from(entry.encode_to_vec()),
+                                &entry.encode_to_vec(),
                             )
                             .await?;
                         } else {
@@ -495,13 +493,11 @@ where
                 }
 
                 // Always terminate the response stream with an empty StoreKeyValue.
-                write_frame(
+                write_response(
                     stream,
                     stream_id,
                     &mut next_message_id,
-                    super::codec::KIND_MESSAGE,
-                    true,
-                    bytes::Bytes::from(StoreKeyValue::default().encode_to_vec()),
+                    &StoreKeyValue::default().encode_to_vec(),
                 )
                 .await?;
 
@@ -549,15 +545,8 @@ where
                         Err(_) => true,
                     };
                     if should_write {
-                        write_frame(
-                            stream,
-                            stream_id,
-                            &mut next_message_id,
-                            super::codec::KIND_MESSAGE,
-                            true,
-                            bytes::Bytes::from(response_bytes),
-                        )
-                        .await?;
+                        write_response(stream, stream_id, &mut next_message_id, &response_bytes)
+                            .await?;
                     }
                 }
 
@@ -2255,6 +2244,61 @@ mod tests {
         assert!(error_text.contains("CIDNotFound"));
 
         handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn block_get_returns_blob_larger_than_one_frame() {
+        use manytype_core::crdt::cid::cid_string_to_bytes;
+        use manytype_proto::filesync::{BlockGetRequest, BlockGetResponse, BlockPushRequest};
+
+        let state = test_state();
+        let payload = vec![9u8; 3 * 1024 * 1024];
+        let cid = cid_string_to_bytes(&compute_cid(&payload)).unwrap();
+        file_node::handle_block_push(
+            &BlockPushRequest {
+                space_id: "space-1".to_string(),
+                file_id: "large-file".to_string(),
+                cid: cid.clone(),
+                data: payload.clone(),
+            }
+            .encode_to_vec(),
+            &state.file_node,
+            &state.sync_state,
+            &test_peer(),
+        )
+        .unwrap();
+
+        let (client, server) = duplex(64 * 1024);
+        let mut server_stream = DrpcStream::new(server);
+        let mut client_stream = DrpcStream::new(client);
+        let handle = tokio::spawn(async move {
+            dispatch(
+                1,
+                "/filesync.File/BlockGet",
+                &mut server_stream,
+                &state,
+                &test_peer(),
+            )
+            .await
+        });
+
+        let request = BlockGetRequest {
+            space_id: "space-1".to_string(),
+            cid,
+            wait: false,
+        };
+        client_stream
+            .write_message(0, 0, &request.encode_to_vec())
+            .await
+            .unwrap();
+        let response =
+            BlockGetResponse::decode(client_stream.read_message().await.unwrap().as_slice())
+                .unwrap();
+        assert_eq!(response.data, payload);
+        let close_frame = client_stream.read_frame().await.unwrap().unwrap();
+        assert_eq!(close_frame.kind, KIND_CLOSE_SEND);
+
+        handle.await.unwrap().unwrap();
     }
 
     #[tokio::test]

@@ -19,10 +19,13 @@ use super::codec::{
 const DEFAULT_MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
 const DEFAULT_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 const MAX_METHOD_BYTES: usize = 1024;
+/// drpc's default frame split size (`drpcwire.SplitData`).
+const MAX_SPLIT_BYTES: usize = 64 * 1024;
 
 /// A bidirectional DRPC stream over an async transport.
 pub struct DrpcStream<T> {
     framed: Framed<T, DrpcCodec>,
+    split_bytes: usize,
     max_message_bytes: usize,
     io_timeout: std::time::Duration,
 }
@@ -53,6 +56,7 @@ where
     ) -> Self {
         Self {
             framed: Framed::new(io, DrpcCodec::with_max_frame_bytes(max_frame_bytes)),
+            split_bytes: max_frame_bytes.min(MAX_SPLIT_BYTES),
             max_message_bytes,
             io_timeout,
         }
@@ -186,22 +190,33 @@ where
         }
     }
 
-    /// Write a single KIND_MESSAGE frame with done=true.
+    /// Write a message as KIND_MESSAGE frames that share one message id,
+    /// split like drpc does with done=true only on the last frame.
     pub async fn write_message(
         &mut self,
         stream_id: u64,
         message_id: u64,
         data: &[u8],
     ) -> Result<()> {
-        self.write_frame(DrpcFrame {
-            kind: KIND_MESSAGE,
-            done: true,
-            control: false,
-            stream_id,
-            message_id,
-            data: Bytes::copy_from_slice(data),
-        })
-        .await
+        let data = Bytes::copy_from_slice(data);
+        let mut start = 0;
+        loop {
+            let end = data.len().min(start + self.split_bytes);
+            let done = end == data.len();
+            self.write_frame(DrpcFrame {
+                kind: KIND_MESSAGE,
+                done,
+                control: false,
+                stream_id,
+                message_id,
+                data: data.slice(start..end),
+            })
+            .await?;
+            if done {
+                return Ok(());
+            }
+            start = end;
+        }
     }
 
     /// Write a KIND_ERROR frame without a specific error code.
@@ -309,6 +324,75 @@ mod tests {
             .unwrap_err();
         let exceeded = deadline::exceeded(&error).unwrap();
         assert_eq!(exceeded.stage(), DeadlineStage::StreamWrite);
+    }
+
+    #[tokio::test]
+    async fn large_message_is_split_into_bounded_frames_and_reassembled() {
+        let (client, server) = duplex(64 * 1024);
+        let mut writer = DrpcStream::with_limits(client, 1024 * 1024, 1024 * 1024);
+        let mut reader = DrpcStream::with_limits(server, 1024 * 1024, 1024 * 1024);
+        let message: Vec<u8> = (0..2 * MAX_SPLIT_BYTES + 100)
+            .map(|index| index as u8)
+            .collect();
+
+        let sent = message.clone();
+        let write = tokio::spawn(async move {
+            writer.write_message(3, 7, &sent).await.unwrap();
+            writer.write_message(3, 8, &sent).await.unwrap();
+        });
+
+        let mut frames = Vec::new();
+        loop {
+            let frame = reader.read_frame().await.unwrap().unwrap();
+            let done = frame.done;
+            frames.push(frame);
+            if done {
+                break;
+            }
+        }
+        assert_eq!(
+            frames
+                .iter()
+                .map(|frame| (frame.data.len(), frame.done))
+                .collect::<Vec<_>>(),
+            [
+                (MAX_SPLIT_BYTES, false),
+                (MAX_SPLIT_BYTES, false),
+                (100, true)
+            ]
+        );
+        assert!(frames.iter().all(|frame| frame.kind == KIND_MESSAGE
+            && frame.stream_id == 3
+            && frame.message_id == 7));
+        assert_eq!(
+            frames
+                .iter()
+                .flat_map(|frame| frame.data.iter().copied())
+                .collect::<Vec<_>>(),
+            message
+        );
+
+        assert_eq!(reader.read_message().await.unwrap(), message);
+        write.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn split_size_respects_smaller_frame_limit_and_empty_messages() {
+        let (client, server) = duplex(4096);
+        let mut writer = DrpcStream::with_limits(client, 1024, 4096);
+        let mut reader = DrpcStream::with_limits(server, 1024, 4096);
+
+        writer.write_message(1, 1, &[7; 1500]).await.unwrap();
+        let first = reader.read_frame().await.unwrap().unwrap();
+        let second = reader.read_frame().await.unwrap().unwrap();
+        assert_eq!((first.data.len(), first.done), (1024, false));
+        assert_eq!((second.data.len(), second.done), (476, true));
+        assert_eq!(second.message_id, first.message_id);
+
+        writer.write_message(1, 2, &[]).await.unwrap();
+        let empty = reader.read_frame().await.unwrap().unwrap();
+        assert!(empty.data.is_empty());
+        assert!(empty.done);
     }
 
     #[tokio::test]

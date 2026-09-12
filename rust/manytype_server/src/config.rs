@@ -14,6 +14,8 @@ const DEFAULT_HEALTH_LISTEN: &str = "127.0.0.1:33021";
 const MAX_CONNECTION_SETUP_TIMEOUT_SECONDS: u64 = 60;
 const MAX_STREAM_SETUP_TIMEOUT_SECONDS: u64 = 60;
 const MAX_STREAM_IO_TIMEOUT_SECONDS: u64 = 300;
+/// Room for the BlockPush/BlockGet fields around a blob: ids, CID, tags and lengths.
+const BLOB_MESSAGE_OVERHEAD_BYTES: u64 = 4 * 1024;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -261,8 +263,10 @@ impl ResourceLimits {
             "max_file_index_bytes must be positive"
         );
         ensure!(
-            self.max_blob_bytes <= self.max_message_bytes as u64,
-            "max_blob_bytes must not exceed max_message_bytes"
+            self.max_blob_bytes
+                .checked_add(BLOB_MESSAGE_OVERHEAD_BYTES)
+                .is_some_and(|bytes| bytes <= self.max_message_bytes as u64),
+            "max_blob_bytes plus {BLOB_MESSAGE_OVERHEAD_BYTES} bytes of protobuf overhead must fit within max_message_bytes"
         );
         ensure!(
             self.max_space_storage_bytes >= self.max_blob_bytes,
@@ -451,6 +455,17 @@ mod tests {
         let mut config: ServerConfig = toml::from_str(&private_config()).unwrap();
         config.limits.max_message_bytes = config.limits.max_frame_bytes - 1;
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn resource_limits_leave_room_for_blob_message_overhead() {
+        let mut config: ServerConfig = toml::from_str(&private_config()).unwrap();
+        config.limits.max_blob_bytes = config.limits.max_message_bytes as u64;
+        assert!(config.validate().is_err());
+
+        config.limits.max_blob_bytes =
+            config.limits.max_message_bytes as u64 - BLOB_MESSAGE_OVERHEAD_BYTES;
+        config.validate().unwrap();
     }
 
     #[test]
