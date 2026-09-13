@@ -113,6 +113,7 @@ pub fn handle_blocks_check(
 ) -> Result<Vec<u8>> {
     let request = BlocksCheckRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
     let is_authorized = sync_state.peer_owns_space(&request.space_id, authenticated_peer);
+    let owned_space_ids = sync_state.owned_space_ids(authenticated_peer);
 
     let mut availability = Vec::with_capacity(request.cids.len());
     for cid_bytes in request.cids {
@@ -133,8 +134,10 @@ pub fn handle_blocks_check(
             .map_err(FileNodeError::unexpected)?
         {
             AvailabilityStatus::ExistsInSpace
-        } else {
+        } else if blob_bound_to_any_space(state, &owned_space_ids, &cid)? {
             AvailabilityStatus::Exists
+        } else {
+            AvailabilityStatus::NotExists
         };
         availability.push(BlockAvailability {
             cid: cid_bytes,
@@ -202,9 +205,19 @@ pub fn handle_blocks_bind(
 ) -> Result<Vec<u8>> {
     let request = BlocksBindRequest::decode(request_bytes).map_err(FileNodeError::unexpected)?;
     ensure_space_authorized(&request.space_id, sync_state, authenticated_peer)?;
+    let owned_space_ids = sync_state.owned_space_ids(authenticated_peer);
 
     for cid_bytes in request.cids {
         let cid = cid_bytes_to_string(&cid_bytes).map_err(FileNodeError::invalid_cid)?;
+        // Binding grants BlockGet access, so it is limited to blobs the peer
+        // already holds; anything else must be uploaded with BlockPush.
+        let is_public = state
+            .blob_index
+            .is_public_invite(&cid)
+            .map_err(FileNodeError::unexpected)?;
+        if !is_public && !blob_bound_to_any_space(state, &owned_space_ids, &cid)? {
+            return Err(FileNodeError::cid_not_found(format!("cid {cid} not found")));
+        }
         let Some(data) = state
             .blob_store
             .get(&cid)
@@ -398,6 +411,19 @@ fn ensure_space_authorized(
     Err(FileNodeError::forbidden(format!(
         "peer does not own or cannot access space {space_id}"
     )))
+}
+
+fn blob_bound_to_any_space(state: &FileNodeState, space_ids: &[String], cid: &str) -> Result<bool> {
+    for space_id in space_ids {
+        if state
+            .blob_index
+            .space_has_cid(space_id, cid)
+            .map_err(FileNodeError::unexpected)?
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn put_and_bind_block(
@@ -754,9 +780,7 @@ mod tests {
         )
         .unwrap();
 
-        let other_space = temp_dir.path().join("other-sync.redb");
-        let other_sync = new_shared_sync_state_at(other_space).unwrap();
-        other_sync
+        sync_state
             .upsert_space_metadata(
                 "space-2",
                 Some(vec![2]),
@@ -797,7 +821,7 @@ mod tests {
                 }
                 .encode_to_vec(),
                 &state,
-                &other_sync,
+                &sync_state,
                 &owner_peer(),
             )
             .unwrap()
@@ -1435,6 +1459,112 @@ mod tests {
         .to_string();
 
         assert!(error.contains("CIDNotFound"));
+    }
+
+    #[test]
+    fn owner_of_another_space_cannot_check_bind_or_read_private_blobs() {
+        let temp_dir = TempDir::new().unwrap();
+        let sync_state = seeded_sync_state(&temp_dir);
+        let state = file_node_state(&temp_dir);
+        sync_state
+            .upsert_space_metadata(
+                "space-2",
+                Some(vec![2]),
+                None,
+                None,
+                None,
+                None,
+                Some(false),
+                Some(&other_peer()),
+            )
+            .unwrap();
+        let private_payload = b"private-block".to_vec();
+        let private_cid = cid_string_to_bytes(&compute_cid(&private_payload)).unwrap();
+        handle_block_push(
+            &BlockPushRequest {
+                space_id: "space-1".to_string(),
+                file_id: "file-1".to_string(),
+                cid: private_cid.clone(),
+                data: private_payload.clone(),
+            }
+            .encode_to_vec(),
+            &state,
+            &sync_state,
+            &owner_peer(),
+        )
+        .unwrap();
+
+        let availability = BlocksCheckResponse::decode(
+            handle_blocks_check(
+                &BlocksCheckRequest {
+                    space_id: "space-2".to_string(),
+                    cids: vec![private_cid.clone()],
+                }
+                .encode_to_vec(),
+                &state,
+                &sync_state,
+                &other_peer(),
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            availability.blocks_availability[0].status,
+            AvailabilityStatus::NotExists as i32
+        );
+        let bind_error = handle_blocks_bind(
+            &BlocksBindRequest {
+                space_id: "space-2".to_string(),
+                file_id: "file-2".to_string(),
+                cids: vec![private_cid.clone()],
+            }
+            .encode_to_vec(),
+            &state,
+            &sync_state,
+            &other_peer(),
+        )
+        .unwrap_err();
+        assert!(bind_error.to_string().contains("CIDNotFound"));
+        assert!(
+            !state
+                .blob_index
+                .space_has_cid("space-2", &compute_cid(&private_payload))
+                .unwrap()
+        );
+        let block_get = BlockGetRequest {
+            space_id: "space-2".to_string(),
+            cid: private_cid.clone(),
+            wait: false,
+        }
+        .encode_to_vec();
+        assert!(
+            handle_block_get(&block_get, &state, &sync_state, &other_peer())
+                .unwrap_err()
+                .to_string()
+                .contains("CIDNotFound")
+        );
+
+        handle_block_push(
+            &BlockPushRequest {
+                space_id: "space-2".to_string(),
+                file_id: "file-2".to_string(),
+                cid: private_cid,
+                data: private_payload.clone(),
+            }
+            .encode_to_vec(),
+            &state,
+            &sync_state,
+            &other_peer(),
+        )
+        .unwrap();
+        let response = BlockGetResponse::decode(
+            handle_block_get(&block_get, &state, &sync_state, &other_peer())
+                .unwrap()
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(response.data, private_payload);
     }
 
     #[test]
