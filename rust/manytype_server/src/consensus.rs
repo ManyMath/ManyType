@@ -37,6 +37,7 @@ pub static TEST_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 /// Stores the first unsigned record of a log after verifying its CID.
 pub fn handle_log_add(request_bytes: &[u8]) -> Result<Vec<u8>> {
     let request = LogAddRequest::decode(request_bytes)?;
+    let is_space_linked = is_space_linked_log_add(&request);
     let record = request
         .record
         .ok_or_else(|| anyhow::anyhow!("missing first log record"))?;
@@ -48,7 +49,11 @@ pub fn handle_log_add(request_bytes: &[u8]) -> Result<Vec<u8>> {
         !logs.contains_key(&request.log_id),
         "consensus log already exists"
     );
-    logs.insert(request.log_id, vec![StoredRecord { id: record.id }]);
+    // Space-linked logs are registered by `persist_space_linked_log_add` once
+    // their root is durable.
+    if !is_space_linked {
+        logs.insert(request.log_id, vec![StoredRecord { id: record.id }]);
+    }
 
     Ok(ConsensusOk {}.encode_to_vec())
 }
@@ -92,8 +97,7 @@ pub fn handle_record_add(
 
 /// Ensure a consensus log exists in memory for the given head.
 ///
-/// This is used to re-seed the in-memory consensus view from persisted state
-/// after a server restart. Only the latest head is required because
+/// An existing log is left untouched. Only the latest head is required because
 /// `handle_record_add` validates against the current tip.
 pub fn ensure_log_exists(log_id: &str, head_id: &str) {
     let mut logs = CONSENSUS_LOGS.lock().unwrap();
@@ -106,26 +110,35 @@ pub fn ensure_log_exists(log_id: &str, head_id: &str) {
 
 /// Re-seed an in-memory log from persisted ACL state when available.
 ///
+/// The persisted head always wins over the in-memory one, so a record whose
+/// persistence failed cannot leave a phantom head behind.
+///
 /// Returns the persisted head used for seeding, or `None` when the requested
 /// log does not map to a persisted space-linked ACL log.
 pub fn ensure_log_exists_from_sync_state(
     log_id: &str,
     sync_state: &SharedSyncState,
 ) -> Option<String> {
-    let head_id = {
-        let state = sync_state.read().unwrap();
-        let space = state.get(log_id)?;
-        if !space.acl_head.is_empty() {
-            Some(space.acl_head.clone())
-        } else if !space.acl_root_id.is_empty() {
-            Some(space.acl_root_id.clone())
-        } else {
-            None
-        }
-    }?;
-
-    ensure_log_exists(log_id, &head_id);
+    let head_id = persisted_head(log_id, sync_state)?;
+    CONSENSUS_LOGS.lock().unwrap().insert(
+        log_id.to_string(),
+        vec![StoredRecord {
+            id: head_id.clone(),
+        }],
+    );
     Some(head_id)
+}
+
+fn persisted_head(log_id: &str, sync_state: &SharedSyncState) -> Option<String> {
+    let state = sync_state.read().unwrap();
+    let space = state.get(log_id)?;
+    if !space.acl_head.is_empty() {
+        Some(space.acl_head.clone())
+    } else if !space.acl_root_id.is_empty() {
+        Some(space.acl_root_id.clone())
+    } else {
+        None
+    }
 }
 
 /// True when the persisted sync state already contains a space-linked ACL log.
@@ -169,6 +182,12 @@ pub fn persist_space_linked_log_add(
     }
     let raw_with_id = request.record.as_ref().expect("space-linked record exists");
 
+    let mut logs = CONSENSUS_LOGS.lock().unwrap();
+    anyhow::ensure!(
+        !logs.contains_key(&request.log_id)
+            && !has_persisted_space_linked_log(&request.log_id, sync_state),
+        "consensus log already exists"
+    );
     sync_state.upsert_space_metadata(
         &request.log_id,
         None,
@@ -179,21 +198,49 @@ pub fn persist_space_linked_log_add(
         None,
         None,
     )?;
+    logs.insert(
+        request.log_id.clone(),
+        vec![StoredRecord {
+            id: raw_with_id.id.clone(),
+        }],
+    );
     Ok(true)
 }
 
 /// Persist a direct `RecordAdd` result when it belongs to a persisted space log.
+///
+/// The record must still extend the persisted head; concurrent adds that were
+/// accepted against the same head are rejected here. Afterwards the in-memory
+/// head matches the persisted log, rolling back `handle_record_add` on failure.
 pub fn persist_space_linked_record_add(
     log_id: &str,
     raw_with_id_bytes: &[u8],
     record_id: &str,
     sync_state: &SharedSyncState,
 ) -> Result<bool> {
-    if ensure_log_exists_from_sync_state(log_id, sync_state).is_none() {
+    let mut logs = CONSENSUS_LOGS.lock().unwrap();
+    let Some(head_id) = persisted_head(log_id, sync_state) else {
         return Ok(false);
-    }
-    sync_state.append_acl_record(log_id, raw_with_id_bytes.to_vec(), record_id)?;
-    Ok(true)
+    };
+    let persisted = record_prev_id(raw_with_id_bytes).and_then(|prev_id| {
+        anyhow::ensure!(
+            prev_id == head_id,
+            "record prevId does not match the current head"
+        );
+        sync_state.append_acl_record(log_id, raw_with_id_bytes.to_vec(), record_id)
+    });
+    let id = match persisted {
+        Ok(()) => record_id.to_string(),
+        Err(_) => head_id,
+    };
+    logs.insert(log_id.to_string(), vec![StoredRecord { id }]);
+    persisted.map(|()| true)
+}
+
+fn record_prev_id(raw_with_id_bytes: &[u8]) -> Result<String> {
+    let raw_with_id = RawRecordWithId::decode(raw_with_id_bytes)?;
+    let raw_record = RawRecord::decode(raw_with_id.payload.as_slice())?;
+    Ok(Record::decode(raw_record.payload.as_slice())?.prev_id)
 }
 
 #[cfg(test)]
@@ -567,5 +614,125 @@ mod tests {
         assert_eq!(records.len(), 3);
         let last = RawRecordWithId::decode(records.last().unwrap().as_slice()).unwrap();
         assert_eq!(last.id, second_response.id);
+    }
+
+    fn raw_record_with_data(prev_id: &str, data: Vec<u8>) -> RawRecord {
+        RawRecord {
+            payload: Record {
+                prev_id: prev_id.to_string(),
+                identity: vec![7; 32],
+                data,
+                timestamp: 1,
+            }
+            .encode_to_vec(),
+            signature: b"sig".to_vec(),
+            ..Default::default()
+        }
+    }
+
+    fn add_space_linked_record(
+        log_id: &str,
+        record: RawRecord,
+        sync_state: &SharedSyncState,
+    ) -> Result<RawRecordWithId> {
+        ensure_log_exists_from_sync_state(log_id, sync_state);
+        let response_bytes = handle_record_add(
+            &RecordAddRequest {
+                log_id: log_id.to_string(),
+                record: Some(record),
+            }
+            .encode_to_vec(),
+            &test_signing_key(),
+        )?;
+        let response = RawRecordWithId::decode(response_bytes.as_slice())?;
+        persist_space_linked_record_add(log_id, &response_bytes, &response.id, sync_state)?;
+        Ok(response)
+    }
+
+    #[test]
+    fn failed_log_add_persist_can_be_retried() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+        reset_logs();
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("sync.redb");
+        let root = build_test_acl_root(&[1u8; 32], "space-1");
+        let log_add = LogAddRequest {
+            log_id: "space-1".to_string(),
+            record: Some(root),
+        };
+
+        {
+            let full = SharedSyncState::open_with_limit(&path, 1).unwrap();
+            handle_log_add(&log_add.encode_to_vec()).unwrap();
+            let error = persist_space_linked_log_add(&log_add, &full).unwrap_err();
+            assert!(error.to_string().contains("quota exceeded"));
+        }
+
+        let sync_state = new_shared_sync_state_at(&path).unwrap();
+        assert!(!has_persisted_space_linked_log("space-1", &sync_state));
+        handle_log_add(&log_add.encode_to_vec()).unwrap();
+        assert!(persist_space_linked_log_add(&log_add, &sync_state).unwrap());
+        assert!(
+            persist_space_linked_log_add(&log_add, &sync_state)
+                .unwrap_err()
+                .to_string()
+                .contains("already exists")
+        );
+    }
+
+    #[test]
+    fn failed_record_persist_does_not_advance_the_log_head() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+        reset_logs();
+        let temp_dir = TempDir::new().unwrap();
+        let sync_state =
+            SharedSyncState::open_with_limit(temp_dir.path().join("sync.redb"), 64 * 1024).unwrap();
+        let root = build_test_acl_root(&[1u8; 32], "space-1");
+        let log_add = LogAddRequest {
+            log_id: "space-1".to_string(),
+            record: Some(root.clone()),
+        };
+        handle_log_add(&log_add.encode_to_vec()).unwrap();
+        persist_space_linked_log_add(&log_add, &sync_state).unwrap();
+
+        let error = add_space_linked_record(
+            "space-1",
+            raw_record_with_data(&root.id, vec![0; 128 * 1024]),
+            &sync_state,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("quota exceeded"));
+        assert_eq!(
+            CONSENSUS_LOGS.lock().unwrap()["space-1"].last().unwrap().id,
+            root.id
+        );
+
+        let accepted = add_space_linked_record(
+            "space-1",
+            raw_record_with_data(&root.id, b"small".to_vec()),
+            &sync_state,
+        )
+        .unwrap();
+        let records = sync_state.list_acl_records("space-1", "");
+        assert_eq!(records.len(), 2);
+        assert_eq!(
+            RawRecordWithId::decode(records[1].as_slice()).unwrap().id,
+            accepted.id
+        );
+
+        let stale_payload = raw_record_with_data(&root.id, b"stale".to_vec()).encode_to_vec();
+        let stale = RawRecordWithId {
+            id: compute_cid(&stale_payload),
+            payload: stale_payload,
+        };
+        let error = persist_space_linked_record_add(
+            "space-1",
+            &stale.encode_to_vec(),
+            &stale.id,
+            &sync_state,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("prevId does not match"));
+        assert_eq!(sync_state.list_acl_records("space-1", "").len(), 2);
     }
 }
