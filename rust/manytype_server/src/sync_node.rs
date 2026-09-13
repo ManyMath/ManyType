@@ -278,7 +278,7 @@ pub fn handle_space_push(
         acl_payload_id,
         settings_payload,
         settings_payload_id,
-        Some(false),
+        None,
         None,
     )?;
 
@@ -1247,6 +1247,39 @@ mod tests {
             Some(b"settings".as_ref())
         );
         assert_eq!(space.settings_payload_id, "settings-1");
+    }
+
+    #[test]
+    fn space_push_keeps_coordinator_shared_flag() {
+        let sync_state = new_shared_sync_state();
+        let remote_peer_id = test_remote_peer_id(3);
+        let (space_id, space_header, credential) =
+            make_space_header_with_receipt(&sync_state, 6, &remote_peer_id);
+        let remote_peer = remote_peer(&remote_peer_id, 6);
+        let request = SpacePushRequest {
+            payload: Some(SpacePayload {
+                space_header: Some(space_header),
+                ..Default::default()
+            }),
+            credential,
+        }
+        .encode_to_vec();
+        let push = || {
+            handle_space_push(
+                &request,
+                &sync_state,
+                &test_coordinator_config(),
+                &test_signing_key(),
+                &remote_peer,
+            )
+            .unwrap()
+        };
+
+        push();
+        sync_state.mark_space_shared(&space_id).unwrap();
+        push();
+
+        assert!(sync_state.read().unwrap()[&space_id].is_shared);
     }
 
     #[test]
