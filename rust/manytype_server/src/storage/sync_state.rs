@@ -6,7 +6,7 @@ use std::sync::{Arc, LockResult, Mutex, RwLock, RwLockReadGuard};
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use manytype_core::crdt::cid::compute_cid;
 use manytype_proto::consensus::RawRecordWithId;
 use manytype_proto::spacesync::StoreKeyValue;
@@ -242,19 +242,26 @@ impl SyncStateStorage {
     }
 
     fn ensure_space_registered_locked(&self, space_id: &str) -> Result<()> {
+        // Create the space database first so a registered space always has one.
+        let space_db = Database::create(self.paths().space_db_path(space_id)?)?;
+        ensure_space_tables(&space_db)?;
         let write_txn = self.global_db.begin_write()?;
         {
             let mut table = write_txn.open_table(GLOBAL_SPACES_TABLE)?;
             table.insert(space_id, b"1".as_slice())?;
         }
         write_txn.commit()?;
-        let space_db = Database::create(self.paths().space_db_path(space_id)?)?;
-        ensure_space_tables(&space_db)?;
         Ok(())
     }
 
     fn load_space(&self, space_id: &str) -> Result<SpaceState> {
-        let space_db = Database::create(self.paths().space_db_path(space_id)?)?;
+        let space_db_path = self.paths().space_db_path(space_id)?;
+        let space_db = Database::open(&space_db_path).with_context(|| {
+            format!(
+                "registered space {space_id} has no readable database at {}",
+                space_db_path.display()
+            )
+        })?;
         ensure_space_tables(&space_db)?;
 
         let read_txn = space_db.begin_read()?;

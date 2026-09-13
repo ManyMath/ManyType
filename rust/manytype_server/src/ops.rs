@@ -495,6 +495,26 @@ mod tests {
     }
 
     #[test]
+    fn restore_rejects_snapshot_missing_a_space_database() {
+        let temp = TempDir::new().unwrap();
+        let paths = paths(&temp);
+        let live = SharedSyncState::open(&paths.sync_root).unwrap();
+        live.claim_space_owner("space-1", &owner_peer()).unwrap();
+        drop(live);
+        FileNodeState::open(&paths.files_root).unwrap();
+        let backup = temp.path().join("backup");
+        create_backup(&paths, &backup).unwrap();
+        std::fs::remove_file(backup.join("sync").join("spaces").join("space-1.redb")).unwrap();
+
+        let error = restore_backup(&paths, &backup, true).unwrap_err();
+
+        assert!(format!("{error:#}").contains("registered space space-1"));
+        let reopened = SharedSyncState::open(&paths.sync_root).unwrap();
+        reopened.authorize_space("space-1", &owner_peer()).unwrap();
+        assert!(paths.sync_root.join("spaces").join("space-1.redb").exists());
+    }
+
+    #[test]
     fn failed_install_reinstates_both_live_stores() {
         let temp = TempDir::new().unwrap();
         let paths = paths(&temp);
