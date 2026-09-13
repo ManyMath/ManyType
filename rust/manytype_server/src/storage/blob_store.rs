@@ -1,3 +1,5 @@
+use std::fs::File;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -36,28 +38,36 @@ impl BlobStore {
 
     pub fn put(&self, cid: &str, data: &[u8]) -> Result<()> {
         let path = self.blob_path(cid);
-        if path.exists() {
+        // Keep an intact copy, but rewrite one left short or corrupt by a crash.
+        let intact = std::fs::metadata(&path).is_ok_and(|metadata| {
+            metadata.len() == data.len() as u64
+                && std::fs::read(&path).is_ok_and(|existing| existing == data)
+        });
+        if intact {
             return Ok(());
         }
 
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
+        let parent = path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("blob path has no parent directory"))?;
+        std::fs::create_dir_all(parent)?;
 
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
         let tmp_path = path.with_extension(format!("tmp-{nonce}"));
-        std::fs::write(&tmp_path, data)?;
-
-        if path.exists() {
+        let result = (|| -> Result<()> {
+            let mut file = File::create(&tmp_path)?;
+            file.write_all(data)?;
+            file.sync_all()?;
+            std::fs::rename(&tmp_path, &path)?;
+            sync_dir(parent)
+        })();
+        if result.is_err() {
             let _ = std::fs::remove_file(&tmp_path);
-            return Ok(());
         }
-
-        std::fs::rename(&tmp_path, &path)?;
-        Ok(())
+        result
     }
 
     pub fn remove(&self, cid: &str) -> Result<()> {
@@ -83,6 +93,19 @@ impl BlobStore {
             .join(second)
             .join(format!("{cid}.blob"))
     }
+}
+
+// The index commits durably, so the blob and its directory entry must be on
+// disk before `put` returns.
+#[cfg(unix)]
+fn sync_dir(path: &Path) -> Result<()> {
+    File::open(path)?.sync_all()?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_dir(_path: &Path) -> Result<()> {
+    Ok(())
 }
 
 #[cfg(test)]
@@ -118,5 +141,30 @@ mod tests {
         store.put("bafy-test-cid", b"hello").unwrap();
 
         assert_eq!(store.get("bafy-test-cid").unwrap(), Some(b"hello".to_vec()));
+    }
+
+    #[test]
+    fn blob_store_put_repairs_a_damaged_blob() {
+        let temp_dir = TempDir::new().unwrap();
+        let store = BlobStore::open(temp_dir.path().join("manytype.redb")).unwrap();
+        store.put("bafy-test-cid", b"hello").unwrap();
+
+        std::fs::write(store.blob_path("bafy-test-cid"), b"he").unwrap();
+        store.put("bafy-test-cid", b"hello").unwrap();
+        assert_eq!(store.get("bafy-test-cid").unwrap(), Some(b"hello".to_vec()));
+
+        std::fs::write(store.blob_path("bafy-test-cid"), b"\0\0\0\0\0").unwrap();
+        store.put("bafy-test-cid", b"hello").unwrap();
+        assert_eq!(store.get("bafy-test-cid").unwrap(), Some(b"hello".to_vec()));
+
+        let blob_path = store.blob_path("bafy-test-cid");
+        let leftovers: Vec<_> = std::fs::read_dir(blob_path.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(
+            leftovers,
+            vec![std::ffi::OsString::from("bafy-test-cid.blob")]
+        );
     }
 }
