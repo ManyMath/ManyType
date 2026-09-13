@@ -878,13 +878,25 @@ impl SharedSyncState {
             .lock()
             .map_err(|_| anyhow::anyhow!("sync state mutation lock is poisoned"))?;
         let mut state = self.inner.write().unwrap();
-        let mut replacement = state.get(space_id).cloned().unwrap_or_default();
-        if let Some(existing) = replacement.raw_changes.get(change_id) {
+        // A change that is already part of this object has already moved its
+        // heads; applying it again would resurrect it as a stale head.
+        if let Some(space) = state.get(space_id)
+            && let Some(existing) = space.raw_changes.get(change_id)
+        {
             ensure!(
                 existing == &raw_change,
                 "object change id collision for {change_id}"
             );
-        } else {
+            if space
+                .object_changes
+                .get(object_id)
+                .is_some_and(|change_ids| change_ids.iter().any(|id| id == change_id))
+            {
+                return Ok(());
+            }
+        }
+        let mut replacement = state.get(space_id).cloned().unwrap_or_default();
+        if !replacement.raw_changes.contains_key(change_id) {
             replacement
                 .raw_changes
                 .insert(change_id.to_string(), raw_change.clone());
@@ -1262,6 +1274,51 @@ mod tests {
         let snapshot = state.read().unwrap();
         let heads = &snapshot.get("space-1").unwrap().object_heads["object-1"];
         assert_eq!(heads, &vec!["child".to_string()]);
+    }
+
+    #[test]
+    fn resending_an_ancestor_change_keeps_heads_unchanged() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        let chain = [("a", None), ("b", Some("a")), ("c", Some("b"))];
+        for (change_id, parent) in chain {
+            let parents: Vec<String> = parent.into_iter().map(ToString::to_string).collect();
+            state
+                .record_object_change(
+                    "space-1",
+                    "object-1",
+                    change_id,
+                    change_id.as_bytes().to_vec(),
+                    &parents,
+                )
+                .unwrap();
+        }
+
+        state
+            .record_object_change(
+                "space-1",
+                "object-1",
+                "b",
+                b"b".to_vec(),
+                &["a".to_string()],
+            )
+            .unwrap();
+
+        assert_eq!(
+            state.read().unwrap()["space-1"].object_heads["object-1"],
+            vec!["c".to_string()]
+        );
+        drop(state);
+        let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        let snapshot = reopened.read().unwrap();
+        assert_eq!(
+            snapshot["space-1"].object_heads["object-1"],
+            vec!["c".to_string()]
+        );
+        assert_eq!(
+            snapshot["space-1"].object_changes["object-1"],
+            vec!["a".to_string(), "b".to_string(), "c".to_string()]
+        );
     }
 
     #[test]
