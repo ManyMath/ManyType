@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 
 const MAX_REQUEST_BYTES: usize = 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);
 
 #[derive(Clone, Debug, Default)]
 pub struct HealthState {
@@ -36,7 +37,22 @@ pub async fn serve(
         tokio::select! {
             _ = shutdown.cancelled() => return Ok(()),
             accepted = listener.accept() => {
-                let (socket, _) = accepted.context("health listener accept failed")?;
+                let socket = match accepted {
+                    Ok((socket, _)) => socket,
+                    Err(error) => {
+                        tracing::warn!(
+                            event = "health_accept_failed",
+                            error = %error
+                        );
+                        if let Some(delay) = accept_retry_delay(&error) {
+                            tokio::select! {
+                                _ = shutdown.cancelled() => return Ok(()),
+                                _ = tokio::time::sleep(delay) => {}
+                            }
+                        }
+                        continue;
+                    }
+                };
                 if let Err(error) = respond(socket, &state).await {
                     tracing::warn!(
                         event = "health_request_failed",
@@ -45,6 +61,19 @@ pub async fn serve(
                 }
             }
         }
+    }
+}
+
+/// A failed accept never stops the health endpoint. Errors that only affect
+/// one pending connection retry at once; anything else, such as running out
+/// of file descriptors, backs off briefly instead of spinning.
+fn accept_retry_delay(error: &std::io::Error) -> Option<Duration> {
+    match error.kind() {
+        std::io::ErrorKind::ConnectionAborted
+        | std::io::ErrorKind::ConnectionReset
+        | std::io::ErrorKind::ConnectionRefused
+        | std::io::ErrorKind::Interrupted => None,
+        _ => Some(ACCEPT_RETRY_DELAY),
     }
 }
 
@@ -115,6 +144,24 @@ mod tests {
 
         shutdown.cancel();
         task.await.unwrap().unwrap();
+    }
+
+    #[test]
+    fn accept_errors_retry_and_back_off_on_resource_exhaustion() {
+        use std::io::{Error, ErrorKind};
+
+        assert_eq!(
+            accept_retry_delay(&Error::from(ErrorKind::ConnectionAborted)),
+            None
+        );
+        assert_eq!(
+            accept_retry_delay(&Error::from(ErrorKind::OutOfMemory)),
+            Some(ACCEPT_RETRY_DELAY)
+        );
+        assert_eq!(
+            accept_retry_delay(&Error::other("too many open files")),
+            Some(ACCEPT_RETRY_DELAY)
+        );
     }
 
     #[tokio::test]
