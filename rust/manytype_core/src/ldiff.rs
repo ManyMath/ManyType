@@ -305,26 +305,22 @@ impl Diff {
             return result;
         }
 
-        result.elements = self.scan_elements(range.from, range.to, range.limit);
+        result.elements = self
+            .scan_elements(range.from, range.to, range.limit)
+            .iter()
+            .map(|item| item.element.clone())
+            .collect();
         result.count = result.elements.len();
         result
     }
 
-    fn scan_elements(&self, from: u64, to: u64, limit: usize) -> Vec<Element> {
-        let mut result = Vec::new();
-        for item in &self.sorted {
-            if item.hash < from {
-                continue;
-            }
-            if item.hash > to {
-                break;
-            }
-            result.push(item.element.clone());
-            if limit > 0 && result.len() >= limit {
-                break;
-            }
+    fn scan_elements(&self, from: u64, to: u64, limit: usize) -> &[InternalElement] {
+        let items = self.elements_in_range(from, to);
+        if limit > 0 && items.len() > limit {
+            &items[..limit]
+        } else {
+            items
         }
-        result
     }
 
     fn rebuild(&mut self) {
@@ -369,7 +365,7 @@ impl Diff {
                 count,
             }
         } else {
-            let hash = hash_elements(&elements);
+            let hash = hash_elements(elements);
             RangeNode { hash, count }
         };
 
@@ -377,11 +373,10 @@ impl Diff {
         node
     }
 
-    fn elements_in_range(&self, from: u64, to: u64) -> Vec<&InternalElement> {
-        self.sorted
-            .iter()
-            .filter(|item| item.hash >= from && item.hash <= to)
-            .collect()
+    fn elements_in_range(&self, from: u64, to: u64) -> &[InternalElement] {
+        let start = self.sorted.partition_point(|item| item.hash < from);
+        let end = self.sorted.partition_point(|item| item.hash <= to);
+        &self.sorted[start..end.max(start)]
     }
 }
 
@@ -477,7 +472,7 @@ fn gen_tuple_ranges(from: u64, to: u64, divide_factor: usize) -> Vec<RangeTuple>
     ranges
 }
 
-fn hash_elements(elements: &[&InternalElement]) -> Vec<u8> {
+fn hash_elements(elements: &[InternalElement]) -> Vec<u8> {
     if elements.is_empty() {
         return Vec::new();
     }
@@ -540,6 +535,54 @@ mod tests {
             hex::encode(&result[0].hash),
             "40e87194294172544506168240aaf40dddce460def5d7c282d585e206fc0b702"
         );
+    }
+
+    #[test]
+    fn arbitrary_ranges_select_elements_by_hash() {
+        let mut diff = Diff::new(16, 16);
+        diff.set((0..1000).map(|index| element(&index.to_string(), "head")));
+        let mut hashes: Vec<u64> = diff
+            .ids()
+            .iter()
+            .map(|id| xxh64(id.as_bytes(), 0))
+            .collect();
+        hashes.sort();
+
+        for (from, to, limit) in [
+            (0, u64::MAX, 0),
+            (hashes[10], hashes[20], 0),
+            (hashes[10] + 1, hashes[20] - 1, 0),
+            (hashes[100], u64::MAX, 7),
+            (hashes[20], hashes[10], 0),
+        ] {
+            let expected: Vec<String> = diff
+                .ids()
+                .into_iter()
+                .filter(|id| (from..=to).contains(&xxh64(id.as_bytes(), 0)))
+                .take(if limit == 0 { usize::MAX } else { limit })
+                .collect();
+            let results = diff.ranges(&[
+                Range {
+                    from,
+                    to,
+                    elements: true,
+                    limit,
+                },
+                Range {
+                    from,
+                    to,
+                    elements: false,
+                    limit,
+                },
+            ]);
+            let ids: Vec<String> = results[0]
+                .elements
+                .iter()
+                .map(|element| element.id.clone())
+                .collect();
+            assert_eq!(ids, expected);
+            assert_eq!(results[1].count, expected.len());
+        }
     }
 
     #[test]
