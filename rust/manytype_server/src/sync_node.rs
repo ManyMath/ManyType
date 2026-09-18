@@ -28,6 +28,9 @@ pub use crate::storage::sync_state::{new_shared_sync_state, new_shared_sync_stat
 
 const LDIFF_DIVIDE_FACTOR: usize = 32;
 const LDIFF_COMPARE_THRESHOLD: usize = 256;
+// any-sync splits mismatched ranges holding more than 256 elements 32 ways, so
+// a round carries at most about n/8 ranges; this covers ~1M-object spaces.
+const MAX_DIFF_RANGES: usize = 131_072;
 
 /// Handle /spacesync.SpaceSync/HeadSync
 ///
@@ -48,32 +51,7 @@ pub fn handle_head_sync(
         if !request.ranges.is_empty() && matches!(request.diff_type(), DiffType::V2 | DiffType::V3)
         {
             let diff = build_head_diff(space, request.diff_type());
-            diff.ranges(
-                &request
-                    .ranges
-                    .iter()
-                    .map(|range| Range {
-                        from: range.from,
-                        to: range.to,
-                        elements: range.elements,
-                        limit: range.limit as usize,
-                    })
-                    .collect::<Vec<_>>(),
-            )
-            .into_iter()
-            .map(|result| HeadSyncResult {
-                hash: result.hash,
-                elements: result
-                    .elements
-                    .into_iter()
-                    .map(|element| HeadSyncResultElement {
-                        id: element.id,
-                        head: element.head,
-                    })
-                    .collect(),
-                count: result.count as u32,
-            })
-            .collect()
+            diff_ranges(&diff, &request.ranges)?
         } else {
             let elements = collect_object_elements(space);
 
@@ -101,25 +79,7 @@ pub fn handle_head_sync(
             LDIFF_COMPARE_THRESHOLD,
             request.diff_type(),
         );
-        diff.ranges(
-            &request
-                .ranges
-                .iter()
-                .map(|range| Range {
-                    from: range.from,
-                    to: range.to,
-                    elements: range.elements,
-                    limit: range.limit as usize,
-                })
-                .collect::<Vec<_>>(),
-        )
-        .into_iter()
-        .map(|result| HeadSyncResult {
-            hash: result.hash,
-            elements: Vec::new(),
-            count: result.count as u32,
-        })
-        .collect()
+        diff_ranges(&diff, &request.ranges)?
     } else {
         vec![]
     };
@@ -157,32 +117,7 @@ pub fn handle_store_diff(
     let results = if let Some(space) = state.get(space_id) {
         if !request.ranges.is_empty() {
             let diff = build_store_diff(space);
-            diff.ranges(
-                &request
-                    .ranges
-                    .iter()
-                    .map(|range| Range {
-                        from: range.from,
-                        to: range.to,
-                        elements: range.elements,
-                        limit: range.limit as usize,
-                    })
-                    .collect::<Vec<_>>(),
-            )
-            .into_iter()
-            .map(|result| HeadSyncResult {
-                hash: result.hash,
-                elements: result
-                    .elements
-                    .into_iter()
-                    .map(|element| HeadSyncResultElement {
-                        id: element.id,
-                        head: element.head,
-                    })
-                    .collect(),
-                count: result.count as u32,
-            })
-            .collect()
+            diff_ranges(&diff, &request.ranges)?
         } else {
             let elements = collect_store_elements(space);
             if elements.is_empty() && space.space_header.is_some() {
@@ -202,26 +137,10 @@ pub fn handle_store_diff(
             }
         }
     } else if !request.ranges.is_empty() {
-        Diff::new(LDIFF_DIVIDE_FACTOR, LDIFF_COMPARE_THRESHOLD)
-            .ranges(
-                &request
-                    .ranges
-                    .iter()
-                    .map(|range| Range {
-                        from: range.from,
-                        to: range.to,
-                        elements: range.elements,
-                        limit: range.limit as usize,
-                    })
-                    .collect::<Vec<_>>(),
-            )
-            .into_iter()
-            .map(|result| HeadSyncResult {
-                hash: result.hash,
-                elements: Vec::new(),
-                count: result.count as u32,
-            })
-            .collect()
+        diff_ranges(
+            &Diff::new(LDIFF_DIVIDE_FACTOR, LDIFF_COMPARE_THRESHOLD),
+            &request.ranges,
+        )?
     } else {
         vec![]
     };
@@ -899,6 +818,51 @@ pub fn handle_store_elements_messages(
     }
     responses.push(StoreKeyValue::default().encode_to_vec());
     Ok(responses)
+}
+
+/// Answers HeadSync/StoreDiff range queries against `diff`.
+///
+/// Ranges from an honest peer are disjoint, so together they never select
+/// more elements than the diff holds. Requests that do, or that carry an
+/// unreasonable number of ranges, are rejected rather than copying the space
+/// once per range.
+fn diff_ranges(diff: &Diff, ranges: &[HeadSyncRange]) -> Result<Vec<HeadSyncResult>> {
+    anyhow::ensure!(
+        ranges.len() <= MAX_DIFF_RANGES,
+        "diff request has {} ranges, limit {MAX_DIFF_RANGES}",
+        ranges.len()
+    );
+    let mut remaining_elements = diff.len();
+    ranges
+        .iter()
+        .map(|range| {
+            let result = diff
+                .ranges(&[Range {
+                    from: range.from,
+                    to: range.to,
+                    elements: range.elements,
+                    limit: range.limit as usize,
+                }])
+                .remove(0);
+            remaining_elements = remaining_elements
+                .checked_sub(result.elements.len())
+                .ok_or_else(|| {
+                    anyhow::anyhow!("diff request selects more elements than the space holds")
+                })?;
+            Ok(HeadSyncResult {
+                hash: result.hash,
+                elements: result
+                    .elements
+                    .into_iter()
+                    .map(|element| HeadSyncResultElement {
+                        id: element.id,
+                        head: element.head,
+                    })
+                    .collect(),
+                count: result.count as u32,
+            })
+        })
+        .collect()
 }
 
 fn collect_object_elements(space: &SpaceState) -> Vec<HeadSyncResultElement> {
@@ -2159,6 +2123,69 @@ mod tests {
             .map(|element| element.id.as_str())
             .collect();
         assert_eq!(ids, vec!["settings-peer-1", "settings-peer-2"]);
+    }
+
+    #[test]
+    fn head_sync_ranges_are_bounded_by_space_contents() {
+        let sync_state = owned_sync_state();
+        for object_id in ["obj-1", "obj-2", "obj-3"] {
+            sync_state
+                .record_object_change(
+                    "space-1",
+                    object_id,
+                    &format!("{object_id}-change"),
+                    object_id.as_bytes().to_vec(),
+                    &[],
+                )
+                .unwrap();
+        }
+        let head_sync = |ranges: Vec<HeadSyncRange>| {
+            handle_head_sync(
+                &HeadSyncRequest {
+                    space_id: "space-1".to_string(),
+                    ranges,
+                    diff_type: DiffType::V3 as i32,
+                }
+                .encode_to_vec(),
+                &sync_state,
+                &test_peer(),
+            )
+        };
+        let range = |from, to| HeadSyncRange {
+            from,
+            to,
+            limit: 0,
+            elements: true,
+        };
+
+        let response = HeadSyncResponse::decode(
+            head_sync(vec![
+                range(0, u64::MAX / 2),
+                range(u64::MAX / 2 + 1, u64::MAX),
+            ])
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        let returned: usize = response
+            .results
+            .iter()
+            .map(|result| result.elements.len())
+            .sum();
+        assert_eq!(returned, 3);
+
+        let overlapping = head_sync(vec![range(0, u64::MAX); 2]).unwrap_err();
+        assert!(overlapping.to_string().contains("more elements"));
+
+        let too_many = head_sync(vec![
+            HeadSyncRange {
+                elements: false,
+                ..range(0, u64::MAX)
+            };
+            MAX_DIFF_RANGES + 1
+        ])
+        .unwrap_err();
+        assert!(too_many.to_string().contains("ranges, limit"));
     }
 
     #[test]
