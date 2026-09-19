@@ -18,10 +18,12 @@ class ReplayedObjectState {
 
 /// Replay an encrypted object tree into its latest snapshot-equivalent state.
 ///
-/// This mirrors the local read-path/state-compaction replay rules:
-/// snapshots reset state, subsequent changes mutate blocks/details/objectTypes/
-/// relationLinks/collections, and encrypted/snappy-compressed TreeChanges are
-/// transparently decoded with [treeKey].
+/// This mirrors heart's state build: a snapshot resets state only when it
+/// supersedes every change replayed before it (a concurrent snapshot just
+/// contributes its content), subsequent changes mutate blocks/details/
+/// objectTypes/relationLinks/collections, and encrypted/snappy-compressed
+/// TreeChanges are transparently decoded with [treeKey]. [rawTreeChanges]
+/// must start with the root change and be in topological order.
 Future<ReplayedObjectState> replayObjectState({
   required List<Uint8List> rawTreeChanges,
   required Uint8List treeKey,

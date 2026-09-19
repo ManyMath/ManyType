@@ -227,6 +227,67 @@ void main() {
       final state = collectBlockState(tree);
       expect(state, isEmpty);
     });
+
+    test('a concurrent snapshot does not discard sibling-branch edits',
+        () async {
+      final root = await buildRootChange(
+        spaceId: 'space-1',
+        aclHeadId: aclHeadId,
+        identityPrivateKey: identitySeed,
+      );
+      final tree = ObjectTree.fromRoot(root);
+
+      final snapshotData = Uint8List.fromList(Change(
+        snapshot: Change_Snapshot(
+          data: createMinimalSnapshot(
+            'sb-root',
+            [createTextBlock('block-1', 'Original')],
+          ),
+        ),
+      ).writeToBuffer());
+      final base = await buildTreeChange(
+        currentHeads: [root.id],
+        aclHeadId: aclHeadId,
+        snapshotBaseId: root.id,
+        changesData: snapshotData,
+        identityPrivateKey: identitySeed,
+        isSnapshot: true,
+      );
+      await tree.addChange(base);
+
+      final edit = await buildTreeChange(
+        currentHeads: [base.id],
+        aclHeadId: aclHeadId,
+        snapshotBaseId: base.id,
+        changesData: marshalChangeContent([
+          Change_Content(
+            blockUpdate: Change_BlockUpdate(events: [
+              Event_Message(
+                blockSetText: Event_Block_Set_Text(
+                  id: 'block-1',
+                  text: Event_Block_Set_Text_TextValue(value: 'Edited'),
+                ),
+              ).writeToBuffer(),
+            ]),
+          ),
+        ]),
+        identityPrivateKey: identitySeed,
+      );
+      // Snapshot made on another device from base, without the edit.
+      final concurrent = await buildTreeChange(
+        currentHeads: [base.id],
+        aclHeadId: aclHeadId,
+        snapshotBaseId: base.id,
+        changesData: snapshotData,
+        identityPrivateKey: identitySeed,
+        isSnapshot: true,
+      );
+      await tree.addChange(edit);
+      await tree.addChange(concurrent);
+
+      final state = collectBlockState(tree);
+      expect(state['block-1']!.text.text, equals('Edited'));
+    });
   });
 
   group('createSnapshot', () {

@@ -10,13 +10,15 @@ import 'package:manytype_protocol/manytype_protocol.dart'
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart';
 
 import '../crypto/aes_gcm.dart';
+import 'cid.dart';
 
 final _snappy = SnappyCodec();
 
 /// Replay raw tree changes into a [ChangeReplayState].
 ///
-/// Encrypted and snappy-compressed TreeChanges are transparently decoded with
-/// [treeKey]; root changes and changes without data are skipped.
+/// [rawTreeChanges] must be in topological order. Encrypted and
+/// snappy-compressed TreeChanges are transparently decoded with [treeKey];
+/// root changes and changes without data are skipped.
 Future<ChangeReplayState> replayRawTreeChanges(
   List<Uint8List> rawTreeChanges,
   Uint8List treeKey,
@@ -48,18 +50,11 @@ Future<ChangeReplayState> replayRawTreeChanges(
       data = _snappy.decompress(data);
     }
 
-    final change = Change.fromBuffer(data);
-    if (change.hasSnapshot()) {
-      state.loadSnapshot(change.snapshot);
-      continue;
-    }
-
-    if (change.fileKeys.isNotEmpty) {
-      state.upsertFileKeys(change.fileKeys);
-    }
-    for (final content in change.content) {
-      state.applyContent(content);
-    }
+    state.applyChange(
+      await computeCid(rawChange),
+      treeChange.treeHeadIds,
+      Change.fromBuffer(data),
+    );
   }
 
   return state;
@@ -492,6 +487,32 @@ class ChangeReplayState {
 
   FileInfo? fileInfo;
   Int64? originalCreatedTimestamp;
+
+  final _heads = <String>{};
+
+  /// Apply tree change [changeId], whose parents are [parentIds].
+  ///
+  /// Mirrors heart's `BuildState`: snapshot data is only loaded when the
+  /// snapshot supersedes everything replayed so far, i.e. its parents cover
+  /// the current heads. A concurrent snapshot only contributes its content and
+  /// file keys, so edits replayed from sibling branches survive.
+  void applyChange(String changeId, List<String> parentIds, Change change) {
+    final supersedesReplayed = _heads.every(parentIds.contains);
+    _heads
+      ..removeAll(parentIds)
+      ..add(changeId);
+    if (change.hasSnapshot() && supersedesReplayed) {
+      loadSnapshot(change.snapshot);
+      return;
+    }
+
+    if (change.fileKeys.isNotEmpty) {
+      upsertFileKeys(change.fileKeys);
+    }
+    for (final content in change.content) {
+      applyContent(content);
+    }
+  }
 
   void applyContent(Change_Content content) => _applyContent(this, content);
 

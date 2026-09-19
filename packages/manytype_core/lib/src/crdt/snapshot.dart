@@ -101,22 +101,11 @@ ChangeReplayState _replayTree(ObjectTree tree) {
     if (i == 0) continue;
 
     final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
-
-    if (treeChange.isSnapshot) {
-      final change = Change.fromBuffer(treeChange.changesData);
-      if (change.hasSnapshot()) {
-        state.loadSnapshot(change.snapshot);
-      }
-      continue;
-    }
-
-    final change = Change.fromBuffer(treeChange.changesData);
-    if (change.fileKeys.isNotEmpty) {
-      state.upsertFileKeys(change.fileKeys);
-    }
-    for (final content in change.content) {
-      state.applyContent(content);
-    }
+    state.applyChange(
+      changes[i].id,
+      treeChange.treeHeadIds,
+      Change.fromBuffer(treeChange.changesData),
+    );
   }
 
   return state;
