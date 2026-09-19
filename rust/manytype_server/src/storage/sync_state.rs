@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-#[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LockResult, Mutex, RwLock, RwLockReadGuard};
 #[cfg(test)]
@@ -172,6 +171,8 @@ pub struct SharedSyncState {
     deleted_accounts: Arc<RwLock<HashSet<String>>>,
     storage: Arc<SyncStateStorage>,
     mutation_lock: Arc<Mutex<()>>,
+    // Running total of `sync_state_logical_bytes`, updated under `mutation_lock`.
+    logical_bytes: Arc<AtomicU64>,
     max_logical_bytes: u64,
 }
 
@@ -530,18 +531,20 @@ impl SharedSyncState {
             deleted_accounts: Arc::new(RwLock::new(deleted_accounts)),
             storage,
             mutation_lock: Arc::new(Mutex::new(())),
+            logical_bytes: Arc::new(AtomicU64::new(logical_bytes)),
             max_logical_bytes,
         })
     }
 
+    /// Returns the logical size after replacing `space_id`, which callers
+    /// store in `logical_bytes` once the replacement is persisted.
     fn ensure_space_replacement_fits(
         &self,
         spaces: &HashMap<String, SpaceState>,
-        deleted_accounts: &HashSet<String>,
         space_id: &str,
         replacement: &SpaceState,
-    ) -> Result<()> {
-        let current = sync_state_logical_bytes(spaces, deleted_accounts)?;
+    ) -> Result<u64> {
+        let current = self.logical_bytes.load(Ordering::Relaxed);
         let previous = spaces
             .get(space_id)
             .map(|space| space_logical_bytes(space_id, space))
@@ -557,7 +560,7 @@ impl SharedSyncState {
             "sync state quota exceeded: requested {requested} logical bytes, limit {} bytes",
             self.max_logical_bytes
         );
-        Ok(())
+        Ok(requested)
     }
 
     /// Returns whether `AccountDelete` has already been accepted for this
@@ -580,9 +583,7 @@ impl SharedSyncState {
         if deleted.contains(&key) {
             return Ok(());
         }
-        let spaces = self.inner.read().unwrap();
-        let current = sync_state_logical_bytes(&spaces, &deleted)?;
-        let mut requested = current;
+        let mut requested = self.logical_bytes.load(Ordering::Relaxed);
         add_logical_entry(&mut requested, key.len(), 1)?;
         ensure!(
             requested <= self.max_logical_bytes,
@@ -591,6 +592,7 @@ impl SharedSyncState {
         );
         self.storage.persist_deleted_account(&key)?;
         deleted.insert(key);
+        self.logical_bytes.store(requested, Ordering::Relaxed);
         Ok(())
     }
 
@@ -646,8 +648,7 @@ impl SharedSyncState {
             replacement.owner_account_identity = Some(*owner.account_identity());
         }
 
-        let deleted = self.deleted_accounts.read().unwrap();
-        self.ensure_space_replacement_fits(&state, &deleted, space_id, &replacement)?;
+        let logical_bytes = self.ensure_space_replacement_fits(&state, space_id, &replacement)?;
 
         self.storage.persist_space_metadata(
             space_id,
@@ -661,6 +662,7 @@ impl SharedSyncState {
             owner.map(AuthenticatedPeer::account_identity),
         )?;
         state.insert(space_id.to_string(), replacement);
+        self.logical_bytes.store(logical_bytes, Ordering::Relaxed);
         Ok(())
     }
 
@@ -690,8 +692,7 @@ impl SharedSyncState {
         }
         replacement.owner_peer_id = authenticated_peer.id().to_string();
         replacement.owner_account_identity = Some(*authenticated_peer.account_identity());
-        let deleted = self.deleted_accounts.read().unwrap();
-        self.ensure_space_replacement_fits(&state, &deleted, space_id, &replacement)?;
+        let logical_bytes = self.ensure_space_replacement_fits(&state, space_id, &replacement)?;
 
         self.storage.persist_space_metadata(
             space_id,
@@ -705,6 +706,7 @@ impl SharedSyncState {
             Some(authenticated_peer.account_identity()),
         )?;
         state.insert(space_id.to_string(), replacement);
+        self.logical_bytes.store(logical_bytes, Ordering::Relaxed);
         Ok(())
     }
 
@@ -744,8 +746,7 @@ impl SharedSyncState {
                     .then(|| replacement.settings_payload_id.clone()),
             )
         };
-        let deleted = self.deleted_accounts.read().unwrap();
-        self.ensure_space_replacement_fits(&state, &deleted, space_id, &replacement)?;
+        let logical_bytes = self.ensure_space_replacement_fits(&state, space_id, &replacement)?;
 
         self.storage.persist_space_metadata(
             space_id,
@@ -759,6 +760,7 @@ impl SharedSyncState {
             None,
         )?;
         state.insert(space_id.to_string(), replacement);
+        self.logical_bytes.store(logical_bytes, Ordering::Relaxed);
         Ok(())
     }
 
@@ -816,12 +818,12 @@ impl SharedSyncState {
         replacement.acl_records.push(raw_record_with_id.clone());
         replacement.acl_head = record_id.to_string();
         let index = replacement.acl_records.len() - 1;
-        let deleted = self.deleted_accounts.read().unwrap();
-        self.ensure_space_replacement_fits(&state, &deleted, space_id, &replacement)?;
+        let logical_bytes = self.ensure_space_replacement_fits(&state, space_id, &replacement)?;
 
         self.storage
             .persist_acl_record(space_id, index, &raw_record_with_id)?;
         state.insert(space_id.to_string(), replacement);
+        self.logical_bytes.store(logical_bytes, Ordering::Relaxed);
         Ok(())
     }
 
@@ -927,8 +929,7 @@ impl SharedSyncState {
         }
         let heads = heads.clone();
         let object_changes = object_changes.clone();
-        let deleted = self.deleted_accounts.read().unwrap();
-        self.ensure_space_replacement_fits(&state, &deleted, space_id, &replacement)?;
+        let logical_bytes = self.ensure_space_replacement_fits(&state, space_id, &replacement)?;
 
         self.storage.persist_object_state(
             space_id,
@@ -939,6 +940,7 @@ impl SharedSyncState {
             Some(&raw_change),
         )?;
         state.insert(space_id.to_string(), replacement);
+        self.logical_bytes.store(logical_bytes, Ordering::Relaxed);
         Ok(())
     }
 
@@ -969,11 +971,12 @@ impl SharedSyncState {
         replacement
             .store_key_values
             .insert(entry.key_peer_id.clone(), encoded.clone());
-        let deleted = self.deleted_accounts.read().unwrap();
-        self.ensure_space_replacement_fits(&state, &deleted, &entry.space_id, &replacement)?;
+        let logical_bytes =
+            self.ensure_space_replacement_fits(&state, &entry.space_id, &replacement)?;
         self.storage
             .persist_store_key_value(&entry.space_id, &entry.key_peer_id, &encoded)?;
         state.insert(entry.space_id, replacement);
+        self.logical_bytes.store(logical_bytes, Ordering::Relaxed);
         Ok(())
     }
 
@@ -1439,6 +1442,70 @@ mod tests {
                 .to_string()
                 .contains("collision")
         );
+    }
+
+    #[test]
+    fn running_logical_size_matches_a_full_recount() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        let peer = test_peer("peer-owner");
+        let assert_counter_matches = |state: &SharedSyncState| {
+            assert_eq!(
+                state.logical_bytes.load(Ordering::Relaxed),
+                current_logical_usage(state)
+            );
+        };
+
+        state.claim_space_owner("space-1", &peer).unwrap();
+        assert_counter_matches(&state);
+        state
+            .upsert_space_metadata(
+                "space-1",
+                Some(b"header".to_vec()),
+                Some(b"acl-root".to_vec()),
+                Some("acl-root-id".to_string()),
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        assert_counter_matches(&state);
+        state.mark_space_shared("space-1").unwrap();
+        assert_counter_matches(&state);
+        let record = RawRecordWithId {
+            payload: b"record".to_vec(),
+            id: "record-1".to_string(),
+        }
+        .encode_to_vec();
+        state
+            .append_acl_record("space-1", record, "record-1")
+            .unwrap();
+        assert_counter_matches(&state);
+        state
+            .record_object_change("space-1", "object-1", "a", b"a".to_vec(), &[])
+            .unwrap();
+        state
+            .record_object_change(
+                "space-1",
+                "object-1",
+                "b",
+                b"b".to_vec(),
+                &["a".to_string()],
+            )
+            .unwrap();
+        assert_counter_matches(&state);
+        state
+            .upsert_store_entry(test_store_entry("peer-00"))
+            .unwrap();
+        assert_counter_matches(&state);
+        state.mark_account_deleted(&[7; 32]).unwrap();
+        assert_counter_matches(&state);
+
+        let usage = current_logical_usage(&state);
+        drop(state);
+        let reopened = new_shared_sync_state_at(temp_dir.path()).unwrap();
+        assert_eq!(reopened.logical_bytes.load(Ordering::Relaxed), usage);
     }
 
     #[test]
