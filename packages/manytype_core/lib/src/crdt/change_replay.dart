@@ -100,8 +100,12 @@ void _applyContent(ChangeReplayState state, Change_Content content) {
       }
       break;
     case Change_Content_Value.detailsSet:
-      state.details.fields[content.detailsSet.key] =
-          content.detailsSet.value.deepCopy();
+      if (content.detailsSet.hasValue()) {
+        state.details.fields[content.detailsSet.key] =
+            content.detailsSet.value.deepCopy();
+      } else {
+        state.details.fields.remove(content.detailsSet.key);
+      }
       break;
     case Change_Content_Value.detailsUnset:
       state.details.fields.remove(content.detailsUnset.key);

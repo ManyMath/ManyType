@@ -5,6 +5,7 @@ import 'package:manytype_protocol/changes.dart';
 import 'package:manytype_protocol/events.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 import 'package:manytype_protocol/models.dart';
+import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart';
 import 'package:test/test.dart';
 
 final _seed = Uint8List.fromList(List.generate(32, (i) => i + 1));
@@ -53,14 +54,21 @@ Change _setText(String text) => Change(content: [
       ),
     ]);
 
-Future<String> _replayedText(List<RawTreeChangeWithId> changes) async {
+Future<SmartBlockSnapshotBase> _replay(
+  List<RawTreeChangeWithId> changes,
+) async {
   final replayed = await replayObjectState(
     rawTreeChanges: [
       for (final change in changes) Uint8List.fromList(change.rawChange),
     ],
     treeKey: Uint8List(32),
   );
-  return replayed.snapshot.blocks.firstWhere((b) => b.id == 't').text.text;
+  return replayed.snapshot;
+}
+
+Future<String> _replayedText(List<RawTreeChangeWithId> changes) async {
+  final snapshot = await _replay(changes);
+  return snapshot.blocks.firstWhere((b) => b.id == 't').text.text;
 }
 
 void main() {
@@ -87,6 +95,31 @@ void main() {
           await _change([a1.id], _snapshot('compacted'), isSnapshot: true);
 
       expect(await _replayedText([root, s0, a1, s1]), 'compacted');
+    });
+  });
+  group('replayObjectState content', () {
+    test('a detailsSet without a value deletes the detail', () async {
+      final root = await _root();
+      final set = await _change(
+        [root.id],
+        Change(content: [
+          Change_Content(
+            detailsSet: Change_DetailsSet(
+              key: 'tag',
+              value: Value(stringValue: 'x'),
+            ),
+          ),
+        ]),
+      );
+      final clear = await _change(
+        [set.id],
+        Change(content: [
+          Change_Content(detailsSet: Change_DetailsSet(key: 'tag')),
+        ]),
+      );
+
+      final snapshot = await _replay([root, set, clear]);
+      expect(snapshot.details.fields.containsKey('tag'), isFalse);
     });
   });
 }
