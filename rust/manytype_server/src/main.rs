@@ -217,17 +217,10 @@ async fn serve(config_path: PathBuf) -> Result<()> {
                     bail!("QUIC listener stopped before shutdown");
                 };
                 let remote_address = incoming.remote_address();
-                let connection_permit = match Arc::clone(&connection_limit).try_acquire_owned() {
-                    Ok(permit) => permit,
-                    Err(_) => {
-                        tracing::warn!(
-                            event = "connection_rejected",
-                            remote_address = %remote_address,
-                            reason = "connection_limit"
-                        );
-                        incoming.refuse();
-                        continue;
-                    }
+                let Some((incoming, connection_permit)) =
+                    admit_incoming(incoming, &connection_limit)
+                else {
+                    continue;
                 };
                 let local_peer_id_libp2p = local_peer_id_libp2p.clone();
                 let local_identity_keypair = local_identity_keypair.clone();
@@ -355,6 +348,35 @@ async fn shutdown_signal() -> Result<()> {
         .context("failed to install Ctrl-C handler")?;
 
     Ok(())
+}
+
+/// Takes a connection slot for an incoming QUIC connection.
+///
+/// Peers must first prove they own their source address via a Retry, so
+/// spoofed or abandoned Initial packets never hold a slot for the whole
+/// connection setup timeout.
+fn admit_incoming(
+    incoming: quinn::Incoming,
+    connection_limit: &Arc<Semaphore>,
+) -> Option<(quinn::Incoming, OwnedSemaphorePermit)> {
+    if !incoming.remote_address_validated() {
+        if let Err(error) = incoming.retry() {
+            error.into_incoming().refuse();
+        }
+        return None;
+    }
+    match Arc::clone(connection_limit).try_acquire_owned() {
+        Ok(permit) => Some((incoming, permit)),
+        Err(_) => {
+            tracing::warn!(
+                event = "connection_rejected",
+                remote_address = %incoming.remote_address(),
+                reason = "connection_limit"
+            );
+            incoming.refuse();
+            None
+        }
+    }
 }
 
 async fn handle_connection(
@@ -589,6 +611,41 @@ fn tls_peer_id(connection: &quinn::Connection) -> Result<String> {
     let cert = libp2p_tls::certificate::parse(cert)
         .map_err(|e| anyhow::anyhow!("invalid libp2p TLS certificate: {e}"))?;
     Ok(cert.peer_id().to_string())
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn connection_slots_require_a_validated_address() {
+        let server_config = transport::quic::make_server_config(&[3; 32]).unwrap();
+        let endpoint =
+            quinn::Endpoint::server(server_config, "127.0.0.1:0".parse().unwrap()).unwrap();
+        let address = endpoint.local_addr().unwrap();
+        let mut seed = [4; 32];
+        let keypair = Keypair::ed25519_from_bytes(seed.as_mut_slice()).unwrap();
+        let mut tls_config = libp2p_tls::make_client_config(&keypair, None).unwrap();
+        tls_config.alpn_protocols = vec![b"anysync".to_vec()];
+        let mut client = quinn::Endpoint::client("127.0.0.1:0".parse().unwrap()).unwrap();
+        client.set_default_client_config(quinn::ClientConfig::new(Arc::new(
+            quinn::crypto::rustls::QuicClientConfig::try_from(Arc::new(tls_config)).unwrap(),
+        )));
+        let connecting = client.connect(address, "manytype").unwrap();
+        let connection_limit = Arc::new(Semaphore::new(1));
+
+        let first = endpoint.accept().await.unwrap();
+        assert!(!first.remote_address_validated());
+        assert!(admit_incoming(first, &connection_limit).is_none());
+        assert_eq!(connection_limit.available_permits(), 1);
+
+        let retried = endpoint.accept().await.unwrap();
+        let (incoming, _permit) = admit_incoming(retried, &connection_limit).unwrap();
+        assert_eq!(connection_limit.available_permits(), 0);
+        let (server_connection, client_connection) = tokio::join!(incoming, connecting);
+        server_connection.unwrap();
+        client_connection.unwrap();
+    }
 }
 
 #[cfg(test)]
