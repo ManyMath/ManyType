@@ -235,7 +235,8 @@ pub fn handle_acl_upload_invite(
 
 /// Handle /coordinator.Coordinator/SpaceDelete
 ///
-/// Stub: returns success with a future timestamp. No actual space teardown in v2.4.
+/// Stub: returns success with the current time as the deletion timestamp. No
+/// actual space teardown in v2.4.
 pub fn handle_space_delete(
     request_bytes: &[u8],
     sync_state: &SharedSyncState,

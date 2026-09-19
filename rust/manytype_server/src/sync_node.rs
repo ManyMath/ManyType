@@ -35,8 +35,8 @@ const MAX_DIFF_RANGES: usize = 131_072;
 /// Handle /spacesync.SpaceSync/HeadSync
 ///
 /// Returns the head list for all known objects in the requested space.
-/// For Phase 5 this still returns a full listing; Phase 6 narrows this to
-/// hash-based range diffing.
+/// V2/V3 requests with ranges are answered with ldiff range hashes; other
+/// requests get the full listing.
 pub fn handle_head_sync(
     request_bytes: &[u8],
     sync_state: &SharedSyncState,
@@ -266,9 +266,9 @@ pub fn handle_space_pull(
 
 /// Handle a single ObjectSyncMessage from the bidirectional stream.
 ///
-/// Stores pushed raw changes. When the payload is empty, treats the message as
-/// a pull request and returns the local raw changes as a single
-/// length-prefixed payload.
+/// Stores pushed raw changes. An empty payload or a full-sync request is
+/// answered with a `TreeFullSyncResponse` carrying the changes the peer is
+/// missing.
 pub fn handle_object_sync_message(
     message_bytes: &[u8],
     sync_state: &SharedSyncState,

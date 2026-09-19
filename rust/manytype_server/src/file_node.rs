@@ -246,6 +246,8 @@ pub fn handle_blocks_bind(
     Ok(FilesyncOk {}.encode_to_vec())
 }
 
+/// Stub: checks ownership and returns success without unbinding the files'
+/// blobs (a public-deployment blocker in SECURITY.md).
 pub fn handle_files_delete(
     request_bytes: &[u8],
     _state: &FileNodeState,
