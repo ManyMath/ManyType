@@ -127,8 +127,12 @@ impl<S: TreeStorage> ObjectTree<S> {
         Ok(())
     }
 
-    /// Add a verified tree change (non-root).
+    /// Add a verified tree change (non-root). Changes already in the tree are ignored.
     pub fn add_change(&mut self, raw_with_id: &RawTreeChangeWithId) -> Result<()> {
+        if self.storage.has_change(&raw_with_id.id) {
+            return Ok(());
+        }
+
         let verified = verify_tree_change(raw_with_id)?;
 
         // Validate all parents exist
@@ -346,6 +350,22 @@ mod tests {
         tree.add_change(&merge).unwrap();
 
         assert_eq!(tree.heads(), vec![merge.id]);
+    }
+
+    #[test]
+    fn re_adding_known_change_leaves_heads_unchanged() {
+        let sk = test_signing_key();
+        let root = make_root_change(&sk, "space-1", b"seed1");
+        let mut tree = ObjectTree::new(InMemoryTreeStorage::new());
+        tree.add_root(&root).unwrap();
+
+        let c1 = make_tree_change(&sk, vec![root.id.clone()], &root.id, b"change1");
+        let c2 = make_tree_change(&sk, vec![c1.id.clone()], &root.id, b"change2");
+        tree.add_change(&c1).unwrap();
+        tree.add_change(&c2).unwrap();
+        tree.add_change(&c1).unwrap();
+
+        assert_eq!(tree.heads(), vec![c2.id]);
     }
 
     #[test]
