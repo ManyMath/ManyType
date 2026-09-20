@@ -18,46 +18,61 @@ final _snappy = SnappyCodec();
 ///
 /// [rawTreeChanges] must be in topological order. Encrypted and
 /// snappy-compressed TreeChanges are transparently decoded with [treeKey];
-/// root changes and changes without data are skipped.
+/// root changes and changes without data are skipped. With
+/// [skipUnreadable], a change that cannot be decoded is skipped instead of
+/// failing the whole replay.
 Future<ChangeReplayState> replayRawTreeChanges(
   List<Uint8List> rawTreeChanges,
-  Uint8List treeKey,
-) async {
+  Uint8List treeKey, {
+  bool skipUnreadable = false,
+}) async {
   final state = ChangeReplayState();
 
   for (final rawChange in rawTreeChanges) {
-    final rawTreeChange = RawTreeChange.fromBuffer(rawChange);
-    if (rawTreeChange.payload.isEmpty) {
-      continue;
-    }
-
-    final TreeChange treeChange;
     try {
-      treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+      await _replayRawTreeChange(state, rawChange, treeKey);
     } catch (_) {
-      // Root change or non-tree payload.
-      continue;
+      if (!skipUnreadable) rethrow;
     }
-    if (treeChange.changesData.isEmpty) {
-      continue;
-    }
-
-    var data = Uint8List.fromList(treeChange.changesData);
-    if (treeChange.readKeyId.isNotEmpty) {
-      data = await aesGcmDecrypt(treeKey, data);
-    }
-    if (treeChange.dataType == '1/s') {
-      data = _snappy.decompress(data);
-    }
-
-    state.applyChange(
-      await computeCid(rawChange),
-      treeChange.treeHeadIds,
-      Change.fromBuffer(data),
-    );
   }
 
   return state;
+}
+
+Future<void> _replayRawTreeChange(
+  ChangeReplayState state,
+  Uint8List rawChange,
+  Uint8List treeKey,
+) async {
+  final rawTreeChange = RawTreeChange.fromBuffer(rawChange);
+  if (rawTreeChange.payload.isEmpty) {
+    return;
+  }
+
+  final TreeChange treeChange;
+  try {
+    treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+  } catch (_) {
+    // Root change or non-tree payload.
+    return;
+  }
+  if (treeChange.changesData.isEmpty) {
+    return;
+  }
+
+  var data = Uint8List.fromList(treeChange.changesData);
+  if (treeChange.readKeyId.isNotEmpty) {
+    data = await aesGcmDecrypt(treeKey, data);
+  }
+  if (treeChange.dataType == '1/s') {
+    data = _snappy.decompress(data);
+  }
+
+  state.applyChange(
+    await computeCid(rawChange),
+    treeChange.treeHeadIds,
+    Change.fromBuffer(data),
+  );
 }
 
 void _applyContent(ChangeReplayState state, Change_Content content) {

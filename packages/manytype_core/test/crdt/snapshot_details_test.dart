@@ -12,13 +12,29 @@ import 'package:test/test.dart';
 /// UN-encrypted, UN-compressed TreeChange envelope (empty readKeyId + empty
 /// dataType). This keeps the test off the real crypto + snappy code paths;
 /// `replayObjectDetails` then exercises only its replay merge logic.
-Uint8List _wrapAsRawTreeChange(changes_proto.Change change) {
+Uint8List _wrapAsRawTreeChange(
+  changes_proto.Change change, [
+  List<String> parents = const [],
+]) {
   final tc = TreeChange()
+    ..treeHeadIds.addAll(parents)
     ..changesData = change.writeToBuffer()
     ..readKeyId = ''
     ..dataType = '';
   final raw = RawTreeChange()..payload = tc.writeToBuffer();
   return Uint8List.fromList(raw.writeToBuffer());
+}
+
+/// Wrap [changes] as a linear chain, each change parented on the previous.
+Future<List<Uint8List>> _chain(List<changes_proto.Change> changes) async {
+  final rows = <Uint8List>[];
+  var parents = const <String>[];
+  for (final change in changes) {
+    final raw = _wrapAsRawTreeChange(change, parents);
+    rows.add(raw);
+    parents = [await computeCid(raw)];
+  }
+  return rows;
 }
 
 changes_proto.Change _snapshotChange(Map<String, Value> details) {
@@ -29,11 +45,20 @@ changes_proto.Change _snapshotChange(Map<String, Value> details) {
       ..data = (SmartBlockSnapshotBase()..details = struct));
 }
 
-changes_proto.Change _detailsSetChange(String key, Value value) {
+changes_proto.Change _detailsSetChange(String key, Value? value) {
   return changes_proto.Change()
     ..content.add(
       changes_proto.Change_Content(
         detailsSet: changes_proto.Change_DetailsSet(key: key, value: value),
+      ),
+    );
+}
+
+changes_proto.Change _detailsUnsetChange(String key) {
+  return changes_proto.Change()
+    ..content.add(
+      changes_proto.Change_Content(
+        detailsUnset: changes_proto.Change_DetailsUnset(key: key),
       ),
     );
 }
@@ -75,20 +100,12 @@ void main() {
     });
 
     test('second snapshot clears and replaces all prior details', () async {
-      final rows = <Uint8List>[
-        _wrapAsRawTreeChange(
-          _snapshotChange(<String, Value>{'a': Value(stringValue: '1')}),
-        ),
-        _wrapAsRawTreeChange(
-          _detailsSetChange('b', Value(stringValue: '2')),
-        ),
-        _wrapAsRawTreeChange(
-          _snapshotChange(<String, Value>{'x': Value(stringValue: '9')}),
-        ),
-        _wrapAsRawTreeChange(
-          _detailsSetChange('y', Value(stringValue: '7')),
-        ),
-      ];
+      final rows = await _chain([
+        _snapshotChange(<String, Value>{'a': Value(stringValue: '1')}),
+        _detailsSetChange('b', Value(stringValue: '2')),
+        _snapshotChange(<String, Value>{'x': Value(stringValue: '9')}),
+        _detailsSetChange('y', Value(stringValue: '7')),
+      ]);
       final out = await replayObjectDetails(
         rawTreeChanges: rows,
         treeKey: emptyKey,
@@ -98,6 +115,61 @@ void main() {
       expect(out['y']!.stringValue, '7');
       expect(out.containsKey('a'), isFalse);
       expect(out.containsKey('b'), isFalse);
+    });
+
+    test('a snapshot without details clears prior details', () async {
+      final rows = await _chain([
+        _snapshotChange(<String, Value>{'a': Value(stringValue: '1')}),
+        _detailsSetChange('b', Value(stringValue: '2')),
+        changes_proto.Change()
+          ..snapshot = (changes_proto.Change_Snapshot()
+            ..data = SmartBlockSnapshotBase()),
+      ]);
+      final out = await replayObjectDetails(
+        rawTreeChanges: rows,
+        treeKey: emptyKey,
+      );
+      expect(out, isEmpty);
+    });
+
+    test('detailsUnset and a valueless detailsSet delete the key', () async {
+      final rows = await _chain([
+        _snapshotChange(<String, Value>{
+          'a': Value(stringValue: '1'),
+          'b': Value(stringValue: '2'),
+        }),
+        _detailsUnsetChange('a'),
+        _detailsSetChange('b', null),
+      ]);
+      final out = await replayObjectDetails(
+        rawTreeChanges: rows,
+        treeKey: emptyKey,
+      );
+      expect(out, isEmpty);
+    });
+
+    test('a concurrent snapshot keeps details set on a sibling branch',
+        () async {
+      final base = _wrapAsRawTreeChange(
+        _snapshotChange(<String, Value>{'a': Value(stringValue: '1')}),
+      );
+      final baseId = await computeCid(base);
+      final rows = <Uint8List>[
+        base,
+        _wrapAsRawTreeChange(
+          _detailsSetChange('a', Value(stringValue: '10')),
+          [baseId],
+        ),
+        _wrapAsRawTreeChange(
+          _snapshotChange(<String, Value>{'a': Value(stringValue: '1')}),
+          [baseId],
+        ),
+      ];
+      final out = await replayObjectDetails(
+        rawTreeChanges: rows,
+        treeKey: emptyKey,
+      );
+      expect(out['a']!.stringValue, '10');
     });
 
     test('returned values are deep-copied (mutating them is safe)', () async {
