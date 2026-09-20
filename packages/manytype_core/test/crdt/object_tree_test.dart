@@ -161,6 +161,37 @@ void main() {
       expect(tree.heads.first, equals(merge.id));
     });
 
+    test('re-adding a known change leaves heads unchanged', () async {
+      final root = await buildRootChange(
+        spaceId: 'space-1',
+        aclHeadId: 'acl-1',
+        identityPrivateKey: identitySeed,
+      );
+      final tree = ObjectTree.fromRoot(root);
+
+      final change1 = await buildTreeChange(
+        currentHeads: [root.id],
+        aclHeadId: 'acl-1',
+        snapshotBaseId: root.id,
+        changesData: Uint8List.fromList([1, 2, 3]),
+        identityPrivateKey: identitySeed,
+      );
+      final change2 = await buildTreeChange(
+        currentHeads: [change1.id],
+        aclHeadId: 'acl-1',
+        snapshotBaseId: root.id,
+        changesData: Uint8List.fromList([4, 5, 6]),
+        identityPrivateKey: identitySeed,
+      );
+      await tree.addChange(change1);
+      await tree.addChange(change2);
+      await tree.addChange(change1);
+      await tree.addChange(root);
+
+      expect(tree.heads, equals([change2.id]));
+      expect(tree.serialize(), hasLength(3));
+    });
+
     test('buildTreeChange with changesData produces valid signed change',
         () async {
       final root = await buildRootChange(

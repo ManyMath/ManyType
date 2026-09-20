@@ -38,7 +38,10 @@ class ObjectTree {
   ///
   /// Verifies CID integrity, signature validity, and that all referenced
   /// parent heads exist in the tree. Updates the head set accordingly.
+  /// Changes already in the tree are ignored.
   Future<void> addChange(RawTreeChangeWithId change) async {
+    if (_changes.containsKey(change.id)) return;
+
     // 1. Verify CID: computeCid(change.rawChange) == change.id
     final recomputedCid =
         await computeCid(Uint8List.fromList(change.rawChange));
