@@ -192,6 +192,47 @@ void main() {
       expect(tree.serialize(), hasLength(3));
     });
 
+    test('serialize order does not depend on insertion order', () async {
+      final root = await buildRootChange(
+        spaceId: 'space-1',
+        aclHeadId: 'acl-1',
+        identityPrivateKey: identitySeed,
+      );
+      final base = await buildTreeChange(
+        currentHeads: [root.id],
+        aclHeadId: 'acl-1',
+        snapshotBaseId: root.id,
+        changesData: Uint8List.fromList([1]),
+        identityPrivateKey: identitySeed,
+      );
+      final forks = [
+        for (var i = 2; i < 5; i++)
+          await buildTreeChange(
+            currentHeads: [base.id],
+            aclHeadId: 'acl-1',
+            snapshotBaseId: root.id,
+            changesData: Uint8List.fromList([i]),
+            identityPrivateKey: identitySeed,
+          ),
+      ];
+
+      final forward = ObjectTree.fromRoot(root);
+      final backward = ObjectTree.fromRoot(root);
+      await forward.addChange(base);
+      await backward.addChange(base);
+      for (final fork in forks) {
+        await forward.addChange(fork);
+      }
+      for (final fork in forks.reversed) {
+        await backward.addChange(fork);
+      }
+
+      final forkIds = forks.map((fork) => fork.id).toList()..sort();
+      final expected = [root.id, base.id, ...forkIds];
+      expect(forward.serialize().map((c) => c.id), equals(expected));
+      expect(backward.serialize().map((c) => c.id), equals(expected));
+    });
+
     test('buildTreeChange with changesData produces valid signed change',
         () async {
       final root = await buildRootChange(

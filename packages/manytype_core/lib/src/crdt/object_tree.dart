@@ -15,7 +15,7 @@ import 'package:manytype_protocol/manytype_protocol.dart';
 /// from heads (they now have a successor), and the new change ID is added.
 class ObjectTree {
   final Map<String, RawTreeChangeWithId> _changes = {};
-  final Map<String, List<String>> _parentMap = {}; // id -> parent ids
+  final Map<String, List<String>> _childMap = {}; // id -> child ids
   final Set<String> _headIds = {};
 
   /// The CID of the root change.
@@ -28,7 +28,6 @@ class ObjectTree {
     rootId = rootChange.id;
     _changes[rootId] = rootChange;
     _headIds.add(rootId);
-    _parentMap[rootId] = []; // root has no parents
   }
 
   /// Current head CIDs, sorted for deterministic comparison.
@@ -75,9 +74,11 @@ class ObjectTree {
       }
     }
 
-    // 6. Add to _changes and _parentMap
+    // 6. Add to _changes and _childMap
     _changes[change.id] = change;
-    _parentMap[change.id] = parentIds;
+    for (final parentId in parentIds) {
+      (_childMap[parentId] ??= []).add(change.id);
+    }
 
     // 7. Update _headIds: remove each parent from heads, add this change id
     for (final parentId in parentIds) {
@@ -88,30 +89,34 @@ class ObjectTree {
 
   /// Serialize the tree as a list of [RawTreeChangeWithId] in topological order.
   ///
-  /// Root change is first, followed by changes in dependency order.
+  /// Root change is first, followed by changes in dependency order. Like
+  /// any-sync's tree iterator, this is the reverse post-order of a walk from
+  /// the root with concurrent children ordered by id, so peers holding the
+  /// same changes serialize (and replay) them identically.
   List<RawTreeChangeWithId> serialize() {
-    final result = <RawTreeChangeWithId>[];
+    final postOrder = <String>[];
     final visited = <String>{};
+    final expanded = <String>{};
+    final stack = <String>[rootId];
 
-    void visit(String id) {
-      if (visited.contains(id)) return;
-      visited.add(id);
-
-      // Visit parents first (topological ordering)
-      final parents = _parentMap[id] ?? [];
-      for (final parentId in parents) {
-        visit(parentId);
+    while (stack.isNotEmpty) {
+      final id = stack.removeLast();
+      // Second visit: every descendant has been emitted.
+      if (expanded.remove(id)) {
+        postOrder.add(id);
+        continue;
       }
+      if (!visited.add(id)) continue;
 
-      result.add(_changes[id]!);
+      stack.add(id);
+      expanded.add(id);
+      final children = [...?_childMap[id]]..sort();
+      for (final childId in children) {
+        if (!visited.contains(childId)) stack.add(childId);
+      }
     }
 
-    // Start from heads to ensure all reachable nodes are visited
-    for (final headId in _headIds) {
-      visit(headId);
-    }
-
-    return result;
+    return [for (final id in postOrder.reversed) _changes[id]!];
   }
 
   /// Deserialize an ObjectTree from a topologically ordered list of changes.
