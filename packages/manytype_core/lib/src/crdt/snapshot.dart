@@ -24,10 +24,25 @@ SmartBlockSnapshotBase _buildSnapshotBaseFromReplay(
   ChangeReplayState replayed,
   String rootId,
 ) {
-  final contentBlocks = replayed.blocks.values.toList()
+  final blocks = replayed.blocks.values.toList()
     ..sort((left, right) => left.id.compareTo(right.id));
 
-  final snapshot = createMinimalSnapshot(rootId, contentBlocks);
+  final SmartBlockSnapshotBase snapshot;
+  if (replayed.blocks.containsKey(rootId)) {
+    snapshot = SmartBlockSnapshotBase()..blocks.addAll(blocks);
+  } else {
+    // No root block was replayed: hang the top-level blocks off a fresh
+    // root + layout skeleton and keep nested blocks under their parents.
+    final childIds = {for (final block in blocks) ...block.childrenIds};
+    snapshot = createMinimalSnapshot(rootId, [
+      for (final block in blocks)
+        if (!childIds.contains(block.id)) block,
+    ])
+      ..blocks.addAll([
+        for (final block in blocks)
+          if (childIds.contains(block.id)) block,
+      ]);
+  }
   if (replayed.details.fields.isNotEmpty) {
     snapshot.details = replayed.details.deepCopy();
   }

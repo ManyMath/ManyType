@@ -321,6 +321,32 @@ void main() {
       expect(snapshot.blocks.any((b) => b.id == 'block-2'), isTrue);
     });
 
+    test('keeps a replayed root and layout instead of wrapping them again',
+        () async {
+      final (tree, _, rootChangeId) =
+          await _buildTreeWithBlocks(identitySeed, aclHeadId, const []);
+      final skeleton = createMinimalSnapshot(
+        'sb-root',
+        [createTextBlock('block-1', 'Hello')],
+      );
+      await tree.addChange(await buildTreeChange(
+        currentHeads: tree.heads,
+        aclHeadId: aclHeadId,
+        snapshotBaseId: rootChangeId,
+        changesData: Uint8List.fromList(
+          Change(snapshot: Change_Snapshot(data: skeleton)).writeToBuffer(),
+        ),
+        identityPrivateKey: identitySeed,
+        isSnapshot: true,
+      ));
+
+      final snapshot = createSnapshot(tree, 'sb-root');
+      final blockMap = {for (final b in snapshot.blocks) b.id: b};
+      expect(snapshot.blocks, hasLength(3));
+      expect(blockMap['sb-root']!.childrenIds, ['layout-sb-root']);
+      expect(blockMap['layout-sb-root']!.childrenIds, ['block-1']);
+    });
+
     test('replays metadata, relations, store values, and file info', () async {
       final block1 = createTextBlock('block-1', 'Hello');
 
@@ -479,6 +505,41 @@ void main() {
       final rawTreeChange = RawTreeChange.fromBuffer(snapshotChange.rawChange);
       final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
       expect(treeChange.isSnapshot, isTrue);
+    });
+
+    test('compacting twice keeps a single root and layout', () async {
+      final (tree, _, _) = await _buildTreeWithBlocks(
+        identitySeed,
+        aclHeadId,
+        [
+          Change_Content(
+              blockCreate: Change_BlockCreate(
+                  targetId: 'sb-root',
+                  blocks: [createTextBlock('block-1', 'Hello')])),
+        ],
+      );
+
+      await compactTree(
+        tree: tree,
+        rootId: 'sb-root',
+        aclHeadId: aclHeadId,
+        identityPrivateKey: identitySeed,
+      );
+      final snapshotChange = await compactTree(
+        tree: tree,
+        rootId: 'sb-root',
+        aclHeadId: aclHeadId,
+        identityPrivateKey: identitySeed,
+      );
+
+      final rawTreeChange = RawTreeChange.fromBuffer(snapshotChange.rawChange);
+      final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
+      final blocks =
+          Change.fromBuffer(treeChange.changesData).snapshot.data.blocks;
+      final blockMap = {for (final b in blocks) b.id: b};
+      expect(blocks, hasLength(3));
+      expect(blockMap['sb-root']!.childrenIds, ['layout-sb-root']);
+      expect(blockMap['layout-sb-root']!.childrenIds, ['block-1']);
     });
 
     test('preserves replayed fileInfo and fileKeys in snapshot changes',
