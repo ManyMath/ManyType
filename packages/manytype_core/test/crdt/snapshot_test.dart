@@ -505,6 +505,8 @@ void main() {
       final rawTreeChange = RawTreeChange.fromBuffer(snapshotChange.rawChange);
       final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
       expect(treeChange.isSnapshot, isTrue);
+      // Plaintext changesData must not claim a read key.
+      expect(treeChange.readKeyId, isEmpty);
     });
 
     test('compacting twice keeps a single root and layout', () async {

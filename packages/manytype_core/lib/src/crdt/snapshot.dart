@@ -70,13 +70,15 @@ SmartBlockSnapshotBase _buildSnapshotBaseFromReplay(
 /// [Change] proto with the `snapshot` field set to a [Change_Snapshot]
 /// containing the full [SmartBlockSnapshotBase].
 ///
+/// The snapshot is written as plaintext with an empty `readKeyId`, matching
+/// the unencrypted changes [collectBlockState] replays.
+///
 /// Returns the new snapshot change (already added to tree).
 Future<RawTreeChangeWithId> compactTree({
   required ObjectTree tree,
   required String rootId,
   required String aclHeadId,
   required Uint8List identityPrivateKey,
-  String readKeyId = '',
 }) async {
   final replayed = _replayTree(tree);
   final snapshotBase = _buildSnapshotBaseFromReplay(replayed, rootId);
@@ -97,7 +99,6 @@ Future<RawTreeChangeWithId> compactTree({
     snapshotBaseId: tree.rootId,
     changesData: changeBytes,
     identityPrivateKey: identityPrivateKey,
-    readKeyId: readKeyId,
     isSnapshot: true,
   );
 
