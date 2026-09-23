@@ -121,5 +121,32 @@ void main() {
       final snapshot = await _replay([root, set, clear]);
       expect(snapshot.details.fields.containsKey('tag'), isFalse);
     });
+
+    test('collection slice updates follow heart slice semantics', () async {
+      final root = await _root();
+      final change = await _change(
+        [root.id],
+        Change(content: [
+          Change_Content(
+            storeKeySet: Change_StoreKeySet(
+              path: ['objects'],
+              value: Value(
+                listValue: ListValue(values: [
+                  Value(stringValue: 'a'),
+                  Value(stringValue: 'b'),
+                ]),
+              ),
+            ),
+          ),
+          buildStoreSliceUpdateAdd(key: 'objects', ids: ['x'], afterId: 'gone'),
+          buildStoreSliceUpdateMove(key: 'objects', ids: ['b', 'gone']),
+        ]),
+      );
+
+      final snapshot = await _replay([root, change]);
+      final objects = snapshot.collections.fields['objects']!.listValue.values
+          .map((value) => value.stringValue);
+      expect(objects, ['b', 'x', 'a']);
+    });
   });
 }
