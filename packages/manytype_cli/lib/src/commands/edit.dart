@@ -1054,33 +1054,10 @@ Future<({String storeKey, List<String> memberIds})?> _loadCollectionState(
         }
         if (content.hasStoreSliceUpdate()) {
           final key = content.storeSliceUpdate.key;
-          final current =
-              List<String>.from(collections[key] ?? const <String>[]);
-          switch (content.storeSliceUpdate.whichOperation()) {
-            case changes_proto.Change_StoreSliceUpdate_Operation.add:
-              _insertAfterId(
-                current,
-                content.storeSliceUpdate.add.afterId,
-                content.storeSliceUpdate.add.ids,
-              );
-              collections[key] = current;
-              break;
-            case changes_proto.Change_StoreSliceUpdate_Operation.remove:
-              current.removeWhere(content.storeSliceUpdate.remove.ids.contains);
-              collections[key] = current;
-              break;
-            case changes_proto.Change_StoreSliceUpdate_Operation.move:
-              current.removeWhere(content.storeSliceUpdate.move.ids.contains);
-              _insertAfterId(
-                current,
-                content.storeSliceUpdate.move.afterId,
-                content.storeSliceUpdate.move.ids,
-              );
-              collections[key] = current;
-              break;
-            case changes_proto.Change_StoreSliceUpdate_Operation.notSet:
-              break;
-          }
+          collections[key] = applyStoreSliceUpdate(
+            collections[key] ?? const <String>[],
+            content.storeSliceUpdate,
+          );
         }
       }
     } catch (_) {
@@ -1174,27 +1151,6 @@ Map<String, List<String>> _collectionsFromSnapshot(Struct snapshotCollections) {
         .toList();
   }
   return collections;
-}
-
-void _insertAfterId(
-  List<String> current,
-  String afterId,
-  Iterable<String> ids,
-) {
-  final values = ids.toList();
-  if (values.isEmpty) return;
-
-  if (afterId.isEmpty) {
-    current.insertAll(0, values);
-    return;
-  }
-
-  final index = current.indexOf(afterId);
-  if (index < 0) {
-    current.addAll(values);
-    return;
-  }
-  current.insertAll(index + 1, values);
 }
 
 Future<String?> _resolvePrimaryTextBlockId(

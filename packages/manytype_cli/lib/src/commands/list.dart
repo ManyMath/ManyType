@@ -570,21 +570,10 @@ void _applyCollectionStoreSliceUpdate(
   Map<String, Value> collections,
   changes_proto.Change_StoreSliceUpdate update,
 ) {
-  final current = _readCollectionStringList(collections[update.key]);
-  switch (update.whichOperation()) {
-    case changes_proto.Change_StoreSliceUpdate_Operation.add:
-      _insertCollectionIds(current, update.add.afterId, update.add.ids);
-      break;
-    case changes_proto.Change_StoreSliceUpdate_Operation.remove:
-      current.removeWhere(update.remove.ids.contains);
-      break;
-    case changes_proto.Change_StoreSliceUpdate_Operation.move:
-      current.removeWhere(update.move.ids.contains);
-      _insertCollectionIds(current, update.move.afterId, update.move.ids);
-      break;
-    case changes_proto.Change_StoreSliceUpdate_Operation.notSet:
-      break;
-  }
+  final current = applyStoreSliceUpdate(
+    _readCollectionStringList(collections[update.key]),
+    update,
+  );
   collections[update.key] = Value(
     listValue: ListValue(
       values: current.map((value) => Value(stringValue: value)).toList(),
@@ -600,28 +589,4 @@ List<String> _readCollectionStringList(Value? value) {
       .where((item) => item.hasStringValue())
       .map((item) => item.stringValue)
       .toList();
-}
-
-void _insertCollectionIds(
-  List<String> current,
-  String afterId,
-  Iterable<String> ids,
-) {
-  final values = ids.toList();
-  if (values.isEmpty) {
-    return;
-  }
-
-  if (afterId.isEmpty) {
-    current.insertAll(0, values);
-    return;
-  }
-
-  final index = current.indexOf(afterId);
-  if (index < 0) {
-    current.addAll(values);
-    return;
-  }
-
-  current.insertAll(index + 1, values);
 }
