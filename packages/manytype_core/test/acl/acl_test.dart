@@ -131,6 +131,33 @@ void main() {
       expect(record.id, startsWith('bafy'));
     });
 
+    test('root and record timestamps are Unix seconds', () async {
+      final before = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final root = await buildAclRoot(
+        spaceId: spaceId,
+        masterKeySeed: masterKeySeed,
+        identityPrivateKey: identitySeed,
+        readKey: readKey,
+      );
+      final record = await buildAclRecord(
+        prevId: root.id,
+        aclData: AclData(),
+        identityPrivateKey: identitySeed,
+      );
+      final after = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+      final verifiedRoot = await verifyAndDecodeAclRecord(root);
+      final verifiedRecord = await verifyAndDecodeAclRecord(record);
+      final timestamps = [
+        verifiedRoot.timestamp,
+        verifiedRoot.aclRoot!.timestamp.toInt(),
+        verifiedRecord.timestamp,
+      ];
+      for (final timestamp in timestamps) {
+        expect(timestamp, inInclusiveRange(before, after));
+      }
+    });
+
     test('CID verification: computeCid(rawRecordWithId.payload) == id',
         () async {
       final result = await buildAclRoot(

@@ -36,8 +36,8 @@ Future<RawRecordWithId> buildAclRoot({
   final identitySignature =
       await ed25519Sign(masterKeySeed, identityKeyPair.publicKey);
 
-  // 4. Create AclRoot proto
-  final now = DateTime.now().millisecondsSinceEpoch;
+  // 4. Create AclRoot proto (any-sync timestamps are Unix seconds)
+  final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
   final aclRoot = AclRoot(
     identity: identityKeyPair.publicKey,
     masterKey: masterKeyPair.publicKey,
@@ -99,8 +99,8 @@ Future<RawRecordWithId> buildAclRecord({
   // 2. Marshal AclData to bytes
   final aclDataBytes = aclData.writeToBuffer();
 
-  // 3. Create Record proto with prevId linking to chain
-  final now = DateTime.now().millisecondsSinceEpoch;
+  // 3. Create Record proto with prevId linking to chain (Unix seconds)
+  final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
   final record = Record(
     prevId: prevId,
     identity: _marshalEd25519PublicKey(keyPair.publicKey),
