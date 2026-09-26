@@ -194,6 +194,20 @@ void main() {
       expect(recreated['root']!.childrenIds, ['p1', 'p2', 'n']);
     });
 
+    test('blockDuplicate is ignored', () async {
+      final blocks = await _replayOnTree((_) => [
+            Change_Content(
+              blockDuplicate: Change_BlockDuplicate(
+                targetId: 'p2',
+                position: Block_Position.Inner,
+                ids: ['x', 'missing'],
+              ),
+            ),
+          ]);
+      expect(blocks['p1']!.childrenIds, ['x']);
+      expect(blocks['p2']!.childrenIds, isEmpty);
+    });
+
     test('relationAdd keeps an existing relation link', () async {
       final root = await _root();
       final change = await _change(

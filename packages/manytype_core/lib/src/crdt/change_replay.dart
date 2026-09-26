@@ -100,14 +100,6 @@ void _applyContent(ChangeReplayState state, Change_Content content) {
         content.blockMove.ids,
       );
       break;
-    case Change_Content_Value.blockDuplicate:
-      _insertIds(
-        state,
-        content.blockDuplicate.targetId,
-        content.blockDuplicate.position,
-        content.blockDuplicate.ids.toList(),
-      );
-      break;
     case Change_Content_Value.relationAdd:
       for (final link in content.relationAdd.relationLinks) {
         state.relationLinks.putIfAbsent(link.key, link.deepCopy);
@@ -167,6 +159,8 @@ void _applyContent(ChangeReplayState state, Change_Content content) {
     case Change_Content_Value.setFileInfo:
       state.fileInfo = content.setFileInfo.fileInfo.deepCopy();
       break;
+    // Heart's applyChange has no blockDuplicate case, so it is ignored.
+    case Change_Content_Value.blockDuplicate:
     case Change_Content_Value.notificationCreate:
     case Change_Content_Value.notificationUpdate:
     case Change_Content_Value.deviceAdd:
