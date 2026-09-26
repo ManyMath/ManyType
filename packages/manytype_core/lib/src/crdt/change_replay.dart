@@ -19,15 +19,18 @@ final _snappy = SnappyCodec();
 ///
 /// [rawTreeChanges] must be in topological order. Encrypted and
 /// snappy-compressed TreeChanges are transparently decoded with [treeKey];
-/// root changes and changes without data are skipped. With
-/// [skipUnreadable], a change that cannot be decoded is skipped instead of
-/// failing the whole replay.
+/// the root change (whose id is the root block id) and changes without data
+/// are skipped. With [skipUnreadable], a change that cannot be decoded is
+/// skipped instead of failing the whole replay.
 Future<ChangeReplayState> replayRawTreeChanges(
   List<Uint8List> rawTreeChanges,
   Uint8List treeKey, {
   bool skipUnreadable = false,
 }) async {
-  final state = ChangeReplayState();
+  final state = ChangeReplayState(
+    rootId:
+        rawTreeChanges.isEmpty ? '' : await computeCid(rawTreeChanges.first),
+  );
 
   for (final rawChange in rawTreeChanges) {
     try {
@@ -176,8 +179,15 @@ void _applyContent(ChangeReplayState state, Change_Content content) {
 void _applyBlockCreate(ChangeReplayState state, Change_BlockCreate create) {
   final ids = <String>[];
   for (final block in create.blocks) {
+    // Like heart's changeBlockCreate: an existing root is kept, the root is
+    // never inserted anywhere, and re-created blocks leave their old parent.
+    if (block.id == state.rootId) {
+      if (state.blocks.containsKey(block.id)) continue;
+    } else {
+      ids.add(block.id);
+      _unlinkIds(state, [block.id]);
+    }
     state.blocks[block.id] = block.deepCopy();
-    ids.add(block.id);
   }
   _insertIds(state, create.targetId, create.position, ids);
 }
@@ -337,7 +347,21 @@ void _insertIds(
   Block_Position position,
   List<String> ids,
 ) {
-  if (ids.isEmpty || targetId.isEmpty) return;
+  if (ids.isEmpty) return;
+  if (targetId.isEmpty) {
+    // Like heart's InsertTo: no target means the root, inner positions only.
+    if (state.rootId.isNotEmpty) {
+      _insertIds(
+        state,
+        state.rootId,
+        position == Block_Position.InnerFirst
+            ? Block_Position.InnerFirst
+            : Block_Position.Inner,
+        ids,
+      );
+    }
+    return;
+  }
 
   final target = state.blocks[targetId];
   switch (position) {
@@ -471,6 +495,11 @@ List<String> _readStringList(Value? value) {
 /// Shared by [replayRawTreeChanges] and the in-memory ObjectTree replay in
 /// `snapshot.dart` so both apply changes with the same rules.
 class ChangeReplayState {
+  ChangeReplayState({this.rootId = ''});
+
+  /// Id of the object's root block, i.e. the tree id.
+  final String rootId;
+
   final blocks = <String, Block>{};
   final relationLinks = <String, RelationLink>{};
   final details = Struct();

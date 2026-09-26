@@ -71,6 +71,35 @@ Future<String> _replayedText(List<RawTreeChangeWithId> changes) async {
   return snapshot.blocks.firstWhere((b) => b.id == 't').text.text;
 }
 
+/// Replay [content] on top of a snapshot whose root block carries the tree
+/// id, as in real objects: root -> [p1, p2], p1 -> [x]. The root block is
+/// keyed as 'root' in the result.
+Future<Map<String, Block>> _replayOnTree(
+  List<Change_Content> Function(String rootId) content,
+) async {
+  final root = await _root();
+  final base = await _change(
+    [root.id],
+    Change(
+      snapshot: Change_Snapshot(
+        data: SmartBlockSnapshotBase(blocks: [
+          Block(id: root.id, childrenIds: ['p1', 'p2']),
+          Block(id: 'p1', childrenIds: ['x']),
+          Block(id: 'p2'),
+          Block(id: 'x'),
+        ]),
+      ),
+    ),
+    isSnapshot: true,
+  );
+  final change = await _change([base.id], Change(content: content(root.id)));
+  final snapshot = await _replay([root, base, change]);
+  return {
+    for (final block in snapshot.blocks)
+      block.id == root.id ? 'root' : block.id: block,
+  };
+}
+
 void main() {
   group('replayObjectState snapshots', () {
     test('a concurrent snapshot does not discard sibling-branch edits',
@@ -120,6 +149,49 @@ void main() {
 
       final snapshot = await _replay([root, set, clear]);
       expect(snapshot.details.fields.containsKey('tag'), isFalse);
+    });
+
+    test('blockCreate without a target inserts into the root', () async {
+      final appended = await _replayOnTree((_) => [
+            Change_Content(
+                blockCreate: Change_BlockCreate(blocks: [Block(id: 'n')])),
+          ]);
+      expect(appended['root']!.childrenIds, ['p1', 'p2', 'n']);
+
+      final prepended = await _replayOnTree((_) => [
+            Change_Content(
+              blockCreate: Change_BlockCreate(
+                position: Block_Position.InnerFirst,
+                blocks: [Block(id: 'n')],
+              ),
+            ),
+          ]);
+      expect(prepended['root']!.childrenIds, ['n', 'p1', 'p2']);
+    });
+
+    test('blockCreate keeps an existing root and moves re-created blocks',
+        () async {
+      final blocks = await _replayOnTree((_) => [
+            Change_Content(
+              blockCreate: Change_BlockCreate(
+                targetId: 'p2',
+                position: Block_Position.Inner,
+                blocks: [Block(id: 'x')],
+              ),
+            ),
+          ]);
+      expect(blocks['p1']!.childrenIds, isEmpty);
+      expect(blocks['p2']!.childrenIds, ['x']);
+
+      final recreated = await _replayOnTree((rootId) => [
+            Change_Content(
+              blockCreate: Change_BlockCreate(blocks: [
+                Block(id: rootId),
+                Block(id: 'n'),
+              ]),
+            ),
+          ]);
+      expect(recreated['root']!.childrenIds, ['p1', 'p2', 'n']);
     });
 
     test('relationAdd keeps an existing relation link', () async {

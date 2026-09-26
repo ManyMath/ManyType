@@ -107,7 +107,7 @@ Future<RawTreeChangeWithId> compactTree({
 }
 
 ChangeReplayState _replayTree(ObjectTree tree) {
-  final state = ChangeReplayState();
+  final state = ChangeReplayState(rootId: tree.rootId);
   final changes = tree.serialize();
 
   for (var i = 0; i < changes.length; i++) {
