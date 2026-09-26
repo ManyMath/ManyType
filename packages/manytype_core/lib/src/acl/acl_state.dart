@@ -195,8 +195,13 @@ class AclState {
 
   void _handleInviteJoin(AclAccountInviteJoin join) {
     final identityHex = _identityHex(join.identity);
-    // Use the permissions from the join message
-    _permissions[identityHex] = join.permissions;
+    // Use the join's permissions, falling back to the invite's like any-sync.
+    var permissions = join.permissions;
+    if (permissions == AclUserPermissions.None) {
+      permissions = _pendingInvites[join.inviteRecordId]?.permissions ??
+          AclUserPermissions.None;
+    }
+    _permissions[identityHex] = permissions;
     _statuses[identityHex] = AclAccountStatus.active;
   }
 

@@ -254,6 +254,52 @@ void main() {
       expect(state.getStatus(joinerHex), equals(AclAccountStatus.active));
     });
 
+    test('invite join without permissions inherits the invite permissions',
+        () async {
+      final root = await buildAclRoot(
+        spaceId: spaceId,
+        masterKeySeed: masterKeySeed,
+        identityPrivateKey: identitySeed,
+        readKey: readKey,
+      );
+      final state = AclState()..applyRoot(await verifyAndDecodeAclRecord(root));
+
+      final inviteKeyPair = await ed25519KeyPairFromSeed(
+          Uint8List.fromList(List.generate(32, (i) => i + 50)));
+      final inviteRecord = await buildAclRecord(
+        prevId: root.id,
+        aclData: AclData(aclContent: [
+          AclContentValue(
+            invite: AclAccountInvite(
+              inviteKey: inviteKeyPair.publicKey,
+              permissions: AclUserPermissions.Reader,
+            ),
+          ),
+        ]),
+        identityPrivateKey: identitySeed,
+      );
+      state.applyRecord(await verifyAndDecodeAclRecord(inviteRecord));
+
+      final joinerKeyPair = await ed25519KeyPairFromSeed(
+          Uint8List.fromList(List.generate(32, (i) => i + 200)));
+      final joinRecord = await buildAclRecord(
+        prevId: inviteRecord.id,
+        aclData: AclData(aclContent: [
+          AclContentValue(
+            inviteJoin: AclAccountInviteJoin(
+              identity: joinerKeyPair.publicKey,
+              inviteRecordId: inviteRecord.id,
+            ),
+          ),
+        ]),
+        identityPrivateKey: identitySeed,
+      );
+      state.applyRecord(await verifyAndDecodeAclRecord(joinRecord));
+
+      final joinerHex = hex.encode(joinerKeyPair.publicKey);
+      expect(state.getPermission(joinerHex), equals(AclUserPermissions.Reader));
+    });
+
     test('AclState decodes marshalled nested identities and tracks removal',
         () async {
       final root = await buildAclRoot(
