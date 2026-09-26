@@ -122,6 +122,29 @@ void main() {
       expect(snapshot.details.fields.containsKey('tag'), isFalse);
     });
 
+    test('relationAdd keeps an existing relation link', () async {
+      final root = await _root();
+      final change = await _change(
+        [root.id],
+        Change(content: [
+          Change_Content(
+            relationAdd: Change_RelationAdd(relationLinks: [
+              RelationLink(key: 'status', format: RelationFormat.status),
+            ]),
+          ),
+          Change_Content(
+            relationAdd: Change_RelationAdd(relationLinks: [
+              RelationLink(key: 'status', format: RelationFormat.tag),
+            ]),
+          ),
+        ]),
+      );
+
+      final snapshot = await _replay([root, change]);
+      expect(snapshot.relationLinks, hasLength(1));
+      expect(snapshot.relationLinks.single.format, RelationFormat.status);
+    });
+
     test('collection slice updates follow heart slice semantics', () async {
       final root = await _root();
       final change = await _change(

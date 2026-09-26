@@ -107,7 +107,7 @@ void _applyContent(ChangeReplayState state, Change_Content content) {
       break;
     case Change_Content_Value.relationAdd:
       for (final link in content.relationAdd.relationLinks) {
-        state.relationLinks[link.key] = link.deepCopy();
+        state.relationLinks.putIfAbsent(link.key, link.deepCopy);
       }
       break;
     case Change_Content_Value.relationRemove:
