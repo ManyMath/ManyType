@@ -14,9 +14,10 @@ import 'snapshot_details.dart';
 /// including the `default` sentinel for "no explicit color".
 ///
 /// Note: the Anytype web custom-CSS docs include `green` as a hue variable,
-/// but `green` is NOT present in the Kotlin `ThemeColor` enum: treat as
-/// out-of-palette for Phase 38 MVP. Phase 42 bidirectional verification
-/// against the official client will confirm this constraint.
+/// but `green` is not a relation-option color: it is absent from the Kotlin
+/// `ThemeColor` enum and from anytype-heart v0.48.5's `constant.OptionColor`
+/// list, whose ten values match the non-default entries here. The Phase 42
+/// bidirectional captures only exercised blue, orange and red.
 const Set<String> optionColorPalette = <String>{
   'default',
   'grey',
@@ -203,8 +204,8 @@ Future<Map<String, ResolvedOption>> loadLocalOptionIndex(
 /// `changePayload` field does not begin with tag 0x08 (field 1, wire
 /// type 0 = varint).
 ///
-/// Mirrors `packages/manytype_cli/lib/src/commands/read.dart:541-557`
-/// (`_extractSmartBlockType` + `_decodeVarint`) verbatim: moved into
+/// Mirrors `_extractSmartBlockType` + `_decodeVarint` in
+/// `packages/manytype_cli/lib/src/commands/read.dart`: moved into
 /// `manytype_core` so Phase 38's [loadLocalOptionIndex] can scan root
 /// changes without depending on the CLI.
 ///
