@@ -19,15 +19,40 @@ class ObjectTree {
   final Set<String> _headIds = {};
 
   /// The CID of the root change.
-  late final String rootId;
+  final String rootId;
+
+  ObjectTree._(RawTreeChangeWithId rootChange) : rootId = rootChange.id {
+    _changes[rootId] = rootChange;
+    _headIds.add(rootId);
+  }
 
   /// Create an ObjectTree from a root change.
   ///
-  /// The root change becomes the initial single head.
-  ObjectTree.fromRoot(RawTreeChangeWithId rootChange) {
-    rootId = rootChange.id;
-    _changes[rootId] = rootChange;
-    _headIds.add(rootId);
+  /// Verifies the root's CID and, unless the root is derived (derived roots
+  /// carry no identity or signature), its Ed25519 signature. The root change
+  /// becomes the initial single head.
+  static Future<ObjectTree> fromRoot(RawTreeChangeWithId rootChange) async {
+    final recomputedCid =
+        await computeCid(Uint8List.fromList(rootChange.rawChange));
+    if (recomputedCid != rootChange.id) {
+      throw StateError(
+          'CID mismatch: expected ${rootChange.id}, computed $recomputedCid');
+    }
+
+    final rawTreeChange = RawTreeChange.fromBuffer(rootChange.rawChange);
+    final root = RootChange.fromBuffer(rawTreeChange.payload);
+    if (!root.isDerived) {
+      final valid = await ed25519Verify(
+        _decodeIdentityPublicKey(root.identity),
+        Uint8List.fromList(rawTreeChange.payload),
+        Uint8List.fromList(rawTreeChange.signature),
+      );
+      if (!valid) {
+        throw StateError('Invalid signature for root change ${rootChange.id}');
+      }
+    }
+
+    return ObjectTree._(rootChange);
   }
 
   /// Current head CIDs, sorted for deterministic comparison.
@@ -121,15 +146,15 @@ class ObjectTree {
 
   /// Deserialize an ObjectTree from a topologically ordered list of changes.
   ///
-  /// The first change must be the root change. Subsequent changes are added
-  /// in order, with CID and signature verification.
+  /// The first change must be the root change. It and the subsequent changes
+  /// are added in order, with CID and signature verification.
   static Future<ObjectTree> deserialize(
       List<RawTreeChangeWithId> changes) async {
     if (changes.isEmpty) {
       throw ArgumentError('Cannot deserialize empty change list');
     }
 
-    final tree = ObjectTree.fromRoot(changes.first);
+    final tree = await ObjectTree.fromRoot(changes.first);
 
     for (var i = 1; i < changes.length; i++) {
       await tree.addChange(changes[i]);

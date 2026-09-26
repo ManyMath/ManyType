@@ -29,7 +29,7 @@ Future<(ObjectTree, String, String)> _buildTreeWithBlocks(
     aclHeadId: aclHeadId,
     identityPrivateKey: identitySeed,
   );
-  final tree = ObjectTree.fromRoot(root);
+  final tree = await ObjectTree.fromRoot(root);
 
   // Add a change containing the operations
   final changesData = marshalChangeContent(operations);
@@ -87,7 +87,7 @@ void main() {
         aclHeadId: aclHeadId,
         identityPrivateKey: identitySeed,
       );
-      final tree = ObjectTree.fromRoot(root);
+      final tree = await ObjectTree.fromRoot(root);
 
       // Add BlockCreate
       final createData = marshalChangeContent([
@@ -134,7 +134,7 @@ void main() {
         aclHeadId: aclHeadId,
         identityPrivateKey: identitySeed,
       );
-      final tree = ObjectTree.fromRoot(root);
+      final tree = await ObjectTree.fromRoot(root);
 
       final createData = marshalChangeContent([
         Change_Content(
@@ -194,7 +194,7 @@ void main() {
         aclHeadId: aclHeadId,
         identityPrivateKey: identitySeed,
       );
-      final tree = ObjectTree.fromRoot(root);
+      final tree = await ObjectTree.fromRoot(root);
 
       // Add BlockCreate
       final createData = marshalChangeContent([
@@ -235,7 +235,7 @@ void main() {
         aclHeadId: aclHeadId,
         identityPrivateKey: identitySeed,
       );
-      final tree = ObjectTree.fromRoot(root);
+      final tree = await ObjectTree.fromRoot(root);
 
       final snapshotData = Uint8List.fromList(Change(
         snapshot: Change_Snapshot(
@@ -551,7 +551,7 @@ void main() {
         aclHeadId: aclHeadId,
         identityPrivateKey: identitySeed,
       );
-      final tree = ObjectTree.fromRoot(root);
+      final tree = await ObjectTree.fromRoot(root);
 
       final authoredChange = Change(
         content: [
@@ -639,7 +639,7 @@ void main() {
         aclHeadId: aclHeadId,
         identityPrivateKey: identitySeed,
       );
-      final tree = ObjectTree.fromRoot(root);
+      final tree = await ObjectTree.fromRoot(root);
 
       // Add 3 separate changes with different blocks
       final blocks = [

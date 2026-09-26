@@ -66,9 +66,45 @@ void main() {
         aclHeadId: 'acl-1',
         identityPrivateKey: identitySeed,
       );
-      final tree = ObjectTree.fromRoot(root);
+      final tree = await ObjectTree.fromRoot(root);
       expect(tree.heads, hasLength(1));
       expect(tree.heads.first, equals(root.id));
+    });
+
+    test('rejects a root whose id is not its CID', () async {
+      final root = await buildRootChange(
+        spaceId: 'space-1',
+        aclHeadId: 'acl-1',
+        identityPrivateKey: identitySeed,
+      );
+      final forged = RawTreeChangeWithId(rawChange: root.rawChange, id: 'x');
+      await expectLater(ObjectTree.fromRoot(forged), throwsStateError);
+      await expectLater(ObjectTree.deserialize([forged]), throwsStateError);
+    });
+
+    test('rejects a non-derived root with an invalid signature', () async {
+      final root = await buildRootChange(
+        spaceId: 'space-1',
+        aclHeadId: 'acl-1',
+        identityPrivateKey: identitySeed,
+      );
+      final raw = RawTreeChange.fromBuffer(root.rawChange)
+        ..signature = List.filled(64, 0);
+      final rawBytes = Uint8List.fromList(raw.writeToBuffer());
+      final forged = RawTreeChangeWithId(
+        rawChange: rawBytes,
+        id: await computeCid(rawBytes),
+      );
+      await expectLater(ObjectTree.fromRoot(forged), throwsStateError);
+    });
+
+    test('accepts an unsigned derived root', () async {
+      final root = await buildDerivedRootChange(
+        spaceId: 'space-1',
+        changePayload: Uint8List.fromList([0x08, 0x10]),
+      );
+      final tree = await ObjectTree.fromRoot(root);
+      expect(tree.heads, equals([root.id]));
     });
 
     test('addChange with one parent updates heads', () async {
@@ -77,7 +113,7 @@ void main() {
         aclHeadId: 'acl-1',
         identityPrivateKey: identitySeed,
       );
-      final tree = ObjectTree.fromRoot(root);
+      final tree = await ObjectTree.fromRoot(root);
 
       final change1 = await buildTreeChange(
         currentHeads: tree.heads,
@@ -98,7 +134,7 @@ void main() {
         aclHeadId: 'acl-1',
         identityPrivateKey: identitySeed,
       );
-      final tree = ObjectTree.fromRoot(root);
+      final tree = await ObjectTree.fromRoot(root);
 
       // Fork: both reference root as parent
       final fork1 = await buildTreeChange(
@@ -128,7 +164,7 @@ void main() {
         aclHeadId: 'acl-1',
         identityPrivateKey: identitySeed,
       );
-      final tree = ObjectTree.fromRoot(root);
+      final tree = await ObjectTree.fromRoot(root);
 
       final fork1 = await buildTreeChange(
         currentHeads: [root.id],
@@ -167,7 +203,7 @@ void main() {
         aclHeadId: 'acl-1',
         identityPrivateKey: identitySeed,
       );
-      final tree = ObjectTree.fromRoot(root);
+      final tree = await ObjectTree.fromRoot(root);
 
       final change1 = await buildTreeChange(
         currentHeads: [root.id],
@@ -216,8 +252,8 @@ void main() {
           ),
       ];
 
-      final forward = ObjectTree.fromRoot(root);
-      final backward = ObjectTree.fromRoot(root);
+      final forward = await ObjectTree.fromRoot(root);
+      final backward = await ObjectTree.fromRoot(root);
       await forward.addChange(base);
       await backward.addChange(base);
       for (final fork in forks) {
@@ -279,7 +315,7 @@ void main() {
         aclHeadId: 'acl-1',
         identityPrivateKey: identitySeed,
       );
-      final tree = ObjectTree.fromRoot(root);
+      final tree = await ObjectTree.fromRoot(root);
 
       // Add two changes linearly
       final change1 = await buildTreeChange(
