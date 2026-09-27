@@ -1,13 +1,11 @@
 import 'dart:typed_data';
 
-import 'package:libcompress/src/snappy/snappy_codec.dart';
 import 'package:manytype_core/manytype_core.dart';
-import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/models.dart';
 import 'package:manytype_protocol/manytype_protocol.dart'
-    show RawTreeChange, RootChange, TreeChange;
+    show RawTreeChange, RootChange;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart'
-    show ListValue, Value;
+    show Value;
 
 import '../config.dart';
 import '../collection_keys.dart';
@@ -19,8 +17,6 @@ import 'create.dart';
 import 'delete.dart';
 import 'edit.dart';
 import 'read.dart';
-
-final _snappy = SnappyCodec();
 
 /// Lightweight metadata extracted from an object's change tree.
 class ObjectMeta {
@@ -357,138 +353,30 @@ Future<ObjectMeta?> _extractObjectMeta(
   // Derive per-object tree key.
   final treeKey = await deriveTreeKey(spaceKey, obj.id);
 
-  // Walk changes to accumulate metadata.
-  final objectTypes = <String>[];
-  String? name;
-  final details = <String, String>{};
-  var isCollection = false;
-  Block_Content_Dataview? collectionDataview;
-  final collections = <String, Value>{};
-
-  for (var i = 0; i < changes.length; i++) {
-    try {
-      final rawTreeChange = RawTreeChange.fromBuffer(changes[i].rawBytes);
-      if (rawTreeChange.payload.isEmpty) continue;
-
-      // Try as TreeChange (non-root changes).
-      TreeChange treeChange;
-      try {
-        treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
-      } catch (_) {
-        // Root change or unparseable -- skip.
-        continue;
-      }
-      if (treeChange.changesData.isEmpty) continue;
-
-      // Decrypt and decompress.
-      var data = Uint8List.fromList(treeChange.changesData);
-      if (treeChange.readKeyId.isNotEmpty) {
-        data = await aesGcmDecrypt(treeKey, data);
-      }
-      if (treeChange.dataType == '1/s') {
-        data = _snappy.decompress(data);
-      }
-
-      final change = changes_proto.Change.fromBuffer(data);
-
-      // Extract from snapshot.
-      if (change.hasSnapshot()) {
-        final snapData = change.snapshot.data;
-        if (snapData.objectTypes.isNotEmpty) {
-          objectTypes
-            ..clear()
-            ..addAll(snapData.objectTypes);
-        }
-        collectionDataview = _findCollectionDataview(snapData.blocks);
-        isCollection = collectionDataview != null;
-        collections
-          ..clear()
-          ..addEntries(snapData.collections.fields.entries.map(
-            (entry) => MapEntry(entry.key, entry.value.deepCopy()),
-          ));
-        if (snapData.hasDetails()) {
-          for (final entry in snapData.details.fields.entries) {
-            details[entry.key] =
-                _valueToString(entry.value, optIndex: optIndex);
-          }
-          if (snapData.details.fields.containsKey('name')) {
-            name = snapData.details.fields['name']!.stringValue;
-          }
-        }
-      }
-
-      // Process incremental content changes.
-      for (final content in change.content) {
-        if (content.hasDetailsSet()) {
-          final key = content.detailsSet.key;
-          final val =
-              _valueToString(content.detailsSet.value, optIndex: optIndex);
-          details[key] = val;
-          if (key == 'name') {
-            name = content.detailsSet.value.hasStringValue()
-                ? content.detailsSet.value.stringValue
-                : val;
-          }
-        }
-        if (content.hasObjectTypeAdd()) {
-          final typeKey = content.objectTypeAdd.key.isNotEmpty
-              ? content.objectTypeAdd.key
-              : content.objectTypeAdd.url;
-          if (typeKey.isNotEmpty && !objectTypes.contains(typeKey)) {
-            objectTypes.add(typeKey);
-          }
-        }
-        if (content.hasObjectTypeRemove()) {
-          final typeKey = content.objectTypeRemove.key.isNotEmpty
-              ? content.objectTypeRemove.key
-              : content.objectTypeRemove.url;
-          objectTypes.remove(typeKey);
-        }
-        if (content.hasBlockCreate()) {
-          for (final block in content.blockCreate.blocks) {
-            if (!block.hasDataview() || !block.dataview.isCollection) {
-              continue;
-            }
-            isCollection = true;
-            collectionDataview ??= block.dataview.deepCopy();
-            if (collectionDataview.views.isEmpty &&
-                block.dataview.views.isNotEmpty) {
-              collectionDataview = block.dataview.deepCopy();
-            }
-          }
-        }
-        if (content.hasStoreKeySet()) {
-          final key = _topLevelCollectionKey(content.storeKeySet.path);
-          if (key != null) {
-            collections[key] = content.storeKeySet.value.deepCopy();
-          }
-        }
-        if (content.hasStoreKeyUnset()) {
-          final key = _topLevelCollectionKey(content.storeKeyUnset.path);
-          if (key != null) {
-            collections.remove(key);
-          }
-        }
-        if (content.hasStoreSliceUpdate()) {
-          _applyCollectionStoreSliceUpdate(
-              collections, content.storeSliceUpdate);
-        }
-      }
-    } catch (_) {
-      // Encrypted or corrupt change -- skip silently.
-      continue;
-    }
-  }
+  // Replay the change tree into the object's current state.
+  final snapshot = await replayObjectSnapshot(
+    rawTreeChanges:
+        changes.map((change) => Uint8List.fromList(change.rawBytes)).toList(),
+    treeKey: treeKey,
+  );
+  final details = <String, String>{
+    for (final entry in snapshot.details.fields.entries)
+      entry.key: _valueToString(entry.value, optIndex: optIndex),
+  };
+  final nameValue = snapshot.details.fields['name'];
+  final collectionDataview = _findCollectionDataview(snapshot.blocks);
 
   return ObjectMeta(
     id: obj.id,
-    types: List<String>.from(objectTypes),
-    name: name,
+    types: List<String>.from(snapshot.objectTypes),
+    name: nameValue == null || !nameValue.hasStringValue()
+        ? details['name']
+        : nameValue.stringValue,
     details: details,
     isArchived: details['isArchived'] == 'true',
-    isCollection: isCollection,
+    isCollection: collectionDataview != null,
     collectionMemberCount:
-        _collectionMemberCount(collections, collectionDataview),
+        _collectionMemberCount(snapshot.collections.fields, collectionDataview),
   );
 }
 
@@ -548,13 +436,6 @@ Block_Content_Dataview? _findCollectionDataview(List<Block> blocks) {
   return null;
 }
 
-String? _topLevelCollectionKey(List<String> path) {
-  if (path.length != 1) {
-    return null;
-  }
-  return path.first;
-}
-
 int _collectionMemberCount(
   Map<String, Value> collections,
   Block_Content_Dataview? dataview,
@@ -564,21 +445,6 @@ int _collectionMemberCount(
   }
   final storeKey = resolveCollectionStoreKeyFromValues(dataview, collections);
   return _readCollectionStringList(collections[storeKey]).length;
-}
-
-void _applyCollectionStoreSliceUpdate(
-  Map<String, Value> collections,
-  changes_proto.Change_StoreSliceUpdate update,
-) {
-  final current = applyStoreSliceUpdate(
-    _readCollectionStringList(collections[update.key]),
-    update,
-  );
-  collections[update.key] = Value(
-    listValue: ListValue(
-      values: current.map((value) => Value(stringValue: value)).toList(),
-    ),
-  );
 }
 
 List<String> _readCollectionStringList(Value? value) {
