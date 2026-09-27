@@ -40,3 +40,19 @@ Future<ReplayedObjectState> replayObjectState({
     snapshot: state.toSnapshot(),
   );
 }
+
+/// Replay an object tree like [replayObjectState], but tolerantly: no root
+/// smart block type is required and changes that cannot be decrypted or
+/// decoded are skipped, as in `replayObjectDetails`. For callers such as
+/// listings that must still show what they can of a partly unreadable object.
+Future<SmartBlockSnapshotBase> replayObjectSnapshot({
+  required List<Uint8List> rawTreeChanges,
+  required Uint8List treeKey,
+}) async {
+  final state = await replayRawTreeChanges(
+    rawTreeChanges,
+    treeKey,
+    skipUnreadable: true,
+  );
+  return state.toSnapshot();
+}

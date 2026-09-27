@@ -258,4 +258,45 @@ void main() {
       expect(objects, ['b', 'x', 'a']);
     });
   });
+
+  group('replayObjectSnapshot', () {
+    test('skips unreadable changes and needs no root smart block type',
+        () async {
+      final root = await buildRootChange(
+        spaceId: 'space-1',
+        aclHeadId: 'acl-1',
+        identityPrivateKey: _seed,
+      );
+      final base =
+          await _change([root.id], _snapshot('original'), isSnapshot: true);
+      // Claims a read key, so it is decrypted with the wrong key and fails.
+      final unreadable = await buildTreeChange(
+        currentHeads: [base.id],
+        aclHeadId: 'acl-1',
+        snapshotBaseId: base.id,
+        changesData: Uint8List.fromList(_setText('lost').writeToBuffer()),
+        identityPrivateKey: _seed,
+        readKeyId: 'acl-1',
+      );
+      final edit = await _change([unreadable.id], _setText('edited'));
+      final rawTreeChanges = [
+        for (final change in [root, base, unreadable, edit])
+          Uint8List.fromList(change.rawChange),
+      ];
+
+      await expectLater(
+        replayObjectState(
+            rawTreeChanges: rawTreeChanges, treeKey: Uint8List(32)),
+        throwsStateError,
+      );
+      final snapshot = await replayObjectSnapshot(
+        rawTreeChanges: rawTreeChanges,
+        treeKey: Uint8List(32),
+      );
+      expect(
+        snapshot.blocks.firstWhere((b) => b.id == 't').text.text,
+        'edited',
+      );
+    });
+  });
 }
