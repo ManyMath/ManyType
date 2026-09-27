@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:fixnum/fixnum.dart';
-import 'package:libcompress/src/snappy/snappy_codec.dart';
+import 'package:libcompress/libcompress.dart' show SnappyCodec;
 import 'package:manytype_protocol/changes.dart';
 import 'package:manytype_protocol/events.dart';
 import 'package:manytype_protocol/models.dart';
