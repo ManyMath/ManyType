@@ -3,7 +3,6 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:fixnum/fixnum.dart';
-import 'package:libcompress/src/snappy/snappy_codec.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/models.dart';
@@ -21,8 +20,6 @@ import '../sync_service.dart';
 import '../tree_write_metadata.dart';
 import 'file_relation_source.dart';
 import 'file_transfer.dart';
-
-final _snappy = SnappyCodec();
 
 /// File object created by [editCommand] when writing a `--file-relation`
 /// value (a new FileObject is created and uploaded, then referenced by ID).
@@ -1010,63 +1007,16 @@ Future<({String storeKey, List<String> memberIds})?> _loadCollectionState(
   List<Change> changes,
   Uint8List treeKey,
 ) async {
-  final blocks = <String, Block>{};
-  final collections = <String, List<String>>{};
-
-  for (final stored in changes) {
-    try {
-      final rawTreeChange = RawTreeChange.fromBuffer(stored.rawBytes);
-      if (rawTreeChange.payload.isEmpty) continue;
-
-      final TreeChange treeChange;
-      try {
-        treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
-      } catch (_) {
-        continue;
-      }
-      if (treeChange.changesData.isEmpty) continue;
-
-      final decoded = await _decodeTreeChangeData(
-        treeChange,
-        treeKey,
-      );
-      final change = changes_proto.Change.fromBuffer(decoded);
-
-      if (change.hasSnapshot()) {
-        blocks
-          ..clear()
-          ..addEntries(
-            change.snapshot.data.blocks.map(
-              (block) => MapEntry(block.id, block.deepCopy()),
-            ),
-          );
-        collections
-          ..clear()
-          ..addAll(_collectionsFromSnapshot(change.snapshot.data.collections));
-        continue;
-      }
-
-      for (final content in change.content) {
-        if (content.hasBlockCreate()) {
-          for (final block in content.blockCreate.blocks) {
-            blocks[block.id] = block.deepCopy();
-          }
-        }
-        if (content.hasStoreSliceUpdate()) {
-          final key = content.storeSliceUpdate.key;
-          collections[key] = applyStoreSliceUpdate(
-            collections[key] ?? const <String>[],
-            content.storeSliceUpdate,
-          );
-        }
-      }
-    } catch (_) {
-      continue;
-    }
-  }
+  final snapshot = await replayObjectSnapshot(
+    rawTreeChanges: changes
+        .map((change) => Uint8List.fromList(change.rawBytes))
+        .toList(growable: false),
+    treeKey: treeKey,
+  );
+  final collections = _collectionsFromSnapshot(snapshot.collections);
 
   Block? dataviewBlock;
-  for (final block in blocks.values) {
+  for (final block in snapshot.blocks) {
     if (block.hasDataview() && block.dataview.isCollection) {
       dataviewBlock = block;
       break;
@@ -1125,20 +1075,6 @@ bool _stringListsEqual(List<String> a, List<String> b) {
     }
   }
   return true;
-}
-
-Future<Uint8List> _decodeTreeChangeData(
-  TreeChange treeChange,
-  Uint8List treeKey,
-) async {
-  var data = Uint8List.fromList(treeChange.changesData);
-  if (treeChange.readKeyId.isNotEmpty) {
-    data = await aesGcmDecrypt(treeKey, data);
-  }
-  if (treeChange.dataType == '1/s') {
-    data = _snappy.decompress(data);
-  }
-  return data;
 }
 
 Map<String, List<String>> _collectionsFromSnapshot(Struct snapshotCollections) {
