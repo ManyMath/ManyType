@@ -410,12 +410,10 @@ String _extractTextFromDecodedChangeBytes(Uint8List decoded) {
   return '';
 }
 
-/// Extract and print metadata from the first snapshot change in the tree.
-///
-/// After finding the snapshot, iterates through all subsequent non-snapshot
-/// changes and applies BlockCreate / BlockUpdate(blockSetText) deltas so
-/// `_printSnapshotBlocks` can render the *current* replayed state (Phase 37:
-/// BlockUpdate mutations must be visible on re-read).
+/// Print metadata, blocks and collection members from the object's current
+/// state, replayed by the shared core replay so `_printSnapshotBlocks`
+/// renders every post-snapshot mutation (Phase 37: BlockUpdate mutations must
+/// be visible on re-read).
 Future<void> _printSnapshotMetadata(
   List<Change> changes,
   void Function(String) emit, {
@@ -426,38 +424,12 @@ Future<void> _printSnapshotMetadata(
   int? smartBlockType,
   Map<String, ResolvedOption> optIndex = const <String, ResolvedOption>{},
 }) async {
-  // Locate the first snapshot change.
-  int? snapshotIndex;
-  changes_proto.Change? snapshotChangeProto;
-  for (var i = 0; i < changes.length; i++) {
-    try {
-      final rawTreeChange = RawTreeChange.fromBuffer(changes[i].rawBytes);
-      if (rawTreeChange.payload.isEmpty) continue;
-
-      TreeChange treeChange;
-      try {
-        treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
-      } catch (_) {
-        continue; // Root change -- skip.
-      }
-      if (treeChange.changesData.isEmpty) continue;
-
-      final decoded = await _decodeTreeChangeChangesData(
-        treeChange,
-        treeKey: treeKey,
-      );
-      final changeProto = changes_proto.Change.fromBuffer(decoded);
-      if (!changeProto.hasSnapshot()) continue;
-      snapshotIndex = i;
-      snapshotChangeProto = changeProto;
-      break;
-    } catch (_) {
-      continue;
-    }
-  }
-  if (snapshotIndex == null || snapshotChangeProto == null) return;
-
-  final snapData = snapshotChangeProto.snapshot.data;
+  // Without a tree key, encrypted changes fail to decrypt and are skipped.
+  final snapData = await replayObjectSnapshot(
+    rawTreeChanges:
+        changes.map((change) => Uint8List.fromList(change.rawBytes)).toList(),
+    treeKey: treeKey ?? Uint8List(32),
+  );
 
   // objectTypes
   if (snapData.objectTypes.isNotEmpty) {
@@ -490,109 +462,12 @@ Future<void> _printSnapshotMetadata(
     }
   }
 
-  // Build mutable block state from snapshot, then replay subsequent
-  // non-snapshot changes' BlockCreate and BlockUpdate(blockSetText) deltas.
-  // Also replay DetailsSet into a merged details map so Phase 38 status/tag
-  // option rendering reflects post-snapshot edit values.
-  final blockState = <String, Block>{};
-  final blockOrder = <String>[];
-  for (final block in snapData.blocks) {
-    blockState[block.id] = block.deepCopy();
-    blockOrder.add(block.id);
-  }
-  // Start merged details from the snapshot's details, replay DetailsSet
-  // deltas on top.
-  final mergedDetails = <String, Value>{};
-  if (snapData.hasDetails()) {
-    for (final entry in snapData.details.fields.entries) {
-      mergedDetails[entry.key] = entry.value;
-    }
-  }
-  final mergedCollections = <String, Value>{};
-  for (final entry in snapData.collections.fields.entries) {
-    mergedCollections[entry.key] = entry.value.deepCopy();
-  }
-
-  for (var i = snapshotIndex + 1; i < changes.length; i++) {
-    try {
-      final rawTreeChange = RawTreeChange.fromBuffer(changes[i].rawBytes);
-      if (rawTreeChange.payload.isEmpty) continue;
-      TreeChange treeChange;
-      try {
-        treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
-      } catch (_) {
-        continue;
-      }
-      if (treeChange.changesData.isEmpty) continue;
-
-      final decoded = await _decodeTreeChangeChangesData(
-        treeChange,
-        treeKey: treeKey,
-      );
-      final changeProto = changes_proto.Change.fromBuffer(decoded);
-      // Skip downstream snapshots: we only show the first snapshot's
-      // blocks plus deltas to keep CLI read deterministic.
-      if (changeProto.hasSnapshot()) continue;
-
-      for (final content in changeProto.content) {
-        if (content.hasDetailsSet()) {
-          final key = content.detailsSet.key;
-          final val = content.detailsSet.value;
-          mergedDetails[key] = val;
-        }
-        if (content.hasStoreKeySet()) {
-          final key = _topLevelCollectionKey(content.storeKeySet.path);
-          if (key != null) {
-            mergedCollections[key] = content.storeKeySet.value.deepCopy();
-          }
-        }
-        if (content.hasStoreKeyUnset()) {
-          final key = _topLevelCollectionKey(content.storeKeyUnset.path);
-          if (key != null) {
-            mergedCollections.remove(key);
-          }
-        }
-        if (content.hasStoreSliceUpdate()) {
-          _applyCollectionStoreSliceUpdate(
-            mergedCollections,
-            content.storeSliceUpdate,
-          );
-        }
-        if (content.hasBlockCreate()) {
-          for (final newBlock in content.blockCreate.blocks) {
-            if (!blockState.containsKey(newBlock.id)) {
-              blockOrder.add(newBlock.id);
-            }
-            blockState[newBlock.id] = newBlock.deepCopy();
-          }
-        }
-        if (content.hasBlockUpdate()) {
-          for (final eventBytes in content.blockUpdate.events) {
-            try {
-              final eventMsg = Event_Message.fromBuffer(eventBytes);
-              if (eventMsg.hasBlockSetText()) {
-                final set = eventMsg.blockSetText;
-                final target = blockState[set.id];
-                if (target == null) continue;
-                if (!target.hasText()) {
-                  target.text = Block_Content_Text();
-                }
-                if (set.hasText()) target.text.text = set.text.value;
-                if (set.hasStyle()) target.text.style = set.style.value;
-                if (set.hasChecked()) {
-                  target.text.checked = set.checked.value;
-                }
-              }
-            } catch (_) {
-              continue;
-            }
-          }
-        }
-      }
-    } catch (_) {
-      continue;
-    }
-  }
+  final blockState = <String, Block>{
+    for (final block in snapData.blocks) block.id: block,
+  };
+  final blockOrder = [for (final block in snapData.blocks) block.id];
+  final mergedDetails = snapData.details.fields;
+  final mergedCollections = snapData.collections.fields;
 
   // Phase 38: render status and tag relation VALUES using the local
   // STRelationOption index. Two detection paths:
@@ -872,28 +747,6 @@ Block_Content_Dataview? _findCollectionDataview(List<Block> blocks) {
     }
   }
   return null;
-}
-
-String? _topLevelCollectionKey(List<String> path) {
-  if (path.length != 1) {
-    return null;
-  }
-  return path.first;
-}
-
-void _applyCollectionStoreSliceUpdate(
-  Map<String, Value> collections,
-  changes_proto.Change_StoreSliceUpdate update,
-) {
-  final current = applyStoreSliceUpdate(
-    _readCollectionStringList(collections[update.key]),
-    update,
-  );
-  collections[update.key] = Value(
-    listValue: ListValue(
-      values: current.map((value) => Value(stringValue: value)).toList(),
-    ),
-  );
 }
 
 List<String> _readCollectionStringList(Value? value) {
