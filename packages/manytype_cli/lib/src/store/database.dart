@@ -112,6 +112,10 @@ class ManytypeDatabase extends _$ManytypeDatabase {
   }
 
   /// Insert a change for an object.
+  ///
+  /// Change ids are content addresses, so re-inserting an id the object
+  /// already holds keeps the stored row. Throws [StateError] if the id is
+  /// already stored under a different object.
   Future<void> insertChange(
     String id,
     String objectId,
@@ -125,8 +129,15 @@ class ManytypeDatabase extends _$ManytypeDatabase {
         rawBytes: Uint8List.fromList(rawBytes),
         parentHeads: parentHeadsJson,
       ),
-      mode: InsertMode.insertOrReplace,
+      mode: InsertMode.insertOrIgnore,
     );
+    final stored =
+        await (select(changes)..where((c) => c.id.equals(id))).getSingle();
+    if (stored.objectId != objectId) {
+      throw StateError(
+        'Change $id already belongs to object ${stored.objectId}',
+      );
+    }
   }
 
   /// Get all objects.

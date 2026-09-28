@@ -89,8 +89,17 @@ void main() {
     });
 
     test('marks deleted objects from pulled settings-tree deletes', () async {
-      const settingsObjectId = 'settings-obj';
       const deletedObjectId = 'obj-1';
+      final settingsRoot = RawTreeChange(
+        payload: Uint8List.fromList(
+          RootChange(
+            spaceId: 'space-a',
+            changeType: 'anytype.space',
+          ).writeToBuffer(),
+        ),
+      );
+      final settingsObjectId =
+          await computeCid(Uint8List.fromList(settingsRoot.writeToBuffer()));
       final spaceKey = Uint8List.fromList(List<int>.filled(32, 7));
       final treeKey = await deriveTreeKey(spaceKey, settingsObjectId);
 
@@ -112,14 +121,6 @@ void main() {
           TreeChange(
             changesData: encryptedDelete,
             readKeyId: 'acl-head',
-          ).writeToBuffer(),
-        ),
-      );
-      final settingsRoot = RawTreeChange(
-        payload: Uint8List.fromList(
-          RootChange(
-            spaceId: 'space-a',
-            changeType: 'anytype.space',
           ).writeToBuffer(),
         ),
       );

@@ -873,6 +873,10 @@ Future<_SpaceBootstrap?> _loadOrPullSpaceBootstrap(
 
       final aclPayload = Uint8List.fromList(payload.aclPayload);
       final settingsPayload = Uint8List.fromList(payload.spaceSettingsPayload);
+      if (await computeCid(aclPayload) != payload.aclPayloadId ||
+          await computeCid(settingsPayload) != payload.spaceSettingsPayloadId) {
+        continue;
+      }
 
       await db.insertObject(payload.aclPayloadId, spaceId);
       await db.insertChange(
@@ -972,6 +976,7 @@ Future<bool> _storePulledMessageBytes(
   Uint8List msgBytes, {
   Uint8List? spaceKey,
 }) async {
+  final changes = <RawTreeChangeWithId>[];
   try {
     final msg = ObjectSyncMessage.fromBuffer(msgBytes);
     final looksLikeObjectSyncMessage = msg.hasPayload() ||
@@ -985,7 +990,6 @@ Future<bool> _storePulledMessageBytes(
     }
 
     final treeMsg = TreeSyncMessage.fromBuffer(msg.payload);
-    final changes = <RawTreeChangeWithId>[];
     if (treeMsg.hasRootChange()) {
       changes.add(treeMsg.rootChange);
     }
@@ -997,24 +1001,28 @@ Future<bool> _storePulledMessageBytes(
         changes.addAll(treeMsg.content.fullSyncResponse.changes);
       }
     }
-
-    for (final raw in changes) {
-      final changeBytes = Uint8List.fromList(raw.rawChange);
-      await _storeRawPulledChange(
-        db,
-        spaceId,
-        objectId,
-        changeBytes,
-        changeId: raw.id,
-        spaceKey: spaceKey,
-      );
-    }
-    return true;
   } catch (_) {
     return false;
   }
+
+  for (final raw in changes) {
+    final changeBytes = Uint8List.fromList(raw.rawChange);
+    await _storeRawPulledChange(
+      db,
+      spaceId,
+      objectId,
+      changeBytes,
+      changeId: raw.id,
+      spaceKey: spaceKey,
+    );
+  }
+  return true;
 }
 
+/// Stores one pulled change under [objectId]. A change whose [changeId] is
+/// not the CID of its bytes, or whose id is already stored under another
+/// object, is dropped: a sync node must not be able to rewrite or move an
+/// existing change row.
 Future<void> _storeRawPulledChange(
   ManytypeDatabase db,
   String spaceId,
@@ -1023,13 +1031,20 @@ Future<void> _storeRawPulledChange(
   String? changeId,
   Uint8List? spaceKey,
 }) async {
-  final resolvedChangeId = changeId ?? await computeCid(changeBytes);
-  await db.insertChange(
-    resolvedChangeId,
-    objectId,
-    changeBytes,
-    jsonEncode(_extractParentHeads(changeBytes)),
-  );
+  final computedChangeId = await computeCid(changeBytes);
+  if (changeId != null && changeId != computedChangeId) {
+    return;
+  }
+  try {
+    await db.insertChange(
+      computedChangeId,
+      objectId,
+      changeBytes,
+      jsonEncode(_extractParentHeads(changeBytes)),
+    );
+  } on StateError {
+    return;
+  }
 
   for (final ref in extractAttachmentRefsFromRawChangeBytes(changeBytes)) {
     await db.upsertAttachmentRef(
@@ -1048,6 +1063,11 @@ Future<bool> _isSpaceSettingsObject(
 ) async {
   final changes = await db.getChangesForObject(objectId);
   for (final change in changes) {
+    // A tree's id is its root change's CID; only that change can mark the
+    // object as the settings tree.
+    if (change.id != objectId) {
+      continue;
+    }
     try {
       final rawTreeChange = RawTreeChange.fromBuffer(change.rawBytes);
       if (rawTreeChange.payload.isEmpty) {
