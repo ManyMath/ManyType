@@ -1307,25 +1307,62 @@ Future<(int, int)> _syncStoreValues(
     responseMessages: _decodeLengthPrefixedMessages(responseData).toList(),
   );
 
+  final pulled = await storePulledStoreValues(
+    db,
+    spaceId,
+    responseData,
+    requestedKeys: requestedKeys,
+  );
+
+  return (pushed, pulled);
+}
+
+/// Store key-value entries pulled through `StoreElements`: length-prefixed
+/// [StoreKeyValue] messages, terminated by one with an empty key.
+///
+/// Entries for another space, entries whose value is not a [StoreKeyInner],
+/// and entries no newer than the local copy are dropped, so a sync node
+/// cannot move a value between spaces or roll it back. Returns how many of
+/// [requestedKeys] were stored.
+Future<int> storePulledStoreValues(
+  ManytypeDatabase db,
+  String spaceId,
+  Uint8List responseData, {
+  Set<String> requestedKeys = const <String>{},
+}) async {
+  final localTimestamps = <String, int?>{
+    for (final entry in await db.getStoreEntriesBySpace(spaceId))
+      entry.keyPeerId: _storeValueTimestamp(entry.value),
+  };
+
   int pulled = 0;
   for (final messageBytes in _decodeLengthPrefixedMessages(responseData)) {
     final message = StoreKeyValue.fromBuffer(messageBytes);
     if (message.keyPeerId.isEmpty) {
       break;
     }
+    if (message.spaceId.isNotEmpty && message.spaceId != spaceId) {
+      continue;
+    }
+    final timestamp = _storeValueTimestamp(message.value);
+    final localTimestamp = localTimestamps[message.keyPeerId];
+    if (timestamp == null ||
+        (localTimestamp != null && localTimestamp >= timestamp)) {
+      continue;
+    }
     await db.upsertStoreEntry(
       keyPeerId: message.keyPeerId,
-      spaceId: message.spaceId.isNotEmpty ? message.spaceId : spaceId,
+      spaceId: spaceId,
       valueBytes: message.value,
       identitySignatureBytes: message.identitySignature,
       peerSignatureBytes: message.peerSignature,
     );
+    localTimestamps[message.keyPeerId] = timestamp;
     if (requestedKeys.contains(message.keyPeerId)) {
       pulled++;
     }
   }
-
-  return (pushed, pulled);
+  return pulled;
 }
 
 Future<void> _ensureBootstrapStoreEntry(
@@ -1419,6 +1456,17 @@ List<String> _extractParentHeads(List<int> rawChangeBytes) {
     return treeChange.treeHeadIds;
   } catch (_) {
     return const [];
+  }
+}
+
+int? _storeValueTimestamp(List<int> valueBytes) {
+  if (valueBytes.isEmpty) {
+    return null;
+  }
+  try {
+    return StoreKeyInner.fromBuffer(valueBytes).timestampMicro.toInt();
+  } catch (_) {
+    return null;
   }
 }
 

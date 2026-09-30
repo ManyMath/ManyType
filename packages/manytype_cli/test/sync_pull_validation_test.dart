@@ -4,6 +4,7 @@ library;
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:fixnum/fixnum.dart';
 import 'package:manytype_cli/src/account_registry.dart';
 import 'package:manytype_cli/src/commands/create.dart';
 import 'package:manytype_cli/src/config.dart';
@@ -138,7 +139,51 @@ void main() {
 
     expect(await db.isObjectDeleted('victim'), isFalse);
   });
+
+  test('pulled store values cannot cross spaces or roll back local values',
+      () async {
+    await db.upsertStoreEntry(
+      keyPeerId: 'key-a',
+      spaceId: 'space-a',
+      valueBytes: _storeValue(200),
+      identitySignatureBytes: [1],
+      peerSignatureBytes: [1],
+    );
+
+    final pulled = await storePulledStoreValues(
+      db,
+      'space-a',
+      _frame([
+        _storeKeyValue('key-a', 'space-a', _storeValue(100)),
+        _storeKeyValue('key-b', 'space-b', _storeValue(300)),
+        _storeKeyValue('key-c', 'space-a', [0xff, 0xff]),
+        _storeKeyValue('key-d', '', _storeValue(400)),
+        Uint8List.fromList(StoreKeyValue().writeToBuffer()),
+      ]),
+      requestedKeys: {'key-a', 'key-b', 'key-c', 'key-d'},
+    );
+
+    expect(pulled, 1);
+    final entries = await db.getStoreEntriesBySpace('space-a');
+    expect(entries.map((entry) => entry.keyPeerId), ['key-a', 'key-d']);
+    expect(entries.first.value, _storeValue(200));
+    expect(await db.getStoreEntriesBySpace('space-b'), isEmpty);
+  });
 }
+
+List<int> _storeValue(int timestampMicro) => StoreKeyInner(
+      key: 'key',
+      timestampMicro: Int64(timestampMicro),
+    ).writeToBuffer();
+
+Uint8List _storeKeyValue(String keyPeerId, String spaceId, List<int> value) =>
+    Uint8List.fromList(
+      StoreKeyValue(
+        keyPeerId: keyPeerId,
+        spaceId: spaceId,
+        value: value,
+      ).writeToBuffer(),
+    );
 
 Uint8List _rawTreeChange(List<int> changesData) => Uint8List.fromList(
       RawTreeChange(
