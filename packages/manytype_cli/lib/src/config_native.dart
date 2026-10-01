@@ -102,8 +102,18 @@ class CliConfig {
     return CliConfig(mnemonic: mnemonic, serverAddress: serverAddress);
   }
 
-  /// Initialize config directory and generate new mnemonic if needed.
-  static Future<CliConfig> initialize() async {
+  /// Initialize the config directory with a newly generated mnemonic.
+  ///
+  /// Throws [StateError] if config.toml already exists, since replacing it
+  /// discards the existing mnemonic; pass [force] to overwrite it anyway.
+  static Future<CliConfig> initialize({bool force = false}) async {
+    final file = File(configPath);
+    if (!force && await file.exists()) {
+      throw StateError(
+        'Config already exists at $configPath. Re-running init would replace '
+        'its mnemonic; pass --force to overwrite it.',
+      );
+    }
     final dir = Directory(configDir);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
@@ -112,11 +122,21 @@ class CliConfig {
     final config =
         CliConfig(mnemonic: mnemonic, serverAddress: '127.0.0.1:33020');
 
-    final file = File(configPath);
-    await file.writeAsString(encodeCliConfig(
-      mnemonic: config.mnemonic,
-      serverAddress: config.serverAddress,
-    ));
+    final temporary = File(
+      '$configPath.tmp-${DateTime.now().microsecondsSinceEpoch}-$pid',
+    );
+    try {
+      await temporary.writeAsString(
+        encodeCliConfig(
+          mnemonic: config.mnemonic,
+          serverAddress: config.serverAddress,
+        ),
+        flush: true,
+      );
+      await temporary.rename(file.path);
+    } finally {
+      if (await temporary.exists()) await temporary.delete();
+    }
     return config;
   }
 }

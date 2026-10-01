@@ -4,6 +4,7 @@ library;
 
 import 'dart:io';
 import 'package:test/test.dart';
+import 'package:manytype_cli/src/account_registry.dart';
 import 'package:manytype_cli/src/config.dart';
 
 void main() {
@@ -73,6 +74,43 @@ void main() {
         () => CliConfig.loadFrom('${tempDir.path}/nonexistent.toml'),
         throwsA(isA<StateError>()),
       );
+    });
+  });
+
+  group('CliConfig.initialize', () {
+    late Directory tempDir;
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('manytype_init_test_');
+      CliConfig.testConfigDirOverride = tempDir.path;
+      AccountRegistry.testBaseDirOverride = tempDir.path;
+    });
+
+    tearDown(() async {
+      CliConfig.testConfigDirOverride = null;
+      AccountRegistry.testBaseDirOverride = null;
+      await tempDir.delete(recursive: true);
+    });
+
+    test('refuses to replace an existing config without force', () async {
+      final first = await CliConfig.initialize();
+
+      await expectLater(CliConfig.initialize(), throwsA(isA<StateError>()));
+
+      final reloaded = await CliConfig.load();
+      expect(reloaded.mnemonic, first.mnemonic);
+      expect(
+        tempDir.listSync().map((entity) => entity.path),
+        [CliConfig.configPath],
+      );
+    });
+
+    test('replaces an existing config with force', () async {
+      final first = await CliConfig.initialize();
+      final second = await CliConfig.initialize(force: true);
+
+      expect(second.mnemonic, isNot(first.mnemonic));
+      expect((await CliConfig.load()).mnemonic, second.mnemonic);
     });
   });
 }

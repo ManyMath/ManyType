@@ -60,7 +60,7 @@ class CliConfig {
         'config I/O is vm-only; construct CliConfig directly on web');
   }
 
-  static Future<CliConfig> initialize() async {
+  static Future<CliConfig> initialize({bool force = false}) async {
     throw UnsupportedError(
         'config I/O is vm-only; construct CliConfig directly on web');
   }

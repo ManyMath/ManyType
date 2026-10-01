@@ -420,7 +420,13 @@ Future<void> main(List<String> arguments) async {
   parser.addCommand('space-pull-bootstrap', spacePullBootstrapParser);
   parser.addCommand('space-pull-refetch', spacePullRefetchParser);
   parser.addCommand('list', listParser);
-  parser.addCommand('init');
+  parser.addCommand(
+    'init',
+    ArgParser()
+      ..addFlag('force',
+          negatable: false,
+          help: 'Overwrite an existing config.toml, replacing its mnemonic'),
+  );
   parser.addCommand('file-upload', fileUploadParser);
   parser.addCommand('file-open', fileOpenParser);
   parser.addCommand('probe-network');
@@ -453,7 +459,7 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'init':
-      await CliConfig.initialize();
+      await CliConfig.initialize(force: command['force'] == true);
       print('Initialized ~/.manytype/');
       print('Mnemonic saved to ${CliConfig.configPath}');
       break;
