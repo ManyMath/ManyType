@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:manytype_core/manytype_core.dart' show generateMnemonic;
 
+import 'private_files.dart';
+
 /// Parse a simple TOML file with key = "value" pairs.
 /// Supports only flat string values (sufficient for config.toml).
 Map<String, String> parseSimpleToml(String content) {
@@ -114,29 +116,17 @@ class CliConfig {
         'its mnemonic; pass --force to overwrite it.',
       );
     }
-    final dir = Directory(configDir);
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
     final mnemonic = generateMnemonic();
     final config =
         CliConfig(mnemonic: mnemonic, serverAddress: '127.0.0.1:33020');
 
-    final temporary = File(
-      '$configPath.tmp-${DateTime.now().microsecondsSinceEpoch}-$pid',
+    await writePrivateFileAtomically(
+      configPath,
+      encodeCliConfig(
+        mnemonic: config.mnemonic,
+        serverAddress: config.serverAddress,
+      ),
     );
-    try {
-      await temporary.writeAsString(
-        encodeCliConfig(
-          mnemonic: config.mnemonic,
-          serverAddress: config.serverAddress,
-        ),
-        flush: true,
-      );
-      await temporary.rename(file.path);
-    } finally {
-      if (await temporary.exists()) await temporary.delete();
-    }
     return config;
   }
 }

@@ -8,6 +8,7 @@ import 'package:manytype_cli/src/commands/create.dart';
 import 'package:manytype_cli/src/commands/sync.dart';
 import 'package:manytype_cli/src/config.dart';
 import 'package:manytype_cli/src/identity.dart';
+import 'package:manytype_cli/src/private_files.dart';
 import 'package:manytype_cli/src/store/database.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
@@ -181,8 +182,11 @@ Future<Map<String, Object?>> readJsonFile(String path) async {
   return decoded;
 }
 
+/// Writes [json] with owner-only permissions: continuation state carries the
+/// account mnemonic.
 Future<void> writeJsonFile(String path, Map<String, Object?> json) {
-  return File(path).writeAsString(
+  return writePrivateFileAtomically(
+    path,
     const JsonEncoder.withIndent('  ').convert(json),
   );
 }

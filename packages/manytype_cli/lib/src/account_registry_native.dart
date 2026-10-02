@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'account_profile.dart';
 import 'account_sync_metadata.dart';
 import 'config.dart';
+import 'private_files.dart';
 import 'recovery_phrase_store.dart';
 
 /// Durable boundaries in the native local-account removal transaction.
@@ -76,7 +77,7 @@ class AccountRegistry {
       RandomAccessFile? lock;
       var lockHeld = false;
       try {
-        await Directory(baseDir).create(recursive: true);
+        await createPrivateDirectory(baseDir);
         lock = await File(_lifecycleLockPath).open(mode: FileMode.append);
         await lock.lock(FileLock.exclusive);
         lockHeld = true;
@@ -593,7 +594,7 @@ class AccountRegistry {
     }
     if (originalType == FileSystemEntityType.notFound) return;
     _requireEntryType(entry, originalType);
-    await Directory(p.dirname(entry.stagedPath)).create(recursive: true);
+    await createPrivateDirectory(p.dirname(entry.stagedPath));
     switch (entry.kind) {
       case _AccountRemovalEntryKind.file:
         await File(entry.originalPath).rename(entry.stagedPath);
@@ -620,7 +621,7 @@ class AccountRegistry {
         'Cannot restore ${entry.originalPath}: an active path already exists.',
       );
     }
-    await Directory(p.dirname(entry.originalPath)).create(recursive: true);
+    await createPrivateDirectory(p.dirname(entry.originalPath));
     switch (entry.kind) {
       case _AccountRemovalEntryKind.file:
         await File(entry.stagedPath).rename(entry.originalPath);
@@ -862,7 +863,7 @@ class AccountRegistry {
   ) {
     return _serializeLifecycle(() async {
       await _requireSummary(id);
-      await Directory(accountDir(id)).create(recursive: true);
+      await createPrivateDirectory(accountDir(id));
       await _writeFileAtomically(
         accountSyncMetadataPath(id),
         jsonEncode(metadata.toJson()),
@@ -971,7 +972,7 @@ class AccountRegistry {
       );
     }
     if (!directoryExisted) {
-      await dir.create(recursive: true);
+      await createPrivateDirectory(dir.path);
     }
 
     final createdAt = DateTime.now().toUtc();
@@ -1073,19 +1074,12 @@ class AccountRegistry {
     });
   }
 
-  static Future<void> _writeFileAtomically(String path, String content) async {
-    final target = File(path);
-    await target.parent.create(recursive: true);
-    final temporary = File(
-      '$path.tmp-${DateTime.now().microsecondsSinceEpoch}-${pid.toString()}',
+  static Future<void> _writeFileAtomically(String path, String content) {
+    return writePrivateFileAtomically(
+      path,
+      content,
+      beforeReplace: testBeforeAtomicReplaceHook,
     );
-    try {
-      await temporary.writeAsString(content, flush: true);
-      await testBeforeAtomicReplaceHook?.call(path);
-      await temporary.rename(path);
-    } finally {
-      if (await temporary.exists()) await temporary.delete();
-    }
   }
 }
 
