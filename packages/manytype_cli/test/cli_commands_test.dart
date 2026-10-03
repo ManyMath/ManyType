@@ -100,4 +100,39 @@ void main() {
       expect(list.stdout.toString(), startsWith('* default\t'));
     });
   });
+
+  group('edit', () {
+    Future<ProcessResult> editRelation(String flag, String value) => cli([
+          '--network-config',
+          'unused.yml',
+          'edit',
+          '--id',
+          'obj-1',
+          '--relation',
+          'done',
+          flag,
+          value,
+        ]);
+
+    test('rejects a --bool value other than true or false', () async {
+      final result = await editRelation('--bool', 'yes');
+
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr.toString(), contains('--bool must be'));
+    });
+
+    test('accepts --bool case-insensitively', () async {
+      final result = await editRelation('--bool', 'TRUE');
+
+      expect(result.stderr.toString(), isNot(contains('--bool must be')));
+    });
+
+    test('rejects a non-integer --date before doing any work', () async {
+      final result = await editRelation('--date', 'tomorrow');
+
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr.toString(), contains('--date must be'));
+      expect(Directory(manytypeDir).existsSync(), isFalse);
+    });
+  });
 }

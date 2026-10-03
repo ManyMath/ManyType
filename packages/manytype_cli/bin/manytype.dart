@@ -689,7 +689,7 @@ Future<void> main(List<String> arguments) async {
       final relationKey = command['relation'] as String?;
       final stringValue = command['string'] as String?;
       final stringListArg = command['string-list'] as String?;
-      final boolValue = command['bool'] as String?;
+      final boolValue = (command['bool'] as String?)?.toLowerCase();
       final dateValue = command['date'] as String?;
       final fileRelationPath = command['file-relation'] as String?;
       final objectIdValue = command['object-id'] as String?;
@@ -838,6 +838,12 @@ Future<void> main(List<String> arguments) async {
           throw StateError('--set-checked must be "true" or "false"');
         }
         setChecked = setCheckedRaw == 'true';
+      }
+      if (boolValue != null && boolValue != 'true' && boolValue != 'false') {
+        throw StateError('--bool must be "true" or "false"');
+      }
+      if (dateValue != null && int.tryParse(dateValue) == null) {
+        throw StateError('--date must be a Unix timestamp in seconds');
       }
 
       Block_Content_Text_Style? setStyle;
