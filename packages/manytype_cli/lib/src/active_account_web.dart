@@ -13,3 +13,6 @@ Future<({CliConfig config, String dbPath})> resolveActiveAccount({
     'account resolution is vm-only; construct CliConfig directly on web',
   );
 }
+
+/// Legacy single-account installs only exist on native hosts.
+Future<String?> migrateLegacyAccountIfPresent() async => null;

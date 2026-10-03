@@ -42,23 +42,14 @@ Future<({CliConfig config, String dbPath})> resolveActiveAccount({
     if (accountOverride != null || envAccountId != null) {
       rethrow;
     }
-    if (await File(CliConfig.configPath).exists()) {
-      final legacyConfig = await CliConfig.load(serverOverride: serverOverride);
-      final migrated = await AccountRegistry.migrateLegacyAccount(
-        legacyConfigPath: CliConfig.configPath,
-        legacyDbPath: CliConfig.dbPath,
-        legacyMnemonic: legacyConfig.mnemonic,
-      );
-      if (migrated == null) {
-        throw StateError(
-            'Legacy account migration did not register an account.');
-      }
+    final migratedId = await migrateLegacyAccountIfPresent();
+    if (migratedId != null) {
       // A Flutter host has injected platform secure storage before opening a
       // session. Loading through the registry performs the plaintext-to-secure
       // migration atomically before the phrase is returned to the caller. A
       // pure CLI host has no injected store and retains its legacy config.
       final migratedConfig = await AccountRegistry.loadConfig(
-        migrated.id,
+        migratedId,
         serverOverride: serverOverride,
       );
       return (config: migratedConfig, dbPath: CliConfig.dbPath);
@@ -66,4 +57,24 @@ Future<({CliConfig config, String dbPath})> resolveActiveAccount({
     final config = await CliConfig.load(serverOverride: serverOverride);
     return (config: config, dbPath: CliConfig.dbPath);
   }
+}
+
+/// Registers a legacy top-level `~/.manytype/config.toml` install as an
+/// account profile if no profiles exist yet (see
+/// [AccountRegistry.migrateLegacyAccount]). Returns the registered account
+/// id, or null when there is no legacy config or profiles already exist.
+Future<String?> migrateLegacyAccountIfPresent() async {
+  if (!await File(CliConfig.configPath).exists()) {
+    return null;
+  }
+  if ((await AccountRegistry.listAccounts()).isNotEmpty) {
+    return null;
+  }
+  final legacyConfig = await CliConfig.load();
+  final migrated = await AccountRegistry.migrateLegacyAccount(
+    legacyConfigPath: CliConfig.configPath,
+    legacyDbPath: CliConfig.dbPath,
+    legacyMnemonic: legacyConfig.mnemonic,
+  );
+  return migrated?.id;
 }

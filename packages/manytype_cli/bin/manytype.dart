@@ -44,6 +44,9 @@ Future<void> _runAccountCommand(
   }
 
   try {
+    // Register a legacy single-account install first, so account commands
+    // neither hide it nor orphan it by creating the first profile.
+    await migrateLegacyAccountIfPresent();
     switch (sub.name) {
       case 'create':
         final result = await createAccountCommand(name: sub['name'] as String?);
