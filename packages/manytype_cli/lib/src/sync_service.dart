@@ -53,6 +53,11 @@ class SyncDiscoveryResult {
 }
 
 class SyncService {
+  SyncService({NativeBridge Function()? bridgeFactory})
+      : _bridgeFactory = bridgeFactory ?? NativeBridge.new;
+
+  final NativeBridge Function() _bridgeFactory;
+
   /// Sync local objects with the remote Rust server.
   ///
   /// Performs the full protocol flow:
@@ -89,7 +94,7 @@ class SyncService {
           : config.serverAddress,
       networkConfigPath: networkConfigPath,
     );
-    final bridge = NativeBridge();
+    final bridge = _bridgeFactory();
     int? coordinatorHandleId;
     final syncHandleIds = <int>[];
     var syncAddresses = <String>[];
@@ -251,6 +256,20 @@ class SyncService {
       int pushed = 0;
       int pulled = 0;
       final pushedObjectIds = <String>[];
+      final failedPulls = <String>[];
+      // The ACL list and key-value store are not trees, and the settings tree
+      // is not served over the generic pull path either: requests for these
+      // ids are expected to fail.
+      final expectedPullFailures = <String>{
+        if (bootstrap != null) ...[
+          bootstrap.aclPayloadId,
+          bootstrap.spaceSettingsPayloadId,
+        ],
+        await computeCid(
+          StorageHeader(spaceId: spaceId, storageName: 'default')
+              .writeToBuffer(),
+        ),
+      };
       if (officialInteropMode) {
         final localOnlyObjectCount = localHeads.entries.where((entry) {
           final serverHeadSet = serverHeads[entry.key] ?? <String>{};
@@ -409,9 +428,12 @@ class SyncService {
             capture: capture,
             spaceKey: spaceKey,
           );
-          if (refreshed) {
+          if (refreshed.stored) {
             pulled++;
             print('  Reconciled pushed object: $objectId');
+          } else if (refreshed.failed &&
+              !expectedPullFailures.contains(objectId)) {
+            failedPulls.add(objectId);
           }
         }
       }
@@ -433,33 +455,24 @@ class SyncService {
           );
           final pullPayload = Uint8List.fromList(requestMsg.writeToBuffer());
 
-          final responseChunks = <Uint8List>[];
-          for (final handleId in syncHandleIds) {
-            try {
-              final resp = bridge.requestObject(
-                  handleId, spaceId, objectId, pullPayload);
-              if (resp.isNotEmpty) {
-                responseChunks.add(resp);
-                capture.recordStreamRpc(
-                  role: 'sync-node',
-                  method: '/spacesync.SpaceSync/ObjectSyncRequestStream',
-                  requestMessages: [pullPayload],
-                  responseMessages: _decodeMessagesFromFfi(resp),
-                );
-              }
-            } catch (_) {
-              continue;
-            }
+          final response = _requestObjectFromSyncNodes(
+            bridge,
+            syncHandleIds,
+            spaceId,
+            objectId,
+            pullPayload,
+            capture: capture,
+          );
+          if (response.failed && !expectedPullFailures.contains(objectId)) {
+            failedPulls.add(objectId);
           }
 
-          final responseData = _mergeFfiResponseChunks(responseChunks);
-
-          if (responseData.isNotEmpty) {
+          if (response.data.isNotEmpty) {
             await storePulledChanges(
               db,
               spaceId,
               objectId,
-              responseData,
+              response.data,
               spaceKey: spaceKey,
             );
             pulled++;
@@ -490,6 +503,12 @@ class SyncService {
         }
       }
 
+      if (failedPulls.isNotEmpty) {
+        print(
+          'WARN: could not pull ${failedPulls.length} object(s) from any sync '
+          'node: ${failedPulls.join(", ")}',
+        );
+      }
       print(
         'Sync complete: pushed $pushed, pulled $pulled objects, '
         'pushed $pushedStoreValues, pulled $pulledStoreValues store values',
@@ -501,6 +520,7 @@ class SyncService {
           'pulled_objects': pulled,
           'pushed_store_values': pushedStoreValues,
           'pulled_store_values': pulledStoreValues,
+          'failed_object_pulls': failedPulls,
         },
       );
     } catch (error) {
@@ -623,7 +643,9 @@ class SyncService {
   }
 }
 
-Future<bool> _pullObjectFromSyncNodes(
+/// Re-pulls [objectId] from the sync nodes. `failed` is true when every node
+/// failed the request, rather than answering with nothing.
+Future<({bool stored, bool failed})> _pullObjectFromSyncNodes(
   ManytypeDatabase db,
   NativeBridge bridge,
   List<int> syncHandleIds,
@@ -657,7 +679,41 @@ Future<bool> _pullObjectFromSyncNodes(
   );
   final pullPayload = Uint8List.fromList(requestMsg.writeToBuffer());
 
+  final response = _requestObjectFromSyncNodes(
+    bridge,
+    syncHandleIds,
+    spaceId,
+    objectId,
+    pullPayload,
+    capture: capture,
+  );
+
+  if (response.data.isEmpty) {
+    return (stored: false, failed: response.failed);
+  }
+
+  await storePulledChanges(
+    db,
+    spaceId,
+    objectId,
+    response.data,
+    spaceKey: spaceKey,
+  );
+  return (stored: true, failed: response.failed);
+}
+
+/// Sends [pullPayload] for [objectId] to every sync node and merges the
+/// answers. `failed` is true when every node threw.
+({Uint8List data, bool failed}) _requestObjectFromSyncNodes(
+  NativeBridge bridge,
+  List<int> syncHandleIds,
+  String spaceId,
+  String objectId,
+  Uint8List pullPayload, {
+  required _SessionCapture capture,
+}) {
   final responseChunks = <Uint8List>[];
+  var failures = 0;
   for (final handleId in syncHandleIds) {
     try {
       final resp =
@@ -671,25 +727,18 @@ Future<bool> _pullObjectFromSyncNodes(
           responseMessages: _decodeMessagesFromFfi(resp),
         );
       }
-    } catch (_) {
-      continue;
+    } catch (error) {
+      failures++;
+      capture.recordNote(
+        'object-pull-error',
+        {'object_id': objectId, 'message': error.toString()},
+      );
     }
   }
-
-  final responseData = _mergeFfiResponseChunks(responseChunks);
-
-  if (responseData.isEmpty) {
-    return false;
-  }
-
-  await storePulledChanges(
-    db,
-    spaceId,
-    objectId,
-    responseData,
-    spaceKey: spaceKey,
+  return (
+    data: _mergeFfiResponseChunks(responseChunks),
+    failed: syncHandleIds.isNotEmpty && failures == syncHandleIds.length,
   );
-  return true;
 }
 
 Uint8List _mergeFfiResponseChunks(List<Uint8List> chunks) {
