@@ -8,6 +8,8 @@ import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/coordinator.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';
 import 'package:manytype_protocol/spacesync.dart';
+import 'package:protobuf/protobuf.dart'
+    show CodedBufferReader, WIRETYPE_LENGTH_DELIMITED, makeTag;
 
 import 'acl_codec.dart';
 import 'config.dart';
@@ -1221,9 +1223,9 @@ Future<(int, int)> _syncStoreValues(
   _SessionCapture? capture,
 }) async {
   final localEntries = await db.getStoreEntriesBySpace(spaceId);
-  final localHeads = <String, String>{
+  final localHeads = <String, int?>{
     for (final entry in localEntries)
-      entry.keyPeerId: _storeHeadFromValue(entry.value),
+      entry.keyPeerId: _storeValueTimestamp(entry.value),
   };
 
   final storeDiffRequestBytes = Uint8List.fromList(
@@ -1243,23 +1245,18 @@ Future<(int, int)> _syncStoreValues(
     requestBytes: storeDiffRequestBytes,
     responseBytes: storeDiffResponseBytes,
   );
-  final storeDiffResponse =
-      StoreDiffResponse.fromBuffer(storeDiffResponseBytes);
-  final serverHeads = <String, String>{};
-  for (final result in storeDiffResponse.results) {
-    for (final element in result.elements) {
-      serverHeads[element.id] = element.head;
-    }
-  }
+  final serverHeads = decodeStoreDiffHeads(storeDiffResponseBytes);
 
   final messages = <StoreKeyValue>[StoreKeyValue(spaceId: spaceId)];
   final requestedKeys = <String>{};
   int pushed = 0;
 
   for (final entry in localEntries) {
-    final localHead = localHeads[entry.keyPeerId]!;
-    final serverHead = serverHeads[entry.keyPeerId];
-    if (serverHead == null || localHead.compareTo(serverHead) > 0) {
+    if (!serverHeads.containsKey(entry.keyPeerId) ||
+        _isNewerStoreHead(
+          localHeads[entry.keyPeerId],
+          serverHeads[entry.keyPeerId],
+        )) {
       messages.add(
         StoreKeyValue(
           keyPeerId: entry.keyPeerId,
@@ -1274,8 +1271,8 @@ Future<(int, int)> _syncStoreValues(
   }
 
   for (final entry in serverHeads.entries) {
-    final localHead = localHeads[entry.key];
-    if (localHead == null || entry.value.compareTo(localHead) > 0) {
+    if (!localHeads.containsKey(entry.key) ||
+        _isNewerStoreHead(entry.value, localHeads[entry.key])) {
       messages.add(StoreKeyValue(keyPeerId: entry.key, spaceId: spaceId));
       requestedKeys.add(entry.key);
     }
@@ -1470,17 +1467,56 @@ int? _storeValueTimestamp(List<int> valueBytes) {
   }
 }
 
-String _storeHeadFromValue(Uint8List valueBytes) {
-  try {
-    final inner = StoreKeyInner.fromBuffer(valueBytes);
-    final timestamp = inner.timestampMicro.toInt();
-    return timestamp < 0
-        ? '00000000000000000000'
-        : timestamp.toString().padLeft(20, '0');
-  } catch (_) {
-    return '';
+/// Reads the per-key heads of a `StoreDiff` response as value timestamps
+/// (microseconds).
+///
+/// `HeadSyncResultElement.head` is declared as a string, but official
+/// any-sync nodes fill it with the timestamp as 8 raw big-endian bytes, which
+/// protobuf's UTF-8 decoding would mangle, while manytype_server sends it as
+/// 20 zero-padded decimal digits. The head bytes are read off the wire and
+/// either encoding is parsed so heads compare numerically. A head in neither
+/// encoding maps to null.
+Map<String, int?> decodeStoreDiffHeads(List<int> responseBytes) {
+  final heads = <String, int?>{};
+  // StoreDiffResponse.results = 1, HeadSyncResult.elements = 2,
+  // HeadSyncResultElement.head = 2.
+  for (final result in _lengthDelimitedFields(responseBytes, 1)) {
+    for (final element in _lengthDelimitedFields(result, 2)) {
+      final head = _lengthDelimitedFields(element, 2).lastOrNull;
+      heads[HeadSyncResultElement.fromBuffer(element).id] =
+          head == null ? null : _storeHeadTimestamp(head);
+    }
+  }
+  return heads;
+}
+
+Iterable<Uint8List> _lengthDelimitedFields(
+  List<int> message,
+  int fieldNumber,
+) sync* {
+  final reader = CodedBufferReader(message);
+  final tag = makeTag(fieldNumber, WIRETYPE_LENGTH_DELIMITED);
+  while (!reader.isAtEnd()) {
+    final next = reader.readTag();
+    if (next == tag) {
+      yield reader.readBytes();
+    } else {
+      reader.skipField(next);
+    }
   }
 }
+
+int? _storeHeadTimestamp(List<int> head) {
+  if (head.length == 8) {
+    return head.fold<int>(0, (value, byte) => value * 256 + byte);
+  }
+  if (head.isNotEmpty && head.every((byte) => byte >= 0x30 && byte <= 0x39)) {
+    return int.tryParse(String.fromCharCodes(head));
+  }
+  return null;
+}
+
+bool _isNewerStoreHead(int? head, int? other) => (head ?? -1) > (other ?? -1);
 
 String _spaceStatusName(SpaceStatus status) => status.name;
 
