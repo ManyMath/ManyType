@@ -405,6 +405,9 @@ Future<OpenedBlobResult> openBlobFromFileNode({
   );
   final response = filesync.BlockGetResponse.fromBuffer(responseBytes);
   final blobBytes = Uint8List.fromList(response.data);
+  if (!await _blobMatchesCid(blobBytes, cid)) {
+    throw StateError('BlockGet returned data that does not hash to $cid');
+  }
   await db.cacheBlob(
     spaceId: spaceId,
     fileId: fileId,
@@ -498,6 +501,26 @@ Future<String?> _resolveStoredCid(
     throw StateError('Multiple CIDs known for $fileId. Pass --cid explicitly.');
   }
   return cids.single;
+}
+
+/// Whether [bytes] hash to [cid]. Only the multihash is compared: file-node
+/// blocks may use another codec (raw, dag-pb) than the dag-cbor CIDs
+/// [computeCid] produces.
+Future<bool> _blobMatchesCid(Uint8List bytes, String cid) async {
+  final expected = cidToBytes(cid);
+  // Skip the CID version and codec varints.
+  var offset = 0;
+  for (var varint = 0; varint < 2; varint++) {
+    while (offset < expected.length && expected[offset] & 0x80 != 0) {
+      offset++;
+    }
+    offset++;
+  }
+  if (offset > expected.length) {
+    return false;
+  }
+  final actual = cidToBytes(await computeCid(bytes));
+  return _byteListsEqual(expected.sublist(offset), actual.sublist(2));
 }
 
 bool _byteListsEqual(List<int> left, List<int> right) {
