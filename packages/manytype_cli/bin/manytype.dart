@@ -959,6 +959,10 @@ Future<void> main(List<String> arguments) async {
       break;
 
     case 'list':
+      final whereFilter = command['where'] as String?;
+      if (whereFilter != null && whereFilter.indexOf('=') <= 0) {
+        throw StateError('--where must be key=value (e.g. done=true)');
+      }
       final active = await resolveActiveAccount(
         accountOverride: accountOverride,
         envAccountId: envAccountId,
@@ -971,7 +975,7 @@ Future<void> main(List<String> arguments) async {
         config,
         networkConfigPath: networkConfigPath,
         typeFilter: command['type'] as String?,
-        whereFilter: command['where'] as String?,
+        whereFilter: whereFilter,
       );
       _printObjectTable(results);
       await db.close();

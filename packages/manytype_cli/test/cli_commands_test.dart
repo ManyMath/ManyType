@@ -135,4 +135,15 @@ void main() {
       expect(Directory(manytypeDir).existsSync(), isFalse);
     });
   });
+
+  group('list', () {
+    for (final where in ['done', '=true']) {
+      test('rejects --where "$where"', () async {
+        final result = await cli(['list', '--where', where]);
+
+        expect(result.exitCode, isNot(0));
+        expect(result.stderr.toString(), contains('--where must be'));
+      });
+    }
+  });
 }

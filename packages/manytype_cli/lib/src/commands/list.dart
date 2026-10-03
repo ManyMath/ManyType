@@ -60,6 +60,8 @@ Future<List<ObjectMeta>> listCommand(
   SyncService? syncService,
   Identity? identityOverride,
 }) async {
+  _checkWhereFilter(whereFilter);
+
   // Derive identity and space key once.
   final identity =
       identityOverride ?? await Identity.fromMnemonic(config.mnemonic);
@@ -303,10 +305,8 @@ bool matchesObjectMetaFilters(
   // to names. Users write `--where status=Done`, NOT
   // `--where status=opt-abc123`.
   if (whereFilter != null) {
+    _checkWhereFilter(whereFilter);
     final eqIndex = whereFilter.indexOf('=');
-    if (eqIndex <= 0) {
-      return true;
-    }
     final key = whereFilter.substring(0, eqIndex);
     final value = whereFilter.substring(eqIndex + 1);
     if (meta.details[key] != value) {
@@ -315,6 +315,18 @@ bool matchesObjectMetaFilters(
   }
 
   return true;
+}
+
+/// Throws [ArgumentError] unless [whereFilter] is `key=value` with a
+/// non-empty key.
+void _checkWhereFilter(String? whereFilter) {
+  if (whereFilter != null && whereFilter.indexOf('=') <= 0) {
+    throw ArgumentError.value(
+      whereFilter,
+      'whereFilter',
+      'expected key=value (e.g. done=true)',
+    );
+  }
 }
 
 /// Decode an object's change tree to extract name, type, and details metadata.
