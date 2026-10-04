@@ -19,13 +19,15 @@ class AccountProfile {
 
   /// Derive a short, deterministic, filesystem/db-name-safe account id from
   /// a mnemonic. Two calls with the same mnemonic always produce the same
-  /// id; two different mnemonics produce different ids with cryptographic
-  /// collision resistance (CID of the account public key, truncated).
+  /// id; two different mnemonics collide only if the first 48 bits of their
+  /// account public keys' SHA-256 digests match (CID of the account public
+  /// key, truncated).
   static Future<String> deriveAccountId(String mnemonic) async {
     final identity = await Identity.fromMnemonic(mnemonic);
     final cid = await computeCid(identity.accountKeyPair.publicKey);
-    // Strip the multibase 'b' prefix; first 16 base32 chars are already
-    // derived from a full SHA-256 digest, so collision resistance holds.
+    // Strip the multibase 'b' prefix and keep 16 base32 chars. The first six
+    // ("afyrei") encode the constant CIDv1/dag-cbor/sha2-256 header, so only
+    // 48 digest bits remain. Ids are persisted: keep this derivation as is.
     return cid.substring(1, 17);
   }
 
