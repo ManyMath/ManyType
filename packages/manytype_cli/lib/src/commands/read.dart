@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:libcompress/src/snappy/snappy_codec.dart';
+import 'package:libcompress/libcompress.dart' show SnappyCodec;
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/changes.dart' as changes_proto;
 import 'package:manytype_protocol/events.dart';

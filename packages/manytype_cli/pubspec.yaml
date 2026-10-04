@@ -12,7 +12,10 @@ dependencies:
     path: ../manytype_protocol
   args: ^2.5.0
   ffi: ^2.1.0
+  fixnum: ^1.1.0
   drift: ^2.22.0
+  libcompress: ^1.2.1
+  protobuf: ^6.0.0
   sqlite3: ^2.7.0
   path: ^1.9.0
   yaml: ^3.1.3
