@@ -1,10 +1,15 @@
 @TestOn('vm')
 library;
 
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:manytype_cli/src/account_registry.dart';
 import 'package:manytype_cli/src/config.dart';
+import 'package:manytype_cli/src/identity.dart';
+import 'package:manytype_cli/src/store/database.dart';
+import 'package:manytype_core/manytype_core.dart' show computeCid;
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -145,5 +150,45 @@ void main() {
         expect(result.stderr.toString(), contains('--where must be'));
       });
     }
+  });
+
+  group('file-open', () {
+    test('writes downloads under the active account', () async {
+      final profile = await AccountRegistry.createAccount(
+        mnemonic: _mnemonic,
+        displayName: 'work',
+      );
+      await AccountRegistry.setCurrentAccountId(profile.id);
+      final identity = await Identity.fromMnemonic(_mnemonic);
+      final bytes = Uint8List.fromList(utf8.encode('cached blob'));
+      final cid = await computeCid(bytes);
+      final db = ManytypeDatabase(AccountRegistry.accountDbPath(profile.id));
+      await db.cacheBlob(
+        spaceId: identity.spaceId,
+        fileId: 'file-1',
+        cid: cid,
+        bytes: bytes,
+      );
+      await db.close();
+
+      final result = await cli([
+        '--network-config',
+        'unused.yml',
+        'file-open',
+        '--file-id',
+        'file-1',
+        '--cid',
+        cid,
+      ]);
+
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      final expected = CliConfig.downloadPath(
+        'file-1',
+        cid,
+        downloadsDir: AccountRegistry.accountDownloadsDir(profile.id),
+      );
+      expect(result.stdout.toString(), contains('-> $expected'));
+      expect(File(expected).readAsBytesSync(), bytes);
+    });
   });
 }

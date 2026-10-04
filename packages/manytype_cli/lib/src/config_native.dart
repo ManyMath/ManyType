@@ -69,10 +69,20 @@ class CliConfig {
   static String get dbPath => p.join(configDir, 'store.db');
   static String get downloadsDir => p.join(configDir, 'downloads');
 
-  static String downloadPath(String fileId, String cid) {
+  /// Where `file-open` writes a blob by default: under [downloadsDir] if
+  /// given (normally the account's own downloads dir), else the legacy
+  /// top-level downloads dir.
+  static String downloadPath(
+    String fileId,
+    String cid, {
+    String? downloadsDir,
+  }) {
     final safeFileId = fileId.replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
     final safeCid = cid.replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
-    return p.join(downloadsDir, '${safeFileId}_$safeCid.bin');
+    return p.join(
+      downloadsDir ?? CliConfig.downloadsDir,
+      '${safeFileId}_$safeCid.bin',
+    );
   }
 
   /// Load config from ~/.manytype/config.toml.

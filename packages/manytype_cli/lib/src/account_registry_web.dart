@@ -45,6 +45,7 @@ class AccountRegistry {
 
   static String accountDir(String id) => 'accounts/$id';
   static String accountConfigPath(String id) => 'accounts/$id/config';
+  static String accountDownloadsDir(String id) => 'accounts/$id/downloads';
 
   /// Per-account OPFS/IndexedDB database name (passed straight to
   /// `WasmDatabase.open(databaseName: ...)`).

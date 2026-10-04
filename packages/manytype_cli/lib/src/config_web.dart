@@ -43,10 +43,14 @@ class CliConfig {
   static String get downloadsDir => throw UnsupportedError(
       'config I/O is vm-only; construct CliConfig directly on web');
 
-  static String downloadPath(String fileId, String cid) {
+  static String downloadPath(
+    String fileId,
+    String cid, {
+    String? downloadsDir,
+  }) {
     final safeFileId = fileId.replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
     final safeCid = cid.replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
-    return p.join('downloads', '${safeFileId}_$safeCid.bin');
+    return p.join(downloadsDir ?? 'downloads', '${safeFileId}_$safeCid.bin');
   }
 
   static Future<CliConfig> load({String? serverOverride}) async {

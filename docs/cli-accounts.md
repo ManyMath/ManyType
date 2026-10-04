@@ -46,6 +46,8 @@ against whichever account is currently selected, using this precedence:
 Each account's config and database live under
 `~/.manytype/accounts/<accountId>/{config.toml,store.db}`, indexed by
 `~/.manytype/accounts.json` and a `~/.manytype/current` pointer file.
+`file-open` writes to `~/.manytype/accounts/<accountId>/downloads/` unless
+`--output` is given, so removing an account also removes its downloads.
 `<accountId>` is derived deterministically from the account's public key, so
 re-importing the same mnemonic always resolves to the same account id.
 

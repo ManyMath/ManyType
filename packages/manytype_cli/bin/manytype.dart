@@ -1228,6 +1228,10 @@ Future<void> main(List<String> arguments) async {
         serverOverride: serverOverride,
       );
       final config = active.config;
+      final accountId = await AccountResolver.resolveAccountId(
+        explicitAccountId: accountOverride,
+        envAccountId: envAccountId,
+      );
       final db = ManytypeDatabase(active.dbPath);
       final openResult = await fileOpenCommand(
         db,
@@ -1236,6 +1240,7 @@ Future<void> main(List<String> arguments) async {
         fileId: fileId,
         cid: command['cid'] as String?,
         outputPath: command['output'] as String?,
+        downloadsDir: AccountRegistry.accountDownloadsDir(accountId),
       );
       print(
         'Opened $fileId (${openResult.fromCache ? "cache" : "network"}) -> '

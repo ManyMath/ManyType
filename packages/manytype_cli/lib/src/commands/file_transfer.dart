@@ -126,6 +126,7 @@ Future<OpenedFileResult> fileOpenCommand(
   required String fileId,
   String? cid,
   String? outputPath,
+  String? downloadsDir,
 }) async {
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final resolvedCid =
@@ -145,8 +146,12 @@ Future<OpenedFileResult> fileOpenCommand(
     fileId: fileId,
     cid: resolvedCid,
   );
-  final destinationPath =
-      outputPath ?? CliConfig.downloadPath(fileId, resolvedCid);
+  final destinationPath = outputPath ??
+      CliConfig.downloadPath(
+        fileId,
+        resolvedCid,
+        downloadsDir: downloadsDir,
+      );
   final outputFile = File(destinationPath);
   await outputFile.parent.create(recursive: true);
   await outputFile.writeAsBytes(result.bytes, flush: true);
