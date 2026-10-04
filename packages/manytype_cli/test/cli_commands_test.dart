@@ -19,6 +19,10 @@ const _mnemonic =
     'abandon abandon abandon abandon abandon abandon abandon abandon abandon '
     'abandon abandon about';
 
+const _otherMnemonic =
+    'guilt universe cup credit night tissue pencil window brother ecology '
+    'marriage over';
+
 /// Runs bin/manytype.dart as a subprocess against a throwaway HOME, so these
 /// tests never see the real ~/.manytype.
 void main() {
@@ -110,6 +114,24 @@ void main() {
       expect(lines, hasLength(2));
       expect(lines.first, startsWith('* default\t'));
       expect(lines.last, startsWith('  work\t'));
+    });
+
+    test('current honours --account', () async {
+      await AccountRegistry.createAccount(
+        mnemonic: _mnemonic,
+        displayName: 'work',
+      );
+      final home = await AccountRegistry.createAccount(
+        mnemonic: _otherMnemonic,
+        displayName: 'home',
+      );
+      final work = (await AccountRegistry.listAccounts()).first;
+      await AccountRegistry.setCurrentAccountId(work.id);
+
+      final result = await cli(['--account', 'home', 'account', 'current']);
+
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect(result.stdout.toString().trim(), 'home\t${home.id}');
     });
 
     test('list shows a legacy install', () async {

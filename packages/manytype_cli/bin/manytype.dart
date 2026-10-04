@@ -32,6 +32,7 @@ import 'package:manytype_cli/src/store/database.dart';
 /// and prints/sets `exitCode` for the CLI.
 Future<void> _runAccountCommand(
   ArgResults command, {
+  String? accountOverride,
   String? envAccountId,
 }) async {
   final sub = command.command;
@@ -81,7 +82,10 @@ Future<void> _runAccountCommand(
         break;
 
       case 'current':
-        final summary = await currentAccountCommand(envAccountId: envAccountId);
+        final summary = await currentAccountCommand(
+          explicitAccountId: accountOverride,
+          envAccountId: envAccountId,
+        );
         print('${summary.displayName}\t${summary.id}');
         break;
 
@@ -510,7 +514,11 @@ Future<void> _run(ArgParser parser, ArgResults results) async {
 
   switch (command.name) {
     case 'account':
-      await _runAccountCommand(command, envAccountId: envAccountId);
+      await _runAccountCommand(
+        command,
+        accountOverride: accountOverride,
+        envAccountId: envAccountId,
+      );
       break;
 
     case 'init':

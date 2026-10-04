@@ -75,12 +75,17 @@ Future<AccountUseResult> useAccountCommand(String idOrName) async {
   return AccountUseResult(id: resolvedId);
 }
 
-/// Resolve and return the current account's summary.
+/// Resolve and return the current account's summary, with the same
+/// precedence as every other command (see [AccountResolver]).
 ///
 /// Throws [AmbiguousAccountError] or [NoAccountError] if it can't be
 /// resolved to exactly one account.
-Future<AccountSummary> currentAccountCommand({String? envAccountId}) async {
+Future<AccountSummary> currentAccountCommand({
+  String? explicitAccountId,
+  String? envAccountId,
+}) async {
   final resolvedId = await AccountResolver.resolveAccountId(
+    explicitAccountId: explicitAccountId,
     envAccountId: envAccountId,
   );
   final accounts = await AccountRegistry.listAccounts();
