@@ -259,7 +259,7 @@ void _printObjectTable(List<ObjectMeta> metas) {
   }
 }
 
-Future<void> main(List<String> arguments) async {
+ArgParser _buildParser() {
   final parser = ArgParser()
     ..addFlag('help', abbr: 'h', negatable: false)
     ..addOption('server',
@@ -435,9 +435,61 @@ Future<void> main(List<String> arguments) async {
   parser.addCommand('probe-network');
   parser.addCommand('probe-file-node', probeFileNodeParser);
   parser.addCommand('account', buildAccountParser());
+  return parser;
+}
 
-  final results = parser.parse(arguments);
+/// A command-line usage mistake: reported with the command's usage and exit
+/// code 64 (EX_USAGE) rather than as a failure of the command itself.
+class _UsageError implements Exception {
+  _UsageError(this.message);
 
+  final String message;
+}
+
+Future<void> main(List<String> arguments) async {
+  final parser = _buildParser();
+  ArgResults? results;
+  try {
+    results = parser.parse(arguments);
+    await _run(parser, results);
+    return;
+  } on ArgParserException catch (error) {
+    _printUsageError(parser, error.message, error.commands);
+  } on _UsageError catch (error) {
+    _printUsageError(parser, error.message, [
+      if (results?.command != null) results!.command!.name!,
+    ]);
+  } catch (error) {
+    stderr.writeln('Error: ${error is StateError ? error.message : error}');
+    exitCode = 1;
+  }
+  // A failed command can leave a background database isolate open, which
+  // would otherwise keep the process alive.
+  await Future.wait([stdout.flush(), stderr.flush()]);
+  exit(exitCode);
+}
+
+void _printUsageError(
+  ArgParser parser,
+  String message,
+  List<String> commands,
+) {
+  var commandParser = parser;
+  final path = <String>['manytype'];
+  for (final name in commands) {
+    final next = commandParser.commands[name];
+    if (next == null) break;
+    commandParser = next;
+    path.add(name);
+  }
+  stderr.writeln(message);
+  stderr.writeln();
+  stderr.writeln('Usage: ${path.join(' ')} [options]');
+  if (commandParser.usage.isNotEmpty) stderr.writeln(commandParser.usage);
+  exitCode = 64;
+}
+
+Future<void> _run(ArgParser parser, ArgResults results) async {
   if (results['help'] == true || results.command == null) {
     print('Usage: manytype <command> [options]');
     print(
@@ -500,7 +552,7 @@ Future<void> main(List<String> arguments) async {
             asRelationOption
           ].where((f) => f).length >
           1) {
-        throw StateError(
+        throw _UsageError(
           '--as-type, --as-relation, --as-set, --as-collection, '
           '--as-template, and '
           '--as-relation-option are '
@@ -514,7 +566,7 @@ Future<void> main(List<String> arguments) async {
               asTemplate ||
               asRelationOption) &&
           name == null) {
-        throw StateError(
+        throw _UsageError(
           '--as-type, --as-relation, --as-set, --as-collection, '
           '--as-template, and '
           '--as-relation-option require --name',
@@ -529,7 +581,7 @@ Future<void> main(List<String> arguments) async {
             asTemplate,
             asRelationOption
           ].any((f) => f)) {
-        throw StateError(
+        throw _UsageError(
           '--template cannot be combined with any --as-* creation mode',
         );
       }
@@ -539,50 +591,50 @@ Future<void> main(List<String> arguments) async {
               command['toggle'] == true ||
               command['quote'] == true ||
               command['callout'] == true)) {
-        throw StateError(
+        throw _UsageError(
           '--template cannot be combined with block scaffold flags',
         );
       }
       if (templateId != null && name != null) {
-        throw StateError(
+        throw _UsageError(
           '--name cannot be combined with --template; use positional text instead',
         );
       }
       if (asTemplate) {
         if (targetObjectType == null || targetObjectType.isEmpty) {
-          throw StateError(
+          throw _UsageError(
             '--as-template requires --target-object-type <stTypeObjectId>',
           );
         }
       } else if (targetObjectType != null) {
-        throw StateError('--target-object-type requires --as-template');
+        throw _UsageError('--target-object-type requires --as-template');
       }
 
       // Phase 38: create --as-relation-option validation
       if (asRelationOption) {
         if (forRelation == null || forRelation.isEmpty) {
-          throw StateError(
+          throw _UsageError(
             '--as-relation-option requires --for-relation <relationKey>',
           );
         }
         if (colorArg == null || colorArg.isEmpty) {
-          throw StateError(
+          throw _UsageError(
             '--as-relation-option requires --color <name> (one of: '
             '${optionColorPalette.join(", ")})',
           );
         }
         if (!optionColorPalette.contains(colorArg)) {
-          throw StateError(
+          throw _UsageError(
             '--color "$colorArg" is not in the Anytype palette. Accepted: '
             '${optionColorPalette.join(", ")}',
           );
         }
       } else {
         if (forRelation != null) {
-          throw StateError('--for-relation requires --as-relation-option');
+          throw _UsageError('--for-relation requires --as-relation-option');
         }
         if (colorArg != null) {
-          throw StateError('--color requires --as-relation-option');
+          throw _UsageError('--color requires --as-relation-option');
         }
       }
 
@@ -628,7 +680,7 @@ Future<void> main(List<String> arguments) async {
 
       if (command['sync'] == true) {
         if (networkConfigPath == null) {
-          throw StateError(
+          throw _UsageError(
             'create --sync requires --network-config <path>',
           );
         }
@@ -660,7 +712,7 @@ Future<void> main(List<String> arguments) async {
 
       if (command['sync'] == true) {
         if (networkConfigPath == null) {
-          throw StateError(
+          throw _UsageError(
             'read --sync requires --network-config <path>',
           );
         }
@@ -744,20 +796,20 @@ Future<void> main(List<String> arguments) async {
                 dateValue != null ||
                 fileRelationPath != null ||
                 objectIdValue != null)) {
-          throw StateError(
+          throw _UsageError(
             '--status is mutex with --string, --string-list, --bool, --date, '
             '--file-relation, and --object-id',
           );
         }
         // --tag is mutex with --tag-add / --tag-remove.
         if (hasTag && hasTagDelta) {
-          throw StateError(
+          throw _UsageError(
             '--tag is mutex with --tag-add and --tag-remove (use one or the other)',
           );
         }
         // --status and --tag/--tag* are mutex with each other.
         if (hasStatus && (hasTag || hasTagDelta)) {
-          throw StateError(
+          throw _UsageError(
             '--status is mutex with --tag / --tag-add / --tag-remove',
           );
         }
@@ -769,7 +821,7 @@ Future<void> main(List<String> arguments) async {
                 dateValue != null ||
                 fileRelationPath != null ||
                 objectIdValue != null)) {
-          throw StateError(
+          throw _UsageError(
             '--tag / --tag-add / --tag-remove are mutex with --string, '
             '--string-list, --bool, --date, --file-relation, and --object-id',
           );
@@ -787,7 +839,7 @@ Future<void> main(List<String> arguments) async {
           hasTagDelta ? 'delta' : null,
         ].where((v) => v != null).length;
         if (typedCount != 1) {
-          throw StateError(
+          throw _UsageError(
             '--relation requires exactly one of --string, --string-list, '
             '--bool, --date, --file-relation, --object-id, --status, --tag, or '
             '--tag-add/--tag-remove',
@@ -799,12 +851,12 @@ Future<void> main(List<String> arguments) async {
           dateValue != null ||
           fileRelationPath != null ||
           objectIdValue != null) {
-        throw StateError(
+        throw _UsageError(
           '--string, --string-list, --bool, --date, --file-relation, and '
           '--object-id require --relation <key>',
         );
       } else if (hasStatus || hasTag || hasTagDelta) {
-        throw StateError(
+        throw _UsageError(
           '--status / --tag / --tag-add / --tag-remove require --relation <key>',
         );
       }
@@ -822,12 +874,12 @@ Future<void> main(List<String> arguments) async {
 
       if (blockId != null) {
         if (setCount != 1) {
-          throw StateError(
+          throw _UsageError(
             '--block-id requires exactly one of --set-text, --set-checked, or --set-style',
           );
         }
       } else if (setCount > 0) {
-        throw StateError(
+        throw _UsageError(
           '--set-text, --set-checked, and --set-style require --block-id <id>',
         );
       }
@@ -835,22 +887,22 @@ Future<void> main(List<String> arguments) async {
       bool? setChecked;
       if (setCheckedRaw != null) {
         if (setCheckedRaw != 'true' && setCheckedRaw != 'false') {
-          throw StateError('--set-checked must be "true" or "false"');
+          throw _UsageError('--set-checked must be "true" or "false"');
         }
         setChecked = setCheckedRaw == 'true';
       }
       if (boolValue != null && boolValue != 'true' && boolValue != 'false') {
-        throw StateError('--bool must be "true" or "false"');
+        throw _UsageError('--bool must be "true" or "false"');
       }
       if (dateValue != null && int.tryParse(dateValue) == null) {
-        throw StateError('--date must be a Unix timestamp in seconds');
+        throw _UsageError('--date must be a Unix timestamp in seconds');
       }
 
       Block_Content_Text_Style? setStyle;
       if (setStyleName != null) {
         setStyle = parseStyleName(setStyleName);
         if (setStyle == null) {
-          throw StateError(
+          throw _UsageError(
             '--set-style must be one of: ${acceptedStyleNames.join(", ")}',
           );
         }
@@ -862,24 +914,24 @@ Future<void> main(List<String> arguments) async {
         collectionMoveId,
       ].where((v) => v != null).length;
       if (collectionCount > 1) {
-        throw StateError(
+        throw _UsageError(
           '--collection-add, --collection-remove, and --collection-move are mutually exclusive',
         );
       }
       if (collectionMoveId != null && afterArg == null) {
-        throw StateError(
+        throw _UsageError(
           '--collection-move requires --after <objectId> (use --after "" to move to front)',
         );
       }
       if (collectionMoveId == null && afterArg != null) {
-        throw StateError('--after requires --collection-move');
+        throw _UsageError('--after requires --collection-move');
       }
       if (collectionCount > 0 &&
           (newText != null ||
               hasCheckbox ||
               relationKey != null ||
               blockId != null)) {
-        throw StateError(
+        throw _UsageError(
           '--collection-add / --collection-remove / --collection-move are mutex with --text, --checkbox, --relation, and --block-id',
         );
       }
@@ -889,13 +941,13 @@ Future<void> main(List<String> arguments) async {
           relationKey == null &&
           blockId == null &&
           collectionCount == 0) {
-        throw StateError(
+        throw _UsageError(
           'edit requires --text, --checkbox, --relation, --block-id, or a collection operation',
         );
       }
 
       if (networkConfigPath == null) {
-        throw StateError(
+        throw _UsageError(
           'edit requires --network-config <path>',
         );
       }
@@ -937,7 +989,7 @@ Future<void> main(List<String> arguments) async {
 
     case 'delete':
       if (networkConfigPath == null) {
-        throw StateError(
+        throw _UsageError(
           'delete requires --network-config <path>',
         );
       }
@@ -961,7 +1013,7 @@ Future<void> main(List<String> arguments) async {
     case 'list':
       final whereFilter = command['where'] as String?;
       if (whereFilter != null && whereFilter.indexOf('=') <= 0) {
-        throw StateError('--where must be key=value (e.g. done=true)');
+        throw _UsageError('--where must be key=value (e.g. done=true)');
       }
       final active = await resolveActiveAccount(
         accountOverride: accountOverride,
@@ -983,7 +1035,7 @@ Future<void> main(List<String> arguments) async {
 
     case 'space-delete':
       if (networkConfigPath == null) {
-        throw StateError(
+        throw _UsageError(
           'space-delete requires --network-config <path>',
         );
       }
@@ -993,10 +1045,10 @@ Future<void> main(List<String> arguments) async {
       final waitSeconds = int.tryParse(waitSecondsRaw);
       final deletionDurationMinutes = int.tryParse(deletionDurationRaw);
       if (waitSeconds == null) {
-        throw StateError('--wait-seconds must be an integer');
+        throw _UsageError('--wait-seconds must be an integer');
       }
       if (deletionDurationMinutes == null) {
-        throw StateError('--deletion-duration-minutes must be an integer');
+        throw _UsageError('--deletion-duration-minutes must be an integer');
       }
       final active = await resolveActiveAccount(
         accountOverride: accountOverride,
@@ -1026,7 +1078,7 @@ Future<void> main(List<String> arguments) async {
 
     case 'account-delete':
       if (networkConfigPath == null) {
-        throw StateError(
+        throw _UsageError(
           'account-delete requires --network-config <path>',
         );
       }
@@ -1054,7 +1106,7 @@ Future<void> main(List<String> arguments) async {
 
     case 'acl-lifecycle':
       if (networkConfigPath == null) {
-        throw StateError(
+        throw _UsageError(
           'acl-lifecycle requires --network-config <path>',
         );
       }
@@ -1128,7 +1180,7 @@ Future<void> main(List<String> arguments) async {
 
     case 'space-pull-bootstrap':
       if (networkConfigPath == null) {
-        throw StateError(
+        throw _UsageError(
           'space-pull-bootstrap requires --network-config <path>',
         );
       }
@@ -1179,16 +1231,16 @@ Future<void> main(List<String> arguments) async {
 
     case 'file-upload':
       if (networkConfigPath == null) {
-        throw StateError(
+        throw _UsageError(
           'file-upload requires --network-config <path>',
         );
       }
       final fileId = command['file-id'] as String?;
       if (fileId == null || fileId.isEmpty) {
-        throw StateError('file-upload requires --file-id <id>');
+        throw _UsageError('file-upload requires --file-id <id>');
       }
       if (command.rest.isEmpty) {
-        throw StateError('file-upload requires a source file path');
+        throw _UsageError('file-upload requires a source file path');
       }
       final active = await resolveActiveAccount(
         accountOverride: accountOverride,
@@ -1214,13 +1266,13 @@ Future<void> main(List<String> arguments) async {
 
     case 'file-open':
       if (networkConfigPath == null) {
-        throw StateError(
+        throw _UsageError(
           'file-open requires --network-config <path>',
         );
       }
       final fileId = command['file-id'] as String?;
       if (fileId == null || fileId.isEmpty) {
-        throw StateError('file-open requires --file-id <id>');
+        throw _UsageError('file-open requires --file-id <id>');
       }
       final active = await resolveActiveAccount(
         accountOverride: accountOverride,
@@ -1251,7 +1303,7 @@ Future<void> main(List<String> arguments) async {
 
     case 'probe-network':
       if (networkConfigPath == null) {
-        throw StateError(
+        throw _UsageError(
           'probe-network requires --network-config <path>',
         );
       }
@@ -1274,7 +1326,7 @@ Future<void> main(List<String> arguments) async {
 
     case 'probe-file-node':
       if (networkConfigPath == null) {
-        throw StateError(
+        throw _UsageError(
           'probe-file-node requires --network-config <path>',
         );
       }

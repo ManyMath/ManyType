@@ -62,15 +62,31 @@ void main() {
     await homeDir.delete(recursive: true);
   });
 
-  Future<ProcessResult> cli(List<String> args) {
+  // A CLI that hangs after an error reports exit code -1.
+  Future<ProcessResult> cli(List<String> args) async {
     final environment = Map<String, String>.of(Platform.environment)
       ..remove('MANYTYPE_ACCOUNT')
       ..['HOME'] = homeDir.path;
-    return Process.run(
+    final process = await Process.start(
       Platform.resolvedExecutable,
       [cliKernel, ...args],
       environment: environment,
       includeParentEnvironment: false,
+    );
+    final stdoutText = process.stdout.transform(utf8.decoder).join();
+    final stderrText = process.stderr.transform(utf8.decoder).join();
+    final exitCode = await process.exitCode.timeout(
+      const Duration(minutes: 1),
+      onTimeout: () {
+        process.kill();
+        return -1;
+      },
+    );
+    return ProcessResult(
+      process.pid,
+      exitCode,
+      await stdoutText,
+      await stderrText,
     );
   }
 
@@ -122,7 +138,7 @@ void main() {
     test('rejects a --bool value other than true or false', () async {
       final result = await editRelation('--bool', 'yes');
 
-      expect(result.exitCode, isNot(0));
+      expect(result.exitCode, 64);
       expect(result.stderr.toString(), contains('--bool must be'));
     });
 
@@ -135,7 +151,7 @@ void main() {
     test('rejects a non-integer --date before doing any work', () async {
       final result = await editRelation('--date', 'tomorrow');
 
-      expect(result.exitCode, isNot(0));
+      expect(result.exitCode, 64);
       expect(result.stderr.toString(), contains('--date must be'));
       expect(Directory(manytypeDir).existsSync(), isFalse);
     });
@@ -146,10 +162,58 @@ void main() {
       test('rejects --where "$where"', () async {
         final result = await cli(['list', '--where', where]);
 
-        expect(result.exitCode, isNot(0));
+        expect(result.exitCode, 64);
         expect(result.stderr.toString(), contains('--where must be'));
       });
     }
+  });
+
+  group('errors', () {
+    test('report an unknown option as a usage error', () async {
+      final result = await cli(['list', '--bogus']);
+
+      expect(result.exitCode, 64);
+      expect(result.stderr.toString(), contains('--bogus'));
+      expect(result.stderr.toString(), contains('Usage: manytype list'));
+      expect(result.stderr.toString(), isNot(contains('#0')));
+    });
+
+    test('report invalid flag combinations as usage errors', () async {
+      final result = await cli(['edit', '--id', 'obj-1']);
+
+      expect(result.exitCode, 64);
+      expect(result.stderr.toString(), contains('edit requires --text'));
+      expect(result.stderr.toString(), contains('Usage: manytype edit'));
+    });
+
+    test('report command failures without a stack trace', () async {
+      final result = await cli(['list']);
+
+      expect(result.exitCode, 1);
+      expect(result.stderr.toString(), startsWith('Error: Config not found'));
+      expect(result.stderr.toString(), isNot(contains('#0')));
+    });
+
+    test('exit after a failure with the database open', () async {
+      final profile = await AccountRegistry.createAccount(
+        mnemonic: _mnemonic,
+        displayName: 'work',
+      );
+      await AccountRegistry.setCurrentAccountId(profile.id);
+
+      final result = await cli([
+        '--network-config',
+        'unused.yml',
+        'edit',
+        '--id',
+        'missing-object',
+        '--text',
+        'hello',
+      ]);
+
+      expect(result.exitCode, 1, reason: '${result.stderr}');
+      expect(result.stderr.toString(), contains('Object not found locally'));
+    });
   });
 
   group('file-open', () {
