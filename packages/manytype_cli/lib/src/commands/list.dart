@@ -115,7 +115,12 @@ Future<List<ObjectMeta>> listCommand(
       optIndex: optIndex,
       cachedChanges: rawChangesByObject[obj.id],
     );
-    if (meta != null && !meta.isArchived) {
+    // The ACL root and the derived Home/Archive/Widgets/Workspace roots
+    // replay with no type, name, or collection; hide them like the other
+    // system objects.
+    if (meta != null &&
+        !meta.isArchived &&
+        (meta.types.isNotEmpty || meta.name != null || meta.isCollection)) {
       metas.add(meta);
     }
   }

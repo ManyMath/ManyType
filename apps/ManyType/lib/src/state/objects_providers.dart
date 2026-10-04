@@ -163,17 +163,11 @@ final objectsProvider = FutureProvider.family<List<ObjectMeta>, String>((
   if (session == null) {
     return const <ObjectMeta>[];
   }
-  final metas = await listCommand(
+  return listCommand(
     session.db,
     session.config,
     identityOverride: session.identity,
   );
-  // Space initialization derives system roots (Home / Archive / Widgets /
-  // Workspace dashboards) that surface from listCommand with no object
-  // type and no name; hide them from the user-facing list.
-  return metas
-      .where((m) => m.types.isNotEmpty || m.name != null || m.isCollection)
-      .toList();
 });
 
 /// Replayed detail view for one object: `readCommand`'s rendered report
