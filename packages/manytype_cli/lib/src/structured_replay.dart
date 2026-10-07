@@ -478,11 +478,26 @@ ReplayedRelationView _buildRelationView(
       boolValue: value.boolValue,
     );
   }
+  if (value.hasNumberValue()) {
+    return ReplayedRelationView(
+      key: key,
+      format: format,
+      stringValue: _formatNumber(value.numberValue),
+    );
+  }
   return ReplayedRelationView(
     key: key,
     format: format,
     stringValue: value.toString(),
   );
+}
+
+/// Renders whole numbers without a trailing ".0".
+String _formatNumber(double number) {
+  if (number == number.truncateToDouble() && number.abs() < 1e15) {
+    return number.toInt().toString();
+  }
+  return number.toString();
 }
 
 /// Best-effort format guess for a detail with no matching `relationLinks` or
