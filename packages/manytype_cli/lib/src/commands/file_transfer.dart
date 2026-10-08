@@ -224,7 +224,9 @@ Future<OpenedBlobResult> openBlobWithNetworkConfig(
 
 /// Library-facing facade over file upload/download, for consumers that
 /// hold a [ManytypeSession] instead of driving the CLI directly. Bytes in,
-/// bytes out: no filesystem path assumed, so it also works on web.
+/// bytes out: no filesystem path assumed. The file node is reached through
+/// the native bridge, so on web [upload] always throws and [open] only
+/// succeeds for a blob that is already cached locally.
 class FileTransferFacade {
   const FileTransferFacade(this._session);
 
