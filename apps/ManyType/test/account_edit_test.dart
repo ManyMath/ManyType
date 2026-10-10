@@ -74,6 +74,29 @@ void main() {
     },
   );
 
+  test('rename keeps the current account id and open session', () async {
+    final profile = await container
+        .read(accountsControllerProvider)
+        .createAndSelect(mnemonic: _testMnemonic, displayName: 'Work');
+    final session = await container.read(sessionProvider.future);
+    final currentIds = <AsyncValue<String?>>[];
+    container.listen(
+      currentAccountIdProvider,
+      (_, next) => currentIds.add(next),
+    );
+
+    await container
+        .read(accountsControllerProvider)
+        .rename(profile.id, 'Personal');
+
+    expect(
+      (await container.read(currentAccountProvider.future))!.displayName,
+      'Personal',
+    );
+    expect(currentIds, isEmpty);
+    expect(await container.read(sessionProvider.future), same(session));
+  });
+
   test(
     'updateServerAddress changes the address the session reopens with',
     () async {

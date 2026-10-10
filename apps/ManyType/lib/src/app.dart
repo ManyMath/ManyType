@@ -62,6 +62,7 @@ class _RootGate extends ConsumerWidget {
         return ref
             .watch(currentAccountProvider)
             .when(
+              skipLoadingOnReload: true,
               loading: () =>
                   const _DemoPreparationGate(message: 'Checking workspace...'),
               error: (e, _) => _DemoRecoveryFailure(

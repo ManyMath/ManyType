@@ -112,10 +112,11 @@ class AccountsController {
     _invalidate();
   }
 
-  /// Renames [id]'s display name.
+  /// Renames [id]'s display name. Only the account list changes; the
+  /// current account and its open session remain valid.
   Future<void> rename(String id, String displayName) async {
     await AccountRegistry.renameAccount(id, displayName);
-    _invalidate();
+    _ref.invalidate(accountsProvider);
   }
 
   /// Updates [id]'s server address. Reopens the session (if it's the
