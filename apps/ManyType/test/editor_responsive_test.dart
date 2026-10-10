@@ -29,6 +29,7 @@ void main() {
   late Directory tempBase;
   late ProviderContainer container;
   late String objectId;
+  late String secondObjectId;
   late String typeObjectId;
   late String relationObjectId;
   late String spaceId;
@@ -75,6 +76,9 @@ void main() {
           objectId,
           text: 'A paragraph that remains editable on a narrow screen.',
         );
+    secondObjectId =
+        (await container.read(objectsControllerProvider).create('Second page'))!
+            .objectId;
     typeObjectId =
         (await container
                 .read(objectsControllerProvider)
@@ -87,6 +91,7 @@ void main() {
             .objectId;
     await container.read(objectsProvider(spaceId).future);
     await container.read(objectBlocksProvider(objectId).future);
+    await container.read(objectBlocksProvider(secondObjectId).future);
     await container.read(objectBlocksProvider(typeObjectId).future);
     await container.read(objectBlocksProvider(relationObjectId).future);
     await container.read(objectRelationsProvider(objectId).future);
@@ -166,6 +171,46 @@ void main() {
 
     expect(values, <String>['First title', 'Final title']);
     expect(find.text('Saved locally'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a title edit after switching pages saves to the open page', (
+    tester,
+  ) async {
+    final saves = <String>[];
+    saveOverride = (objectId, blockId, value) async {
+      saves.add('$objectId/$blockId=$value');
+    };
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MWidgetsApp(theme: manyTypeLightTheme(), home: const HomePage()),
+      ),
+    );
+    await tester.pump();
+    for (final id in <String>[objectId, secondObjectId]) {
+      container.read(pendingObjectSelectionProvider.notifier).state = id;
+      await tester.pump();
+      await tester.pump();
+    }
+
+    final title = find.descendant(
+      of: find.byWidgetPredicate(
+        (widget) =>
+            widget is MTextField && widget.semanticLabel == 'Page title',
+      ),
+      matching: find.byType(EditableText),
+    );
+    expect(tester.widget<EditableText>(title).controller.text, 'Second page');
+    await tester.enterText(title, 'Renamed page');
+    await tester.pump();
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    await tester.pump();
+
+    expect(saves, <String>['$secondObjectId/title=Renamed page']);
     expect(tester.takeException(), isNull);
   });
 

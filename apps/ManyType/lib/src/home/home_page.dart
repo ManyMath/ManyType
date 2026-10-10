@@ -193,6 +193,7 @@ class HomePage extends HookConsumerWidget {
                         : selectedObjectId.value == null
                         ? _EmptyDetailHint(section: section)
                         : ObjectDetailView(
+                            key: ValueKey<String>(selectedObjectId.value!),
                             objectId: selectedObjectId.value!,
                             spaceId: spaceId,
                             maximized: maximizeActive,

@@ -50,6 +50,7 @@ class ObjectDetailView extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final blocks = ref.watch(objectBlocksProvider(objectId));
     final metas = ref.watch(objectsProvider(spaceId)).valueOrNull;
+    final saveBlockText = ref.watch(objectBlockTextSaverProvider);
     final saveState = useState(_EditorSaveState.idle);
     final saveError = useState<String?>(null);
     final pendingSaveCount = useRef(0);
@@ -65,19 +66,19 @@ class ObjectDetailView extends HookConsumerWidget {
       saveState.value = _EditorSaveState.saving;
       saveError.value = null;
       try {
-        await ref.read(objectBlockTextSaverProvider)(objectId, block.id, value);
-        if (request == latestSaveRequest.value) {
+        await saveBlockText(objectId, block.id, value);
+        if (context.mounted && request == latestSaveRequest.value) {
           saveState.value = _EditorSaveState.saved;
         }
       } catch (error) {
-        if (request == latestSaveRequest.value) {
+        if (context.mounted && request == latestSaveRequest.value) {
           saveState.value = _EditorSaveState.failed;
           saveError.value = '$error';
         }
         rethrow;
       } finally {
         pendingSaveCount.value--;
-        if (pendingSaveCount.value > 0) {
+        if (context.mounted && pendingSaveCount.value > 0) {
           saveState.value = _EditorSaveState.saving;
         }
       }
@@ -92,17 +93,17 @@ class ObjectDetailView extends HookConsumerWidget {
         await ref
             .read(objectsControllerProvider)
             .editBlock(objectId, blockId: block.id, setChecked: value);
-        if (request == latestSaveRequest.value) {
+        if (context.mounted && request == latestSaveRequest.value) {
           saveState.value = _EditorSaveState.saved;
         }
       } catch (error) {
-        if (request == latestSaveRequest.value) {
+        if (context.mounted && request == latestSaveRequest.value) {
           saveState.value = _EditorSaveState.failed;
           saveError.value = '$error';
         }
       } finally {
         pendingSaveCount.value--;
-        if (pendingSaveCount.value > 0) {
+        if (context.mounted && pendingSaveCount.value > 0) {
           saveState.value = _EditorSaveState.saving;
         }
       }
@@ -183,6 +184,9 @@ class ObjectDetailView extends HookConsumerWidget {
                             const SizedBox(height: 4),
                           if (titleBlock != null)
                             _EditableBlock(
+                              key: ValueKey<String>(
+                                '$objectId/${titleBlock.id}',
+                              ),
                               block: titleBlock,
                               title: true,
                               titleSemanticLabel: schemaMeta == null
@@ -210,6 +214,9 @@ class ObjectDetailView extends HookConsumerWidget {
                               index++
                             )
                               Padding(
+                                key: ValueKey<String>(
+                                  '$objectId/${bodyBlocks[index].id}',
+                                ),
                                 padding: const EdgeInsets.only(bottom: 8),
                                 child: _EditableBlock(
                                   block: bodyBlocks[index],
@@ -444,6 +451,7 @@ typedef _SaveChecked =
 
 class _EditableBlock extends HookWidget {
   const _EditableBlock({
+    super.key,
     required this.block,
     required this.onSaveText,
     required this.onSaveChecked,
@@ -492,14 +500,17 @@ class _EditableBlock extends HookWidget {
       return operation;
     }
 
+    final latestCommit = useRef(commit);
+    latestCommit.value = commit;
+
     useEffect(() {
       void saveOnBlur() {
-        if (!focusNode.hasFocus) unawaited(commit());
+        if (!focusNode.hasFocus) unawaited(latestCommit.value());
       }
 
       focusNode.addListener(saveOnBlur);
       return () => focusNode.removeListener(saveOnBlur);
-    }, <Object?>[focusNode, block.id]);
+    }, <Object?>[focusNode]);
 
     useEffect(() {
       if (!focusNode.hasFocus &&
