@@ -15,21 +15,36 @@ class HeadSyncClient {
     DiffType diffType = DiffType.V3,
     int divideFactor = 32,
     int compareThreshold = 256,
+    int maxRounds = 64,
+    int maxPendingRanges = 1 << 16,
   })  : _invoker = invoker,
         _diffType = diffType,
         _divideFactor = divideFactor,
-        _compareThreshold = compareThreshold;
+        _compareThreshold = compareThreshold,
+        _maxRounds = maxRounds,
+        _maxPendingRanges = maxPendingRanges;
 
   final HeadSyncUnaryInvoker _invoker;
   final DiffType _diffType;
   final int _divideFactor;
   final int _compareThreshold;
 
+  // A server reporting counts it never resolves would otherwise make
+  // narrowing grow the pending ranges by [_divideFactor] every round.
+  final int _maxRounds;
+  final int _maxPendingRanges;
+
   Map<String, Set<String>> fetchServerHeads(int handleId, String spaceId) {
     final serverHeads = <String, Set<String>>{};
     var pending = <HeadSyncRange>[_fullRange(elements: false)];
+    var rounds = 0;
 
     while (pending.isNotEmpty) {
+      if (++rounds > _maxRounds) {
+        throw StateError(
+          'HeadSync did not converge after $_maxRounds rounds',
+        );
+      }
       print('HeadSync: pending ranges=${pending.length}');
       final request = HeadSyncRequest(
         spaceId: spaceId,
@@ -62,7 +77,7 @@ class HeadSyncClient {
             // Some servers cap the number of elements returned per range even
             // when `limit=0`. If we didn't receive all elements, subdivide and
             // keep narrowing until we can fetch the complete set.
-            nextRanges.addAll(_subdivide(range));
+            _addSubdivided(nextRanges, range);
           }
           continue;
         }
@@ -91,7 +106,7 @@ class HeadSyncClient {
         }
 
         // A hash-only response means the client must narrow the range again.
-        nextRanges.addAll(_subdivide(range));
+        _addSubdivided(nextRanges, range);
       }
 
       pending = nextRanges;
@@ -107,9 +122,35 @@ class HeadSyncClient {
         limit: 0,
       );
 
+  void _addSubdivided(List<HeadSyncRange> ranges, HeadSyncRange range) {
+    ranges.addAll(_subdivide(range));
+    if (ranges.length > _maxPendingRanges) {
+      throw StateError(
+        'HeadSync narrowing exceeded $_maxPendingRanges pending ranges',
+      );
+    }
+  }
+
   List<HeadSyncRange> _subdivide(HeadSyncRange range) {
     final from = _protoToUint64(range.from);
     final to = _protoToUint64(range.to);
+    if (to - from < BigInt.from(_divideFactor)) {
+      // Too narrow for [_divideFactor] parts: the equal split below would
+      // produce zero-width parts that wrap around (from 0, to the full
+      // range). Split into single hash values instead.
+      if (to <= from) {
+        throw StateError('HeadSync cannot narrow range $from..$to further');
+      }
+      return [
+        for (var value = from; value <= to; value += BigInt.one)
+          HeadSyncRange(
+            from: _uint64ToProto(value),
+            to: _uint64ToProto(value),
+            elements: false,
+            limit: 0,
+          ),
+      ];
+    }
     var perRange = (to - from) ~/ BigInt.from(_divideFactor);
     final align = ((to - from) % BigInt.from(_divideFactor) + BigInt.one) %
         BigInt.from(_divideFactor);
