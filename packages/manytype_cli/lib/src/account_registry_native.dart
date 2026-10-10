@@ -965,10 +965,14 @@ class AccountRegistry {
       );
     }
     final store = _recoveryPhraseStore;
-    if (await store?.read(id) != null) {
+    // Platform stores such as the iOS Keychain outlive an app uninstall, so a
+    // reinstall can find this account's phrase still present. Reuse it only
+    // when it is the phrase being imported.
+    final existingPhrase = await store?.read(id);
+    if (existingPhrase != null && existingPhrase != mnemonic) {
       throw StateError(
-        'a platform recovery phrase already exists for $id; refusing to '
-        'overwrite it',
+        'a different platform recovery phrase already exists for $id; '
+        'refusing to overwrite it',
       );
     }
     if (!directoryExisted) {
@@ -979,7 +983,7 @@ class AccountRegistry {
     var securePhraseWriteAttempted = false;
     var configWritten = false;
     try {
-      if (store != null) {
+      if (store != null && existingPhrase == null) {
         // Preflight proved no value exists. Mark the attempt first because a
         // platform store can persist and then report failure; cleanup remains
         // safe and idempotent in either case.
