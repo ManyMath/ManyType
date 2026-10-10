@@ -113,4 +113,30 @@ void main() {
     expect(saves, <String>['a/title=Renamed A']);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a refreshed checkbox block updates the checkbox', (
+    tester,
+  ) async {
+    ReplayedBlockView task(bool checked) => ReplayedBlockView(
+      id: 'task',
+      style: Block_Content_Text_Style.Checkbox,
+      text: 'Task',
+      checked: checked,
+    );
+    blocksById['a'] = <ReplayedBlockView>[title('Page A'), task(true)];
+    final selected = ValueNotifier<String>('a');
+    addTearDown(selected.dispose);
+    await pumpDetail(tester, selected);
+
+    MCheckbox checkbox() => tester.widget<MCheckbox>(find.byType(MCheckbox));
+    expect(checkbox().controller!.value, isTrue);
+
+    blocksById['a'] = <ReplayedBlockView>[title('Page A'), task(false)];
+    container.invalidate(objectBlocksProvider('a'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(checkbox().controller!.value, isFalse);
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -477,6 +477,7 @@ class _EditableBlock extends HookWidget {
     final pendingSaves = useRef(0);
     final saveTail = useRef<Future<void>>(Future<void>.value());
     final checkedController = useMController<bool>(block.checked ?? false);
+    final pendingCheckedSaves = useRef(0);
 
     Future<void> commit([String? submitted]) {
       final value = submitted ?? controller.value;
@@ -498,6 +499,15 @@ class _EditableBlock extends HookWidget {
           .whenComplete(() => pendingSaves.value--);
       saveTail.value = operation;
       return operation;
+    }
+
+    Future<void> toggleChecked(bool value) async {
+      pendingCheckedSaves.value++;
+      try {
+        await onSaveChecked(block, value);
+      } finally {
+        pendingCheckedSaves.value--;
+      }
     }
 
     final latestCommit = useRef(commit);
@@ -522,6 +532,15 @@ class _EditableBlock extends HookWidget {
       }
       return null;
     }, <Object?>[block.text]);
+
+    useEffect(() {
+      final checked = block.checked ?? false;
+      if (pendingCheckedSaves.value == 0 &&
+          checkedController.value != checked) {
+        checkedController.value = checked;
+      }
+      return null;
+    }, <Object?>[block.id, block.checked]);
 
     final textStyle = title
         ? theme.typography.headlineLarge.copyWith(fontWeight: FontWeight.w700)
@@ -569,7 +588,7 @@ class _EditableBlock extends HookWidget {
             child: MCheckbox(
               controller: checkedController,
               semanticLabel: block.text.isEmpty ? 'Task' : block.text,
-              onChanged: (value) => unawaited(onSaveChecked(block, value)),
+              onChanged: (value) => unawaited(toggleChecked(value)),
             ),
           ),
           const SizedBox(width: 8),
