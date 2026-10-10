@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -85,7 +86,9 @@ class _SyncDialog extends HookConsumerWidget {
     return MDialogContent(
       title: 'Sync',
       description: !state.supported
-          ? 'Browser workspaces are offline-only.'
+          ? kIsWeb
+                ? 'Browser workspaces are offline-only.'
+                : 'Workspaces on this platform are offline-only.'
           : state.configSummary == null
           ? 'Connect this workspace to an any-sync coordinator.'
           : 'A network config is loaded. Probe it to verify availability or '
@@ -97,10 +100,7 @@ class _SyncDialog extends HookConsumerWidget {
           if (!state.supported) ...<Widget>[
             const MAlert(
               variant: MAlertVariant.neutral,
-              message:
-                  'Sync is disabled in the browser editor. Your recovery '
-                  'identity and documents stay in this browser; use the '
-                  'native ManyType app to configure and run device sync.',
+              message: syncUnavailableMessage,
             ),
             const SizedBox(height: 16),
           ],

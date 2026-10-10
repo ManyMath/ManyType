@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -1046,7 +1047,8 @@ class _SyncStatusBadge extends StatelessWidget {
       SyncUiStatus.unconfigured => MBadgeVariant.outline,
     };
     final label = switch (state.status) {
-      SyncUiStatus.unsupported => 'Sync: native only',
+      SyncUiStatus.unsupported =>
+        kIsWeb ? 'Sync: native only' : 'Sync: unavailable',
       SyncUiStatus.unconfigured => 'Sync: configure',
       SyncUiStatus.ready => 'Sync: configured',
       SyncUiStatus.probing => 'Probing...',
@@ -1061,7 +1063,8 @@ class _SyncStatusBadge extends StatelessWidget {
 }
 
 String _syncSummary(SyncUiStatus status) => switch (status) {
-  SyncUiStatus.unsupported => 'Unavailable in browser',
+  SyncUiStatus.unsupported =>
+    kIsWeb ? 'Unavailable in browser' : 'Unavailable on this platform',
   SyncUiStatus.unconfigured => 'Not configured',
   SyncUiStatus.ready => 'Configured',
   SyncUiStatus.probing => 'Checking connection',

@@ -560,7 +560,7 @@ void main() {
       final state = container.read(provider);
       expect(state.status, SyncUiStatus.unsupported);
       expect(state.canRun, isFalse);
-      expect(state.message, contains('disabled in the browser'));
+      expect(state.message, contains('not available on this platform'));
       expect(probeCalls, 0);
       expect(syncCalls, 0);
       expect(metadataStore.values, isEmpty);

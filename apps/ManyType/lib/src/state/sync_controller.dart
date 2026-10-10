@@ -10,6 +10,7 @@ import 'package:manytype_cli/src/account_registry.dart';
 
 import 'objects_providers.dart';
 import 'session_provider.dart';
+import 'sync_transport_platform.dart';
 
 typedef ManyTypeSyncRunner =
     Future<void> Function(ManytypeSession session, String networkConfigContent);
@@ -155,7 +156,9 @@ final syncClockProvider = Provider<DateTime Function()>(
       () => DateTime.now().toUtc(),
 );
 
-final nativeSyncSupportedProvider = Provider<bool>((ref) => !kIsWeb);
+final nativeSyncSupportedProvider = Provider<bool>(
+  (ref) => !kIsWeb && nativeSyncTransportAvailable,
+);
 
 final syncRunnerProvider = Provider<ManyTypeSyncRunner>((ref) {
   if (kIsWeb) {
@@ -186,8 +189,9 @@ final syncProbeRunnerProvider = Provider<ManyTypeProbeRunner>((ref) {
 /// Network configuration is not inferred from the account's
 /// legacy `serverAddress` field. A new account remains
 /// [SyncUiStatus.unconfigured] until the user supplies a real any-sync network
-/// configuration. Browser builds remain offline-only and never reach either
-/// runner, both of which eventually instantiate the native transport bridge.
+/// configuration. Browser builds and platforms without the native transport
+/// bridge remain offline-only and never reach either runner, both of which
+/// eventually instantiate that bridge.
 final syncControllerProvider =
     StateNotifierProvider.family<SyncController, SyncUiState, String>((
       ref,
@@ -206,7 +210,7 @@ class SyncController extends StateNotifier<SyncUiState> {
             ? const SyncUiState(restoring: true)
             : const SyncUiState(
                 status: SyncUiStatus.unsupported,
-                message: _webSyncUnavailableMessage,
+                message: syncUnavailableMessage,
               ),
       ) {
     initialized = _supported ? _restore() : Future<void>.value();
@@ -330,7 +334,7 @@ class SyncController extends StateNotifier<SyncUiState> {
     if (!_supported) {
       state = state.copyWith(
         status: SyncUiStatus.unsupported,
-        message: _webSyncUnavailableMessage,
+        message: syncUnavailableMessage,
       );
       return;
     }
@@ -416,7 +420,7 @@ class SyncController extends StateNotifier<SyncUiState> {
     if (!_supported) {
       state = state.copyWith(
         status: SyncUiStatus.unsupported,
-        message: _webSyncUnavailableMessage,
+        message: syncUnavailableMessage,
       );
       return;
     }
@@ -500,7 +504,7 @@ class SyncController extends StateNotifier<SyncUiState> {
     if (!_supported) {
       state = state.copyWith(
         status: SyncUiStatus.unsupported,
-        message: _webSyncUnavailableMessage,
+        message: syncUnavailableMessage,
       );
       return;
     }
@@ -604,10 +608,13 @@ class SyncController extends StateNotifier<SyncUiState> {
   }
 }
 
-const String _webSyncUnavailableMessage =
-    'Sync is disabled in the browser editor. Your recovery identity and '
-    'documents stay in this browser; use the native ManyType app to configure '
-    'and run device sync.';
+const String syncUnavailableMessage = kIsWeb
+    ? 'Sync is disabled in the browser editor. Your recovery identity and '
+          'documents stay in this browser; use ManyType on macOS or Linux to '
+          'configure and run device sync.'
+    : 'Sync is not available on this platform yet. Your recovery identity '
+          'and documents stay on this device; use ManyType on macOS or Linux '
+          'to configure and run device sync.';
 
 SyncConfigSummary _configSummary(
   NetworkConfigFile config,

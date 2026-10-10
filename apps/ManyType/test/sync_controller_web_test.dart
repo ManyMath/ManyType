@@ -45,6 +45,7 @@ void main() {
 
       final state = container.read(provider);
       expect(state.status, SyncUiStatus.unsupported);
+      expect(state.message, contains('disabled in the browser'));
       expect(state.networkConfigContent, isEmpty);
       expect(state.lastProbeAt, isNull);
       expect(state.lastSuccessfulSyncAt, isNull);

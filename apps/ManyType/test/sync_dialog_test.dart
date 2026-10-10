@@ -159,7 +159,7 @@ void main() {
     expect(find.text('Previous sync timed out'), findsOneWidget);
   });
 
-  testWidgets('offline browser mode explains that native sync is required', (
+  testWidgets('unsupported platforms explain that sync is unavailable', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(900, 900));
@@ -192,8 +192,14 @@ void main() {
     await tester.tap(find.text('Open sync'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Browser workspaces are offline-only.'), findsOneWidget);
-    expect(find.textContaining('use the native ManyType app'), findsOneWidget);
+    expect(
+      find.text('Workspaces on this platform are offline-only.'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('use ManyType on macOS or Linux'),
+      findsOneWidget,
+    );
     expect(
       tester.widget<MButton>(find.widgetWithText(MButton, 'Probe')).onPressed,
       isNull,
