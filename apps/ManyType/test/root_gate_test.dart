@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manytype/src/app.dart';
 import 'package:manytype/src/home/home_page.dart';
+import 'package:manytype/src/onboarding/onboarding_page.dart';
 import 'package:manytype/src/state/accounts_providers.dart';
 import 'package:manytype/src/state/session_provider.dart';
 import 'package:manytype/src/state/sync_controller.dart';
@@ -81,6 +82,75 @@ void main() {
 
     expect(find.text('Personal'), findsOneWidget);
   });
+
+  testWidgets('a registry load failure can be retried', (tester) async {
+    var idReads = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          currentAccountIdProvider.overrideWith((ref) async {
+            idReads += 1;
+            if (idReads == 1) throw StateError('registry unreadable');
+            return null;
+          }),
+          accountsProvider.overrideWith(
+            (ref) async => const <AccountSummary>[],
+          ),
+        ],
+        child: const ManyTypeApp(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('registry unreadable'), findsOneWidget);
+
+    await tester.tap(find.text('Try again'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(idReads, 2);
+    expect(find.byType(OnboardingPage), findsOneWidget);
+  });
+
+  testWidgets('a missing selected account offers another account', (
+    tester,
+  ) async {
+    var deselects = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          currentAccountIdProvider.overrideWith((ref) async => 'gone'),
+          accountsProvider.overrideWith(
+            (ref) async => <AccountSummary>[summary('Work')],
+          ),
+          accountsControllerProvider.overrideWith(
+            (ref) => _RecordingAccountsController(ref, () => deselects += 1),
+          ),
+        ],
+        child: const ManyTypeApp(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.text('The selected account is no longer registered.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Choose another account'));
+    await tester.pump();
+
+    expect(deselects, 1);
+  });
+}
+
+class _RecordingAccountsController extends AccountsController {
+  _RecordingAccountsController(super.ref, this._onDeselect);
+
+  final void Function() _onDeselect;
+
+  @override
+  Future<void> deselect() async => _onDeselect();
 }
 
 class _MemorySyncMetadataStore implements SyncMetadataStore {

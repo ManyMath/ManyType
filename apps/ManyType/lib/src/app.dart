@@ -36,18 +36,19 @@ class _RootGate extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentId = ref.watch(currentAccountIdProvider);
     final demoState = ref.watch(guestDemoStateProvider);
+    void chooseAnotherAccount() {
+      ref.read(guestDemoStateProvider.notifier).state =
+          const GuestDemoUiState();
+      ref.read(accountsControllerProvider).deselect();
+    }
+
     return currentId.when(
       loading: () => const MScaffold(
         body: Center(child: MLoadingState(message: 'Loading account registry')),
       ),
-      error: (e, _) => MScaffold(
-        body: Center(
-          child: MAlert(
-            variant: MAlertVariant.destructive,
-            message: 'Failed to load account registry: $e',
-            maxWidth: 420,
-          ),
-        ),
+      error: (e, _) => _DemoRecoveryFailure(
+        message: 'Failed to load account registry: $e',
+        onRetry: () => ref.invalidate(currentAccountIdProvider),
       ),
       data: (id) {
         if (id == null) {
@@ -71,8 +72,9 @@ class _RootGate extends ConsumerWidget {
               ),
               data: (account) {
                 if (account == null) {
-                  return const _DemoRecoveryFailure(
+                  return _DemoRecoveryFailure(
                     message: 'The selected account is no longer registered.',
+                    onChooseAccount: chooseAnotherAccount,
                   );
                 }
                 if (!account.pendingStarterTemplate) {
@@ -88,6 +90,7 @@ class _RootGate extends ConsumerWidget {
                           const GuestDemoUiState();
                       ref.invalidate(starterTemplateRecoveryProvider(id));
                     },
+                    onChooseAccount: chooseAnotherAccount,
                   );
                 }
 
@@ -100,6 +103,7 @@ class _RootGate extends ConsumerWidget {
                     message: 'Could not finish the sample workspace: $e',
                     onRetry: () =>
                         ref.invalidate(starterTemplateRecoveryProvider(id)),
+                    onChooseAccount: chooseAnotherAccount,
                   ),
                   data: (_) => const HomePage(),
                 );
@@ -125,10 +129,15 @@ class _DemoPreparationGate extends StatelessWidget {
 }
 
 class _DemoRecoveryFailure extends StatelessWidget {
-  const _DemoRecoveryFailure({required this.message, this.onRetry});
+  const _DemoRecoveryFailure({
+    required this.message,
+    this.onRetry,
+    this.onChooseAccount,
+  });
 
   final String message;
   final VoidCallback? onRetry;
+  final VoidCallback? onChooseAccount;
 
   @override
   Widget build(BuildContext context) {
@@ -141,9 +150,26 @@ class _DemoRecoveryFailure extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               MAlert(variant: MAlertVariant.destructive, message: message),
-              if (onRetry != null) ...<Widget>[
+              if (onRetry != null || onChooseAccount != null) ...<Widget>[
                 const SizedBox(height: 12),
-                MButton(onPressed: onRetry, child: const Text('Try again')),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: <Widget>[
+                    if (onChooseAccount != null)
+                      MButton(
+                        variant: MButtonVariant.outline,
+                        onPressed: onChooseAccount,
+                        child: const Text('Choose another account'),
+                      ),
+                    if (onRetry != null)
+                      MButton(
+                        onPressed: onRetry,
+                        child: const Text('Try again'),
+                      ),
+                  ],
+                ),
               ],
             ],
           ),
