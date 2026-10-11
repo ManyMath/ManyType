@@ -577,6 +577,40 @@ void main() {
     },
   );
 
+  test('a failed pending marker reports that the edit was not saved', () async {
+    final container = buildContainer();
+    addTearDown(container.dispose);
+    final provider = syncControllerProvider(_accountId);
+    await container.read(provider.notifier).initialized;
+    final created = await createCommand(
+      'Before edit',
+      session.db,
+      session.config,
+    );
+    metadataStore.failNextSave = StateError('disk full');
+
+    await expectLater(
+      container
+          .read(objectsControllerProvider)
+          .editBlock(created.objectId, blockId: 'title', setText: 'After edit'),
+      throwsStateError,
+    );
+
+    final blocks = await replayObjectBlocks(
+      session.db,
+      session.config,
+      created.objectId,
+    );
+    expect(
+      blocks!.blocks.singleWhere((block) => block.id == 'title').text,
+      'Before edit',
+    );
+    final state = container.read(provider);
+    expect(state.status, SyncUiStatus.failed);
+    expect(state.message, contains('change was not saved'));
+    expect(state.message, contains('disk full'));
+  });
+
   test(
     'successful sync is not mislabeled when result persistence fails',
     () async {

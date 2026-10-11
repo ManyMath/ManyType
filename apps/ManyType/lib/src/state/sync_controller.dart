@@ -321,8 +321,8 @@ class SyncController extends StateNotifier<SyncUiState> {
         state = state.copyWith(
           status: SyncUiStatus.failed,
           message:
-              'The edit is local, but its pending-sync marker could not '
-              'be saved: $detail',
+              'The change was not saved because its pending-sync marker '
+              'could not be recorded: $detail',
           lastError: detail,
         );
       }
