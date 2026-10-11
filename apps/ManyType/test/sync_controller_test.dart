@@ -195,6 +195,12 @@ void main() {
     expect(state.configSummary?.coordinatorAddress, '127.0.0.1:33020');
   });
 
+  test('syncErrorMessage strips the standard Dart error prefixes', () {
+    expect(syncErrorMessage(Exception('timed out')), 'timed out');
+    expect(syncErrorMessage(StateError('no session')), 'no session');
+    expect(syncErrorMessage(UnsupportedError('no bridge')), 'no bridge');
+  });
+
   test('buildSelfHostedNetworkConfig rejects missing peer id', () {
     expect(
       () => buildSelfHostedNetworkConfig(

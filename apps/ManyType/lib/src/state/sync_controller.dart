@@ -786,11 +786,11 @@ String syncErrorMessage(Object error) {
   if (text.startsWith('Exception: ')) {
     return text.substring('Exception: '.length);
   }
-  if (text.startsWith('StateError: ')) {
-    return text.substring('StateError: '.length);
+  if (text.startsWith('Bad state: ')) {
+    return text.substring('Bad state: '.length);
   }
-  if (text.startsWith('UnsupportedError: ')) {
-    return text.substring('UnsupportedError: '.length);
+  if (text.startsWith('Unsupported operation: ')) {
+    return text.substring('Unsupported operation: '.length);
   }
   return text;
 }
