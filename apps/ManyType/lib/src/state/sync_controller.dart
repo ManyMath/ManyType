@@ -366,16 +366,21 @@ class SyncController extends StateNotifier<SyncUiState> {
       final configuredAt = _metadata.networkConfigContent.trim() == trimmed
           ? _metadata.configuredAt ?? _clock()
           : _clock();
-      state = SyncUiState(
-        networkConfigContent: value,
-        status: state.pendingLocalChanges
-            ? SyncUiStatus.localChangesPending
-            : SyncUiStatus.ready,
-        message: _readyMessage(config),
-        configSummary: _configSummary(config, coordinator),
-        configuredAt: configuredAt,
-        pendingLocalChanges: state.pendingLocalChanges,
-      );
+      final reapplied =
+          state.validationError == null &&
+          state.networkConfigContent.trim() == trimmed;
+      state = reapplied
+          ? state.copyWith(networkConfigContent: value)
+          : SyncUiState(
+              networkConfigContent: value,
+              status: state.pendingLocalChanges
+                  ? SyncUiStatus.localChangesPending
+                  : SyncUiStatus.ready,
+              message: _readyMessage(config),
+              configSummary: _configSummary(config, coordinator),
+              configuredAt: configuredAt,
+              pendingLocalChanges: state.pendingLocalChanges,
+            );
       _persistInBackground((current) {
         if (revision != _configurationRevision) return current;
         final unchanged = current.networkConfigContent.trim() == trimmed;

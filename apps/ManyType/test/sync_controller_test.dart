@@ -2,10 +2,12 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manytype_cli/manytype_cli.dart';
+import 'package:manytype_cli/src/account_registry.dart';
 import 'package:manytype_cli/src/store/database_native.dart'
     show openDatabaseForTesting;
 
@@ -32,11 +34,15 @@ nodes:
 ''';
 
 void main() {
+  late Directory tempBase;
   late ManytypeSession session;
   late _MemorySyncMetadataStore metadataStore;
   late DateTime now;
 
   setUp(() async {
+    tempBase = await Directory.systemTemp.createTemp('manytype_sync_test');
+    AccountRegistry.testBaseDirOverride = tempBase.path;
+    CliConfig.testConfigDirOverride = tempBase.path;
     metadataStore = _MemorySyncMetadataStore();
     now = DateTime.utc(2026, 7, 13, 18, 30);
     session = ManytypeSession(
@@ -46,7 +52,12 @@ void main() {
     );
   });
 
-  tearDown(() => session.close());
+  tearDown(() async {
+    await session.close();
+    AccountRegistry.testBaseDirOverride = null;
+    CliConfig.testConfigDirOverride = null;
+    await tempBase.delete(recursive: true);
+  });
 
   ProviderContainer buildContainer({
     ManyTypeProbeRunner? probeRunner,
@@ -414,6 +425,33 @@ void main() {
     expect(state.message, contains('Sync completed'));
     expect(state.lastSuccessfulSyncAt, now);
     expect(state.pendingLocalChanges, isFalse);
+  });
+
+  test('re-applying the current config keeps its sync results', () async {
+    final container = buildContainer(syncRunner: (_, __) async {});
+    addTearDown(container.dispose);
+    final provider = syncControllerProvider(_accountId);
+    final controller = container.read(provider.notifier);
+    controller.updateNetworkConfig(_networkConfig);
+    await controller.sync(spaceId: 'space-id');
+    final configuredAt = container.read(provider).configuredAt;
+    final syncedAt = container.read(provider).lastSuccessfulSyncAt;
+    expect(syncedAt, isNotNull);
+    now = now.add(const Duration(minutes: 5));
+
+    controller.updateNetworkConfig('$_networkConfig\n');
+    await controller.flushPersistence();
+
+    final state = container.read(provider);
+    expect(state.status, SyncUiStatus.syncSucceeded);
+    expect(state.message, contains('Sync completed'));
+    expect(state.configuredAt, configuredAt);
+    expect(state.lastSuccessfulSyncAt, syncedAt);
+    expect(
+      metadataStore.values[_accountId]?.networkConfigContent,
+      '$_networkConfig\n',
+    );
+    expect(metadataStore.values[_accountId]?.lastSuccessfulSyncAt, syncedAt);
   });
 
   test(
