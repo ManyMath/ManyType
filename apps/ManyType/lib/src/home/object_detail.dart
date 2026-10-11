@@ -674,12 +674,13 @@ class _AddBlockComposer extends HookConsumerWidget {
         await ref
             .read(objectsControllerProvider)
             .insertBlock(objectId, text: text, kind: kind.value);
+        if (!context.mounted) return;
         controller.value = '';
         expanded.value = false;
       } catch (exception) {
-        error.value = '$exception';
+        if (context.mounted) error.value = '$exception';
       } finally {
-        busy.value = false;
+        if (context.mounted) busy.value = false;
       }
     }
 
@@ -1011,11 +1012,11 @@ class _RelationEditor extends HookConsumerWidget {
                         .toString()
                   : null,
             );
-        valueController.value = '';
+        if (context.mounted) valueController.value = '';
       } catch (exception) {
-        error.value = '$exception';
+        if (context.mounted) error.value = '$exception';
       } finally {
-        busy.value = false;
+        if (context.mounted) busy.value = false;
       }
     }
 

@@ -1,6 +1,7 @@
 @TestOn('vm')
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
@@ -19,6 +20,7 @@ void main() {
   late Directory tempBase;
   late Map<String, List<ReplayedBlockView>> blocksById;
   late List<String> saves;
+  late Completer<void> insertGate;
   late ProviderContainer container;
 
   setUp(() async {
@@ -29,6 +31,7 @@ void main() {
     CliConfig.testConfigDirOverride = tempBase.path;
     blocksById = <String, List<ReplayedBlockView>>{};
     saves = <String>[];
+    insertGate = Completer<void>();
     container = ProviderContainer(
       overrides: <Override>[
         objectBlocksProvider.overrideWith(
@@ -47,6 +50,9 @@ void main() {
         ) async {
           saves.add('$objectId/$blockId=$value');
         }),
+        objectsControllerProvider.overrideWith(
+          (ref) => _GatedObjectsController(ref, insertGate.future),
+        ),
       ],
     );
   });
@@ -139,4 +145,53 @@ void main() {
     expect(checkbox().controller!.value, isFalse);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a block insert that finishes after the page closes is ignored', (
+    tester,
+  ) async {
+    blocksById['a'] = <ReplayedBlockView>[title('Page A')];
+    final selected = ValueNotifier<String>('a');
+    addTearDown(selected.dispose);
+    await pumpDetail(tester, selected);
+
+    await tester.tap(find.text('Add block'));
+    await tester.pump();
+    await tester.enterText(
+      find.descendant(
+        of: find.byWidgetPredicate(
+          (widget) =>
+              widget is MTextField && widget.semanticLabel == 'New block text',
+        ),
+        matching: find.byType(EditableText),
+      ),
+      'Late block',
+    );
+    await tester.tap(find.text('Add'));
+    await tester.pump();
+    expect(find.text('Adding...'), findsOneWidget);
+
+    selected.value = 'b';
+    await tester.pump();
+    await tester.pump();
+    insertGate.complete();
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+  });
+}
+
+class _GatedObjectsController extends ObjectsController {
+  _GatedObjectsController(super.ref, this._gate);
+
+  final Future<void> _gate;
+
+  @override
+  Future<InsertBlockResult?> insertBlock(
+    String objectId, {
+    required String text,
+    NewBlockKind kind = NewBlockKind.text,
+  }) async {
+    await _gate;
+    return null;
+  }
 }

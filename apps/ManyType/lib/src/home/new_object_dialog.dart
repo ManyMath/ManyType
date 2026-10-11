@@ -63,9 +63,9 @@ class _NewObjectDialog extends HookConsumerWidget {
           Navigator.of(context).pop(result.objectId);
         }
       } catch (e) {
-        error.value = '$e';
+        if (context.mounted) error.value = '$e';
       } finally {
-        busy.value = false;
+        if (context.mounted) busy.value = false;
       }
     }
 
