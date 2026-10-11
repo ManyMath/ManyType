@@ -454,6 +454,33 @@ void main() {
     expect(metadataStore.values[_accountId]?.lastSuccessfulSyncAt, syncedAt);
   });
 
+  test('probe and sync results that land after disposal are dropped', () async {
+    final probe = Completer<NetworkProbeResult>();
+    final sync = Completer<void>();
+    final container = buildContainer(
+      probeRunner: (_, __) => probe.future,
+      syncRunner: (_, __) => sync.future,
+    );
+    final controller = container.read(
+      syncControllerProvider(_accountId).notifier,
+    );
+    controller.updateNetworkConfig(_networkConfig);
+    await controller.flushPersistence();
+    final saved = metadataStore.values[_accountId];
+
+    final probing = controller.probe();
+    await pumpEventQueue();
+    final syncing = controller.sync(spaceId: 'space-id');
+    await pumpEventQueue();
+    container.dispose();
+    probe.completeError(StateError('no route'));
+    sync.complete();
+
+    await probing;
+    await syncing;
+    expect(metadataStore.values[_accountId], same(saved));
+  });
+
   test(
     'failed sync preserves config, pending state, and prior success time',
     () async {

@@ -430,6 +430,7 @@ class SyncController extends StateNotifier<SyncUiState> {
       return;
     }
     await flushPersistence();
+    if (!mounted) return;
     final content = _validNetworkConfigContent();
     if (content == null) return;
 
@@ -444,6 +445,7 @@ class SyncController extends StateNotifier<SyncUiState> {
       final session = await _requireSession();
       result = await _ref.read(syncProbeRunnerProvider)(session, content);
     } catch (error) {
+      if (!mounted) return;
       final detail = syncErrorMessage(error);
       final probedAt = _clock();
       Object? persistenceError;
@@ -455,6 +457,7 @@ class SyncController extends StateNotifier<SyncUiState> {
       } catch (error) {
         persistenceError = error;
       }
+      if (!mounted) return;
       state = state.copyWith(
         status: SyncUiStatus.failed,
         message: persistenceError == null
@@ -467,12 +470,14 @@ class SyncController extends StateNotifier<SyncUiState> {
       return;
     }
 
+    if (!mounted) return;
     final probedAt = _clock();
     try {
       await _persist(
         (current) => current.copyWith(lastProbeAt: probedAt, lastError: null),
       );
     } catch (error) {
+      if (!mounted) return;
       final detail = syncErrorMessage(error);
       state = state.copyWith(
         status: SyncUiStatus.failed,
@@ -490,6 +495,7 @@ class SyncController extends StateNotifier<SyncUiState> {
       return;
     }
 
+    if (!mounted) return;
     state = state.copyWith(
       status: SyncUiStatus.probeSucceeded,
       message:
@@ -514,6 +520,7 @@ class SyncController extends StateNotifier<SyncUiState> {
       return;
     }
     await flushPersistence();
+    if (!mounted) return;
     final content = _validNetworkConfigContent();
     if (content == null) return;
     final mutationRevisionAtStart = _localMutationRevision;
@@ -528,6 +535,7 @@ class SyncController extends StateNotifier<SyncUiState> {
       final session = await _requireSession();
       await _ref.read(syncRunnerProvider)(session, content);
     } catch (error) {
+      if (!mounted) return;
       final detail = syncErrorMessage(error);
       Object? persistenceError;
       try {
@@ -535,6 +543,7 @@ class SyncController extends StateNotifier<SyncUiState> {
       } catch (error) {
         persistenceError = error;
       }
+      if (!mounted) return;
       state = state.copyWith(
         status: SyncUiStatus.failed,
         message: persistenceError == null
@@ -546,6 +555,7 @@ class SyncController extends StateNotifier<SyncUiState> {
       return;
     }
 
+    if (!mounted) return;
     _ref.invalidate(objectsProvider(spaceId));
     _ref.invalidate(objectBlocksProvider);
     _ref.invalidate(objectRelationsProvider);
@@ -562,6 +572,7 @@ class SyncController extends StateNotifier<SyncUiState> {
         ),
       );
     } catch (error) {
+      if (!mounted) return;
       final detail = syncErrorMessage(error);
       state = state.copyWith(
         status: SyncUiStatus.failed,
@@ -573,6 +584,7 @@ class SyncController extends StateNotifier<SyncUiState> {
       return;
     }
 
+    if (!mounted) return;
     state = state.copyWith(
       status: changedWhileSyncing
           ? SyncUiStatus.localChangesPending
