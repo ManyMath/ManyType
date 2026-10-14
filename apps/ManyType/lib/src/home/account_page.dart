@@ -133,7 +133,10 @@ class AccountView extends ConsumerWidget {
                             child: MDivider(),
                           ),
                           _EditableFact(
-                            label: 'Server address',
+                            label: 'CLI server address',
+                            description:
+                                'Used only by the manytype command-line tool. '
+                                'App sync uses the network configured in Sync.',
                             value: server,
                             style: theme.typography.code.copyWith(fontSize: 12),
                             onEdit: account == null || isLegacySharedDemo
@@ -142,8 +145,8 @@ class AccountView extends ConsumerWidget {
                                     final address =
                                         await promptEditAccountField(
                                           context,
-                                          title: 'Edit server address',
-                                          label: 'Server address',
+                                          title: 'Edit CLI server address',
+                                          label: 'CLI server address',
                                           initialValue: server,
                                         );
                                     if (address != null && address != server) {
@@ -306,17 +309,20 @@ class _EditableFact extends StatelessWidget {
     required this.value,
     required this.style,
     required this.onEdit,
+    this.description,
   });
 
   final String label;
   final String? value;
   final TextStyle style;
   final Future<void> Function()? onEdit;
+  final String? description;
 
   @override
   Widget build(BuildContext context) {
     return MPropertyRow(
       label: label,
+      description: description,
       value: Text(value ?? 'Not set', style: style, softWrap: true),
       trailing: MIconButton(
         icon: MIconData.edit,

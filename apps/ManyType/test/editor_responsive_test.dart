@@ -273,6 +273,8 @@ void main() {
     expect(find.text('Test account'), findsWidgets);
     expect(find.text('Workspace'), findsOneWidget);
     expect(find.bySemanticsLabel('Copy Account ID'), findsOneWidget);
+    expect(find.text('CLI server address'), findsOneWidget);
+    expect(find.textContaining('command-line tool'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

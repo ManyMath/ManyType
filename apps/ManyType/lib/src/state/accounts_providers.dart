@@ -119,8 +119,10 @@ class AccountsController {
     _ref.invalidate(accountsProvider);
   }
 
-  /// Updates [id]'s server address. Reopens the session (if it's the
-  /// current account) so subsequent calls use the new address.
+  /// Updates [id]'s legacy server address, which only the CLI uses: app
+  /// sync always runs against the network config from the sync settings.
+  /// Reopens the session (if it's the current account) so its config
+  /// reflects the new address.
   Future<void> updateServerAddress(String id, String serverAddress) async {
     await AccountRegistry.updateServerAddress(id, serverAddress);
     _ref.invalidate(sessionProvider);
