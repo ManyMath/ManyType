@@ -344,6 +344,7 @@ class _AccountPickerCard extends StatelessWidget {
                   const SizedBox(width: 12),
                   MButton(
                     variant: MButtonVariant.secondary,
+                    semanticLabel: 'Use ${account.displayName}',
                     onPressed: busy ? null : () => onUse(account.id),
                     child: const Text('Use'),
                   ),
