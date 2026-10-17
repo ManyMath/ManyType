@@ -197,7 +197,12 @@ final objectBlocksProvider =
       if (session == null) {
         return null;
       }
-      return replayObjectBlocks(session.db, session.config, objectId);
+      return replayObjectBlocks(
+        session.db,
+        session.config,
+        objectId,
+        identityOverride: session.identity,
+      );
     });
 
 /// Structured relation-value replay for one object -- the data-shaped
