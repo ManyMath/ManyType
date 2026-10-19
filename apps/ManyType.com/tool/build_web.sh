@@ -5,15 +5,9 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 site_root="$(cd "$script_dir/.." && pwd)"
 repo_root="$(cd "$site_root/../.." && pwd)"
 app_dir="$repo_root/apps/ManyType"
-manyui_dir="$repo_root/../ManyUI/manyui"
 
 command -v flutter >/dev/null 2>&1 || {
   echo "flutter is required to build ManyType" >&2
-  exit 1
-}
-test -s "$manyui_dir/pubspec.yaml" || {
-  echo "missing sibling ManyUI package: $manyui_dir" >&2
-  echo "check out ManyUI beside ManyType before building" >&2
   exit 1
 }
 test -s "$app_dir/web/sqlite3.wasm" || {

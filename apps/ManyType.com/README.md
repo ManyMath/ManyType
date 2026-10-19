@@ -11,10 +11,9 @@ SQLite WebAssembly runtime beneath `/home/`.
 
 ## Build and verify
 
-Building requires Flutter and the ManyUI repository checked out beside this
-repository at `../ManyUI`. The build consumes the `manyui`, `manyui_hooks`, and
-`manyui_riverpod` packages from that sibling checkout; those packages are not
-copied into this repository.
+Building requires Flutter. The `manyui`, `manyui_hooks`, and `manyui_riverpod`
+packages are fetched by `flutter pub get` from a pinned commit of the public
+ManyUI git repository; see the root `pubspec.yaml`.
 
 From the ManyType repository root, build the Flutter application with a
 `/home/` base path, compose both routes, and verify the resulting static files:

@@ -10,12 +10,27 @@ workspace:
 dev_dependencies:
   melos: ^7.5.0
 
-# The ManyType app (apps/ManyType) builds on the manyui library, developed in
-# lockstep from a sibling checkout (../ManyUI). manyui is not yet published,
-# so its packages' hosted self-references are overridden to the sibling paths.
+# The ManyType app (apps/ManyType) builds on the manyui library, pinned to a
+# ManyUI commit from its public git mirror. manyui is not yet published, so
+# manyui_hooks and manyui_riverpod's hosted `manyui` constraint is overridden
+# to the same pinned commit. Keep this ref in sync with apps/ManyType.
+#
+# To develop against a local ManyUI checkout at ../ManyUI, create an
+# untracked pubspec_overrides.yaml here (it replaces this whole block):
+#
+#   dependency_overrides:
+#     manyui:
+#       path: ../ManyUI/manyui
+#     manyui_hooks:
+#       path: ../ManyUI/manyui_hooks
+#     manyui_riverpod:
+#       path: ../ManyUI/manyui_riverpod
 dependency_overrides:
   manyui:
-    path: ../ManyUI/manyui
+    git:
+      url: https://github.com/ManyMath/ManyUI.git
+      ref: 88ad8614877b8fd51f79b84376117b37882df11f
+      path: manyui
 melos:
   name: manytype
   sdkPath: auto

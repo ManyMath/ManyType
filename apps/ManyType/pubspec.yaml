@@ -22,11 +22,20 @@ dependencies:
   manytype_protocol:
     path: ../../packages/manytype_protocol
   manyui:
-    path: ../../../ManyUI/manyui
+    git:
+      url: https://github.com/ManyMath/ManyUI.git
+      ref: 88ad8614877b8fd51f79b84376117b37882df11f
+      path: manyui
   manyui_hooks:
-    path: ../../../ManyUI/manyui_hooks
+    git:
+      url: https://github.com/ManyMath/ManyUI.git
+      ref: 88ad8614877b8fd51f79b84376117b37882df11f
+      path: manyui_hooks
   manyui_riverpod:
-    path: ../../../ManyUI/manyui_riverpod
+    git:
+      url: https://github.com/ManyMath/ManyUI.git
+      ref: 88ad8614877b8fd51f79b84376117b37882df11f
+      path: manyui_riverpod
 
 dev_dependencies:
   flutter_lints: ^5.0.0

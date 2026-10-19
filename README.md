@@ -41,10 +41,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo audit
 ```
 
-CI runs all of the above; see `.github/workflows/`. Because the Dart workspace
-includes the ManyType app and its sibling-path ManyUI dependency, every Dart
-workflow checks out ManyType as `ManyType/` and the exact compatible ManyUI
-commit beside it as `ManyUI/`. Configure `DEPENDENCY_CHECKOUT_TOKEN` as a
-read-only repository Actions secret that can clone the private
-`sneurlax/manyui` repository. CI fails closed when this PAT is absent and does
-not fall back to the current repository's job token.
+CI runs all of the above; see `.github/workflows/`. The ManyType app depends
+on ManyUI through a pinned commit of its public git repository
+(https://github.com/ManyMath/ManyUI), so a single ManyType clone is enough to
+build and test. To work against a local ManyUI checkout at `../ManyUI`, add an
+untracked `pubspec_overrides.yaml` at the repository root; the root
+`pubspec.yaml` comment above `dependency_overrides` has the snippet.
