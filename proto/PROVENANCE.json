@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "sources": [
+    {
+      "path": "proto/any_block/changes.proto",
+      "source_url": "https://raw.githubusercontent.com/anyproto/anytype-heart/cfb7ec902abbce2db714de9be3832a1cb0691d8c/pb/protos/changes.proto",
+      "upstream_sha256": "224766460895650ed05827707be8a48d525b243904f3c38b6d785811949955b0",
+      "local_sha256": "299ca381cc1f5cab263e5827909bc6fd502edced68b7f958f474951cebf5d447",
+      "exact_upstream_match": false,
+      "license": "Any Source Available License 1.0",
+      "lineage": "proto/VERSION and source headers; differences are maintained local schema adaptations"
+    },
+    {
+      "path": "proto/any_block/events.proto",
+      "source_url": "https://raw.githubusercontent.com/anyproto/anytype-heart/cfb7ec902abbce2db714de9be3832a1cb0691d8c/pb/protos/events.proto",
+      "upstream_sha256": "12fc81fb40eb8642c5b348beabc0dada770c0255f0cd80761fc0fa8ac277c8df",
+      "local_sha256": "0880713f0008c88198f675b118a545315ff5a22e4b6366674b18929f0ae92a21",
+      "exact_upstream_match": false,
+      "license": "Any Source Available License 1.0",
+      "lineage": "proto/VERSION and source headers; differences are maintained local schema adaptations"
+    },
+    {
+      "path": "proto/any_block/models.proto",
+      "source_url": "https://raw.githubusercontent.com/anyproto/anytype-heart/cfb7ec902abbce2db714de9be3832a1cb0691d8c/pkg/lib/pb/model/protos/models.proto",
+      "upstream_sha256": "462dd7c29cba8bb97119be70b5ffbd816df930cea1a27d4fcad2ebc9c8920ede",
+      "local_sha256": "462dd7c29cba8bb97119be70b5ffbd816df930cea1a27d4fcad2ebc9c8920ede",
+      "exact_upstream_match": true,
+      "license": "Any Source Available License 1.0",
+      "lineage": "proto/VERSION and source headers; differences are maintained local schema adaptations"
+    },
+    {
+      "path": "proto/any_sync/aclrecord.proto",
+      "source_url": "https://raw.githubusercontent.com/anyproto/any-sync/3fde2219e9e698dbb144941331a29073726a499a/commonspace/object/acl/aclrecordproto/protos/aclrecord.proto",
+      "upstream_sha256": "bf868d0602b470d181168c29784de291a9d3255e9b36e713de8f7168485490ee",
+      "local_sha256": "bf868d0602b470d181168c29784de291a9d3255e9b36e713de8f7168485490ee",
+      "exact_upstream_match": true,
+      "license": "MIT",
+      "lineage": "proto/VERSION and source headers; differences are maintained local schema adaptations"
+    },
+    {
+      "path": "proto/any_sync/consensus.proto",
+      "source_url": "https://raw.githubusercontent.com/anyproto/any-sync/3fde2219e9e698dbb144941331a29073726a499a/consensus/consensusproto/protos/consensus.proto",
+      "upstream_sha256": "bc321c7eb64cc2b2de776a6c6ac2298aad6f92b4e65323c17dcafd448f9521d6",
+      "local_sha256": "bc321c7eb64cc2b2de776a6c6ac2298aad6f92b4e65323c17dcafd448f9521d6",
+      "exact_upstream_match": true,
+      "license": "MIT",
+      "lineage": "proto/VERSION and source headers; differences are maintained local schema adaptations"
+    },
+    {
+      "path": "proto/any_sync/coordinator.proto",
+      "source_url": "https://raw.githubusercontent.com/anyproto/any-sync/3fde2219e9e698dbb144941331a29073726a499a/coordinator/coordinatorproto/protos/coordinator.proto",
+      "upstream_sha256": "e4fa18b578222110601b88149919119afe7d93c72ba78ff8c521b0005e01c671",
+      "local_sha256": "e4fa18b578222110601b88149919119afe7d93c72ba78ff8c521b0005e01c671",
+      "exact_upstream_match": true,
+      "license": "MIT",
+      "lineage": "proto/VERSION and source headers; differences are maintained local schema adaptations"
+    },
+    {
+      "path": "proto/any_sync/crypto.proto",
+      "source_url": "https://raw.githubusercontent.com/anyproto/any-sync/3fde2219e9e698dbb144941331a29073726a499a/util/crypto/cryptoproto/protos/crypto.proto",
+      "upstream_sha256": "9712d5496ee0a08c16a5980a100804b8f52932fbecd2dea8e1d616204fa938de",
+      "local_sha256": "9712d5496ee0a08c16a5980a100804b8f52932fbecd2dea8e1d616204fa938de",
+      "exact_upstream_match": true,
+      "license": "MIT",
+      "lineage": "proto/VERSION and source headers; differences are maintained local schema adaptations"
+    },
+    {
+      "path": "proto/any_sync/file.proto",
+      "source_url": "https://raw.githubusercontent.com/anyproto/any-sync/3fde2219e9e698dbb144941331a29073726a499a/commonfile/fileproto/protos/file.proto",
+      "upstream_sha256": "5cdf8486949c80eb10888877a0a6e3f6faf45b1bd12b0dee1a8ab202f6f5b5c9",
+      "local_sha256": "e0e038d83dda003602d59f51a8668aed2f465ffdf8e6988def046bb1f6a07183",
+      "exact_upstream_match": false,
+      "license": "MIT",
+      "lineage": "proto/VERSION and source headers; differences are maintained local schema adaptations"
+    },
+    {
+      "path": "proto/any_sync/handshake.proto",
+      "source_url": "https://raw.githubusercontent.com/anyproto/any-sync/3fde2219e9e698dbb144941331a29073726a499a/net/secureservice/handshake/handshakeproto/protos/handshake.proto",
+      "upstream_sha256": "d913b82619e90855f1ad087e1070fc73a9f60ff72cdf3834e1f490c4703b03fb",
+      "local_sha256": "d913b82619e90855f1ad087e1070fc73a9f60ff72cdf3834e1f490c4703b03fb",
+      "exact_upstream_match": true,
+      "license": "MIT",
+      "lineage": "proto/VERSION and source headers; differences are maintained local schema adaptations"
+    },
+    {
+      "path": "proto/any_sync/spacesync.proto",
+      "source_url": "https://raw.githubusercontent.com/anyproto/any-sync/3fde2219e9e698dbb144941331a29073726a499a/commonspace/spacesyncproto/protos/spacesync.proto",
+      "upstream_sha256": "0c54ed884019d03d6327fac676b51dc782ed7cccb71894212c491d524eeac56a",
+      "local_sha256": "0c54ed884019d03d6327fac676b51dc782ed7cccb71894212c491d524eeac56a",
+      "exact_upstream_match": true,
+      "license": "MIT",
+      "lineage": "proto/VERSION and source headers; differences are maintained local schema adaptations"
+    },
+    {
+      "path": "proto/any_sync/treechange.proto",
+      "source_url": "https://raw.githubusercontent.com/anyproto/any-sync/3fde2219e9e698dbb144941331a29073726a499a/commonspace/object/tree/treechangeproto/protos/treechange.proto",
+      "upstream_sha256": "d339d20ec1b29af4cd22b4367411a66382309456e1a55766d3672700a7a0ff9c",
+      "local_sha256": "d339d20ec1b29af4cd22b4367411a66382309456e1a55766d3672700a7a0ff9c",
+      "exact_upstream_match": true,
+      "license": "MIT",
+      "lineage": "proto/VERSION and source headers; differences are maintained local schema adaptations"
+    }
+  ],
+  "notes": [
+    "Original VERSION ambiguously combines anytype-heart tag v0.48.5 and commit cfb7ec9. This manifest records comparison to the explicit full commit; no equivalence to tag is assumed.",
+    "Local changes and generated derivative types retain upstream notices; first-party licensing is separately owned."
+  ]
+}

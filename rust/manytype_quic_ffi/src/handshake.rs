@@ -14,7 +14,9 @@ use manytype_proto::crypto::{Key, KeyType};
 use manytype_proto::handshake::{
     Ack, Credentials, CredentialsType, Encoding, Error, PayloadSignedPeerIds, Proto, ProtoType,
 };
-use manytype_server::handshake::{read_handshake_msg, verify_signed_peer_ids, write_handshake_msg};
+use manytype_transport::handshake::{
+    read_handshake_msg, verify_signed_peer_ids, write_handshake_msg,
+};
 use prost::Message;
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -171,7 +173,7 @@ mod tests {
     use super::*;
     use manytype_core::crypto::ed25519;
     use manytype_proto::handshake::{Encoding, ProtoType};
-    use manytype_server::handshake::{
+    use manytype_transport::handshake::{
         build_credentials, perform_handshake, perform_proto_handshake,
     };
     use tokio::io::{DuplexStream, duplex};

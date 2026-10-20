@@ -30,7 +30,7 @@ timeout 240s bash -lc '
   set -euo pipefail
   cd "$ROOT_DIR"
   export MANYTYPE_SYNC_CAPTURE_PATH="'"$EDIT_ARTIFACT_PATH"'"
-  dart test packages/manytype_cli/test/oracle_edit_sync_test.dart -t round_trip
+  dart test packages/manytype_client/test/oracle_edit_sync_test.dart -t round_trip
 '
 TEST_STATUS=$?
 set -e

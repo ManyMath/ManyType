@@ -168,12 +168,14 @@ pub struct AclAccountRemove {
 }
 /// AclAccountRequestRemove adds a request to remove an account
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AclAccountRequestRemove {
-}
+pub struct AclAccountRequestRemove {}
 /// AclContentValue contains possible values for Acl
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AclContentValue {
-    #[prost(oneof = "acl_content_value::Value", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14")]
+    #[prost(
+        oneof = "acl_content_value::Value",
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14"
+    )]
     pub value: ::core::option::Option<acl_content_value::Value>,
 }
 /// Nested message and enum types in `AclContentValue`.

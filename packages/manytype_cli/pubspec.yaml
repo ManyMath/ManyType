@@ -6,6 +6,8 @@ resolution: workspace
 environment:
   sdk: ^3.5.3
 dependencies:
+  manytype_client:
+    path: ../manytype_client
   manytype_core:
     path: ../manytype_core
   manytype_protocol:
@@ -23,5 +25,3 @@ dependencies:
 dev_dependencies:
   test: ^1.25.0
   lints: ^5.0.0
-  drift_dev: ^2.22.0
-  build_runner: ^2.4.0

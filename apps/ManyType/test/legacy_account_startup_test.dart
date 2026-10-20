@@ -6,9 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manytype/src/state/accounts_providers.dart';
-import 'package:manytype_cli/src/account_registry.dart';
-import 'package:manytype_cli/src/config.dart';
-import 'package:manytype_cli/src/recovery_phrase_store.dart';
+import 'package:manytype_client/manytype_client.dart';
 
 const _legacyMnemonic =
     'abandon abandon abandon abandon abandon abandon abandon abandon abandon '

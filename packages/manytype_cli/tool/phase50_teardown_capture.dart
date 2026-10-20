@@ -3,11 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:manytype_cli/src/config.dart';
-import 'package:manytype_cli/src/coordinator_service.dart';
-import 'package:manytype_cli/src/ffi/native_bridge.dart';
-import 'package:manytype_cli/src/identity.dart';
-import 'package:manytype_cli/src/network_config.dart';
+import 'package:manytype_client/manytype_client.dart';
 import 'package:manytype_protocol/coordinator.dart';
 
 Future<void> main(List<String> argv) async {

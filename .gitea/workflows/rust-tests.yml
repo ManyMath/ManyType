@@ -1,0 +1,59 @@
+name: Rust test suite
+jobs:
+  test-rust:
+    runs-on: manymath-maintenance-linux-x64
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+    - name: Require private primary forge
+      env:
+        PRIMARY_SERVER: ${{ github.server_url }}
+      working-directory: ${{ runner.temp }}
+      run: 'test "$PRIMARY_SERVER" = https://git.manymath.com
+
+        rustup run 1.94.0 rustc --version
+
+        dart --version
+
+        flutter --version
+
+        '
+    - uses: actions/checkout@v4
+    - name: cargo fmt --check
+      run: cargo fmt --check
+    - name: cargo clippy --workspace --all-targets
+      run: cargo clippy --locked --workspace --all-targets -- -D warnings
+    - name: cargo test --workspace
+      run: cargo test --locked --workspace
+    - name: Verify provisioned cargo-audit
+      run: 'command -v cargo-audit
+
+        cargo audit --version'
+    - name: cargo audit
+      run: cargo audit
+    timeout-minutes: 60
+'on':
+  workflow_dispatch: {}
+  push:
+    branches:
+    - main
+    - maintenance/**
+  pull_request:
+    branches:
+    - main
+permissions:
+  contents: read
+env:
+  RUSTUP_TOOLCHAIN: 1.94.0
+  CARGO_HOME: ${{ runner.temp }}/manytype-cargo-${{ github.run_id }}-${{ github.job }}
+  CARGO_BUILD_JOBS: '3'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  DASH__SUPPRESS_ANALYTICS: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  DO_NOT_TRACK: '1'
+  CI: 'true'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true

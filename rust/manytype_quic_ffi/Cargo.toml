@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 manytype_proto = { path = "../manytype_proto" }
 manytype_core = { path = "../manytype_core" }
-manytype_server = { path = "../manytype_server" }
+manytype_transport = { path = "../manytype_transport" }
 tokio = { workspace = true }
 quinn = { workspace = true }
 rustls = { workspace = true }
@@ -25,4 +25,5 @@ libp2p-identity = { workspace = true, features = ["ed25519", "peerid", "rsa"] }
 libp2p-tls = { workspace = true }
 
 [dev-dependencies]
+manytype_server = { path = "../manytype_server" }
 tokio = { workspace = true, features = ["full"] }

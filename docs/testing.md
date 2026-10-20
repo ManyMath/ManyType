@@ -1,6 +1,6 @@
 # Running the test suite
 
-The workspace has two melos test targets:
+The workspace has three melos test targets:
 
 - **`melos run test`**: runs `dart test` (VM) for every package with a `test/`
   directory. This is the fast inner-loop target: pure Dart, real `dart:io`,
@@ -10,18 +10,26 @@ The workspace has two melos test targets:
   `scripts/README.md` for prerequisites.
 
 - **`melos run test:web`**: fetches web test assets (sqlite3.wasm, the drift
-  worker bundle) via `packages/manytype_cli/tool/fetch_web_test_assets.dart`
+  worker bundle) via `packages/manytype_client/tool/fetch_web_test_assets.dart`
   where needed, then runs `dart test -p chrome -j 1` for every package with a
   `test/` directory. `-j 1` avoids headless-chrome resource contention across
   concurrently loaded browser instances (M014/S05). Both `manytype_core` and
   `manytype_protocol` run their full VM-equivalent suite on chrome.
-  `manytype_cli` runs every test that does not require FFI, a live
+  `manytype_client` runs every test that does not require FFI, a live
   network connection, subprocess spawning, or real-filesystem access: those
   are marked `@TestOn('vm')` with a one-line justification comment and are
   automatically skipped by `dart test` on the `chrome` platform. See
-  `packages/manytype_cli/test/web/persistence_test.dart` for the end-to-end
+  `packages/manytype_client/test/web/persistence_test.dart` for the end-to-end
   IndexedDB open/write/close/reopen/read acceptance test, exercised through
-  the public library entrypoint (`package:manytype_cli/manytype_cli.dart`).
+  the public library entrypoint (`package:manytype_client/manytype_client.dart`).
+  The CLI's process tests and Flutter app are excluded from this Dart browser
+  target; the app has its own Flutter Chrome test.
+
+Browser test assets are generated under the ignored
+`packages/manytype_client/test/web_assets/` directory rather than committed.
+The asset tool downloads sqlite3.wasm for the version in the workspace lockfile,
+records its source and hash, and compiles the checked-in Drift worker source
+with the provisioned Dart SDK before the browser suite runs.
 
 Run either target with `--no-select` in non-interactive contexts (CI, agents)
 to skip melos's package picker prompt, e.g. `melos run test:web --no-select`.
@@ -29,7 +37,7 @@ to skip melos's package picker prompt, e.g. `melos run test:web --no-select`.
 - **`melos run test:ci`**: runs `dart test --exclude-tags=round_trip -j 1`
   for every package with a `test/` directory: the VM suite minus tests
   tagged `round_trip` (docker any-sync oracle / live external-server
-  integration tests, e.g. `packages/manytype_cli/test/oracle_*.dart`,
+  integration tests, e.g. `packages/manytype_client/test/oracle_*.dart`,
   `round_trip_test.dart`, `consensus_service_test.dart`). Every other VM
   test either has no live-infra dependency or self-skips via an env-var
   gate (`MANYTYPE_LIVE_SERVER_TESTS`, `MANYTYPE_RUN_PHASE*`) when its
@@ -58,8 +66,10 @@ and the preflight rejects the stack.
 
 ## CI
 
-`.github/workflows/web-tests.yml` runs `melos run test:web` and
-`.github/workflows/vm-tests.yml` runs `melos run test:ci`, both on push to
-`main` and on every pull request. Neither workflow provisions docker or an
-any-sync oracle stack, so `round_trip`-tagged and env-var-gated
-integration tests remain local-only for now (M021).
+`.gitea/workflows/web-tests.yml` runs `melos run test:web` and
+`.gitea/workflows/vm-tests.yml` runs `melos run test:ci` on the private primary
+forge. Neither workflow provisions Docker or an any-sync oracle stack, so
+`round_trip`-tagged and env-var-gated tests require separate configuration.
+The manual oracle lane requires a dedicated runner with an isolated rootless
+Docker daemon; see [module boundaries](module-boundaries.md). The GitHub mirror
+workflows remain owner-operated.

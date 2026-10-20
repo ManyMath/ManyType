@@ -1,0 +1,78 @@
+name: ManyType Flutter Product
+permissions:
+  contents: read
+jobs:
+  app-site:
+    name: App tests and canonical web distribution
+    runs-on: manymath-maintenance-linux-x64
+    timeout-minutes: 60
+    steps:
+    - name: Require private primary forge
+      env:
+        PRIMARY_SERVER: ${{ github.server_url }}
+      working-directory: ${{ runner.temp }}
+      run: 'test "$PRIMARY_SERVER" = https://git.manymath.com
+
+        rustup run 1.94.0 rustc --version
+
+        dart --version
+
+        flutter --version
+
+        '
+    - name: Checkout ManyType
+      uses: actions/checkout@v4
+      with:
+        path: ManyType
+    - name: Resolve app dependencies
+      working-directory: ManyType/apps/ManyType
+      run: flutter pub get
+    - name: Check app formatting
+      working-directory: ManyType
+      run: dart format --output none --set-exit-if-changed apps/ManyType/lib apps/ManyType/test
+    - name: Analyze canonical app
+      working-directory: ManyType/apps/ManyType
+      run: flutter analyze
+    - name: Test canonical app
+      working-directory: ManyType/apps/ManyType
+      run: timeout --signal=TERM --kill-after=30s 20m flutter test
+    - name: Verify Chrome is available
+      run: google-chrome --version
+    - name: Test canonical app browser-only behavior
+      working-directory: ManyType/apps/ManyType
+      run: timeout --signal=TERM --kill-after=30s 15m flutter test --platform chrome test/sync_controller_web_test.dart
+    - name: Build canonical site and app
+      working-directory: ManyType
+      run: timeout --signal=TERM --kill-after=30s 25m ./apps/ManyType.com/tool/build_web.sh
+    - name: Verify canonical distribution
+      working-directory: ManyType
+      run: ./apps/ManyType.com/tool/verify_web_dist.sh
+    - name: Upload canonical distribution
+      uses: ChristopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
+      with:
+        name: manytype-web
+        path: ManyType/apps/ManyType.com/build/dist
+        if-no-files-found: error
+        retention-days: 7
+'on':
+  workflow_dispatch: {}
+  push:
+    branches:
+    - main
+    - maintenance/**
+  pull_request:
+    branches:
+    - main
+env:
+  RUSTUP_TOOLCHAIN: 1.94.0
+  CARGO_HOME: ${{ runner.temp }}/manytype-cargo-${{ github.run_id }}-${{ github.job }}
+  CARGO_BUILD_JOBS: '3'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  DASH__SUPPRESS_ANALYTICS: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  DO_NOT_TRACK: '1'
+  CI: 'true'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true

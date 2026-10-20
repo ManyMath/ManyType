@@ -4,7 +4,7 @@ import 'package:flutter/services.dart' show TextInputAction;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:manytype_cli/manytype_cli.dart'
+import 'package:manytype_client/manytype_client.dart'
     show NewBlockKind, ObjectMeta, ReplayedBlockView, ReplayedRelationView;
 import 'package:manytype_protocol/models.dart'
     show Block_Content_Text_Style, RelationFormat;

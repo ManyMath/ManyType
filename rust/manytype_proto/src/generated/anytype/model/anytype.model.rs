@@ -30,8 +30,7 @@ pub struct SmartBlockSnapshotBase {
     pub file_info: ::core::option::Option<FileInfo>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct Search {
-}
+pub struct Search {}
 /// Nested message and enum types in `Search`.
 pub mod search {
     #[derive(Clone, PartialEq, ::prost::Message)]
@@ -64,8 +63,7 @@ pub mod search {
         pub relation_details: ::core::option::Option<::prost_types::Struct>,
     }
     #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-    pub struct Message {
-    }
+    pub struct Message {}
     /// Nested message and enum types in `Message`.
     pub mod message {
         #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -77,7 +75,9 @@ pub mod search {
         }
         /// Nested message and enum types in `Sort`.
         pub mod sort {
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum Key {
                 OrderId = 0,
@@ -109,7 +109,9 @@ pub mod search {
                     }
                 }
             }
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum Type {
                 Asc = 0,
@@ -171,7 +173,10 @@ pub struct Block {
     pub align: i32,
     #[prost(enumeration = "block::VerticalAlign", tag = "7")]
     pub vertical_align: i32,
-    #[prost(oneof = "block::ContentOneOf", tags = "11, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30")]
+    #[prost(
+        oneof = "block::ContentOneOf",
+        tags = "11, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30"
+    )]
     pub content: ::core::option::Option<block::ContentOneOf>,
 }
 /// Nested message and enum types in `Block`.
@@ -190,8 +195,7 @@ pub mod block {
         pub drop_on: bool,
     }
     #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-    pub struct Content {
-    }
+    pub struct Content {}
     /// Nested message and enum types in `Content`.
     pub mod content {
         ///
@@ -204,7 +208,9 @@ pub mod block {
         }
         /// Nested message and enum types in `Layout`.
         pub mod layout {
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum Style {
                 Row = 0,
@@ -266,7 +272,9 @@ pub mod block {
         }
         /// Nested message and enum types in `Link`.
         pub mod link {
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum IconSize {
                 SizeNone = 0,
@@ -295,7 +303,9 @@ pub mod block {
                     }
                 }
             }
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum Style {
                 Page = 0,
@@ -328,7 +338,9 @@ pub mod block {
                     }
                 }
             }
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum Description {
                 None = 0,
@@ -357,7 +369,9 @@ pub mod block {
                     }
                 }
             }
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum CardStyle {
                 Text = 0,
@@ -396,7 +410,9 @@ pub mod block {
         }
         /// Nested message and enum types in `Div`.
         pub mod div {
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum Style {
                 Line = 0,
@@ -450,7 +466,9 @@ pub mod block {
         }
         /// Nested message and enum types in `Bookmark`.
         pub mod bookmark {
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum State {
                 Empty = 0,
@@ -489,8 +507,7 @@ pub mod block {
             pub name: ::prost::alloc::string::String,
         }
         #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-        pub struct FeaturedRelations {
-        }
+        pub struct FeaturedRelations {}
         #[derive(Clone, PartialEq, ::prost::Message)]
         pub struct Text {
             #[prost(string, tag = "1")]
@@ -531,7 +548,9 @@ pub mod block {
             }
             /// Nested message and enum types in `Mark`.
             pub mod mark {
-                #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
                 #[repr(i32)]
                 pub enum Type {
                     Strikethrough = 0,
@@ -585,7 +604,9 @@ pub mod block {
                     }
                 }
             }
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum Style {
                 Paragraph = 0,
@@ -683,7 +704,9 @@ pub mod block {
         }
         /// Nested message and enum types in `File`.
         pub mod file {
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum Type {
                 None = 0,
@@ -721,7 +744,9 @@ pub mod block {
                     }
                 }
             }
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum Style {
                 /// all types expect File and None has Embed style by default
@@ -751,7 +776,9 @@ pub mod block {
                     }
                 }
             }
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum State {
                 /// There is no file and preview, it's an empty block, that waits files.
@@ -789,8 +816,7 @@ pub mod block {
             }
         }
         #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-        pub struct Smartblock {
-        }
+        pub struct Smartblock {}
         #[derive(Clone, PartialEq, ::prost::Message)]
         pub struct Dataview {
             /// can be set for detached(without TargetObjectId) inline sets
@@ -875,7 +901,9 @@ pub mod block {
             }
             /// Nested message and enum types in `View`.
             pub mod view {
-                #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
                 #[repr(i32)]
                 pub enum Type {
                     Table = 0,
@@ -913,7 +941,9 @@ pub mod block {
                         }
                     }
                 }
-                #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
                 #[repr(i32)]
                 pub enum Size {
                     Small = 0,
@@ -942,7 +972,9 @@ pub mod block {
                         }
                     }
                 }
-                #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
                 #[repr(i32)]
                 pub enum ListSize {
                     /// Single-line display (default)
@@ -998,7 +1030,9 @@ pub mod block {
             }
             /// Nested message and enum types in `Relation`.
             pub mod relation {
-                #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
                 #[repr(i32)]
                 pub enum DateFormat {
                     /// Jul 30, 2020
@@ -1038,7 +1072,9 @@ pub mod block {
                         }
                     }
                 }
-                #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
                 #[repr(i32)]
                 pub enum TimeFormat {
                     Format12 = 0,
@@ -1064,7 +1100,9 @@ pub mod block {
                         }
                     }
                 }
-                #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
                 #[repr(i32)]
                 pub enum FormulaType {
                     None = 0,
@@ -1148,7 +1186,9 @@ pub mod block {
             }
             /// Nested message and enum types in `Sort`.
             pub mod sort {
-                #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
                 #[repr(i32)]
                 pub enum Type {
                     Asc = 0,
@@ -1177,7 +1217,9 @@ pub mod block {
                         }
                     }
                 }
-                #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
                 #[repr(i32)]
                 pub enum EmptyType {
                     NotSpecified = 0,
@@ -1233,7 +1275,9 @@ pub mod block {
             }
             /// Nested message and enum types in `Filter`.
             pub mod filter {
-                #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
                 #[repr(i32)]
                 pub enum Operator {
                     No = 0,
@@ -1262,7 +1306,9 @@ pub mod block {
                         }
                     }
                 }
-                #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
                 #[repr(i32)]
                 pub enum Condition {
                     None = 0,
@@ -1338,7 +1384,9 @@ pub mod block {
                         }
                     }
                 }
-                #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
                 #[repr(i32)]
                 pub enum QuickOption {
                     ExactDate = 0,
@@ -1468,8 +1516,7 @@ pub mod block {
                 pub checked: bool,
             }
             #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-            pub struct Date {
-            }
+            pub struct Date {}
         }
         #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
         pub struct Relation {
@@ -1485,7 +1532,9 @@ pub mod block {
         }
         /// Nested message and enum types in `Latex`.
         pub mod latex {
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum Processor {
                 Latex = 0,
@@ -1582,14 +1631,11 @@ pub mod block {
             }
         }
         #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-        pub struct TableOfContents {
-        }
+        pub struct TableOfContents {}
         #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-        pub struct Table {
-        }
+        pub struct Table {}
         #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-        pub struct TableColumn {
-        }
+        pub struct TableColumn {}
         #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
         pub struct TableRow {
             #[prost(bool, tag = "1")]
@@ -1608,7 +1654,9 @@ pub mod block {
         }
         /// Nested message and enum types in `Widget`.
         pub mod widget {
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+            #[derive(
+                Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            )]
             #[repr(i32)]
             pub enum Layout {
                 Link = 0,
@@ -1645,8 +1693,7 @@ pub mod block {
             }
         }
         #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-        pub struct Chat {
-        }
+        pub struct Chat {}
     }
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -1907,8 +1954,7 @@ pub mod account {
         pub meta_data_key: ::prost::alloc::string::String,
     }
     #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-    pub struct Auth {
-    }
+    pub struct Auth {}
     /// Nested message and enum types in `Auth`.
     pub mod auth {
         #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1929,7 +1975,9 @@ pub mod account {
             #[prost(bool, tag = "8")]
             pub is_active: bool,
         }
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+        #[derive(
+            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+        )]
         #[repr(i32)]
         pub enum LocalApiScope {
             /// Used in WebClipper; AccountSelect(to be deprecated), ObjectSearch, ObjectShow, ObjectCreate, ObjectCreateFromURL, BlockPreview, BlockPaste, BroadcastPayloadEvent
@@ -2158,8 +2206,7 @@ pub mod restrictions {
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct Object {
-}
+pub struct Object {}
 /// Nested message and enum types in `Object`.
 pub mod object {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -2646,8 +2693,7 @@ pub struct Metadata {
 /// Nested message and enum types in `Metadata`.
 pub mod metadata {
     #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-    pub struct Payload {
-    }
+    pub struct Payload {}
     /// Nested message and enum types in `Payload`.
     pub mod payload {
         #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -2676,7 +2722,10 @@ pub struct Notification {
     pub space: ::prost::alloc::string::String,
     #[prost(string, tag = "14")]
     pub acl_head_id: ::prost::alloc::string::String,
-    #[prost(oneof = "notification::Payload", tags = "6, 8, 9, 10, 11, 13, 15, 16, 17, 18")]
+    #[prost(
+        oneof = "notification::Payload",
+        tags = "6, 8, 9, 10, 11, 13, 15, 16, 17, 18"
+    )]
     pub payload: ::core::option::Option<notification::Payload>,
 }
 /// Nested message and enum types in `Notification`.
@@ -2705,7 +2754,9 @@ pub mod notification {
     }
     /// Nested message and enum types in `Export`.
     pub mod export {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+        #[derive(
+            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+        )]
         #[repr(i32)]
         pub enum Code {
             Null = 0,
@@ -2762,8 +2813,7 @@ pub mod notification {
         pub space_name: ::prost::alloc::string::String,
     }
     #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-    pub struct Test {
-    }
+    pub struct Test {}
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
     pub struct ParticipantRequestApproved {
         #[prost(string, tag = "1")]
@@ -2895,8 +2945,7 @@ pub mod notification {
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct Export {
-}
+pub struct Export {}
 /// Nested message and enum types in `Export`.
 pub mod export {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -2939,8 +2988,7 @@ pub mod export {
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct Import {
-}
+pub struct Import {}
 /// Nested message and enum types in `Import`.
 pub mod import {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -3028,7 +3076,9 @@ pub mod import {
                 Self::FileImportNoObjectsInDirectory => "FILE_IMPORT_NO_OBJECTS_IN_DIRECTORY",
                 Self::HtmlWrongHtmlStructure => "HTML_WRONG_HTML_STRUCTURE",
                 Self::PbNotAnyblockFormat => "PB_NOT_ANYBLOCK_FORMAT",
-                Self::CsvLimitOfRowsOrRelationsExceeded => "CSV_LIMIT_OF_ROWS_OR_RELATIONS_EXCEEDED",
+                Self::CsvLimitOfRowsOrRelationsExceeded => {
+                    "CSV_LIMIT_OF_ROWS_OR_RELATIONS_EXCEEDED"
+                }
                 Self::InsufficientPermissions => "INSUFFICIENT_PERMISSIONS",
             }
         }
@@ -3044,11 +3094,15 @@ pub mod import {
                 "NOTION_NO_OBJECTS_IN_INTEGRATION" => Some(Self::NotionNoObjectsInIntegration),
                 "NOTION_SERVER_IS_UNAVAILABLE" => Some(Self::NotionServerIsUnavailable),
                 "NOTION_RATE_LIMIT_EXCEEDED" => Some(Self::NotionRateLimitExceeded),
-                "FILE_IMPORT_NO_OBJECTS_IN_ZIP_ARCHIVE" => Some(Self::FileImportNoObjectsInZipArchive),
+                "FILE_IMPORT_NO_OBJECTS_IN_ZIP_ARCHIVE" => {
+                    Some(Self::FileImportNoObjectsInZipArchive)
+                }
                 "FILE_IMPORT_NO_OBJECTS_IN_DIRECTORY" => Some(Self::FileImportNoObjectsInDirectory),
                 "HTML_WRONG_HTML_STRUCTURE" => Some(Self::HtmlWrongHtmlStructure),
                 "PB_NOT_ANYBLOCK_FORMAT" => Some(Self::PbNotAnyblockFormat),
-                "CSV_LIMIT_OF_ROWS_OR_RELATIONS_EXCEEDED" => Some(Self::CsvLimitOfRowsOrRelationsExceeded),
+                "CSV_LIMIT_OF_ROWS_OR_RELATIONS_EXCEEDED" => {
+                    Some(Self::CsvLimitOfRowsOrRelationsExceeded)
+                }
                 "INSUFFICIENT_PERMISSIONS" => Some(Self::InsufficientPermissions),
                 _ => None,
             }
@@ -3395,8 +3449,7 @@ pub mod membership_tier_data {
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct MembershipV2 {
-}
+pub struct MembershipV2 {}
 /// Nested message and enum types in `MembershipV2`.
 pub mod membership_v2 {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -3406,7 +3459,7 @@ pub mod membership_v2 {
         pub currency: ::prost::alloc::string::String,
         /// $0.01 = 1
         /// $1.00 = 100
-        /// also supports negative amounts! 
+        /// also supports negative amounts!
         /// some invoices can have negatice amount (refund)
         #[prost(int64, tag = "2")]
         pub amount_cents: i64,
@@ -3450,17 +3503,17 @@ pub mod membership_v2 {
         #[prost(bool, tag = "5")]
         pub is_hidden: bool,
         /// isIntro flag can be used as follows:
-        /// 
-        /// 1. if current user's top level product has isIntro flag -> 
-        /// then you'd rather show a FULL list of all products 
+        ///
+        /// 1. if current user's top level product has isIntro flag ->
+        /// then you'd rather show a FULL list of all products
         /// to enable upgrading from CURRENT product
         /// 2. but if current user's top level product has no isIntro flag ->
-        /// then it means that this plan was aquired and user need to control it. 
+        /// then it means that this plan was aquired and user need to control it.
         /// then show "second screen" to control that product instead
         #[prost(bool, tag = "6")]
         pub is_intro: bool,
         /// isUpgradeable can be used as follows:
-        /// 
+        ///
         /// if current user's top level product has isUpgradeable flag ->
         /// show incentives to buy something else
         #[prost(bool, tag = "7")]
@@ -3495,7 +3548,9 @@ pub mod membership_v2 {
     }
     /// Nested message and enum types in `ProductStatus`.
     pub mod product_status {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+        #[derive(
+            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+        )]
         #[repr(i32)]
         pub enum Status {
             Unknown = 0,
@@ -3513,7 +3568,9 @@ pub mod membership_v2 {
                     Self::Unknown => "StatusUnknown",
                     Self::Pending => "StatusPending",
                     Self::Active => "StatusActive",
-                    Self::PendingRequiresAnyNameAllocation => "StatusPendingRequiresAnyNameAllocation",
+                    Self::PendingRequiresAnyNameAllocation => {
+                        "StatusPendingRequiresAnyNameAllocation"
+                    }
                 }
             }
             /// Creates an enum from field names used in the ProtoBuf definition.
@@ -3522,7 +3579,9 @@ pub mod membership_v2 {
                     "StatusUnknown" => Some(Self::Unknown),
                     "StatusPending" => Some(Self::Pending),
                     "StatusActive" => Some(Self::Active),
-                    "StatusPendingRequiresAnyNameAllocation" => Some(Self::PendingRequiresAnyNameAllocation),
+                    "StatusPendingRequiresAnyNameAllocation" => {
+                        Some(Self::PendingRequiresAnyNameAllocation)
+                    }
                     _ => None,
                 }
             }
@@ -3805,7 +3864,9 @@ pub mod chat_message {
     }
     /// Nested message and enum types in `Attachment`.
     pub mod attachment {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+        #[derive(
+            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+        )]
         #[repr(i32)]
         pub enum AttachmentType {
             /// File attachment
@@ -3842,7 +3903,8 @@ pub mod chat_message {
     pub struct Reactions {
         /// Map of emoji to list of user IDs
         #[prost(map = "string, message", tag = "1")]
-        pub reactions: ::std::collections::HashMap<::prost::alloc::string::String, reactions::IdentityList>,
+        pub reactions:
+            ::std::collections::HashMap<::prost::alloc::string::String, reactions::IdentityList>,
     }
     /// Nested message and enum types in `Reactions`.
     pub mod reactions {
@@ -3892,7 +3954,9 @@ pub mod chat_message {
     }
     /// Nested message and enum types in `MessageBlockLink`.
     pub mod message_block_link {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+        #[derive(
+            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+        )]
         #[repr(i32)]
         pub enum LinkType {
             Object = 0,
@@ -4705,7 +4769,10 @@ pub mod change {
     pub struct Snapshot {
         /// logId -> lastChangeId
         #[prost(map = "string, string", tag = "1")]
-        pub log_heads: ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+        pub log_heads: ::std::collections::HashMap<
+            ::prost::alloc::string::String,
+            ::prost::alloc::string::String,
+        >,
         /// snapshot data
         #[prost(message, optional, tag = "2")]
         pub data: ::core::option::Option<super::SmartBlockSnapshotBase>,
@@ -4718,11 +4785,17 @@ pub mod change {
         #[prost(string, tag = "1")]
         pub hash: ::prost::alloc::string::String,
         #[prost(map = "string, string", tag = "2")]
-        pub keys: ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+        pub keys: ::std::collections::HashMap<
+            ::prost::alloc::string::String,
+            ::prost::alloc::string::String,
+        >,
     }
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Content {
-        #[prost(oneof = "content::Value", tags = "1, 2, 3, 4, 5, 50, 51, 100, 101, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115")]
+        #[prost(
+            oneof = "content::Value",
+            tags = "1, 2, 3, 4, 5, 50, 51, 100, 101, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115"
+        )]
         pub value: ::core::option::Option<content::Value>,
     }
     /// Nested message and enum types in `Content`.

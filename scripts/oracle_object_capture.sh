@@ -18,7 +18,7 @@ timeout 180s bash -lc '
   set -euo pipefail
   export PHASE27_OBJECT_TRUTH_PATH="$ORACLE_ARTIFACT_PATH"
   cd "$ROOT_DIR"
-  dart test packages/manytype_cli/test/oracle_object_sync_test.dart
+  dart test packages/manytype_client/test/oracle_object_sync_test.dart
 '
 
 if [[ ! -f "$ORACLE_ARTIFACT_PATH" ]]; then

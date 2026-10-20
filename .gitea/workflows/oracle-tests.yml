@@ -1,0 +1,23 @@
+name: Manual isolated oracle test suite
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  DASH__SUPPRESS_ANALYTICS: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  RUSTUP_TOOLCHAIN: '1.94.0'
+jobs:
+  test-oracle:
+    runs-on: manymath-oracle-linux-x64
+    timeout-minutes: 180
+    steps:
+      - name: Require private primary forge
+        env:
+          PRIMARY_SERVER: ${{ github.server_url }}
+        run: test "$PRIMARY_SERVER" = https://git.manymath.com
+      - uses: actions/checkout@v4
+      - name: Run oracle in a private rootless Docker daemon
+        env:
+          PRIMARY_SERVER: ${{ github.server_url }}
+        run: bash scripts/run_private_oracle.sh

@@ -15,8 +15,8 @@ dependencies:
   flutter_hooks: ^0.20.5
   flutter_secure_storage: ^10.3.1
   hooks_riverpod: ^2.5.0
-  manytype_cli:
-    path: ../../packages/manytype_cli
+  manytype_client:
+    path: ../../packages/manytype_client
   manytype_core:
     path: ../../packages/manytype_core
   manytype_protocol:

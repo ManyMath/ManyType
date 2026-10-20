@@ -1,16 +1,16 @@
 //! Client-side DRPC operations: invoke, sync_object, and request_object.
 //!
-//! Uses `DrpcStream` and codec types from `manytype_server::drpc`.
+//! Uses `DrpcStream` and codec types from `manytype_transport::drpc`.
 
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::time::{Duration, timeout};
 
-use manytype_server::drpc::codec::{
+use manytype_transport::drpc::codec::{
     DrpcFrame, KIND_CLOSE, KIND_CLOSE_SEND, KIND_ERROR, KIND_INVOKE, KIND_MESSAGE,
 };
-use manytype_server::drpc::stream::DrpcStream;
+use manytype_transport::drpc::stream::DrpcStream;
 
 const STREAM_ID: u64 = 1;
 const EMPTY_UNARY_RESPONSE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -318,7 +318,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use manytype_server::drpc::codec::DrpcFrame;
+    use manytype_transport::drpc::codec::DrpcFrame;
     use tokio::io::duplex;
 
     #[tokio::test]

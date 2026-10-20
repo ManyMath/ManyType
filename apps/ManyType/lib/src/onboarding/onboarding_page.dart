@@ -6,7 +6,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 // Not re-exported by the manytype_cli barrel (see accounts_providers.dart).
 // ignore: implementation_imports
-import 'package:manytype_cli/src/account_profile.dart' show AccountSummary;
+import 'package:manytype_client/manytype_client.dart' show AccountSummary;
 import 'package:manytype_core/manytype_core.dart' show generateMnemonic;
 import 'package:manyui/manyui.dart';
 import 'package:manyui_riverpod/manyui_riverpod.dart';

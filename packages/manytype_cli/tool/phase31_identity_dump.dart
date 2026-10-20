@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:manytype_cli/src/config.dart';
-import 'package:manytype_cli/src/identity.dart';
-import 'package:manytype_cli/src/peer_id.dart';
+import 'package:manytype_client/manytype_client.dart';
 
 String _toHex(List<int> bytes) =>
     bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();

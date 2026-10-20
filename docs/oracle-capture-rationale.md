@@ -12,7 +12,7 @@ far outside the scope of regression coverage for this protocol layer.
 
 ## What the Artifact Captures Instead
 
-The capture mechanism is implemented in `packages/manytype_cli/lib/src/commands/sync.dart` inside
+The capture mechanism is implemented in `packages/manytype_client/lib/src/commands/sync.dart` inside
 the `_SessionCapture` class. When `MANYTYPE_SYNC_CAPTURE_PATH` is set, every DRPC unary and
 streaming RPC is serialized before and after the call:
 

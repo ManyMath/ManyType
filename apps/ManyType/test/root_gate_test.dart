@@ -12,10 +12,7 @@ import 'package:manytype/src/onboarding/onboarding_page.dart';
 import 'package:manytype/src/state/accounts_providers.dart';
 import 'package:manytype/src/state/session_provider.dart';
 import 'package:manytype/src/state/sync_controller.dart';
-import 'package:manytype_cli/manytype_cli.dart'
-    show AccountSyncMetadata, CliConfig, ManytypeSession;
-import 'package:manytype_cli/src/account_profile.dart' show AccountSummary;
-import 'package:manytype_cli/src/account_registry.dart';
+import 'package:manytype_client/manytype_client.dart';
 
 void main() {
   late Directory tempBase;

@@ -74,8 +74,7 @@ pub struct SpacePushRequest {
 }
 /// SpacePushResponse is an empty response
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct SpacePushResponse {
-}
+pub struct SpacePushResponse {}
 /// SpacePullRequest is a request to request a space on a node that doesn't have it
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SpacePullRequest {

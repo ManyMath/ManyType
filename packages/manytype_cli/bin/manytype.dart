@@ -2,30 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
+import 'package:manytype_cli/src/account_parser.dart';
 
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/models.dart';
 
-import 'package:manytype_cli/src/account_registry.dart';
-import 'package:manytype_cli/src/account_resolver.dart';
-import 'package:manytype_cli/src/active_account.dart';
-import 'package:manytype_cli/src/commands/account.dart';
-import 'package:manytype_cli/src/commands/account_delete.dart';
-import 'package:manytype_cli/src/commands/create.dart';
-import 'package:manytype_cli/src/commands/delete.dart';
-import 'package:manytype_cli/src/commands/edit.dart';
-import 'package:manytype_cli/src/commands/acl_lifecycle.dart';
-import 'package:manytype_cli/src/commands/consensus_flow.dart';
-import 'package:manytype_cli/src/commands/list.dart';
-import 'package:manytype_cli/src/commands/file_transfer.dart';
-import 'package:manytype_cli/src/commands/probe_file_node.dart';
-import 'package:manytype_cli/src/commands/probe_network.dart';
-import 'package:manytype_cli/src/commands/read.dart';
-import 'package:manytype_cli/src/commands/space_delete.dart';
-import 'package:manytype_cli/src/commands/space_pull_flow.dart';
-import 'package:manytype_cli/src/commands/sync.dart';
-import 'package:manytype_cli/src/config.dart';
-import 'package:manytype_cli/src/store/database.dart';
+import 'package:manytype_client/manytype_client.dart';
 
 /// Handles the `manytype account <subcommand>` command group: parses the
 /// subcommand's args, calls the typed `commands/account.dart` functions,

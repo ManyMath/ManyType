@@ -8,10 +8,13 @@ bidirectional interoperability with the official Anytype stack.
 - `packages/manytype_protocol`: protobuf-generated wire types.
 - `packages/manytype_core`: CRDT object model and sync logic shared across
   clients.
-- `packages/manytype_cli`: the Dart CLI and library for native and web clients,
-  including account, network-config, and file-relation handling.
+- `packages/manytype_client`: the reusable native/web account, session, storage,
+  synchronization, and recovery library.
+- `packages/manytype_cli`: the command-line entry point and operator tools,
+  consuming the public client API.
 - `rust/`: Rust workspace: `manytype_core` (Rust-side CRDT engine),
-  `manytype_proto`, `manytype_quic_ffi` (QUIC transport FFI), and
+  `manytype_proto`, `manytype_transport` (shared wire helpers),
+  `manytype_quic_ffi` (QUIC transport FFI), and
   `manytype_server` (a from-scratch Any-Sync-compatible server).
 - `docs/`: design notes and rationale (see `docs/testing.md` for the
   test-suite layout and `docs/oracle-capture-rationale.md` for how protocol
@@ -24,12 +27,11 @@ This is a [melos](https://melos.invertase.dev/) workspace. From the repo
 root:
 
 ```sh
-dart pub global activate melos
-melos bootstrap
-melos run test:ci     # VM test suite (safe for a bare CI runner)
-melos run test:web    # chrome test suite
-melos run analyze
-melos run format-check
+flutter pub get --enforce-lockfile
+dart run melos run test:ci     # VM test suite (safe for a bare CI runner)
+dart run melos run test:web    # chrome test suite
+dart run melos run analyze
+dart run melos run format-check
 ```
 
 The Rust workspace is developed independently from `rust/`:
@@ -41,9 +43,16 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo audit
 ```
 
-CI runs all of the above; see `.github/workflows/`. The ManyType app depends
+Private CI runs these validation lanes in `.gitea/workflows/`. The optional
+Docker oracle needs a separately provisioned runner and configuration. The ManyType app depends
 on ManyUI through a pinned commit of its public git repository
 (https://github.com/ManyMath/ManyUI), so a single ManyType clone is enough to
 build and test. To work against a local ManyUI checkout at `../ManyUI`, add an
 untracked `pubspec_overrides.yaml` at the repository root; the root
 `pubspec.yaml` comment above `dependency_overrides` has the snippet.
+
+See [module boundaries and protocol generation](docs/module-boundaries.md) for
+the client/server dependency contracts and pinned regeneration commands. See
+[protocol licenses and provenance](third_party/README.md) before preparing any
+public distribution. First-party licensing remains an owner decision; this
+private maintenance candidate is not a public release.

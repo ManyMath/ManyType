@@ -1,0 +1,6 @@
+name: manytype_protocol_codegen
+publish_to: none
+environment:
+  sdk: ^3.13.0
+dependencies:
+  protoc_plugin: 25.0.0

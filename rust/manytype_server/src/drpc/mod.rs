@@ -1,3 +1,2 @@
-pub mod codec;
+pub use manytype_transport::drpc::{codec, stream};
 pub mod router;
-pub mod stream;

@@ -4,17 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:args/args.dart';
-import 'package:manytype_cli/src/acl_codec.dart';
-import 'package:manytype_cli/src/acl_sync_service.dart';
-import 'package:manytype_cli/src/commands/create.dart';
-import 'package:manytype_cli/src/commands/sync.dart';
-import 'package:manytype_cli/src/config.dart';
-import 'package:manytype_cli/src/consensus_service.dart';
-import 'package:manytype_cli/src/ffi/native_bridge.dart';
-import 'package:manytype_cli/src/identity.dart';
-import 'package:manytype_cli/src/network_config.dart';
-import 'package:manytype_cli/src/space_pull_bootstrap.dart';
-import 'package:manytype_cli/src/store/database.dart';
+import 'package:manytype_client/manytype_client.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/manytype_protocol.dart';

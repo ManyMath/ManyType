@@ -42,8 +42,7 @@ pub struct Record {
     pub timestamp: i64,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct Ok {
-}
+pub struct Ok {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct LogAddRequest {
     #[prost(string, tag = "1")]

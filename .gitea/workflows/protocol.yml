@@ -1,0 +1,31 @@
+name: Protocol generation and module boundaries
+on:
+  push:
+    branches: [main, 'maintenance/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  RUSTUP_TOOLCHAIN: '1.94.0'
+  CARGO_HOME: ${{ runner.temp }}/manytype-codegen-${{ github.run_id }}
+  CARGO_BUILD_JOBS: '3'
+  DASH__SUPPRESS_ANALYTICS: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+jobs:
+  protocol:
+    runs-on: manymath-maintenance-linux-x64
+    timeout-minutes: 30
+    steps:
+      - name: Require private primary forge
+        env:
+          PRIMARY_SERVER: ${{ github.server_url }}
+        run: test "$PRIMARY_SERVER" = https://git.manymath.com
+      - uses: actions/checkout@v4
+      - name: Install pinned generator in job directory
+        run: cargo install protoc-gen-prost --version 0.5.0 --locked --root "$RUNNER_TEMP/manytype-protocol-tools-$GITHUB_RUN_ID"
+      - name: Reproduce and compare protocol types
+        run: PROTOC_GEN_PROST="$RUNNER_TEMP/manytype-protocol-tools-$GITHUB_RUN_ID/bin/protoc-gen-prost" python3 scripts/generate_protocol.py --check
+      - name: Assert module dependency boundaries
+        run: python3 scripts/check_module_boundaries.py

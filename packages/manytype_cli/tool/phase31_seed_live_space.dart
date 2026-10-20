@@ -1,9 +1,7 @@
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:manytype_cli/src/commands/sync.dart';
-import 'package:manytype_cli/src/config.dart';
-import 'package:manytype_cli/src/store/database.dart';
+import 'package:manytype_client/manytype_client.dart';
 
 Future<void> main(List<String> argv) async {
   final parser = ArgParser()

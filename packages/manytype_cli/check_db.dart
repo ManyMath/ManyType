@@ -1,7 +1,5 @@
 import 'dart:convert';
-import 'package:manytype_cli/src/store/database.dart';
-import 'package:manytype_cli/src/commands/create.dart';
-import 'package:manytype_cli/src/config.dart';
+import 'package:manytype_client/manytype_client.dart';
 
 import 'package:manytype_core/manytype_core.dart';
 

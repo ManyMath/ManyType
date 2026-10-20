@@ -7,8 +7,8 @@ use manytype_proto::treechange::{
     RawTreeChangeWithId, TreeFullSyncResponse, TreeHeadUpdate, TreeSyncContentValue,
     TreeSyncMessage, tree_sync_content_value,
 };
-use manytype_server::drpc::codec::{DrpcFrame, KIND_CLOSE, KIND_CLOSE_SEND};
-use manytype_server::drpc::stream::DrpcStream;
+use manytype_transport::drpc::codec::{DrpcFrame, KIND_CLOSE, KIND_CLOSE_SEND};
+use manytype_transport::drpc::stream::DrpcStream;
 use prost::Message;
 
 use crate::handshake::client_proto_handshake;

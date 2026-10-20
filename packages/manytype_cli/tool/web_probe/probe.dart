@@ -15,7 +15,7 @@
 // browser's dumped DOM.
 import 'dart:convert';
 
-import 'package:manytype_cli/manytype_cli.dart';
+import 'package:manytype_client/manytype_client.dart';
 import 'package:web/web.dart' as web;
 
 Future<void> main() async {

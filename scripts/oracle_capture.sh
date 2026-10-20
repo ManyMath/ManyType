@@ -40,7 +40,7 @@ timeout 120s bash -lc '
   set -euo pipefail
   export ORACLE_ARTIFACT_PATH="$ORACLE_ARTIFACT_PATH"
   cd "$ROOT_DIR"
-  dart test packages/manytype_cli/test/oracle_sync_preflight_test.dart
+  dart test packages/manytype_client/test/oracle_sync_preflight_test.dart
 '
 
 if [[ ! -f "$ORACLE_ARTIFACT_PATH" ]]; then

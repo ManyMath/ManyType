@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+manytype_transport = { path = "../manytype_transport" }
 manytype_proto = { path = "../manytype_proto" }
 manytype_core = { path = "../manytype_core" }
 tokio = { workspace = true }

@@ -1,0 +1,17 @@
+[package]
+name = "manytype_transport"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+manytype_proto = { path = "../manytype_proto" }
+manytype_core = { path = "../manytype_core" }
+anyhow = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+prost = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+libp2p-identity = { workspace = true, features = ["ed25519", "peerid", "rsa"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }

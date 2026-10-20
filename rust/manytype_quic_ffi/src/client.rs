@@ -7,8 +7,8 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use libp2p_identity::{Keypair, PeerId};
 
-use manytype_server::deadline::{self, DeadlineStage};
-use manytype_server::drpc::stream::DrpcStream;
+use manytype_transport::deadline::{self, DeadlineStage};
+use manytype_transport::drpc::stream::DrpcStream;
 
 use super::handshake::{client_handshake, client_proto_handshake};
 use crate::incoming::{ServedTreeCache, new_served_tree_cache, spawn_incoming_stream_server};
@@ -252,8 +252,8 @@ fn tls_peer_id(connection: &quinn::Connection) -> Result<String> {
 mod tests {
     use super::*;
     use manytype_core::crypto::ed25519;
-    use manytype_server::handshake::perform_handshake;
     use manytype_server::transport::quic::{make_server_config, run_quic_listener};
+    use manytype_transport::handshake::perform_handshake;
 
     const SERVER_SEED: [u8; 32] = [7u8; 32];
 

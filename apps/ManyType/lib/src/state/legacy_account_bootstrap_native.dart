@@ -3,11 +3,10 @@ import 'dart:io';
 // AccountRegistry/active-account resolution remain host integration APIs
 // rather than part of manytype_cli's command-oriented public barrel.
 // ignore: implementation_imports
-import 'package:manytype_cli/src/account_registry.dart';
+import 'package:manytype_client/manytype_client.dart';
+
 // ignore: implementation_imports
-import 'package:manytype_cli/src/active_account.dart';
 // ignore: implementation_imports
-import 'package:manytype_cli/src/config.dart';
 
 /// Registers and secures a pre-registry account, if this install has one.
 Future<String?> bootstrapLegacyAccountIfPresent() async {

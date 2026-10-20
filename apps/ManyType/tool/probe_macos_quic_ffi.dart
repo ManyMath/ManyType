@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:manytype_cli/src/ffi/native_bridge.dart';
+import 'package:manytype_client/manytype_client.dart';
 
 const expectedAbiVersion = 2;
 

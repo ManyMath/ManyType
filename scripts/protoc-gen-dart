@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/../tool/protocol_codegen"
+exec dart run protoc_plugin:protoc_plugin "$@"

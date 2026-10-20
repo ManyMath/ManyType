@@ -1,0 +1,59 @@
+name: Offline artifact verifiers
+permissions:
+  contents: read
+jobs:
+  verify-artifacts:
+    runs-on: manymath-maintenance-linux-x64
+    steps:
+    - name: Require private primary forge
+      env:
+        PRIMARY_SERVER: ${{ github.server_url }}
+      working-directory: ${{ runner.temp }}
+      run: 'test "$PRIMARY_SERVER" = https://git.manymath.com
+
+        rustup run 1.94.0 rustc --version
+
+        dart --version
+
+        flutter --version
+
+        '
+    - uses: actions/checkout@v4
+    - name: Verifier unit tests
+      run: 'python3 scripts/verify_file_artifacts_test.py
+
+        python3 scripts/verify_nyquist_artifacts_test.py
+
+
+        python3 -m unittest discover -s scripts/tests -v
+
+        '
+    - name: Verify checked-in artifacts
+      run: "for verifier in scripts/verify_*.py; do\n  case \"$verifier\" in\n    *_test.py) continue ;;\n    # Sign-off verifiers\
+        \ compare locally built rust/target binaries.\n    scripts/verify_phase49_signoff.py|scripts/verify_phase53_signoff.py)\
+        \ continue ;;\n    scripts/verify_self_hosted_oracle_metadata.py) continue ;;\n  esac\n  echo \"::group::$verifier\"\
+        \n  python3 \"$verifier\"\n  echo \"::endgroup::\"\ndone\nfor metadata in test_vectors/*/runtime-metadata.json; do\n\
+        \  python3 scripts/verify_self_hosted_oracle_metadata.py --metadata \"$metadata\"\ndone\n"
+    timeout-minutes: 60
+'on':
+  workflow_dispatch: {}
+  push:
+    branches:
+    - main
+    - maintenance/**
+  pull_request:
+    branches:
+    - main
+env:
+  RUSTUP_TOOLCHAIN: 1.94.0
+  CARGO_HOME: ${{ runner.temp }}/manytype-cargo-${{ github.run_id }}-${{ github.job }}
+  CARGO_BUILD_JOBS: '3'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  DASH__SUPPRESS_ANALYTICS: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  DO_NOT_TRACK: '1'
+  CI: 'true'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true

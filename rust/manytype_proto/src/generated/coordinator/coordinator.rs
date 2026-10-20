@@ -126,8 +126,7 @@ pub struct SpaceMakeShareableRequest {
     pub space_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct SpaceMakeShareableResponse {
-}
+pub struct SpaceMakeShareableResponse {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SpaceMakeUnshareableRequest {
     #[prost(string, tag = "1")]
@@ -136,8 +135,7 @@ pub struct SpaceMakeUnshareableRequest {
     pub acl_head: ::prost::alloc::string::String,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct SpaceMakeUnshareableResponse {
-}
+pub struct SpaceMakeUnshareableResponse {}
 /// NetworkConfigurationRequest contains currenId of the client configuration, it can be empty
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NetworkConfigurationRequest {
@@ -288,12 +286,10 @@ pub struct AccountDeleteResponse {
 }
 /// AccountRevertDeletionRequest is a request to revert an account deletion
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AccountRevertDeletionRequest {
-}
+pub struct AccountRevertDeletionRequest {}
 /// AccountRevertDeletionResponse is an empty response confirming that the deletion is reverted
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AccountRevertDeletionResponse {
-}
+pub struct AccountRevertDeletionResponse {}
 /// AclAddRecordRequest contains marshaled consensusproto.RawRecord
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct AclAddRecordRequest {
@@ -341,8 +337,7 @@ pub struct AccountLimitsSetRequest {
     pub shared_spaces_limit: u32,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AccountLimitsSetResponse {
-}
+pub struct AccountLimitsSetResponse {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct AclEventLogRequest {
     #[prost(string, tag = "1")]
@@ -389,8 +384,7 @@ pub struct AclUploadInviteRequest {
     pub data: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AclUploadInviteResponse {
-}
+pub struct AclUploadInviteResponse {}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum ErrorCodes {
