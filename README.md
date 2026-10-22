@@ -28,10 +28,10 @@ root:
 
 ```sh
 flutter pub get --enforce-lockfile
-dart run melos run test:ci     # VM test suite (safe for a bare CI runner)
-dart run melos run test:web    # chrome test suite
-dart run melos run analyze
-dart run melos run format-check
+./tool/melos run test:ci     # VM test suite (safe for a bare CI runner)
+./tool/melos run test:web    # chrome test suite
+./tool/melos run analyze
+./tool/melos run format-check
 ```
 
 The Rust workspace is developed independently from `rust/`:

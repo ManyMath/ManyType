@@ -103,5 +103,5 @@ for _ in $(seq 1 30); do
 done
 python3 scripts/read_server_ready.py "$oracle_state/server.log"
 export LD_LIBRARY_PATH="$PWD/rust/target/release"
-dart run melos run test:oracle --no-select
+./tool/melos run test:oracle --no-select
 # No compose down --volumes: stopping our daemon leaves only this run's data.

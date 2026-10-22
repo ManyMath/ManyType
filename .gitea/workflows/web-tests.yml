@@ -28,7 +28,7 @@ jobs:
     - name: melos bootstrap
       run: timeout --signal=TERM --kill-after=30s 15m flutter pub get --enforce-lockfile
     - name: melos run test:web
-      run: timeout --signal=TERM --kill-after=30s 60m dart run melos run test:web --no-select
+      run: timeout --signal=TERM --kill-after=30s 60m ./tool/melos run test:web --no-select
     timeout-minutes: 60
 'on':
   workflow_dispatch: {}

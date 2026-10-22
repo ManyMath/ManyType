@@ -1,5 +1,9 @@
 # Running the test suite
 
+Use `./tool/melos` from the repository root. This launcher also routes Melos's
+internal child commands through the workspace-pinned dependency, so no global
+Melos installation is required.
+
 The workspace has three melos test targets:
 
 - **`melos run test`**: runs `dart test` (VM) for every package with a `test/`
