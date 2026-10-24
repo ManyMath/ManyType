@@ -30,8 +30,14 @@ jobs:
       run: 'command -v cargo-audit
 
         cargo audit --version'
-    - name: cargo audit
-      run: cargo audit
+    - name: Audit with a freshly fetched, recorded RustSec database
+      run: |
+        advisory_root="$(mktemp -d "$RUNNER_TEMP/manytype-rustsec.XXXXXX")"
+        trap 'rm -rf "$advisory_root"' EXIT
+        timeout 120 git -c core.hooksPath=/dev/null clone --quiet --depth 1 https://github.com/RustSec/advisory-db.git "$advisory_root/db"
+        test "$(git -C "$advisory_root/db" remote get-url origin)" = https://github.com/RustSec/advisory-db.git
+        git -C "$advisory_root/db" rev-parse --verify HEAD
+        cargo audit --db "$advisory_root/db" --no-fetch
     timeout-minutes: 60
 'on':
   workflow_dispatch: {}
