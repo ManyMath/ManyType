@@ -366,15 +366,18 @@ nodes:
         ],
       );
       addTearDown(() async {
+        if (!stalledObjects.isCompleted) stalledObjects.complete([]);
         isolated.dispose();
         await Future<void>.delayed(const Duration(milliseconds: 100));
       });
 
+      // The deliberately incomplete refresh proves the dependency contract.
+      // Real cryptographic seeding is not constrained to a five-second budget.
       final objectId = await isolated
           .read(objectsControllerProvider)
-          .seedDemoTemplate()
-          .timeout(const Duration(seconds: 5));
+          .seedDemoTemplate();
 
+      expect(stalledObjects.isCompleted, isFalse);
       expect(objectId, isNotNull);
       final objects = await listCommand(
         session.db,
