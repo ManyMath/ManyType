@@ -27,6 +27,16 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUST_DIR="$ROOT_DIR/rust"
+RUST_TARGET_DIR="$(
+  cd "$RUST_DIR"
+  cargo metadata --locked --no-deps --format-version 1 |
+    python3 -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])'
+)"
+case "$(uname -s)" in
+  Darwin) FFI_LIBRARY_NAME="libmanytype_quic_ffi.dylib" ;;
+  Linux) FFI_LIBRARY_NAME="libmanytype_quic_ffi.so" ;;
+  *) printf 'unsupported host for native QUIC bridge\n' >&2; exit 1 ;;
+esac
 PORT="${PORT:-33148}"
 
 TMPDIR="$(mktemp -d)"
@@ -53,7 +63,8 @@ trap cleanup EXIT
 mkdir -p "$ARTIFACT_DIR"
 mkdir -p "$MANYTYPE_HOME" "$MANYTYPE_HOME_2"
 
-export LD_LIBRARY_PATH="$ROOT_DIR/rust/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$RUST_TARGET_DIR/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export MANYTYPE_QUIC_FFI_PATH="$RUST_TARGET_DIR/release/$FFI_LIBRARY_NAME"
 
 wait_for_server_ready() {
   local log_file="$1"
@@ -88,7 +99,7 @@ network_id = "manytype-phase38-relation-option"
 EOF
 
 printf 'Starting manytype_server on 127.0.0.1:%s...\n' "$PORT"
-stdbuf -oL -eL "$RUST_DIR/target/debug/manytype_server" "$TMPDIR/server.toml" >"$TMPDIR/server.log" 2>&1 &
+stdbuf -oL -eL "$RUST_TARGET_DIR/debug/manytype_server" "$TMPDIR/server.toml" >"$TMPDIR/server.log" 2>&1 &
 SERVER_PID=$!
 if ! wait_for_server_ready "$TMPDIR/server.log"; then
   printf 'FAIL: server did not become ready\n' >&2
