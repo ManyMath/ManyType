@@ -104,6 +104,13 @@ impl<'a> AuthenticatedPeer<'a> {
 mod tests {
     use super::*;
 
+    // private_canary validation requires an absolute data_dir; use a native
+    // absolute path so the fixtures exercise the same rules on every host.
+    #[cfg(unix)]
+    const ABS_DATA_DIR: &str = "/var/lib/manytype";
+    #[cfg(windows)]
+    const ABS_DATA_DIR: &str = "C:/var/lib/manytype";
+
     fn config_with_allowlist(peer_id: &str, account: [u8; 32]) -> ServerConfig {
         toml::from_str(&format!(
             r#"
@@ -111,7 +118,7 @@ mod tests {
                 quic_listen = "0.0.0.0:33020"
                 health_listen = "127.0.0.1:33021"
                 network_id = "manytype-private-canary"
-                data_dir = "/var/lib/manytype"
+                data_dir = "{ABS_DATA_DIR}"
 
                 [[allowed_principals]]
                 peer_id = "{peer_id}"
@@ -186,7 +193,7 @@ mod tests {
                 quic_listen = "0.0.0.0:33020"
                 health_listen = "127.0.0.1:33021"
                 network_id = "manytype-private-canary"
-                data_dir = "/var/lib/manytype"
+                data_dir = "{ABS_DATA_DIR}"
 
                 [[allowed_principals]]
                 peer_id = "{first_peer}"

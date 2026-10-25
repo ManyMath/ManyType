@@ -305,6 +305,14 @@ mod tests {
     use super::*;
 
     const PEER_ONE: &str = "12D3KooWGHMiFc5JJNpGWJxaqUd7ozGQASZz2TU9PwfGGjqjrc5J";
+
+    // private_canary validation requires an absolute data_dir; use a native
+    // absolute path so the fixtures exercise the same rules on every host.
+    #[cfg(unix)]
+    const ABS_DATA_DIR: &str = "/var/lib/manytype";
+    #[cfg(windows)]
+    const ABS_DATA_DIR: &str = "C:/var/lib/manytype";
+
     fn private_config() -> String {
         format!(
             r#"
@@ -312,7 +320,7 @@ mod tests {
                 quic_listen = "0.0.0.0:33020"
                 health_listen = "127.0.0.1:33021"
                 network_id = "manytype-private-canary"
-                data_dir = "/var/lib/manytype"
+                data_dir = "{ABS_DATA_DIR}"
 
                 [[allowed_principals]]
                 peer_id = "{PEER_ONE}"
@@ -326,25 +334,25 @@ mod tests {
         let config: ServerConfig = toml::from_str(&private_config()).unwrap();
         config.validate().unwrap();
         let paths = config.storage_paths().unwrap();
-        assert_eq!(paths.sync_root, Path::new("/var/lib/manytype/sync"));
-        assert_eq!(paths.files_root, Path::new("/var/lib/manytype/files"));
+        assert_eq!(paths.sync_root, Path::new(ABS_DATA_DIR).join("sync"));
+        assert_eq!(paths.files_root, Path::new(ABS_DATA_DIR).join("files"));
         assert_eq!(
             paths.identity_file,
-            Path::new("/var/lib/manytype/identity.key")
+            Path::new(ABS_DATA_DIR).join("identity.key")
         );
     }
 
     #[test]
     fn private_canary_rejects_embedded_identity_and_missing_allowlist() {
-        let config: ServerConfig = toml::from_str(
+        let config: ServerConfig = toml::from_str(&format!(
             r#"
                 deployment_mode = "private_canary"
                 quic_listen = "0.0.0.0:33020"
                 network_id = "manytype-private-canary"
-                data_dir = "/var/lib/manytype"
+                data_dir = "{ABS_DATA_DIR}"
                 identity_seed = "0101010101010101010101010101010101010101010101010101010101010101"
-            "#,
-        )
+            "#
+        ))
         .unwrap();
         assert!(config.validate().is_err());
     }
@@ -357,7 +365,7 @@ mod tests {
                 quic_listen = "0.0.0.0:33020"
                 health_listen = "127.0.0.1:33021"
                 network_id = "manytype-private-canary"
-                data_dir = "/var/lib/manytype"
+                data_dir = "{ABS_DATA_DIR}"
                 allowed_peer_ids = ["{PEER_ONE}"]
                 allowed_account_identities = ["0303030303030303030303030303030303030303030303030303030303030303"]
             "#
@@ -375,7 +383,7 @@ mod tests {
                 quic_listen = "0.0.0.0:33020"
                 health_listen = "127.0.0.1:33021"
                 network_id = "manytype-private-canary"
-                data_dir = "/var/lib/manytype"
+                data_dir = "{ABS_DATA_DIR}"
 
                 [[allowed_principals]]
                 peer_id = "{PEER_ONE}"
@@ -399,14 +407,14 @@ mod tests {
 
     #[test]
     fn production_mode_remains_prohibited() {
-        let config: ServerConfig = toml::from_str(
+        let config: ServerConfig = toml::from_str(&format!(
             r#"
                 deployment_mode = "production"
                 quic_listen = "0.0.0.0:33020"
                 network_id = "manytype-production"
-                data_dir = "/var/lib/manytype"
-            "#,
-        )
+                data_dir = "{ABS_DATA_DIR}"
+            "#
+        ))
         .unwrap();
         assert!(
             config
@@ -438,13 +446,13 @@ mod tests {
 
     #[test]
     fn config_requires_an_explicit_deployment_mode() {
-        let error = toml::from_str::<ServerConfig>(
+        let error = toml::from_str::<ServerConfig>(&format!(
             r#"
                 quic_listen = "0.0.0.0:33020"
                 network_id = "ambiguous-deployment"
-                data_dir = "/var/lib/manytype"
-            "#,
-        )
+                data_dir = "{ABS_DATA_DIR}"
+            "#
+        ))
         .unwrap_err();
 
         assert!(error.to_string().contains("deployment_mode"));
