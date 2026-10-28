@@ -33,6 +33,7 @@ import 'package:manytype/src/state/accounts_providers.dart';
 import 'package:manytype/src/state/guest_demo.dart';
 import 'package:manytype/src/state/objects_providers.dart';
 import 'package:manytype/src/state/session_provider.dart';
+import 'package:manytype/src/state/sync_controller.dart';
 
 const _testMnemonic =
     'legal winner thank year wave sausage worth useful legal winner thank '
@@ -52,6 +53,8 @@ void main() {
     CliConfig.testConfigDirOverride = tempBase.path;
     container = ProviderContainer(
       overrides: [
+        // Render the supported-sync UI independently of the test host.
+        nativeSyncSupportedProvider.overrideWithValue(true),
         sessionTestDbOverrideProvider.overrideWithValue(
           ManytypeDatabase.forTesting(await openDatabaseForTesting()),
         ),

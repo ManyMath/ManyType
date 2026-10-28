@@ -63,6 +63,8 @@ void main() {
   }) {
     return ProviderContainer(
       overrides: <Override>[
+        // The controller scenarios exercise fake runners, not host FFI support.
+        nativeSyncSupportedProvider.overrideWithValue(true),
         sessionProvider.overrideWith((ref) async => session),
         currentAccountIdProvider.overrideWith((ref) async => _accountId),
         syncMetadataStoreProvider.overrideWithValue(metadataStore),
@@ -74,6 +76,15 @@ void main() {
       ],
     );
   }
+
+  test('the real host capability gate remains unchanged without overrides', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    expect(
+      container.read(nativeSyncSupportedProvider),
+      Platform.isMacOS || Platform.isLinux,
+    );
+  });
 
   test('new account sync state is unconfigured and account-scoped', () async {
     final container = buildContainer(syncRunner: (_, __) async {});

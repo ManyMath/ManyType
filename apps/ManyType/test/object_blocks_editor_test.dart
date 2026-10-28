@@ -34,6 +34,8 @@ void main() {
     CliConfig.testConfigDirOverride = tempBase.path;
     container = ProviderContainer(
       overrides: <Override>[
+        // This fixture supplies a fake transport on every test host.
+        nativeSyncSupportedProvider.overrideWithValue(true),
         syncRunnerProvider.overrideWithValue((_, __) async {}),
       ],
     );

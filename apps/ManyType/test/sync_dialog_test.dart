@@ -20,6 +20,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
+          nativeSyncSupportedProvider.overrideWithValue(true),
           syncMetadataStoreProvider.overrideWithValue(
             _MemorySyncMetadataStore(),
           ),
@@ -79,6 +80,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
+          nativeSyncSupportedProvider.overrideWithValue(true),
           syncMetadataStoreProvider.overrideWithValue(
             _MemorySyncMetadataStore(),
           ),
@@ -128,6 +130,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
+          nativeSyncSupportedProvider.overrideWithValue(true),
           syncMetadataStoreProvider.overrideWithValue(store),
         ],
         child: MWidgetsApp(
