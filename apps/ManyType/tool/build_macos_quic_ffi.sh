@@ -5,7 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 RUST_DIR="$REPO_ROOT/rust"
 LIBRARY_NAME="libmanytype_quic_ffi.dylib"
-DESTINATION_DIR="${1:-$RUST_DIR/target/macos-package}"
 
 export PATH="$HOME/.cargo/bin:$PATH"
 CARGO_BIN="${CARGO:-$(command -v cargo || true)}"
@@ -13,6 +12,12 @@ if [[ -z "$CARGO_BIN" ]]; then
   echo "cargo is required to build the ManyType QUIC bridge" >&2
   exit 1
 fi
+RUST_TARGET_DIR="$(
+  cd "$RUST_DIR"
+  "$CARGO_BIN" metadata --locked --no-deps --format-version 1 |
+    python3 -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])'
+)"
+DESTINATION_DIR="${1:-$RUST_TARGET_DIR/macos-package}"
 
 requested_architectures="${ARCHS:-$(uname -m)}"
 declare -a built_libraries=()
@@ -38,7 +43,6 @@ for architecture in $requested_architectures; do
   (
     cd "$RUST_DIR"
     CARGO_INCREMENTAL=0 \
-      CARGO_TARGET_DIR="$RUST_DIR/target" \
       "$CARGO_BIN" build \
       --locked \
       --release \
@@ -46,7 +50,7 @@ for architecture in $requested_architectures; do
       --target "$rust_target"
   )
 
-  built_library="$RUST_DIR/target/$rust_target/release/$LIBRARY_NAME"
+  built_library="$RUST_TARGET_DIR/$rust_target/release/$LIBRARY_NAME"
   if [[ ! -f "$built_library" ]]; then
     echo "cargo did not produce $built_library" >&2
     exit 1
