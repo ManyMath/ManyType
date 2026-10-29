@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
+import 'package:path/path.dart' as p;
 
 /// FFI struct matching Rust FfiResult.
 ///
@@ -126,7 +127,7 @@ class NativeLibraryLocator {
 
   static String macOSBundleLibraryPath(String executablePath) {
     final contentsDirectory = File(executablePath).absolute.parent.parent;
-    return '${contentsDirectory.path}/Frameworks/$macOSLibraryName';
+    return p.join(contentsDirectory.path, 'Frameworks', macOSLibraryName);
   }
 
   static List<String> developmentLibraryPaths(
@@ -137,8 +138,8 @@ class NativeLibraryLocator {
     var directory = Directory(workingDirectory).absolute;
     while (true) {
       paths
-        ..add('${directory.path}/rust/target/release/$libraryName')
-        ..add('${directory.path}/rust/target/debug/$libraryName');
+        ..add(p.join(directory.path, 'rust', 'target', 'release', libraryName))
+        ..add(p.join(directory.path, 'rust', 'target', 'debug', libraryName));
       if (directory.parent.path == directory.path) {
         break;
       }
