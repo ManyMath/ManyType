@@ -23,6 +23,8 @@ jobs:
           PRIMARY_SERVER: ${{ github.server_url }}
         run: test "$PRIMARY_SERVER" = https://git.manymath.com
       - uses: actions/checkout@v4
+      - name: Protocol tooling portability fixtures
+        run: python3 -m unittest discover -s scripts/tests -p test_generate_protocol.py
       - name: Install pinned generator in job directory
         run: cargo install protoc-gen-prost --version 0.5.0 --locked --root "$RUNNER_TEMP/manytype-protocol-tools-$GITHUB_RUN_ID"
       - name: Reproduce and compare protocol types

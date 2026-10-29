@@ -37,6 +37,17 @@ by changing a shared Rust default. `tool/protocol_codegen/pubspec.lock` pins the
 Dart plugin 25.0.0 and its transitive dependencies. Set `PROTOC_GEN_PROST` to the
 pinned executable if it is not on PATH.
 
+Set `PROTOC_INCLUDE` to the matching protobuf include directory when needed
+(for an official Windows protoc archive, its `include` directory). The script
+checks for `google/protobuf/struct.proto`; without an override it looks beside
+the selected protoc installation and then under `/usr/include`. Windows uses
+the checked-in `.bat` Dart-plugin adapter. Keep the provisioned Dart SDK on PATH.
+The formatter is resolved directly from the installed Rust 1.94.0 toolchain;
+a missing component fails instead of using another formatter from PATH.
+Generated text uses canonical LF bytes on every host. Git attributes prevent
+checkout conversion of those bytes, and `--check` compares checked-in bytes
+exactly rather than hiding line-ending drift.
+
 ```
 python3 scripts/generate_protocol.py
 python3 scripts/generate_protocol.py --check
