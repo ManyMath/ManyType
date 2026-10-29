@@ -1,5 +1,7 @@
-@TestOn(
-    'vm') // shells out via Process.run to a cargo-build + bash harness against a live server (see file header)
+// These live-server harnesses use the Dart native QUIC transport, currently
+// supported only on Linux and macOS. Windows Rust DLL ABI checks are separate
+// evidence and do not establish Windows Dart transport support.
+@TestOn('vm && (linux || mac-os)')
 library;
 
 import 'dart:io';
