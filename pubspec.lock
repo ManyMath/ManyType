@@ -545,8 +545,8 @@ packages:
     dependency: "direct overridden"
     description:
       path: manyui
-      ref: "88ad8614877b8fd51f79b84376117b37882df11f"
-      resolved-ref: "88ad8614877b8fd51f79b84376117b37882df11f"
+      ref: d5b8881a8a582ef0f6f5989addd6ab1fd4ef144c
+      resolved-ref: d5b8881a8a582ef0f6f5989addd6ab1fd4ef144c
       url: "https://github.com/ManyMath/ManyUI.git"
     source: git
     version: "0.1.1"
@@ -554,8 +554,8 @@ packages:
     dependency: transitive
     description:
       path: manyui_hooks
-      ref: "88ad8614877b8fd51f79b84376117b37882df11f"
-      resolved-ref: "88ad8614877b8fd51f79b84376117b37882df11f"
+      ref: d5b8881a8a582ef0f6f5989addd6ab1fd4ef144c
+      resolved-ref: d5b8881a8a582ef0f6f5989addd6ab1fd4ef144c
       url: "https://github.com/ManyMath/ManyUI.git"
     source: git
     version: "0.1.0-dev"
@@ -563,8 +563,8 @@ packages:
     dependency: transitive
     description:
       path: manyui_riverpod
-      ref: "88ad8614877b8fd51f79b84376117b37882df11f"
-      resolved-ref: "88ad8614877b8fd51f79b84376117b37882df11f"
+      ref: d5b8881a8a582ef0f6f5989addd6ab1fd4ef144c
+      resolved-ref: d5b8881a8a582ef0f6f5989addd6ab1fd4ef144c
       url: "https://github.com/ManyMath/ManyUI.git"
     source: git
     version: "0.1.0-dev"

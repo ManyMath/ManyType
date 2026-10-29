@@ -3,12 +3,17 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@unittest.skipUnless(
+    sys.platform.startswith('linux'),
+    'Linux rootless Docker fixture requires /proc and POSIX shell executables',
+)
 class PrivateOracleSafetyTest(unittest.TestCase):
     def test_wrong_daemon_root_cleans_only_owned_child(self):
         with tempfile.TemporaryDirectory(prefix='oracle-safety-') as tmp:

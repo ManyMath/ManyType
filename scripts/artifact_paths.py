@@ -16,9 +16,17 @@ REPO_DIRS = ("test_vectors", "scripts", "docker", "rust", "packages")
 
 def repo_path(value: str | pathlib.Path) -> pathlib.Path:
     path = pathlib.Path(value)
-    if not path.is_absolute() or path.is_relative_to(ROOT):
+    if path.is_absolute() and path.is_relative_to(ROOT):
         return path
-    parts = path.parts
+    # Classify the recorded spelling, not the current host's Path flavor:
+    # /home/... is a POSIX absolute capture even on Windows, while C:\\...
+    # and UNC captures must also work when a verifier runs on POSIX.
+    captured = pathlib.PurePosixPath(value)
+    if not captured.is_absolute():
+        captured = pathlib.PureWindowsPath(value)
+    if not captured.is_absolute():
+        return path
+    parts = captured.parts
     candidates = [
         ROOT.joinpath(*parts[index:])
         for index, part in enumerate(parts)
