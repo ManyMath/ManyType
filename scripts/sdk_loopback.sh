@@ -39,10 +39,14 @@ trap cleanup EXIT
 (cd "$ROOT_DIR/rust" && cargo build --locked -p manytype_server --bin manytype_server)
 
 PORT="$(python3 -c 'import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+# The health listener defaults to a fixed port; a concurrent run on the same
+# host would collide with it.
+HEALTH_PORT="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
 NETWORK_ID="anytype-sdk-loopback"
 cat >"$WORK_DIR/server.toml" <<EOF
 deployment_mode = "development"
 quic_listen = "127.0.0.1:$PORT"
+health_listen = "127.0.0.1:$HEALTH_PORT"
 db_path = "$WORK_DIR/server.redb"
 identity_seed = "$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
 network_id = "$NETWORK_ID"
