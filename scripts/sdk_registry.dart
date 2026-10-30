@@ -51,8 +51,10 @@ Future<void> main(List<String> arguments) async {
 
   final client = HttpClient();
   // Signal subscriptions keep the isolate alive, so leave explicitly.
-  ProcessSignal.sigterm.watch().listen((_) => exit(0));
   ProcessSignal.sigint.watch().listen((_) => exit(0));
+  if (!Platform.isWindows) {
+    ProcessSignal.sigterm.watch().listen((_) => exit(0));
+  }
   File(arguments.first).writeAsStringSync('${server.port}');
 
   await for (final request in server) {
