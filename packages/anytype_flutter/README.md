@@ -26,6 +26,9 @@ void main() {
 }
 ```
 
+The plugin also depends on `sqlite3_flutter_libs`, which bundles the SQLite
+library that `anytype`'s storage needs; Android has no usable system copy.
+
 `AnytypeFlutter.ensureInitialized()` is optional; without it the bridge loads
 on the first network operation. Accounts, storage, objects and sync are the
 `anytype` API, documented in its README. Set `ManytypeStorage.directory` to an
@@ -61,9 +64,15 @@ can build the same sources with cargo, as the `anytype` README describes.
 | --- | --- | --- | --- |
 | Linux x64 | Tested from the published archive | Tested: the running app maps the bundled library | Tested with the bundled library |
 | macOS arm64 | Tested from the published archive | Tested: the running app maps the framework and reports the ABI | Tested with the same sources built as a dylib |
-| iOS arm64 | Tested (example app, unsigned) | Not run | Not run |
-| Windows x64 | Tested (example app, release) | Tested: the SDK loads the bundled DLL | Not run |
-| Android arm64-v8a, armeabi-v7a, x86_64 | Tested (example debug APK) | Not run | Not run |
+| iOS | Tested (example app, unsigned device build and simulator) | Tested in the iOS simulator | Tested in the iOS simulator (example integration test) |
+| Windows x64 | Tested (example app, release) | Tested: the SDK loads the bundled DLL | Tested with the bridge and server built on Windows |
+| Android arm64-v8a, armeabi-v7a, x86_64 | Tested (example debug APK) | Tested on an x86_64 emulator | Tested on an x86_64 emulator (example integration test) |
+
+The example's `integration_test/loopback_test.dart` runs the two-device sync
+on a device or simulator; pass a base64 network config in
+`--dart-define=ANYTYPE_NETWORK_YML_B64=...`. A device reaches the server at
+the address the coordinator advertises, so for an emulator the server must
+listen on an address the emulator can reach, not 127.0.0.1.
 
 "Loopback sync" means synchronization between two SDK instances through the
 ManyType repository's `manytype_server`. It is not compatibility evidence
