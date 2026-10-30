@@ -16,15 +16,17 @@
 # 4. Follows the README's Dart CLI path: fetches the hosted anytype_flutter
 #    into the pub cache, builds its Rust sources with cargo, and runs the
 #    published sync example against a loopback manytype_server.
-# 5. Builds a fresh Flutter Linux app on the hosted anytype_flutter, so
-#    cargokit compiles the bridge from the archive's sources, then proves the
-#    bundled library is the one mapped and that it syncs over loopback.
+# 5. Builds a fresh Flutter desktop app for this host on the hosted
+#    anytype_flutter, so cargokit compiles the bridge from the archive's
+#    sources. On Linux it proves the bundled library is the one the app maps
+#    and syncs with it over loopback; on macOS it checks the framework exports
+#    the bridge and that the launched app maps the framework and loads ABI 2.
 #
 # Archives and logs are kept in output-dir, which must be new or empty
-# (default: a new temp directory). Needs Flutter with the Linux desktop
-# toolchain, Rust 1.88+ via rustup, Python 3.11+, coreutils timeout, and
-# network access to pub.dev and crates.io. When xvfb-run is present the
-# Flutter app is also launched.
+# (default: a new temp directory). Runs on Linux or macOS. Needs Flutter with
+# that desktop toolchain, Rust 1.88+ via rustup, Python 3.11+, coreutils
+# timeout, and network access to pub.dev and crates.io. On Linux the app is
+# launched only when xvfb-run is present.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -39,6 +41,7 @@ ARCHIVES="$OUT_DIR/archives"
 WORK="$(mktemp -d)"
 REGISTRY_PID=""
 APP_RUNNER=""
+APP_PID=""
 cleanup() {
   for pid in "$APP_RUNNER" "$REGISTRY_PID"; do
     if [[ -n "$pid" ]]; then
@@ -52,6 +55,11 @@ trap cleanup EXIT
 mkdir -p "$ARCHIVES"
 PACKAGES=(manytype_protocol manytype_core anytype anytype_flutter)
 VERSION=0.0.2
+case "$(uname -s)" in
+  Linux) HOST=linux; BRIDGE_FILE=libmanytype_quic_ffi.so ;;
+  Darwin) HOST=macos; BRIDGE_FILE=libmanytype_quic_ffi.dylib ;;
+  *) printf 'the archive gate runs on Linux or macOS\n' >&2; exit 64 ;;
+esac
 
 step() { printf '\n== %s\n' "$*"; }
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
@@ -222,11 +230,11 @@ cargo build --locked --release --manifest-path "${plugin_sources[0]}/rust/Cargo.
   { tail -30 "$OUT_DIR/cli-cargo.log"; fail 'cargo build of the hosted plugin sources'; }
 grep -qF "Compiling manytype_quic_ffi v0.1.0 (${plugin_sources[0]}/rust)" "$OUT_DIR/cli-cargo.log" ||
   fail 'bridge was not built from the pub cache copy'
-loopback "$WORK/cli-target/release/libmanytype_quic_ffi.so" cli
+loopback "$WORK/cli-target/release/$BRIDGE_FILE" cli
 
 step 'Flutter consumer: cargokit build from the hosted anytype_flutter'
 APP="$WORK/flutter_consumer"
-(cd "$WORK" && timeout 600 flutter create --no-pub --platforms=linux \
+(cd "$WORK" && timeout 600 flutter create --no-pub --platforms="$HOST" \
   --project-name anytype_flutter_consumer flutter_consumer) >"$OUT_DIR/flutter-create.log" 2>&1 ||
   { cat "$OUT_DIR/flutter-create.log"; fail 'flutter create'; }
 rm -rf "$APP/test"
@@ -248,37 +256,66 @@ printf 'use_precompiled_binaries: false\n' >"$APP/cargokit_options.yaml"
 grep -A5 '^  anytype_flutter:' "$APP/pubspec.lock" | grep -qF "url: \"$PUB_HOSTED_URL\"" ||
   fail 'anytype_flutter not resolved from the registry'
 cp "$APP/pubspec.lock" "$OUT_DIR/flutter-consumer-pubspec.lock"
-plugin_link="$(readlink -f "$APP/linux/flutter/ephemeral/.plugin_symlinks/anytype_flutter")"
-[[ "$plugin_link" == "$(readlink -f "${plugin_sources[0]}")" ]] ||
-  fail "plugin is not the pub cache copy: $plugin_link"
-(cd "$APP" && timeout 1500 flutter build linux --debug) >"$OUT_DIR/flutter-build.log" 2>&1 ||
-  { tail -40 "$OUT_DIR/flutter-build.log"; fail 'flutter build linux'; }
-bundled="$APP/build/linux/x64/debug/bundle/lib/libmanytype_quic_ffi.so"
-[[ -f "$bundled" ]] || fail 'the Linux bundle has no libmanytype_quic_ffi.so'
-echo "Bundled $bundled (sha256 $(sha256sum "$bundled" | cut -d' ' -f1))"
-if command -v xvfb-run >/dev/null; then
-  executable="$APP/build/linux/x64/debug/bundle/anytype_flutter_consumer"
-  xvfb-run -a "$executable" >"$OUT_DIR/flutter-app.log" 2>&1 &
+if [[ "$HOST" == linux ]]; then
+  plugin_link="$APP/linux/flutter/ephemeral/.plugin_symlinks/anytype_flutter"
+else
+  plugin_link="$APP/macos/Flutter/ephemeral/.symlinks/plugins/anytype_flutter"
+fi
+(cd "$APP" && timeout 1500 flutter build "$HOST" --debug) >"$OUT_DIR/flutter-build.log" 2>&1 ||
+  { tail -40 "$OUT_DIR/flutter-build.log"; fail "flutter build $HOST"; }
+[[ "$(readlink -f "$plugin_link")" == "$(readlink -f "${plugin_sources[0]}")" ]] ||
+  fail "plugin is not the pub cache copy: $(readlink -f "$plugin_link")"
+
+# Launch the app and wait until it reports the bridge ABI; sets APP_PID.
+launch() {
+  local executable="$1"; shift
+  "$@" "$executable" >"$OUT_DIR/flutter-app.log" 2>&1 &
   APP_RUNNER=$!
-  app_pid=""
-  for _ in $(seq 1 60); do
-    app_pid="$(pgrep -f "^$executable\$" | head -1 || true)"
-    [[ -n "$app_pid" ]] && grep -q 'bridge ABI' "$OUT_DIR/flutter-app.log" && break
+  APP_PID=""
+  for _ in $(seq 1 90); do
+    APP_PID="$(pgrep -f "^$executable\$" | head -1 || true)"
+    [[ -n "$APP_PID" ]] && grep -q 'bridge ABI' "$OUT_DIR/flutter-app.log" && break
     sleep 1
   done
-  mapped=""
-  if [[ -n "$app_pid" ]]; then
-    mapped="$(grep manytype_quic_ffi "/proc/$app_pid/maps" | awk '{print $6}' | sort -u || true)"
-    kill "$app_pid" 2>/dev/null || true
-  fi
+}
+stop_app() {
+  [[ -n "$APP_PID" ]] && kill "$APP_PID" 2>/dev/null || true
   wait "$APP_RUNNER" 2>/dev/null || true
   APP_RUNNER=""
   grep 'bridge ABI 2' "$OUT_DIR/flutter-app.log" || fail 'Flutter app did not load the bridge'
-  [[ "$mapped" == "$(readlink -f "$bundled")" ]] || fail "Flutter app mapped: $mapped"
-  echo "Flutter app mapped $mapped"
+}
+
+if [[ "$HOST" == linux ]]; then
+  bundled="$APP/build/linux/x64/debug/bundle/lib/$BRIDGE_FILE"
+  [[ -f "$bundled" ]] || fail "the Linux bundle has no $BRIDGE_FILE"
+  echo "Bundled $bundled (sha256 $(sha256sum "$bundled" | cut -d' ' -f1))"
+  if command -v xvfb-run >/dev/null; then
+    launch "$APP/build/linux/x64/debug/bundle/anytype_flutter_consumer" xvfb-run -a
+    mapped=""
+    [[ -n "$APP_PID" ]] &&
+      mapped="$(grep manytype_quic_ffi "/proc/$APP_PID/maps" | awk '{print $6}' | sort -u || true)"
+    stop_app
+    [[ "$mapped" == "$(readlink -f "$bundled")" ]] || fail "Flutter app mapped: $mapped"
+    echo "Flutter app mapped $mapped"
+  else
+    echo 'xvfb-run not found: skipped launching the Flutter app'
+  fi
+  loopback "$bundled" flutter-bundle
 else
-  echo 'xvfb-run not found: skipped launching the Flutter app'
+  app="$APP/build/macos/Build/Products/Debug/anytype_flutter_consumer.app"
+  framework="$app/Contents/Frameworks/anytype_flutter.framework/anytype_flutter"
+  [[ -f "$framework" ]] || fail 'the macOS app has no anytype_flutter framework'
+  nm -gU "$framework" | grep -q ' _ffi_abi_version$' ||
+    fail 'the anytype_flutter framework does not export ffi_abi_version'
+  echo "Bundled the bridge into $framework (sha256 $(shasum -a 256 "$framework" | cut -d' ' -f1))"
+  launch "$app/Contents/MacOS/anytype_flutter_consumer" env
+  mapped=""
+  [[ -n "$APP_PID" ]] && mapped="$(lsof -p "$APP_PID" 2>/dev/null | grep -c 'anytype_flutter.framework' || true)"
+  stop_app
+  [[ "${mapped:-0}" -gt 0 ]] || fail 'the Flutter app did not map the anytype_flutter framework'
+  echo 'Flutter app mapped the anytype_flutter framework'
+  # The framework links FlutterMacOS, so a plain Dart process cannot load
+  # it; the loopback above used the same sources built as a dylib.
 fi
-loopback "$bundled" flutter-bundle
 
 step "PASSED: archives in $ARCHIVES"
