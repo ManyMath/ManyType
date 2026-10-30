@@ -59,6 +59,11 @@ enabled.
 | Linux | `libmanytype_quic_ffi.so` in the bundle's `lib/` |
 | Windows | `manytype_quic_ffi.dll` beside the executable |
 
+On iOS and macOS the bridge is force-loaded into `anytype_flutter.framework`,
+so apps must build pods as dynamic frameworks, CocoaPods' default
+`use_frameworks!` in Flutter apps. With static linkage the bridge is not
+linked in and `NativeBridge` reports that it could not load the library.
+
 The Rust sources ship in this package under `rust/`: the `manytype_quic_ffi`
 crate with `manytype_proto`, `manytype_core` and `manytype_transport` under
 `rust/crates/`, and a locked dependency graph. Dart programs outside Flutter
@@ -71,7 +76,7 @@ can build the same sources with cargo, as the `anytype` README describes.
 | Linux x64 | Tested from the published archive | Tested: the running app maps the bundled library | Tested with the bundled library |
 | macOS arm64 | Tested from the published archive | Tested: the running app maps the framework and reports the ABI | Tested with the same sources built as a dylib |
 | iOS | Tested (example app, unsigned device build and simulator) | Tested in the iOS simulator | Tested in the iOS simulator (example integration test) |
-| Windows x64 | Tested (example app, release) | Tested: the SDK loads the bundled DLL | Tested with the bridge and server built on Windows |
+| Windows x64 | Tested (example app, release, with sqlite3_flutter_libs) | Tested: the SDK loads the bundled DLL | Tested in a Dart process with a cargo-built DLL and server built on Windows |
 | Android arm64-v8a, armeabi-v7a, x86_64 | Tested (example debug APK) | Tested on an x86_64 emulator | Tested on an x86_64 emulator (example integration test) |
 
 The example's `integration_test/loopback_test.dart` runs the two-device sync

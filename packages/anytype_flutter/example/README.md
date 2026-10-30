@@ -10,3 +10,7 @@ flutter run -d linux   # or macos, windows, an Android or iOS device
 
 Building requires a Rust toolchain installed with rustup, because cargokit
 compiles the bridge from `../rust` for the target platform.
+
+Inside the ManyType repository the example is a pub workspace member. To run
+a copy downloaded with the package, first delete the `resolution: workspace`
+line from its `pubspec.yaml`, since there is no workspace root around it.

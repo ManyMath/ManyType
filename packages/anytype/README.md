@@ -109,8 +109,10 @@ cargo build --locked --release \
 export MANYTYPE_QUIC_FFI_PATH="$PWD/build/anytype/release/libmanytype_quic_ffi.so"
 ```
 
-On macOS the file is `libmanytype_quic_ffi.dylib`. AOT-compiled executables
-can instead set `NativeBridge.libraryPath` to the library they ship.
+On macOS the file is `libmanytype_quic_ffi.dylib`. On Windows the pub cache is
+`%LOCALAPPDATA%\Pub\Cache` and the library is `release\manytype_quic_ffi.dll`
+under the target directory. AOT-compiled executables can instead set
+`NativeBridge.libraryPath` to the library they ship.
 
 `NativeBridge` loads the library from the first of these that applies:
 
