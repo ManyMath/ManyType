@@ -31,3 +31,7 @@ jobs:
         run: PROTOC_GEN_PROST="$RUNNER_TEMP/manytype-protocol-tools-$GITHUB_RUN_ID/bin/protoc-gen-prost" python3 scripts/generate_protocol.py --check
       - name: Assert module dependency boundaries
         run: python3 scripts/check_module_boundaries.py
+      - name: Vendored cargokit matches its provenance
+        run: |
+          python3 scripts/check_cargokit_vendor.py
+          python3 -m unittest discover -s tool/tests -p test_cargokit_sync.py
