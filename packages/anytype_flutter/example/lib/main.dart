@@ -36,6 +36,8 @@ class _AnytypeExampleAppState extends State<AnytypeExampleApp> {
     } catch (error) {
       bridge = 'QUIC bridge unavailable: $error';
     }
+    // Logged so platform checks can see whether the bundled bridge loaded.
+    debugPrint(bridge);
     final root = await Directory.systemTemp.createTemp('anytype_example_');
     ManytypeStorage.directory = p.join(root.path, 'store');
     await createAccountCommand(name: 'Example');
