@@ -65,8 +65,8 @@ desktop app built on the hosted plugin, with loopback syncs on Linux (see
 output directory must be new or empty. The script needs Flutter with the
 host's desktop toolchain, Rust 1.88 or newer via rustup, Python 3.11 or newer,
 coreutils `timeout` (Homebrew `coreutils` on macOS), and network access to
-pub.dev and crates.io; on Linux the app is launched only when `xvfb-run` is
-installed. A pass is loopback evidence, not compatibility evidence against an
+pub.dev and crates.io; on Linux the app is launched when `xvfb-run` is
+installed, and CI (`CI=true`) fails without it. A pass is loopback evidence, not compatibility evidence against an
 official Any-Sync deployment.
 
 ## Self-hosted oracle stack

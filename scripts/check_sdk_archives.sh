@@ -26,7 +26,7 @@
 # (default: a new temp directory). Runs on Linux or macOS. Needs Flutter with
 # that desktop toolchain, Rust 1.88+ via rustup, Python 3.11+, coreutils
 # timeout, and network access to pub.dev and crates.io. On Linux the app is
-# launched only when xvfb-run is present.
+# launched when xvfb-run is present, which CI (CI=true) requires.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -123,7 +123,7 @@ require manytype_protocol licenses/any-sync-v0.9.9-MIT.txt \
   licenses/anytype-heart-cfb7ec9-ASAL-1.0.txt
 require anytype example/example.dart example/sync_example.dart
 forbid anytype '^test/|^native/|^bin/'
-require anytype_flutter lib/anytype_flutter.dart rust/Cargo.toml rust/Cargo.lock \
+require anytype_flutter lib/anytype_flutter.dart rust/Cargo.toml rust/Cargo.lock rust/cargokit.yaml \
   rust/LICENSE rust/src/lib.rs cargokit/cmake/cargokit.cmake cargokit/build_pod.sh \
   cargokit/gradle/plugin.gradle cargokit/VENDOR_PROVENANCE.json cargokit/LICENSE \
   rust/crates/manytype_proto/licenses/any-sync-v0.9.9-MIT.txt \
@@ -286,6 +286,11 @@ launch() {
 stop_app() {
   [[ -n "$APP_PID" ]] && kill "$APP_PID" 2>/dev/null || true
   pkill -f "^$APP_EXECUTABLE\$" 2>/dev/null || true
+  # Give xvfb-run time to clean up its Xvfb before it is signalled itself.
+  for _ in $(seq 1 20); do
+    kill -0 "$APP_RUNNER" 2>/dev/null || break
+    sleep 0.5
+  done
   kill "$APP_RUNNER" 2>/dev/null || true
   wait "$APP_RUNNER" 2>/dev/null || true
   APP_RUNNER=""
