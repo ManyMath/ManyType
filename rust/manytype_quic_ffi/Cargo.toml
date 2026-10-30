@@ -1,6 +1,7 @@
 [package]
 name = "manytype_quic_ffi"
 version = "0.1.0"
+rust-version = "1.88"
 edition = "2024"
 publish = false
 license = "MIT"

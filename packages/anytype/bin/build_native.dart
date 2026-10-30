@@ -20,7 +20,7 @@ Usage: dart run anytype:build_native [--debug] [--output-dir <dir>]
   --debug              Build without optimizations.
   --output-dir <dir>   Also copy the library into <dir>, e.g. to bundle it.
 
-Requires Rust 1.85 or newer with cargo on PATH.''';
+Requires Rust 1.88 or newer with cargo on PATH.''';
 
 Future<void> main(List<String> arguments) async {
   var release = true;
@@ -66,21 +66,20 @@ Future<void> main(List<String> arguments) async {
   }
 
   final packageRoot = File.fromUri(library).parent.parent.path;
-  var manifest = p.join(packageRoot, 'native', 'Cargo.toml');
+  // A repository checkout builds from the live Rust workspace, never from a
+  // staged snapshot that may predate local edits.
+  final repositoryRust = p.normalize(p.join(packageRoot, '..', '..', 'rust'));
+  final repositoryManifest = p.join(repositoryRust, 'Cargo.toml');
+  final inRepository = File(
+    p.join(repositoryRust, 'manytype_quic_ffi', 'Cargo.toml'),
+  ).existsSync();
+  final manifest = inRepository
+      ? repositoryManifest
+      : p.join(packageRoot, 'native', 'Cargo.toml');
   if (!File(manifest).existsSync()) {
-    // A repository checkout builds from the full Rust workspace instead.
-    final repositoryManifest = p.normalize(
-      p.join(packageRoot, '..', '..', 'rust', 'Cargo.toml'),
-    );
-    if (!File(repositoryManifest).existsSync()) {
-      stderr.writeln(
-        'No Rust sources found at $manifest. In a repository '
-        'checkout, run scripts/stage_sdk_native.py first.',
-      );
-      exitCode = 1;
-      return;
-    }
-    manifest = repositoryManifest;
+    stderr.writeln('No Rust sources found at $manifest.');
+    exitCode = 1;
+    return;
   }
 
   final toolDirectory = p.join(
@@ -102,7 +101,7 @@ Future<void> main(List<String> arguments) async {
         targetDirectory,
       ], mode: ProcessStartMode.inheritStdio).catchError((Object error) {
         stderr.writeln(
-          'Could not start cargo ($error). Install Rust 1.85 or '
+          'Could not start cargo ($error). Install Rust 1.88 or '
           'newer, for example from https://rustup.rs.',
         );
         exit(1);
@@ -114,6 +113,28 @@ Future<void> main(List<String> arguments) async {
   }
 
   final built = File(p.join(targetDirectory, profile, libraryName));
+  if (!built.existsSync()) {
+    stderr.writeln(
+      'cargo succeeded but ${built.path} does not exist. A configured '
+      'build.target or CARGO_BUILD_TARGET moves the output; unset it to '
+      'build for this host.',
+    );
+    exitCode = 1;
+    return;
+  }
+  // Check the build before installing it anywhere the loader would trust.
+  final abiVersion = DynamicLibrary.open(
+    built.path,
+  ).lookupFunction<Uint32 Function(), int Function()>('ffi_abi_version')();
+  if (abiVersion != NativeBridge.expectedAbiVersion) {
+    stderr.writeln(
+      'Built library reports ABI $abiVersion, but this anytype '
+      'expects ABI ${NativeBridge.expectedAbiVersion}.',
+    );
+    exitCode = 1;
+    return;
+  }
+
   final destinations = [
     NativeLibraryLocator.projectLibraryPath(
       libraryName,
@@ -126,18 +147,6 @@ Future<void> main(List<String> arguments) async {
     final staging = '$destination.tmp';
     built.copySync(staging);
     File(staging).renameSync(destination);
-  }
-
-  final abiVersion = DynamicLibrary.open(
-    destinations.first,
-  ).lookupFunction<Uint32 Function(), int Function()>('ffi_abi_version')();
-  if (abiVersion != NativeBridge.expectedAbiVersion) {
-    stderr.writeln(
-      'Built library reports ABI $abiVersion, but this anytype '
-      'expects ABI ${NativeBridge.expectedAbiVersion}.',
-    );
-    exitCode = 1;
-    return;
   }
   for (final destination in destinations) {
     stdout.writeln('Built $destination (ABI $abiVersion)');
