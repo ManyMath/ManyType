@@ -29,6 +29,7 @@ export 'src/network_config.dart';
 export 'src/peer_id.dart';
 export 'src/recovery_phrase_store.dart';
 export 'src/session.dart';
+export 'src/storage_location.dart';
 export 'src/space_pull_bootstrap.dart';
 export 'src/store/database.dart';
 export 'src/structured_replay.dart';

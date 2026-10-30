@@ -9,6 +9,7 @@ import 'account_sync_metadata.dart';
 import 'config.dart';
 import 'private_files.dart';
 import 'recovery_phrase_store.dart';
+import 'storage_location.dart';
 
 /// Durable boundaries in the native local-account removal transaction.
 ///
@@ -128,6 +129,8 @@ class AccountRegistry {
     if (testBaseDirOverride != null) {
       return testBaseDirOverride!;
     }
+    final configured = ManytypeStorage.directory;
+    if (configured != null) return configured;
     final home = Platform.environment['HOME'] ??
         Platform.environment['USERPROFILE'] ??
         '.';
