@@ -118,23 +118,26 @@ can instead set `NativeBridge.libraryPath` to the library they ship.
 2. The `MANYTYPE_QUIC_FFI_PATH` environment variable.
 3. On macOS, `Contents/Frameworks/libmanytype_quic_ffi.dylib` in the running
    app bundle (the ManyType app's layout).
-4. The platform library name (`libmanytype_quic_ffi.so` on Linux and Android,
+4. The copy an anytype_flutter app carries next to its executable:
+   `lib/libmanytype_quic_ffi.so` on Linux, `manytype_quic_ffi.dll` on Windows,
+   and the `anytype_flutter.framework` binary on iOS and macOS.
+5. The platform library name (`libmanytype_quic_ffi.so` on Linux and Android,
    `manytype_quic_ffi.dll` on Windows, `libmanytype_quic_ffi.dylib` on Apple
-   platforms) through the platform's search path. This finds the copy
-   anytype_flutter bundles on Linux, Windows and Android.
-5. On iOS and macOS, the `anytype_flutter.framework` that anytype_flutter
-   force-loads the static library into.
-6. `rust/target` and `packages/anytype_flutter/rust/target` release and debug
+   platforms) through the platform's search path. On Android this finds the
+   copy anytype_flutter puts in the APK.
+6. On iOS and macOS, `anytype_flutter.framework/anytype_flutter` by its short
+   path.
+7. `rust/target` and `packages/anytype_flutter/rust/target` release and debug
    builds in the current directory or any parent, for development inside the
    ManyType repository.
-7. On iOS and macOS, symbols already loaded into the process, checked for
+8. On iOS and macOS, symbols already loaded into the process, checked for
    `ffi_abi_version`.
 
-When the library named by steps 1, 2 or 3 exists but fails to load, the load
-fails rather than trying the next step. Every load checks the library's C ABI
-version against `NativeBridge.expectedAbiVersion` and throws on a mismatch.
-If nothing loads, a `StateError` lists what was tried and how to provide the
-library.
+When the library named by steps 1 to 4 exists but fails to load, the load
+fails rather than trying the next step, so an app never falls back to a
+development build. Every load checks the library's C ABI version against
+`NativeBridge.expectedAbiVersion` and throws on a mismatch. If nothing loads,
+a `StateError` lists what was tried and how to provide the library.
 
 ## Synchronization
 
@@ -166,10 +169,10 @@ lines to standard output.
 
 | Target | Local storage and objects | Native sync |
 | --- | --- | --- |
-| Linux x64 (Dart VM, Flutter) | Tested | Tested against a loopback server |
-| macOS arm64 (Dart VM, Flutter) | Tested | Tested against a loopback server (Dart VM) |
-| Windows x64 (Dart VM) | Tested on Windows 10 | The bridge builds and loads; sync not run |
-| Android, iOS (Flutter) | Not validated | The bridge builds through anytype_flutter; not run on a device |
+| Linux x64 (Dart VM) | Tested | Tested against a loopback server, also with the library a Flutter build bundles |
+| macOS arm64 (Dart VM) | Tested | Tested against a loopback server |
+| Windows x64 (Dart VM) | Tested on Windows 10 | The DLL an anytype_flutter build bundles loads; sync not run |
+| Android, iOS | Not validated | The bridge builds through anytype_flutter; not run on a device |
 | Web | Supported via drift WebAssembly | Not available: `NativeBridge` throws `UnsupportedError` |
 
 anytype_flutter's README lists exactly what was checked on each platform.

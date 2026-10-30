@@ -69,16 +69,19 @@ build and two-launch smoke commands above.
 
 `NativeBridge.libraryPath` and then `MANYTYPE_QUIC_FFI_PATH` are explicit
 overrides. Without them, the loader prefers the signed library in a macOS app
-bundle, then the platform library name through the platform loader path
-(`libmanytype_quic_ffi.so` on Linux and Android, `manytype_quic_ffi.dll` on
-Windows, `libmanytype_quic_ffi.dylib` on Apple platforms), then on iOS and
-macOS the `anytype_flutter` framework, then release and debug builds in
-`rust/target` and `packages/anytype_flutter/rust/target` found while walking
-up from the current directory, and finally on iOS and macOS the process's
-own symbols, checked for `ffi_abi_version`. If an override or the bundle
-library exists but cannot load, the load fails rather than falling back to
-another artifact. Every load checks `ffi_abi_version` against the Dart
-bindings. The directory walk serves repository development only.
+bundle, then the copy an anytype_flutter app carries next to its executable
+(`lib/` on Linux, beside the executable on Windows, the `anytype_flutter`
+framework on iOS and macOS), then the platform library name through the
+platform loader path (`libmanytype_quic_ffi.so` on Linux and Android, where
+this finds the APK copy, `manytype_quic_ffi.dll` on Windows,
+`libmanytype_quic_ffi.dylib` on Apple platforms), then on iOS and macOS the
+framework by its short path, then release and debug builds in `rust/target`
+and `packages/anytype_flutter/rust/target` found while walking up from the
+current directory, and finally on iOS and macOS the process's own symbols,
+checked for `ffi_abi_version`. If an override, the app bundle library or the
+plugin's bundled copy exists but cannot load, the load fails rather than
+falling back, so a shipped app never reaches the development walk. Every
+load checks `ffi_abi_version` against the Dart bindings.
 
 Flutter apps outside this repository get the library from `anytype_flutter`,
 which builds it from source with cargokit for each platform and bundles it.

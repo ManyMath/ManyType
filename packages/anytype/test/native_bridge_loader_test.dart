@@ -50,6 +50,53 @@ void main() {
     );
   });
 
+  test('locates the anytype_flutter bundle beside each app layout', () {
+    final separator = Platform.pathSeparator;
+    final root = Directory.systemTemp.path;
+    String path(List<String> parts) => [root, ...parts].join(separator);
+
+    expect(
+      NativeLibraryLocator.pluginBundlePath('linux', path(['bundle', 'app'])),
+      path(['bundle', 'lib', NativeLibraryLocator.linuxLibraryName]),
+    );
+    expect(
+      NativeLibraryLocator.pluginBundlePath(
+        'windows',
+        path(['Release', 'app.exe']),
+      ),
+      path(['Release', NativeLibraryLocator.windowsLibraryName]),
+    );
+    expect(
+      NativeLibraryLocator.pluginBundlePath(
+        'macos',
+        path(['App.app', 'Contents', 'MacOS', 'app']),
+      ),
+      path([
+        'App.app',
+        'Contents',
+        'Frameworks',
+        'anytype_flutter.framework',
+        'anytype_flutter',
+      ]),
+    );
+    expect(
+      NativeLibraryLocator.pluginBundlePath(
+        'ios',
+        path(['Runner.app', 'Runner']),
+      ),
+      path([
+        'Runner.app',
+        'Frameworks',
+        'anytype_flutter.framework',
+        'anytype_flutter',
+      ]),
+    );
+    expect(
+      NativeLibraryLocator.pluginBundlePath('android', path(['app'])),
+      isNull,
+    );
+  });
+
   test('orders release before debug for each development ancestor', () {
     final temporaryDirectory = Directory.systemTemp.createTempSync();
     addTearDown(() => temporaryDirectory.deleteSync(recursive: true));

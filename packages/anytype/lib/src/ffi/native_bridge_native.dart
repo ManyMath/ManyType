@@ -147,6 +147,28 @@ class NativeLibraryLocator {
     return p.join(contentsDirectory.path, 'Frameworks', macOSLibraryName);
   }
 
+  /// Where an app built with anytype_flutter carries the bridge, relative to
+  /// the app's executable, or null where the platform loader is the only way
+  /// to reach it (Android loads it from the APK by name).
+  static String? pluginBundlePath(
+    String operatingSystem,
+    String executablePath,
+  ) {
+    final executableDirectory = File(executablePath).absolute.parent;
+    final framework = p.joinAll(pluginFrameworkPath.split('/'));
+    return switch (operatingSystem) {
+      'linux' => p.join(executableDirectory.path, 'lib', linuxLibraryName),
+      'windows' => p.join(executableDirectory.path, windowsLibraryName),
+      'macos' => p.join(
+        executableDirectory.parent.path,
+        'Frameworks',
+        framework,
+      ),
+      'ios' => p.join(executableDirectory.path, 'Frameworks', framework),
+      _ => null,
+    };
+  }
+
   /// Release and debug builds in this repository, found by walking up from
   /// [workingDirectory]: the server workspace's `rust/target` first, then
   /// the plugin crate's own `packages/anytype_flutter/rust/target`.
@@ -272,8 +294,18 @@ class NativeBridge {
       }
     }
 
+    // A copy bundled by anytype_flutter is authoritative too: an app whose
+    // own bridge cannot load must not pick up a development build instead.
+    final bundledPath = NativeLibraryLocator.pluginBundlePath(
+      Platform.operatingSystem,
+      resolvedExecutablePath ?? Platform.resolvedExecutable,
+    );
+    if (bundledPath != null && File(bundledPath).existsSync()) {
+      return DynamicLibrary.open(bundledPath);
+    }
+
     // The platform search path, which also resolves the copy anytype_flutter
-    // bundles on Linux, Windows and Android.
+    // bundles in an Android APK.
     final failures = <String>[];
     try {
       return DynamicLibrary.open(libName);
