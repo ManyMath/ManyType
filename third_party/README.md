@@ -23,7 +23,19 @@ types must not be labeled wholly MIT or Apache merely because a first-party
 license is chosen. ASAL includes non-commercial/Allowed Networks conditions;
 public distribution and intended network use need owner review before release.
 
-At the implementation baseline, first-party ManyType code has no explicit
-license grant. All new modules remain private/unpublished pending the owner's
-license selection. This notice grants no new rights and does not replace any
-upstream terms. Docker and font assets retain their existing separate notices.
+## First-party licensing
+
+On 2026-10-29 the owner chose the MIT License for the first-party code of the
+SDK candidate: the Dart packages `anytype`, `manytype_core` and
+`manytype_protocol`, and the Rust crates `manytype_quic_ffi`,
+`manytype_transport`, `manytype_core` and `manytype_proto`. Each of those
+directories has its own LICENSE. The protocol packages' LICENSE files keep the
+upstream terms above for generated code and do not relabel it MIT.
+
+That decision covers only those packages. The app, CLI, server, site, Docker
+material and repository tooling still have no explicit license grant. Docker
+and font assets retain their existing separate notices.
+
+Software built on the SDK necessarily includes the ASAL-derived block model
+types. Public distribution and the intended commercial or network use remain
+subject to ASAL's Non-Commercial Use and Allowed Networks conditions.

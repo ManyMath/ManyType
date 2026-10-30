@@ -32,9 +32,10 @@ Build them for a project with `dart run anytype:build_native`, or directly:
 
 Dev-dependencies and integration tests are left in the repository; the
 staged crates build the library but do not run its loopback tests.
-First-party code is MIT licensed (see ../LICENSE). `manytype_proto` contains
-code generated from Any-Sync (MIT) and Anytype-heart (Any Source Available
-License 1.0) schemas; their notices are in `manytype_proto/licenses`.
+Each crate carries its LICENSE. First-party code is MIT licensed.
+`manytype_proto` also contains code generated from Any-Sync (MIT) and
+Anytype-heart (Any Source Available License 1.0) schemas; its LICENSE says
+which files, and `manytype_proto/licenses` holds the upstream notices.
 """
 
 
@@ -63,6 +64,7 @@ def main() -> None:
                 if name not in CRATES:
                     raise SystemExit(f'{crate} depends on unstaged path crate {name}')
         (target / 'Cargo.toml').write_text(manifest)
+        shutil.copyfile(source / 'LICENSE', target / 'LICENSE')
         for directory in ['src', 'licenses']:
             if (source / directory).is_dir():
                 shutil.copytree(source / directory, target / directory)

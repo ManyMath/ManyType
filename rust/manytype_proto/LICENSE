@@ -1,0 +1,43 @@
+manytype_proto contains material under three sets of terms.
+
+1. Code generated from Anytype-heart schemas (src/generated/anytype/) derives
+   from anytype-heart commit cfb7ec902abbce2db714de9be3832a1cb0691d8c,
+   including ManyType's local adaptations of those schemas. It is subject to
+   the Any Source Available License 1.0 (ASAL), reproduced in
+   licenses/anytype-heart-cfb7ec9-ASAL-1.0.txt. ASAL permits use, modification
+   and redistribution only for Non-Commercial Use or for Commercial Use in
+   Allowed Networks (https://networks.any.coop), and requires that recipients
+   receive a copy of that license.
+
+2. Code generated from Any-Sync v0.9.9 schemas (every other directory under
+   src/generated/) is subject to the MIT License, Copyright (c) 2023 Any
+   Association, reproduced in licenses/any-sync-v0.9.9-MIT.txt.
+
+3. Everything else (src/lib.rs and Cargo.toml) is first-party ManyType code
+   under the MIT License below.
+
+The first-party license does not change the terms of items 1 and 2.
+proto/PROVENANCE.json in the ManyType repository records the upstream source
+of every schema.
+
+MIT License
+
+Copyright (c) 2025-2026 Joshua Babb and ManyMath LLC
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
