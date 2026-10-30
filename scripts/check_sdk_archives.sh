@@ -1,25 +1,30 @@
 #!/usr/bin/env bash
-# Build the anytype SDK publish archives and prove a fresh consumer can use
+# Build the anytype SDK publish archives and prove fresh consumers can use
 # them.
 #
 #   scripts/check_sdk_archives.sh [output-dir]
 #
-# 1. Stages the native sources and runs `dart pub publish --dry-run` and
-#    `--to-archive` for manytype_protocol, manytype_core and anytype.
-# 2. Checks each archive for required and forbidden content.
-# 3. Serves the archives from a disposable local registry
-#    (scripts/sdk_registry.dart) and resolves a new consumer project against
+# 1. Runs `dart pub publish --dry-run` and `--to-archive` for
+#    manytype_protocol, manytype_core, anytype and anytype_flutter, and checks
+#    each archive for required and forbidden content.
+# 2. Serves the archives from a disposable local registry
+#    (scripts/sdk_registry.dart) and resolves new consumer projects against
 #    it with an empty PUB_CACHE and no path or git overrides.
-# 4. Runs the companion packages' own tests from their archives, analyzes the
-#    consumer and runs the published offline example, also at the lowest
-#    versions the constraints allow.
-# 5. Builds the QUIC bridge from the pub cache copy of native/ with
-#    `dart run anytype:build_native` and runs the published sync example
-#    against a loopback manytype_server.
+# 3. Runs the companion packages' own tests from their archives, analyzes a
+#    pure Dart consumer and runs the published offline example, also at the
+#    lowest versions the constraints allow.
+# 4. Follows the README's Dart CLI path: fetches the hosted anytype_flutter
+#    into the pub cache, builds its Rust sources with cargo, and runs the
+#    published sync example against a loopback manytype_server.
+# 5. Builds a fresh Flutter Linux app on the hosted anytype_flutter, so
+#    cargokit compiles the bridge from the archive's sources, then proves the
+#    bundled library is the one mapped and that it syncs over loopback.
 #
 # Archives and logs are kept in output-dir, which must be new or empty
-# (default: a new temp directory). Needs Dart, Rust 1.88+, Python 3.11+,
-# coreutils timeout, and network access to pub.dev and crates.io.
+# (default: a new temp directory). Needs Flutter with the Linux desktop
+# toolchain, Rust 1.88+ via rustup, Python 3.11+, coreutils timeout, and
+# network access to pub.dev and crates.io. When xvfb-run is present the
+# Flutter app is also launched.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -33,16 +38,19 @@ fi
 ARCHIVES="$OUT_DIR/archives"
 WORK="$(mktemp -d)"
 REGISTRY_PID=""
+APP_RUNNER=""
 cleanup() {
-  if [[ -n "$REGISTRY_PID" ]]; then
-    kill "$REGISTRY_PID" >/dev/null 2>&1 || true
-    wait "$REGISTRY_PID" 2>/dev/null || true
-  fi
+  for pid in "$APP_RUNNER" "$REGISTRY_PID"; do
+    if [[ -n "$pid" ]]; then
+      kill "$pid" >/dev/null 2>&1 || true
+      wait "$pid" 2>/dev/null || true
+    fi
+  done
   rm -rf "$WORK"
 }
 trap cleanup EXIT
 mkdir -p "$ARCHIVES"
-PACKAGES=(manytype_protocol manytype_core anytype)
+PACKAGES=(manytype_protocol manytype_core anytype anytype_flutter)
 VERSION=0.0.2
 
 step() { printf '\n== %s\n' "$*"; }
@@ -57,9 +65,7 @@ pub_retry() {
   return 1
 }
 
-step 'Stage native sources'
-python3 "$ROOT_DIR/scripts/stage_sdk_native.py"
-(cd "$ROOT_DIR" && dart pub get >/dev/null)
+(cd "$ROOT_DIR" && pub_retry get >/dev/null)
 
 step 'Pub dry runs and archives'
 for package in "${PACKAGES[@]}"; do
@@ -90,6 +96,11 @@ forbid() {
     fail "$package archive contains $pattern"
   fi
 }
+contract() {
+  local file="$1" text="$2"
+  tar xzOf "$ARCHIVES/anytype_flutter-$VERSION.tar.gz" "$file" | grep -qF "$text" ||
+    fail "anytype_flutter $file does not contain: $text"
+}
 for package in "${PACKAGES[@]}"; do
   require "$package" pubspec.yaml LICENSE README.md CHANGELOG.md
   forbid "$package" '(^|/)(\.dart_tool|build|target)/'
@@ -101,21 +112,28 @@ for package in "${PACKAGES[@]}"; do
 done
 require manytype_protocol licenses/any-sync-v0.9.9-MIT.txt \
   licenses/anytype-heart-cfb7ec9-ASAL-1.0.txt
-require anytype example/example.dart example/sync_example.dart bin/build_native.dart \
-  native/Cargo.toml native/Cargo.lock native/README.md \
-  native/manytype_quic_ffi/src/lib.rs native/manytype_transport/src/lib.rs \
-  native/manytype_core/src/lib.rs native/manytype_proto/src/lib.rs \
-  native/manytype_proto/licenses/any-sync-v0.9.9-MIT.txt \
-  native/manytype_proto/licenses/anytype-heart-cfb7ec9-ASAL-1.0.txt
-for crate in manytype_quic_ffi manytype_transport manytype_core manytype_proto; do
-  require anytype "native/$crate/Cargo.toml" "native/$crate/LICENSE"
+require anytype example/example.dart example/sync_example.dart
+forbid anytype '^test/|^native/|^bin/'
+require anytype_flutter lib/anytype_flutter.dart rust/Cargo.toml rust/Cargo.lock \
+  rust/LICENSE rust/src/lib.rs cargokit/cmake/cargokit.cmake cargokit/build_pod.sh \
+  cargokit/gradle/plugin.gradle cargokit/VENDOR_PROVENANCE.json cargokit/LICENSE \
+  rust/crates/manytype_proto/licenses/any-sync-v0.9.9-MIT.txt \
+  rust/crates/manytype_proto/licenses/anytype-heart-cfb7ec9-ASAL-1.0.txt
+for crate in manytype_transport manytype_core manytype_proto; do
+  require anytype_flutter "rust/crates/$crate/Cargo.toml" "rust/crates/$crate/LICENSE" \
+    "rust/crates/$crate/src/lib.rs"
 done
-forbid anytype '^test/|manytype_server'
-native_lock="$(tar xzOf "$ARCHIVES/anytype-$VERSION.tar.gz" native/Cargo.lock)"
-if grep -Eq 'name = "(manytype_server|redb)"' <<<"$native_lock"; then
-  fail 'anytype native lockfile includes the server or its storage'
+forbid anytype_flutter 'manytype_server'
+contract linux/CMakeLists.txt 'apply_cargokit(${PROJECT_NAME} ../rust manytype_quic_ffi'
+contract windows/CMakeLists.txt 'apply_cargokit(${PROJECT_NAME} ../rust manytype_quic_ffi ffi_abi_version)'
+contract android/build.gradle 'manifestDir = "../rust"'
+contract ios/anytype_flutter.podspec 'build_pod.sh" ../rust manytype_quic_ffi'
+contract macos/anytype_flutter.podspec 'build_pod.sh" ../rust manytype_quic_ffi'
+plugin_lock="$(tar xzOf "$ARCHIVES/anytype_flutter-$VERSION.tar.gz" rust/Cargo.lock)"
+if grep -Eq 'name = "(manytype_server|redb)"' <<<"$plugin_lock"; then
+  fail 'anytype_flutter lockfile includes the server or its storage'
 fi
-echo 'Required files present; no build output, tests, server or path dependencies.'
+echo 'Required files and platform wiring present; no build output, tests, server or path dependencies.'
 
 step 'Start disposable registry'
 (cd "$ROOT_DIR" && exec dart --packages=.dart_tool/package_config.json \
@@ -138,20 +156,21 @@ for package in manytype_protocol manytype_core; do
     fail "$package archive tests"
 done
 
-step 'Fresh consumer'
+step 'Fresh Dart consumer'
 CONSUMER="$WORK/consumer"
 mkdir -p "$CONSUMER/bin"
 tar xzf "$ARCHIVES/anytype-$VERSION.tar.gz" -C "$CONSUMER/bin" --strip-components=1 \
   example/example.dart example/sync_example.dart
-cat >"$CONSUMER/pubspec.yaml" <<EOF
+cp "$ROOT_DIR/scripts/sdk_check_bridge.dart" "$CONSUMER/bin/check_bridge.dart"
+cat >"$CONSUMER/pubspec.yaml" <<YAML
 name: anytype_consumer
 publish_to: none
 environment:
-  sdk: ^3.5.3
+  sdk: ^3.8.1
 dependencies:
   anytype: $VERSION
   path: ^1.9.0
-EOF
+YAML
 (cd "$CONSUMER" && pub_retry get) >"$OUT_DIR/consumer-pub-get.log" 2>&1 ||
   { cat "$OUT_DIR/consumer-pub-get.log"; fail 'consumer pub get'; }
 python3 - "$CONSUMER/pubspec.lock" "$PUB_HOSTED_URL" "$VERSION" <<'PY'
@@ -174,21 +193,92 @@ cp "$CONSUMER/pubspec.lock" "$OUT_DIR/consumer-pubspec.lock"
 (cd "$CONSUMER" && dart run bin/example.dart) | tee "$OUT_DIR/offline-example.log"
 grep -q 'matches: true' "$OUT_DIR/offline-example.log" || fail 'offline example'
 
-step 'Fresh consumer at lowest allowed versions'
+step 'Fresh Dart consumer at lowest allowed versions'
 (cd "$CONSUMER" && pub_retry downgrade >"$OUT_DIR/consumer-downgrade.log" 2>&1 &&
   dart analyze bin && dart run bin/example.dart >"$OUT_DIR/offline-example-downgraded.log") ||
   { cat "$OUT_DIR/consumer-downgrade.log"; fail 'consumer at lowest versions'; }
 grep -q 'matches: true' "$OUT_DIR/offline-example-downgraded.log" || fail 'downgraded offline example'
 (cd "$CONSUMER" && pub_retry upgrade >/dev/null)
 
-step 'Native bridge from the published sources'
-(cd "$CONSUMER" && dart run anytype:build_native) 2>&1 | tee "$OUT_DIR/build-native.log" | grep -v '^ *Compiling'
-grep -q "Compiling manytype_quic_ffi v0.1.0 ($PUB_CACHE/" "$OUT_DIR/build-native.log" ||
-  fail 'bridge was not built from the pub cache copy'
+# Prove a library loads as the only mapped bridge, then sync over loopback.
+loopback() {
+  local library="$1" label="$2"
+  (cd "$CONSUMER" && MANYTYPE_QUIC_FFI_PATH="$library" dart run bin/check_bridge.dart) |
+    tee "$OUT_DIR/check-bridge-$label.log"
+  grep -q '^Loaded ' "$OUT_DIR/check-bridge-$label.log" || fail "bridge check ($label)"
+  MANYTYPE_QUIC_FFI_PATH="$library" "$ROOT_DIR/scripts/sdk_loopback.sh" \
+    "$CONSUMER" bin/sync_example.dart 2>&1 | tee "$OUT_DIR/loopback-$label.log" |
+    grep -v '^ *Compiling'
+  grep -q '^Device B pulled ' "$OUT_DIR/loopback-$label.log" || fail "loopback sync ($label)"
+}
 
-step 'Loopback sync with the published example'
-"$ROOT_DIR/scripts/sdk_loopback.sh" "$CONSUMER" bin/sync_example.dart 2>&1 |
-  tee "$OUT_DIR/loopback.log" | grep -v '^ *Compiling'
-grep -q '^Device B pulled ' "$OUT_DIR/loopback.log" || fail 'loopback sync'
+step 'Dart CLI path: bridge built from the hosted anytype_flutter sources'
+pub_retry cache add anytype_flutter --version "$VERSION" >"$OUT_DIR/cache-add.log" 2>&1 ||
+  { cat "$OUT_DIR/cache-add.log"; fail 'pub cache add anytype_flutter'; }
+plugin_sources=("$PUB_CACHE"/hosted/*/anytype_flutter-"$VERSION")
+[[ -f "${plugin_sources[0]}/rust/Cargo.toml" ]] || fail 'anytype_flutter sources not in the pub cache'
+cargo build --locked --release --manifest-path "${plugin_sources[0]}/rust/Cargo.toml" \
+  --target-dir "$WORK/cli-target" >"$OUT_DIR/cli-cargo.log" 2>&1 ||
+  { tail -30 "$OUT_DIR/cli-cargo.log"; fail 'cargo build of the hosted plugin sources'; }
+grep -qF "Compiling manytype_quic_ffi v0.1.0 (${plugin_sources[0]}/rust)" "$OUT_DIR/cli-cargo.log" ||
+  fail 'bridge was not built from the pub cache copy'
+loopback "$WORK/cli-target/release/libmanytype_quic_ffi.so" cli
+
+step 'Flutter consumer: cargokit build from the hosted anytype_flutter'
+APP="$WORK/flutter_consumer"
+(cd "$WORK" && timeout 600 flutter create --no-pub --platforms=linux \
+  --project-name anytype_flutter_consumer flutter_consumer) >"$OUT_DIR/flutter-create.log" 2>&1 ||
+  { cat "$OUT_DIR/flutter-create.log"; fail 'flutter create'; }
+rm -rf "$APP/test"
+cat >"$APP/pubspec.yaml" <<YAML
+name: anytype_flutter_consumer
+publish_to: none
+environment:
+  sdk: ^3.10.0
+dependencies:
+  flutter:
+    sdk: flutter
+  anytype_flutter: $VERSION
+YAML
+cp "$ROOT_DIR/scripts/sdk_flutter_consumer_main.dart" "$APP/lib/main.dart"
+# Build from source even if a user or ancestor directory prefers prebuilts.
+printf 'use_precompiled_binaries: false\n' >"$APP/cargokit_options.yaml"
+(cd "$APP" && timeout 600 flutter pub get) >"$OUT_DIR/flutter-pub-get.log" 2>&1 ||
+  { cat "$OUT_DIR/flutter-pub-get.log"; fail 'flutter consumer pub get'; }
+grep -A5 '^  anytype_flutter:' "$APP/pubspec.lock" | grep -qF "url: \"$PUB_HOSTED_URL\"" ||
+  fail 'anytype_flutter not resolved from the registry'
+cp "$APP/pubspec.lock" "$OUT_DIR/flutter-consumer-pubspec.lock"
+plugin_link="$(readlink -f "$APP/linux/flutter/ephemeral/.plugin_symlinks/anytype_flutter")"
+[[ "$plugin_link" == "$(readlink -f "${plugin_sources[0]}")" ]] ||
+  fail "plugin is not the pub cache copy: $plugin_link"
+(cd "$APP" && timeout 1500 flutter build linux --debug) >"$OUT_DIR/flutter-build.log" 2>&1 ||
+  { tail -40 "$OUT_DIR/flutter-build.log"; fail 'flutter build linux'; }
+bundled="$APP/build/linux/x64/debug/bundle/lib/libmanytype_quic_ffi.so"
+[[ -f "$bundled" ]] || fail 'the Linux bundle has no libmanytype_quic_ffi.so'
+echo "Bundled $bundled (sha256 $(sha256sum "$bundled" | cut -d' ' -f1))"
+if command -v xvfb-run >/dev/null; then
+  executable="$APP/build/linux/x64/debug/bundle/anytype_flutter_consumer"
+  xvfb-run -a "$executable" >"$OUT_DIR/flutter-app.log" 2>&1 &
+  APP_RUNNER=$!
+  app_pid=""
+  for _ in $(seq 1 60); do
+    app_pid="$(pgrep -f "^$executable\$" | head -1 || true)"
+    [[ -n "$app_pid" ]] && grep -q 'bridge ABI' "$OUT_DIR/flutter-app.log" && break
+    sleep 1
+  done
+  mapped=""
+  if [[ -n "$app_pid" ]]; then
+    mapped="$(grep manytype_quic_ffi "/proc/$app_pid/maps" | awk '{print $6}' | sort -u || true)"
+    kill "$app_pid" 2>/dev/null || true
+  fi
+  wait "$APP_RUNNER" 2>/dev/null || true
+  APP_RUNNER=""
+  grep 'bridge ABI 2' "$OUT_DIR/flutter-app.log" || fail 'Flutter app did not load the bridge'
+  [[ "$mapped" == "$(readlink -f "$bundled")" ]] || fail "Flutter app mapped: $mapped"
+  echo "Flutter app mapped $mapped"
+else
+  echo 'xvfb-run not found: skipped launching the Flutter app'
+fi
+loopback "$bundled" flutter-bundle
 
 step "PASSED: archives in $ARCHIVES"
