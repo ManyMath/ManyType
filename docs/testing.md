@@ -59,10 +59,11 @@ to skip melos's package picker prompt, e.g. `melos run test:web --no-select`.
 `scripts/check_sdk_archives.sh [output-dir]` builds the `anytype`,
 `manytype_core` and `manytype_protocol` publish archives and tests them from a
 fresh consumer through a disposable local registry, including a native bridge
-build and a loopback sync (see [module boundaries](module-boundaries.md)). It
-needs Dart, Rust 1.85 or newer and network access to pub.dev and crates.io.
-A pass is loopback evidence, not compatibility evidence against an official
-Any-Sync deployment.
+build and a loopback sync (see [module boundaries](module-boundaries.md)). The
+output directory must be new or empty. The script needs Dart, Rust 1.88 or
+newer, Python 3.11 or newer, coreutils `timeout` (Homebrew `coreutils` on
+macOS), and network access to pub.dev and crates.io. A pass is loopback
+evidence, not compatibility evidence against an official Any-Sync deployment.
 
 ## Self-hosted oracle stack
 

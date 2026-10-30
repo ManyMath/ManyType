@@ -17,13 +17,19 @@
 #    `dart run anytype:build_native` and runs the published sync example
 #    against a loopback manytype_server.
 #
-# Archives and logs are kept in output-dir (default: a new temp directory).
+# Archives and logs are kept in output-dir, which must be new or empty
+# (default: a new temp directory). Needs Dart, Rust 1.88+, Python 3.11+,
+# coreutils timeout, and network access to pub.dev and crates.io.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${1:-$(mktemp -d)}"
 mkdir -p "$OUT_DIR"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"
+if [[ -n "$(ls -A "$OUT_DIR")" ]]; then
+  printf 'output directory %s is not empty\n' "$OUT_DIR" >&2
+  exit 64
+fi
 ARCHIVES="$OUT_DIR/archives"
 WORK="$(mktemp -d)"
 REGISTRY_PID=""
@@ -35,7 +41,6 @@ cleanup() {
   rm -rf "$WORK"
 }
 trap cleanup EXIT
-rm -rf "$ARCHIVES"
 mkdir -p "$ARCHIVES"
 PACKAGES=(manytype_protocol manytype_core anytype)
 VERSION=0.0.2
@@ -106,13 +111,14 @@ for crate in manytype_quic_ffi manytype_transport manytype_core manytype_proto; 
   require anytype "native/$crate/Cargo.toml" "native/$crate/LICENSE"
 done
 forbid anytype '^test/|manytype_server'
-if tar xzOf "$ARCHIVES/anytype-$VERSION.tar.gz" native/Cargo.lock | grep -Eq 'name = "(manytype_server|redb)"'; then
+native_lock="$(tar xzOf "$ARCHIVES/anytype-$VERSION.tar.gz" native/Cargo.lock)"
+if grep -Eq 'name = "(manytype_server|redb)"' <<<"$native_lock"; then
   fail 'anytype native lockfile includes the server or its storage'
 fi
 echo 'Required files present; no build output, tests, server or path dependencies.'
 
 step 'Start disposable registry'
-(cd "$ROOT_DIR" && dart --packages=.dart_tool/package_config.json \
+(cd "$ROOT_DIR" && exec dart --packages=.dart_tool/package_config.json \
   scripts/sdk_registry.dart "$WORK/port" "$ARCHIVES"/*.tar.gz) >"$OUT_DIR/registry.log" 2>&1 &
 REGISTRY_PID=$!
 for _ in $(seq 1 60); do [[ -s "$WORK/port" ]] && break; sleep 0.5; done
