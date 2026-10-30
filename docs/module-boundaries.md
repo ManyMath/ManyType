@@ -1,7 +1,7 @@
 # ManyType module boundaries
 
-The repository stays together. `anytype` (formerly `manytype_client`) owns the reusable account,
-session, storage, sync, recovery, and transport API. The Flutter app and CLI
+The repository stays together. `anytype` (formerly `manytype_client`) owns the
+reusable account, session, storage, sync, recovery, and transport API. The Flutter app and CLI
 consume `package:anytype/anytype.dart`; application tests use
 `package:anytype/testing.dart` for platform-specific in-memory storage.
 The legacy `manytype_cli.dart` export remains a compatibility facade. CLI argument
@@ -11,9 +11,36 @@ compatibility: they are typed client operations, without command-line parsing.
 
 The client has no dependency on the CLI. Its implementation and tests moved
 without changing storage schemas, key handling, network wire formats, or native
-ABI names. The public barrel intentionally exposes the previously used API;
-this is not a registry publication or a promise that all implementation helpers
-are a stable future public SDK. All package manifests remain `publish_to: none`.
+ABI names. The public barrel exposes the API the app and CLI already used; at
+0.0.x it is not a promise that every helper stays stable.
+
+## Public SDK packages
+
+`anytype`, `manytype_core` and `manytype_protocol` are the publishable SDK
+family, all at the same version and depending on each other through hosted
+caret constraints. The pub workspace resolves those constraints to the local
+members, so development needs no overrides. The app, CLI and server stay
+`publish_to: none`, and the SDK must not depend on them, on Flutter, or on
+ManyUI. `anytype` is the only client implementation; there is no separate
+facade package. `manytype_protocol` stays separate because its generated
+Anytype-heart types carry ASAL 1.0 terms that the MIT packages do not, and
+`manytype_core` is the IO-free layer that the app and CLI also import.
+
+Publish in dependency order: `manytype_protocol`, then `manytype_core`, then
+`anytype`. Before packing `anytype`, `scripts/stage_sdk_native.py` copies the
+production Rust crates into `packages/anytype/native` (ignored by git,
+included by `.pubignore`) as a standalone Cargo workspace without the
+server dev-dependency and with a pruned lockfile. `dart run
+anytype:build_native` builds that copy for a consumer.
+
+`scripts/check_sdk_archives.sh` is the release gate. It writes the real
+archives with `dart pub publish --to-archive`, checks their contents, serves
+them from a disposable local registry (`scripts/sdk_registry.dart`), and
+resolves a fresh consumer against it with an empty pub cache and no
+overrides. The consumer runs the published offline example at the newest and
+lowest allowed versions, builds the bridge from the pub-cache sources, and
+runs the published sync example against a loopback `manytype_server`
+(`scripts/sdk_loopback.sh`). `.gitea/workflows/sdk-archives.yml` runs it.
 
 `manytype_transport` owns DRPC framing/streams, deadlines, and credential
 handshake helpers shared by the server and QUIC FFI client. Server-side routing,
@@ -23,7 +50,8 @@ internal consumers. The client FFI has a server dependency only in its test
 configuration for loopback tests, never in its production dependency graph.
 
 Run `python3 scripts/check_module_boundaries.py` with Rust 1.94.0 to enforce
-public consumer imports and verify the actual Cargo production graph excludes
+public consumer imports, keep the SDK pubspecs hosted-only and free of
+application packages, and verify the actual Cargo production graph excludes
 the server and its `redb` storage dependency. Run client tests from
 `packages/anytype`, CLI subprocess tests from `packages/manytype_cli`,
 and app tests with Flutter from `apps/ManyType`. Existing shell harnesses retain

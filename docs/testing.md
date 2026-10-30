@@ -54,6 +54,16 @@ to skip melos's package picker prompt, e.g. `melos run test:web --no-select`.
   intermittent "Address already in use" failures in testing, `-j 1` did
   not.
 
+## SDK archives
+
+`scripts/check_sdk_archives.sh [output-dir]` builds the `anytype`,
+`manytype_core` and `manytype_protocol` publish archives and tests them from a
+fresh consumer through a disposable local registry, including a native bridge
+build and a loopback sync (see [module boundaries](module-boundaries.md)). It
+needs Dart, Rust 1.85 or newer and network access to pub.dev and crates.io.
+A pass is loopback evidence, not compatibility evidence against an official
+Any-Sync deployment.
+
 ## Self-hosted oracle stack
 
 The oracle tests and harnesses expect the docker any-sync stack and the

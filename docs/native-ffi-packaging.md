@@ -65,9 +65,19 @@ bypass this boundary. Refresh the Xcode account credential, create or download
 a profile for the isolated smoke identifier, then rerun the development-signed
 build and two-launch smoke commands above.
 
-`MANYTYPE_QUIC_FFI_PATH` remains an explicit override for command-line
-development and integration tests. Without it, the loader prefers the signed
-library in a macOS app bundle, then the platform loader path, then release and
-debug Rust artifacts found while walking up from the current directory. If a
-bundle library exists but cannot load, the app fails rather than falling back
-to a developer artifact.
+## Library discovery
+
+`NativeBridge.libraryPath` and then `MANYTYPE_QUIC_FFI_PATH` are explicit
+overrides. Without them, the loader prefers the signed library in a macOS app
+bundle, then the library `dart run anytype:build_native` placed in the running
+project's `.dart_tool/anytype/native`, then the platform loader path, then
+release and debug Rust artifacts found while walking up from the current
+directory. If a bundle or project library exists but cannot load, the load
+fails rather than falling back to another artifact. Every load checks
+`ffi_abi_version` against the Dart bindings. Package consumers outside this
+repository rely on the first four; the directory walk serves repository
+development only. The loader maps Linux and macOS only.
+
+SDK consumers build the bridge from the Rust sources shipped in the `anytype`
+archive; see `packages/anytype/README.md`. No prebuilt binaries are
+published.

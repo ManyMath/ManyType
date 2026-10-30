@@ -9,7 +9,9 @@ bidirectional interoperability with the official Anytype stack.
 - `packages/manytype_core`: CRDT object model and sync logic shared across
   clients.
 - `packages/anytype`: the reusable native/web account, session, storage,
-  synchronization, and recovery library.
+  synchronization, and recovery library, prepared for pub.dev as the
+  `anytype` SDK together with `manytype_core` and `manytype_protocol` (see
+  `docs/module-boundaries.md`).
 - `packages/manytype_cli`: the command-line entry point and operator tools,
   consuming the public client API.
 - `rust/`: Rust workspace: `manytype_core` (Rust-side CRDT engine),
