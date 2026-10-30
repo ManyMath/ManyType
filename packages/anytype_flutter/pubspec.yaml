@@ -1,0 +1,43 @@
+name: anytype_flutter
+description: >-
+  Flutter integration for the anytype SDK. Builds the manytype_quic_ffi QUIC
+  bridge from source with cargokit, bundles it with the app, and re-exports
+  the anytype API.
+version: 0.0.2
+repository: https://github.com/ManyMath/ManyType/tree/main/packages/anytype_flutter
+issue_tracker: https://github.com/ManyMath/ManyType/issues
+topics:
+  - anytype
+  - any-sync
+  - sync
+  - ffi
+
+environment:
+  sdk: ^3.10.0
+  flutter: '>=3.38.0'
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  anytype: ^0.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        ffiPlugin: true
+      ios:
+        ffiPlugin: true
+      linux:
+        ffiPlugin: true
+      macos:
+        ffiPlugin: true
+      windows:
+        ffiPlugin: true

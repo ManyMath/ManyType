@@ -1,0 +1,26 @@
+name: anytype_flutter_example
+description: Demonstrates the anytype_flutter plugin.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The example ships with the plugin, so it uses the plugin in this
+  # directory's parent. Applications depend on `anytype_flutter: ^0.0.2`.
+  anytype_flutter:
+    path: ../
+  path: ^1.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

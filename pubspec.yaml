@@ -6,6 +6,8 @@ workspace:
   - packages/manytype_protocol
   - packages/manytype_core
   - packages/anytype
+  - packages/anytype_flutter
+  - packages/anytype_flutter/example
   - packages/manytype_cli
   - apps/ManyType
 dev_dependencies:

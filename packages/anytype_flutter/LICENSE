@@ -1,0 +1,35 @@
+anytype_flutter is first-party ManyType code under the MIT License below, with
+one exception. rust/crates/manytype_proto, the Rust protocol crate the QUIC
+bridge is built from, contains code generated from Anytype-heart schemas under
+the Any Source Available License 1.0 and from Any-Sync schemas under the MIT
+License. rust/crates/manytype_proto/LICENSE describes those files, and
+rust/crates/manytype_proto/licenses holds the upstream notices. The vendored
+cargokit/ directory keeps its own LICENSE.
+
+anytype_flutter also depends on anytype and, through it, on
+manytype_protocol, whose Dart types generated from Anytype-heart schemas
+carry the same ASAL 1.0 terms. ASAL permits use only for Non-Commercial Use or
+for Commercial Use in Allowed Networks. See the manytype_protocol LICENSE
+before distributing or deploying software built on this package.
+
+MIT License
+
+Copyright (c) 2025-2026 Joshua Babb and ManyMath LLC
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
