@@ -36,6 +36,22 @@ void main() {
         '${NativeLibraryLocator.macOSLibraryName}');
   });
 
+  test('places project builds beside the package config', () {
+    final separator = Platform.pathSeparator;
+    final root = Directory.systemTemp.path;
+    final packageConfig = '$root${separator}consumer$separator.dart_tool'
+        '${separator}package_config.json';
+
+    expect(
+      NativeLibraryLocator.projectLibraryPath(
+        NativeLibraryLocator.linuxLibraryName,
+        packageConfigPath: packageConfig,
+      ),
+      '$root${separator}consumer$separator.dart_tool${separator}anytype'
+      '${separator}native$separator${NativeLibraryLocator.linuxLibraryName}',
+    );
+  });
+
   test('orders release before debug for each development ancestor', () {
     final temporaryDirectory = Directory.systemTemp.createTempSync();
     addTearDown(() => temporaryDirectory.deleteSync(recursive: true));

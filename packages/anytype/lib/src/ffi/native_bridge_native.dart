@@ -1,5 +1,6 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
@@ -130,6 +131,20 @@ class NativeLibraryLocator {
     return p.join(contentsDirectory.path, 'Frameworks', macOSLibraryName);
   }
 
+  /// Where `dart run anytype:build_native` places the library for the
+  /// project whose `.dart_tool/package_config.json` is [packageConfigPath].
+  static String projectLibraryPath(
+    String libraryName, {
+    required String packageConfigPath,
+  }) {
+    return p.join(
+      File(packageConfigPath).parent.path,
+      'anytype',
+      'native',
+      libraryName,
+    );
+  }
+
   static List<String> developmentLibraryPaths(
     String libraryName, {
     required String workingDirectory,
@@ -152,6 +167,15 @@ class NativeLibraryLocator {
 class NativeBridge {
   /// C ABI version these bindings are written against.
   static const expectedAbiVersion = 2;
+
+  /// Path of the `manytype_quic_ffi` library to load.
+  ///
+  /// When set, it takes precedence over every other search location, and a
+  /// library that fails to load is reported rather than skipped. Hosts that
+  /// ship the library themselves, such as AOT-compiled executables that
+  /// have no package config to search from, set this before the SDK creates
+  /// its first bridge.
+  static String? libraryPath;
 
   final DynamicLibrary _lib;
   late final FfiAbiVersionDart _abiVersion;
@@ -207,6 +231,11 @@ class NativeBridge {
           'Unsupported platform: ${Platform.operatingSystem}');
     }
 
+    final configuredPath = libraryPath;
+    if (configuredPath != null && configuredPath.isNotEmpty) {
+      return DynamicLibrary.open(configuredPath);
+    }
+
     final explicitPath = Platform.environment['MANYTYPE_QUIC_FFI_PATH'];
     if (explicitPath != null && explicitPath.isNotEmpty) {
       return DynamicLibrary.open(explicitPath);
@@ -222,9 +251,22 @@ class NativeBridge {
       }
     }
 
+    final packageConfig = Isolate.packageConfigSync;
+    if (packageConfig != null && packageConfig.isScheme('file')) {
+      final projectPath = NativeLibraryLocator.projectLibraryPath(
+        libName,
+        packageConfigPath: packageConfig.toFilePath(),
+      );
+      if (File(projectPath).existsSync()) {
+        // Built for this project by build_native. Like the bundle library,
+        // a present copy is authoritative.
+        return DynamicLibrary.open(projectPath);
+      }
+    }
+
     try {
       return DynamicLibrary.open(libName);
-    } catch (_) {
+    } catch (error) {
       // Fallback for local dev/test: try to load the Rust cdylib from this repo.
       // This avoids requiring callers to set LD_LIBRARY_PATH manually.
       final candidates = NativeLibraryLocator.developmentLibraryPaths(
@@ -236,7 +278,11 @@ class NativeBridge {
           return DynamicLibrary.open(candidate);
         }
       }
-      rethrow;
+      throw StateError(
+        'Could not load $libName ($error). Build it for this project with '
+        '`dart run anytype:build_native`, or set NativeBridge.libraryPath '
+        'or MANYTYPE_QUIC_FFI_PATH to the library.',
+      );
     }
   }
 
