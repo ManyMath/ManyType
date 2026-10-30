@@ -166,11 +166,13 @@ lines to standard output.
 
 | Target | Local storage and objects | Native sync |
 | --- | --- | --- |
-| Linux x64 (Dart VM) | Tested | Tested against a loopback server |
-| macOS arm64 (Dart VM) | Tested | Tested against a loopback server |
-| Windows x64 (Dart VM) | Tested on Windows 10 | Not supported: the loader has no Windows library and `build_native` refuses |
+| Linux x64 (Dart VM, Flutter) | Tested | Tested against a loopback server |
+| macOS arm64 (Dart VM, Flutter) | Tested | Tested against a loopback server (Dart VM) |
+| Windows x64 (Dart VM) | Tested on Windows 10 | The bridge builds and loads; sync not run |
+| Android, iOS (Flutter) | Not validated | The bridge builds through anytype_flutter; not run on a device |
 | Web | Supported via drift WebAssembly | Not available: `NativeBridge` throws `UnsupportedError` |
-| Android, iOS | Not validated | Not supported by the loader |
+
+anytype_flutter's README lists exactly what was checked on each platform.
 
 The ManyType app also bundles the bridge into a macOS `.app`
 (`Contents/Frameworks`); that path is covered by the app's own packaging

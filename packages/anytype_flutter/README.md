@@ -57,11 +57,11 @@ can build the same sources with cargo, as the `anytype` README describes.
 
 | Target | Build | Bridge loads | Loopback sync |
 | --- | --- | --- | --- |
-| Linux x64 | Tested | Tested | Tested |
-| macOS arm64 | Pending | Pending | Pending |
-| iOS | Pending | Not run | Not run |
-| Windows x64 | Pending | Pending | Not run |
-| Android | Pending | Not run | Not run |
+| Linux x64 | Tested from the published archive | Tested: the running app maps the bundled library | Tested with the bundled library |
+| macOS arm64 | Tested from the published archive | Tested: the running app maps the framework and reports the ABI | Tested with the same sources built as a dylib |
+| iOS arm64 | Tested (example app, unsigned) | Not run | Not run |
+| Windows x64 | Tested (example app, release) | Tested: the SDK loads the bundled DLL | Not run |
+| Android arm64-v8a, armeabi-v7a, x86_64 | Tested (example debug APK) | Not run | Not run |
 
 "Loopback sync" means synchronization between two SDK instances through the
 ManyType repository's `manytype_server`. It is not compatibility evidence
