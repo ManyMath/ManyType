@@ -127,15 +127,15 @@ can instead set `NativeBridge.libraryPath` to the library they ship.
    copy anytype_flutter puts in the APK.
 6. On iOS and macOS, `anytype_flutter.framework/anytype_flutter` by its short
    path.
-7. `rust/target` and `packages/anytype_flutter/rust/target` release and debug
+7. On iOS and macOS, symbols already loaded into the process, checked for
+   `ffi_abi_version`.
+8. `rust/target` and `packages/anytype_flutter/rust/target` release and debug
    builds in the current directory or any parent, for development inside the
    ManyType repository.
-8. On iOS and macOS, symbols already loaded into the process, checked for
-   `ffi_abi_version`.
 
 When the library named by steps 1 to 4 exists but fails to load, the load
-fails rather than trying the next step, so an app never falls back to a
-development build. Every load checks the library's C ABI version against
+fails rather than trying the next step, so an app whose bundled copy is
+present never falls back to a development build. Every load checks the library's C ABI version against
 `NativeBridge.expectedAbiVersion` and throws on a mismatch. If nothing loads,
 a `StateError` lists what was tried and how to provide the library.
 

@@ -323,6 +323,16 @@ class NativeBridge {
       }
     }
 
+    if (isApple) {
+      // The plugin framework is already loaded into the app process, so its
+      // symbols resolve here even when the framework path above does not.
+      final process = DynamicLibrary.process();
+      if (process.providesSymbol('ffi_abi_version')) {
+        return process;
+      }
+      failures.add('process: no ffi_abi_version symbol');
+    }
+
     // Fallback for local dev/test: try to load the Rust cdylib from this repo.
     // This avoids requiring callers to set LD_LIBRARY_PATH manually.
     final candidates = NativeLibraryLocator.developmentLibraryPaths(
@@ -333,16 +343,6 @@ class NativeBridge {
       if (File(candidate).existsSync()) {
         return DynamicLibrary.open(candidate);
       }
-    }
-
-    if (isApple) {
-      // The plugin framework is already loaded into the app process, so its
-      // symbols resolve here even when the framework path above does not.
-      final process = DynamicLibrary.process();
-      if (process.providesSymbol('ffi_abi_version')) {
-        return process;
-      }
-      failures.add('process: no ffi_abi_version symbol');
     }
 
     throw StateError(

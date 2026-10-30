@@ -75,12 +75,13 @@ framework on iOS and macOS), then the platform library name through the
 platform loader path (`libmanytype_quic_ffi.so` on Linux and Android, where
 this finds the APK copy, `manytype_quic_ffi.dll` on Windows,
 `libmanytype_quic_ffi.dylib` on Apple platforms), then on iOS and macOS the
-framework by its short path, then release and debug builds in `rust/target`
-and `packages/anytype_flutter/rust/target` found while walking up from the
-current directory, and finally on iOS and macOS the process's own symbols,
-checked for `ffi_abi_version`. If an override, the app bundle library or the
+framework by its short path, then on iOS and macOS the process's own symbols,
+checked for `ffi_abi_version`, and finally release and debug builds in
+`rust/target` and `packages/anytype_flutter/rust/target` found while walking
+up from the current directory. If an override, the app bundle library or the
 plugin's bundled copy exists but cannot load, the load fails rather than
-falling back, so a shipped app never reaches the development walk. Every
+falling back, so a shipped app whose bundled copy is present never reaches
+the development walk. Every
 load checks `ffi_abi_version` against the Dart bindings.
 
 Flutter apps outside this repository get the library from `anytype_flutter`,
