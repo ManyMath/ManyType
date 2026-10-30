@@ -26,6 +26,12 @@ jobs:
       run: cargo clippy --locked --workspace --all-targets -- -D warnings
     - name: cargo test --workspace
       run: cargo test --locked --workspace
+    - name: anytype_flutter bridge workspace (fmt, clippy, test)
+      working-directory: packages/anytype_flutter/rust
+      run: |
+        cargo fmt --check
+        cargo clippy --locked --workspace --all-targets -- -D warnings
+        cargo test --locked --workspace
     - name: Verify provisioned cargo-audit
       run: 'command -v cargo-audit
 
@@ -38,6 +44,7 @@ jobs:
         test "$(git -C "$advisory_root/db" remote get-url origin)" = https://github.com/RustSec/advisory-db.git
         git -C "$advisory_root/db" rev-parse --verify HEAD
         cargo audit --db "$advisory_root/db" --no-fetch
+        (cd ../packages/anytype_flutter/rust && cargo audit --db "$advisory_root/db" --no-fetch)
     timeout-minutes: 60
 'on':
   workflow_dispatch: {}
@@ -45,6 +52,7 @@ jobs:
     branches:
     - main
     - maintenance/**
+    - release/**
   pull_request:
     branches:
     - main
