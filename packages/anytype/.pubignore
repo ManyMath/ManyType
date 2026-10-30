@@ -4,3 +4,5 @@
 # the repository.
 test/
 native/target/
+dart_test.yaml
+tool/fetch_web_test_assets.dart

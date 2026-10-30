@@ -1,0 +1,54 @@
+name: SDK archives and consumer
+jobs:
+  sdk-archives:
+    runs-on: manymath-maintenance-linux-x64
+    defaults:
+      run:
+        working-directory: ManyType
+    steps:
+    - name: Require private primary forge
+      env:
+        PRIMARY_SERVER: ${{ github.server_url }}
+      working-directory: ${{ runner.temp }}
+      run: 'test "$PRIMARY_SERVER" = https://git.manymath.com
+
+        rustup run 1.94.0 rustc --version
+
+        dart --version
+
+        '
+    - name: Checkout ManyType
+      uses: actions/checkout@v4
+      with:
+        path: ManyType
+    - name: Resolve the workspace
+      run: timeout --signal=TERM --kill-after=30s 15m flutter pub get --enforce-lockfile
+    - name: Build, inspect and consume the publish archives
+      run: timeout --signal=TERM --kill-after=30s 40m scripts/check_sdk_archives.sh "$RUNNER_TEMP/sdk-archives-$GITHUB_RUN_ID"
+    - name: Lockfile unchanged
+      run: git diff --exit-code pubspec.lock
+    timeout-minutes: 60
+'on':
+  workflow_dispatch: {}
+  push:
+    branches:
+    - main
+    - maintenance/**
+    - release/**
+  pull_request:
+    branches:
+    - main
+permissions:
+  contents: read
+env:
+  RUSTUP_TOOLCHAIN: 1.94.0
+  CARGO_HOME: ${{ runner.temp }}/manytype-cargo-${{ github.run_id }}-${{ github.job }}
+  CARGO_BUILD_JOBS: '3'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  DASH__SUPPRESS_ANALYTICS: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  DO_NOT_TRACK: '1'
+  CI: 'true'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true

@@ -63,7 +63,7 @@ def main() -> None:
                 name = Path(dependency['path']).name
                 if name not in CRATES:
                     raise SystemExit(f'{crate} depends on unstaged path crate {name}')
-        (target / 'Cargo.toml').write_text(manifest)
+        (target / 'Cargo.toml').write_text(manifest, newline='\n')
         shutil.copyfile(source / 'LICENSE', target / 'LICENSE')
         for directory in ['src', 'licenses']:
             if (source / directory).is_dir():
@@ -72,8 +72,8 @@ def main() -> None:
     workspace = (RUST / 'Cargo.toml').read_text()
     members = ''.join(f'    "{crate}",\n' for crate in CRATES)
     workspace = re.sub(r'(?ms)^members = \[\n.*?^\]\n', f'members = [\n{members}]\n', workspace)
-    (DEST / 'Cargo.toml').write_text(workspace)
-    (DEST / 'README.md').write_text(README)
+    (DEST / 'Cargo.toml').write_text(workspace, newline='\n')
+    (DEST / 'README.md').write_text(README, newline='\n')
 
     shutil.copyfile(RUST / 'Cargo.lock', DEST / 'Cargo.lock')
     cargo = ['cargo', 'metadata', '--format-version', '1',
