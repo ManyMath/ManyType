@@ -23,6 +23,10 @@ jobs:
         path: ManyType
     - name: Resolve the workspace
       run: timeout --signal=TERM --kill-after=30s 15m flutter pub get --enforce-lockfile
+    - name: anytype_flutter analyze and test
+      run: |
+        flutter analyze packages/anytype_flutter
+        (cd packages/anytype_flutter && flutter test)
     - name: Build, inspect and consume the publish archives
       run: timeout --signal=TERM --kill-after=30s 40m scripts/check_sdk_archives.sh "$RUNNER_TEMP/sdk-archives-$GITHUB_RUN_ID"
     - name: Lockfile unchanged

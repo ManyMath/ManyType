@@ -49,6 +49,7 @@ melos:
         dirExists: test
         ignore:
           - manytype
+          - anytype_flutter
     test:web:
       run: |
         if [ -f tool/fetch_web_test_assets.dart ]; then
@@ -62,6 +63,7 @@ melos:
         dirExists: test
         ignore:
           - manytype
+          - anytype_flutter
           - manytype_cli
     test:ci:
       run: dart test --exclude-tags=round_trip -j 1
@@ -84,6 +86,7 @@ melos:
         dirExists: test
         ignore:
           - manytype
+          - anytype_flutter
     test:oracle:
       run: dart test --tags=round_trip -j 1
       description: |
@@ -104,7 +107,14 @@ melos:
       exec:
         concurrency: 1
     format-check:
-      run: dart format --output=none --set-exit-if-changed .
+      # Vendored cargokit keeps its pinned upstream bytes, so a package that
+      # vendors it is checked only in its own Dart sources.
+      run: |
+        if [ -d cargokit ]; then
+          dart format --output=none --set-exit-if-changed lib test example/lib
+        else
+          dart format --output=none --set-exit-if-changed .
+        fi
       description: Fail if any file isn't formatted per `dart format`.
       exec:
         concurrency: 1
