@@ -7,7 +7,7 @@
 - Encrypted local object store with create, edit, read, list and delete
   operations on Anytype block-model objects.
 - Push and pull synchronization over QUIC through the `manytype_quic_ffi`
-  Rust bridge, whose sources ship in `native/` and build with
-  `dart run anytype:build_native`.
+  Rust bridge. Flutter apps get it from `anytype_flutter`; Dart programs build
+  it from that package's Rust sources.
 - `ManytypeStorage.directory` selects the native storage root, and
   `NativeBridge.libraryPath` selects the bridge library.

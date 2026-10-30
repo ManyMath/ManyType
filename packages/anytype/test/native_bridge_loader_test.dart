@@ -17,7 +17,19 @@ void main() {
       NativeLibraryLocator.linuxLibraryName,
     );
     expect(
+      NativeLibraryLocator.libraryNameForOperatingSystem('ios'),
+      NativeLibraryLocator.macOSLibraryName,
+    );
+    expect(
+      NativeLibraryLocator.libraryNameForOperatingSystem('android'),
+      NativeLibraryLocator.linuxLibraryName,
+    );
+    expect(
       NativeLibraryLocator.libraryNameForOperatingSystem('windows'),
+      NativeLibraryLocator.windowsLibraryName,
+    );
+    expect(
+      NativeLibraryLocator.libraryNameForOperatingSystem('fuchsia'),
       isNull,
     );
   });
@@ -38,23 +50,6 @@ void main() {
     );
   });
 
-  test('places project builds beside the package config', () {
-    final separator = Platform.pathSeparator;
-    final root = Directory.systemTemp.path;
-    final packageConfig =
-        '$root${separator}consumer$separator.dart_tool'
-        '${separator}package_config.json';
-
-    expect(
-      NativeLibraryLocator.projectLibraryPath(
-        NativeLibraryLocator.linuxLibraryName,
-        packageConfigPath: packageConfig,
-      ),
-      '$root${separator}consumer$separator.dart_tool${separator}anytype'
-      '${separator}native$separator${NativeLibraryLocator.linuxLibraryName}',
-    );
-  });
-
   test('orders release before debug for each development ancestor', () {
     final temporaryDirectory = Directory.systemTemp.createTempSync();
     addTearDown(() => temporaryDirectory.deleteSync(recursive: true));
@@ -67,11 +62,32 @@ void main() {
       workingDirectory: workingDirectory,
     );
 
-    expect(paths.take(4), [
-      '$workingDirectory${separator}rust${separator}target${separator}release${separator}${NativeLibraryLocator.macOSLibraryName}',
-      '$workingDirectory${separator}rust${separator}target${separator}debug${separator}${NativeLibraryLocator.macOSLibraryName}',
-      '$apps${separator}rust${separator}target${separator}release${separator}${NativeLibraryLocator.macOSLibraryName}',
-      '$apps${separator}rust${separator}target${separator}debug${separator}${NativeLibraryLocator.macOSLibraryName}',
+    String target(String root, String profile) => [
+      root,
+      'rust',
+      'target',
+      profile,
+      NativeLibraryLocator.macOSLibraryName,
+    ].join(separator);
+    String pluginTarget(String root, String profile) => [
+      root,
+      'packages',
+      'anytype_flutter',
+      'rust',
+      'target',
+      profile,
+      NativeLibraryLocator.macOSLibraryName,
+    ].join(separator);
+
+    expect(paths.take(8), [
+      target(workingDirectory, 'release'),
+      target(workingDirectory, 'debug'),
+      pluginTarget(workingDirectory, 'release'),
+      pluginTarget(workingDirectory, 'debug'),
+      target(apps, 'release'),
+      target(apps, 'debug'),
+      pluginTarget(apps, 'release'),
+      pluginTarget(apps, 'debug'),
     ]);
   });
 }

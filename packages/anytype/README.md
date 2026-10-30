@@ -89,42 +89,52 @@ they must sit beside the page (relative to its base URL).
 ## Native QUIC bridge
 
 Synchronization calls into `manytype_quic_ffi`, a Rust library that handles
-QUIC, libp2p TLS, the Any-Sync handshake and DRPC framing. Its production
-sources ship in this package under `native/`, with a locked dependency
-graph. Offline use does not load it.
+QUIC, libp2p TLS, the Any-Sync handshake and DRPC framing. This package is
+pure Dart and does not contain it; offline use never loads it.
 
-Build it for your project with Rust 1.88 or newer (tested with 1.94.0 on
-Linux and 1.89.0 on macOS):
+Flutter apps depend on
+[anytype_flutter](https://pub.dev/packages/anytype_flutter) instead, which
+re-exports this package and builds and bundles the library for the app with
+cargokit. The build machine needs a Rust toolchain installed with rustup.
+
+Dart programs outside Flutter build the library from anytype_flutter's Rust
+sources with Rust 1.88 or newer (tested with 1.94.0 on Linux and 1.89.0 on
+macOS), then point the SDK at it:
 
 ```sh
-dart run anytype:build_native
+dart pub cache add anytype_flutter --version 0.0.2
+cargo build --locked --release \
+  --manifest-path "${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev/anytype_flutter-0.0.2/rust/Cargo.toml" \
+  --target-dir build/anytype
+export MANYTYPE_QUIC_FFI_PATH="$PWD/build/anytype/release/libmanytype_quic_ffi.so"
 ```
 
-This runs `cargo build --locked --release` on the shipped sources, checks the
-library's ABI version, and places it in `.dart_tool/anytype/native/` of your
-project. Pass
-`--output-dir <dir>` to copy it somewhere else as well, for example into an
-application bundle.
+On macOS the file is `libmanytype_quic_ffi.dylib`. AOT-compiled executables
+can instead set `NativeBridge.libraryPath` to the library they ship.
 
 `NativeBridge` loads the library from the first of these that applies:
 
 1. `NativeBridge.libraryPath`, if your code sets it.
 2. The `MANYTYPE_QUIC_FFI_PATH` environment variable.
 3. On macOS, `Contents/Frameworks/libmanytype_quic_ffi.dylib` in the running
-   app bundle.
-4. The platform's library search path, such as `LD_LIBRARY_PATH`.
-5. `.dart_tool/anytype/native/` of the running project, when a package config
-   is available (`dart run`, `dart test`, JIT executables).
-6. `rust/target/release` and `rust/target/debug` in the current directory or
-   any parent, for development inside the ManyType repository.
+   app bundle (the ManyType app's layout).
+4. The platform library name (`libmanytype_quic_ffi.so` on Linux and Android,
+   `manytype_quic_ffi.dll` on Windows, `libmanytype_quic_ffi.dylib` on Apple
+   platforms) through the platform's search path. This finds the copy
+   anytype_flutter bundles on Linux, Windows and Android.
+5. On iOS and macOS, the `anytype_flutter.framework` that anytype_flutter
+   force-loads the static library into.
+6. `rust/target` and `packages/anytype_flutter/rust/target` release and debug
+   builds in the current directory or any parent, for development inside the
+   ManyType repository.
+7. On iOS and macOS, symbols already loaded into the process, checked for
+   `ffi_abi_version`.
 
-When the library named by steps 1, 2, 3 or 5 exists but fails to load, the
-load fails rather than trying the next step. Every load checks the library's
-C ABI version against `NativeBridge.expectedAbiVersion` and throws on a
-mismatch. If nothing loads,
-a `StateError` explains how to build or point at the library. AOT-compiled
-executables have no package config, so they should set
-`NativeBridge.libraryPath` to the library they ship.
+When the library named by steps 1, 2 or 3 exists but fails to load, the load
+fails rather than trying the next step. Every load checks the library's C ABI
+version against `NativeBridge.expectedAbiVersion` and throws on a mismatch.
+If nothing loads, a `StateError` lists what was tried and how to provide the
+library.
 
 ## Synchronization
 
@@ -149,7 +159,7 @@ A new account's space must be registered once with
 remote ones. Restored devices only call `sync.run`.
 [example/sync_example.dart](example/sync_example.dart) performs a two-device
 round trip; copy it into your project's `bin/` to run it, since examples are
-not runnable from the pub cache. The sync service currently prints progress
+not runnable from the pub cache, and provide the bridge as described above. The sync service currently prints progress
 lines to standard output.
 
 ## Supported targets
@@ -191,10 +201,9 @@ Known limitations:
 
 ## License
 
-First-party code in this package is MIT licensed. `native/manytype_proto`
-contains code generated from Anytype-heart schemas under the Any Source
-Available License 1.0, and this package depends on `manytype_protocol`,
-whose Anytype-heart types carry the same terms. ASAL allows use only for
-Non-Commercial Use or for Commercial Use in Allowed Networks. See
-[LICENSE](LICENSE) and the `manytype_protocol` LICENSE before distributing
-software built on this package.
+First-party code in this package is MIT licensed. It depends on
+`manytype_protocol`, whose types generated from Anytype-heart schemas are under
+the Any Source Available License 1.0. ASAL allows use only for Non-Commercial
+Use or for Commercial Use in Allowed Networks. See [LICENSE](LICENSE) and the
+`manytype_protocol` LICENSE before distributing software built on this
+package.

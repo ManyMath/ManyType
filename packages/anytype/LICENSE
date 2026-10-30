@@ -1,15 +1,9 @@
-anytype is first-party ManyType code under the MIT License below, with one
-exception. native/manytype_proto, the Rust protocol crate the QUIC bridge is
-built from, contains code generated from Anytype-heart schemas under the Any
-Source Available License 1.0 and from Any-Sync schemas under the MIT License.
-native/manytype_proto/LICENSE describes those files, and
-native/manytype_proto/licenses holds the upstream notices.
-
-anytype also depends on manytype_protocol, whose Dart types generated from
-Anytype-heart schemas carry the same ASAL 1.0 terms. ASAL permits use only
-for Non-Commercial Use or for Commercial Use in Allowed Networks. See the
-manytype_protocol LICENSE before distributing or deploying software built
-on this package.
+anytype is first-party ManyType code under the MIT License below. It depends
+on manytype_protocol, whose Dart types generated from Anytype-heart schemas are
+subject to the Any Source Available License 1.0. ASAL permits use only for
+Non-Commercial Use or for Commercial Use in Allowed Networks. See the
+manytype_protocol LICENSE before distributing or deploying software built on
+this package.
 
 MIT License
 

@@ -1,6 +1,5 @@
 import 'dart:ffi';
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
@@ -127,11 +126,18 @@ typedef FfiAbiVersionDart = int Function();
 class NativeLibraryLocator {
   static const macOSLibraryName = 'libmanytype_quic_ffi.dylib';
   static const linuxLibraryName = 'libmanytype_quic_ffi.so';
+  static const windowsLibraryName = 'manytype_quic_ffi.dll';
+
+  /// The anytype_flutter framework that iOS and macOS Flutter builds
+  /// force-load the bridge's static library into.
+  static const pluginFrameworkPath =
+      'anytype_flutter.framework/anytype_flutter';
 
   static String? libraryNameForOperatingSystem(String operatingSystem) {
     return switch (operatingSystem) {
-      'linux' => linuxLibraryName,
-      'macos' => macOSLibraryName,
+      'linux' || 'android' => linuxLibraryName,
+      'macos' || 'ios' => macOSLibraryName,
+      'windows' => windowsLibraryName,
       _ => null,
     };
   }
@@ -141,20 +147,9 @@ class NativeLibraryLocator {
     return p.join(contentsDirectory.path, 'Frameworks', macOSLibraryName);
   }
 
-  /// Where `dart run anytype:build_native` places the library for the
-  /// project whose `.dart_tool/package_config.json` is [packageConfigPath].
-  static String projectLibraryPath(
-    String libraryName, {
-    required String packageConfigPath,
-  }) {
-    return p.join(
-      File(packageConfigPath).parent.path,
-      'anytype',
-      'native',
-      libraryName,
-    );
-  }
-
+  /// Release and debug builds in this repository, found by walking up from
+  /// [workingDirectory]: the server workspace's `rust/target` first, then
+  /// the plugin crate's own `packages/anytype_flutter/rust/target`.
   static List<String> developmentLibraryPaths(
     String libraryName, {
     required String workingDirectory,
@@ -162,9 +157,14 @@ class NativeLibraryLocator {
     final paths = <String>[];
     var directory = Directory(workingDirectory).absolute;
     while (true) {
-      paths
-        ..add(p.join(directory.path, 'rust', 'target', 'release', libraryName))
-        ..add(p.join(directory.path, 'rust', 'target', 'debug', libraryName));
+      for (final target in [
+        p.join(directory.path, 'rust', 'target'),
+        p.join(directory.path, 'packages', 'anytype_flutter', 'rust', 'target'),
+      ]) {
+        paths
+          ..add(p.join(target, 'release', libraryName))
+          ..add(p.join(target, 'debug', libraryName));
+      }
       if (directory.parent.path == directory.path) {
         break;
       }
@@ -272,41 +272,53 @@ class NativeBridge {
       }
     }
 
+    // The platform search path, which also resolves the copy anytype_flutter
+    // bundles on Linux, Windows and Android.
+    final failures = <String>[];
     try {
       return DynamicLibrary.open(libName);
     } catch (error) {
-      // The platform search path comes first so a stale project build
-      // cannot shadow a library a host or harness points at explicitly.
-      final packageConfig = Isolate.packageConfigSync;
-      if (packageConfig != null && packageConfig.isScheme('file')) {
-        final projectPath = NativeLibraryLocator.projectLibraryPath(
-          libName,
-          packageConfigPath: packageConfig.toFilePath(),
-        );
-        if (File(projectPath).existsSync()) {
-          // Built for this project by build_native. Like the bundle
-          // library, a present copy is authoritative.
-          return DynamicLibrary.open(projectPath);
-        }
-      }
-
-      // Fallback for local dev/test: try to load the Rust cdylib from this repo.
-      // This avoids requiring callers to set LD_LIBRARY_PATH manually.
-      final candidates = NativeLibraryLocator.developmentLibraryPaths(
-        libName,
-        workingDirectory: Directory.current.path,
-      );
-      for (final candidate in candidates) {
-        if (File(candidate).existsSync()) {
-          return DynamicLibrary.open(candidate);
-        }
-      }
-      throw StateError(
-        'Could not load $libName ($error). Build it for this project with '
-        '`dart run anytype:build_native`, or set NativeBridge.libraryPath '
-        'or MANYTYPE_QUIC_FFI_PATH to the library.',
-      );
+      failures.add('$libName: $error');
     }
+
+    final isApple = Platform.isMacOS || Platform.isIOS;
+    if (isApple) {
+      // anytype_flutter force-loads the static library into its framework.
+      try {
+        return DynamicLibrary.open(NativeLibraryLocator.pluginFrameworkPath);
+      } catch (error) {
+        failures.add('${NativeLibraryLocator.pluginFrameworkPath}: $error');
+      }
+    }
+
+    // Fallback for local dev/test: try to load the Rust cdylib from this repo.
+    // This avoids requiring callers to set LD_LIBRARY_PATH manually.
+    final candidates = NativeLibraryLocator.developmentLibraryPaths(
+      libName,
+      workingDirectory: Directory.current.path,
+    );
+    for (final candidate in candidates) {
+      if (File(candidate).existsSync()) {
+        return DynamicLibrary.open(candidate);
+      }
+    }
+
+    if (isApple) {
+      // The plugin framework is already loaded into the app process, so its
+      // symbols resolve here even when the framework path above does not.
+      final process = DynamicLibrary.process();
+      if (process.providesSymbol('ffi_abi_version')) {
+        return process;
+      }
+      failures.add('process: no ffi_abi_version symbol');
+    }
+
+    throw StateError(
+      'Could not load the manytype_quic_ffi QUIC bridge '
+      '(${failures.join('; ')}). Depend on anytype_flutter in a Flutter '
+      'app, or build the library and set NativeBridge.libraryPath or '
+      'MANYTYPE_QUIC_FFI_PATH to it.',
+    );
   }
 
   /// Version of the loaded native C ABI.

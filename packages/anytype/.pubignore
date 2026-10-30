@@ -1,8 +1,7 @@
-# pub reads this file instead of .gitignore in this directory. It keeps the
-# staged native/ sources in the archive. The repository-coupled test suite
-# (oracle, harness and loopback tests that need scripts/ and rust/) stays in
-# the repository.
+# pub reads this file instead of .gitignore in this directory. The
+# repository-coupled test suite (oracle, harness and loopback tests that need
+# scripts/ and rust/) stays in the repository.
 test/
-native/target/
+test/web_assets/
 dart_test.yaml
 tool/fetch_web_test_assets.dart

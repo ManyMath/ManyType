@@ -1,8 +1,8 @@
 // Synchronization round trip between two devices of one account.
 //
-// Copy this file into your project's bin/ directory, then:
+// Copy this file into your project's bin/ directory, build the QUIC bridge
+// and point MANYTYPE_QUIC_FFI_PATH at it (see the package README), then:
 //
-//   dart run anytype:build_native
 //   dart run bin/sync_example.dart <network.yml>
 //
 // network.yml lists coordinator, tree, file and consensus nodes in the
