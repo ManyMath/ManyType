@@ -1,1 +1,3 @@
 test/web_assets/
+# Staged by scripts/stage_sdk_native.py and published through .pubignore.
+native/

@@ -1,0 +1,6 @@
+# pub reads this file instead of .gitignore in this directory. It keeps the
+# staged native/ sources in the archive. The repository-coupled test suite
+# (oracle, harness and loopback tests that need scripts/ and rust/) stays in
+# the repository.
+test/
+native/target/
