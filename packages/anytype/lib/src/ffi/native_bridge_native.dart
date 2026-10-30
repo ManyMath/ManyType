@@ -272,22 +272,24 @@ class NativeBridge {
       }
     }
 
-    final packageConfig = Isolate.packageConfigSync;
-    if (packageConfig != null && packageConfig.isScheme('file')) {
-      final projectPath = NativeLibraryLocator.projectLibraryPath(
-        libName,
-        packageConfigPath: packageConfig.toFilePath(),
-      );
-      if (File(projectPath).existsSync()) {
-        // Built for this project by build_native. Like the bundle library,
-        // a present copy is authoritative.
-        return DynamicLibrary.open(projectPath);
-      }
-    }
-
     try {
       return DynamicLibrary.open(libName);
     } catch (error) {
+      // The platform search path comes first so a stale project build
+      // cannot shadow a library a host or harness points at explicitly.
+      final packageConfig = Isolate.packageConfigSync;
+      if (packageConfig != null && packageConfig.isScheme('file')) {
+        final projectPath = NativeLibraryLocator.projectLibraryPath(
+          libName,
+          packageConfigPath: packageConfig.toFilePath(),
+        );
+        if (File(projectPath).existsSync()) {
+          // Built for this project by build_native. Like the bundle
+          // library, a present copy is authoritative.
+          return DynamicLibrary.open(projectPath);
+        }
+      }
+
       // Fallback for local dev/test: try to load the Rust cdylib from this repo.
       // This avoids requiring callers to set LD_LIBRARY_PATH manually.
       final candidates = NativeLibraryLocator.developmentLibraryPaths(

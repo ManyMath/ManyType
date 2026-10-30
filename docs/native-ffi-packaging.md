@@ -69,10 +69,13 @@ build and two-launch smoke commands above.
 
 `NativeBridge.libraryPath` and then `MANYTYPE_QUIC_FFI_PATH` are explicit
 overrides. Without them, the loader prefers the signed library in a macOS app
-bundle, then the library `dart run anytype:build_native` placed in the running
-project's `.dart_tool/anytype/native`, then the platform loader path, then
-release and debug Rust artifacts found while walking up from the current
-directory. If a bundle or project library exists but cannot load, the load
+bundle, then the platform loader path, then the library `dart run
+anytype:build_native` placed in the running project's
+`.dart_tool/anytype/native`, then release and debug Rust artifacts found while
+walking up from the current directory. The platform path precedes the project
+build so a stale `.dart_tool` copy in this workspace cannot shadow a library
+a harness selects through `LD_LIBRARY_PATH`. Inside the repository,
+`build_native` builds from `rust/` rather than a staged snapshot. If a bundle or project library exists but cannot load, the load
 fails rather than falling back to another artifact. Every load checks
 `ffi_abi_version` against the Dart bindings. Package consumers outside this
 repository rely on the first four; the directory walk serves repository
