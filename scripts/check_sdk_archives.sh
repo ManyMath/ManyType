@@ -42,8 +42,9 @@ WORK="$(mktemp -d)"
 REGISTRY_PID=""
 APP_RUNNER=""
 APP_PID=""
+APP_EXECUTABLE=""
 cleanup() {
-  for pid in "$APP_RUNNER" "$REGISTRY_PID"; do
+  for pid in "$APP_PID" "$APP_RUNNER" "$REGISTRY_PID"; do
     if [[ -n "$pid" ]]; then
       kill "$pid" >/dev/null 2>&1 || true
       wait "$pid" 2>/dev/null || true
@@ -266,11 +267,15 @@ fi
 [[ "$(readlink -f "$plugin_link")" == "$(readlink -f "${plugin_sources[0]}")" ]] ||
   fail "plugin is not the pub cache copy: $(readlink -f "$plugin_link")"
 
-# Launch the app and wait until it reports the bridge ABI; sets APP_PID.
+# Launch the app from an empty directory, so no library in the caller's
+# directory or its parents can stand in for the bundled one, and wait until it
+# reports the bridge ABI. Sets APP_PID.
 launch() {
   local executable="$1"; shift
-  "$@" "$executable" >"$OUT_DIR/flutter-app.log" 2>&1 &
+  mkdir -p "$WORK/launch"
+  (cd "$WORK/launch" && exec "$@" "$executable") >"$OUT_DIR/flutter-app.log" 2>&1 &
   APP_RUNNER=$!
+  APP_EXECUTABLE="$executable"
   APP_PID=""
   for _ in $(seq 1 90); do
     APP_PID="$(pgrep -f "^$executable\$" | head -1 || true)"
@@ -280,8 +285,11 @@ launch() {
 }
 stop_app() {
   [[ -n "$APP_PID" ]] && kill "$APP_PID" 2>/dev/null || true
+  pkill -f "^$APP_EXECUTABLE\$" 2>/dev/null || true
+  kill "$APP_RUNNER" 2>/dev/null || true
   wait "$APP_RUNNER" 2>/dev/null || true
   APP_RUNNER=""
+  APP_PID=""
   grep 'bridge ABI 2' "$OUT_DIR/flutter-app.log" || fail 'Flutter app did not load the bridge'
 }
 
@@ -297,6 +305,8 @@ if [[ "$HOST" == linux ]]; then
     stop_app
     [[ "$mapped" == "$(readlink -f "$bundled")" ]] || fail "Flutter app mapped: $mapped"
     echo "Flutter app mapped $mapped"
+  elif [[ "${CI:-}" == true ]]; then
+    fail 'xvfb-run is required in CI to launch the Flutter app'
   else
     echo 'xvfb-run not found: skipped launching the Flutter app'
   fi
@@ -309,11 +319,17 @@ else
     fail 'the anytype_flutter framework does not export ffi_abi_version'
   echo "Bundled the bridge into $framework (sha256 $(shasum -a 256 "$framework" | cut -d' ' -f1))"
   launch "$app/Contents/MacOS/anytype_flutter_consumer" env
-  mapped=""
-  [[ -n "$APP_PID" ]] && mapped="$(lsof -p "$APP_PID" 2>/dev/null | grep -c 'anytype_flutter.framework' || true)"
+  images=""
+  [[ -n "$APP_PID" ]] && images="$(lsof -p "$APP_PID" 2>/dev/null || true)"
   stop_app
-  [[ "${mapped:-0}" -gt 0 ]] || fail 'the Flutter app did not map the anytype_flutter framework'
-  echo 'Flutter app mapped the anytype_flutter framework'
+  grep -q 'anytype_flutter.framework/Versions/A/anytype_flutter' <<<"$images" ||
+    fail 'the Flutter app did not map the anytype_flutter framework'
+  # The framework carries the bridge statically, so a separate bridge dylib
+  # in the process would mean the loader found something else.
+  if grep -q "$BRIDGE_FILE" <<<"$images"; then
+    fail "the Flutter app mapped a separate $BRIDGE_FILE"
+  fi
+  echo "Flutter app mapped the anytype_flutter framework and no separate $BRIDGE_FILE"
   # The framework links FlutterMacOS, so a plain Dart process cannot load
   # it; the loopback above used the same sources built as a dylib.
 fi
