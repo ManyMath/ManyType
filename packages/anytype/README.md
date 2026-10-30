@@ -153,12 +153,18 @@ output.
 | Target | Local storage and objects | Native sync |
 | --- | --- | --- |
 | Linux x64 (Dart VM) | Tested | Tested against a loopback server |
-| macOS (Dart VM, app bundle) | Tested | Tested against a loopback server |
-| Windows | Not supported | Not supported: the loader has no Windows library |
+| macOS arm64 (Dart VM) | Tested | Tested against a loopback server |
+| Windows x64 (Dart VM) | Tested on Windows 10 | Not supported: the loader has no Windows library and `build_native` refuses |
 | Web | Supported via drift WebAssembly | Not available: `NativeBridge` throws `UnsupportedError` |
 | Android, iOS | Not validated | Not supported by the loader |
 
-Native storage uses the system SQLite library through `package:sqlite3`.
+The ManyType app also bundles the bridge into a macOS `.app`
+(`Contents/Frameworks`); that path is covered by the app's own packaging
+checks, not by this package's release checks.
+
+Native storage uses the system SQLite library through `package:sqlite3`: on
+Windows that is `sqlite3.dll` if one is on the search path, otherwise the
+operating system's `winsqlite3.dll`.
 
 ## Interoperability
 
