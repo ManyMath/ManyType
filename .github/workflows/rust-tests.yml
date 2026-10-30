@@ -20,7 +20,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: rust
+          workspaces: |
+            rust
+            packages/anytype_flutter/rust
 
       - name: cargo fmt --check
         run: cargo fmt --check
@@ -31,8 +33,19 @@ jobs:
       - name: cargo test --workspace
         run: cargo test --workspace
 
+      - name: anytype_flutter bridge workspace (fmt, clippy, test)
+        working-directory: packages/anytype_flutter/rust
+        run: |
+          cargo fmt --check
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace
+
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 
       - name: cargo audit
+        run: cargo audit
+
+      - name: cargo audit (anytype_flutter bridge)
+        working-directory: packages/anytype_flutter/rust
         run: cargo audit

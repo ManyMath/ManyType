@@ -36,6 +36,7 @@ jobs:
     branches:
     - main
     - maintenance/**
+    - release/**
   pull_request:
     branches:
     - main

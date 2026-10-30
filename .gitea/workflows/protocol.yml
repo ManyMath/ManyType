@@ -1,7 +1,7 @@
 name: Protocol generation and module boundaries
 on:
   push:
-    branches: [main, 'maintenance/**']
+    branches: [main, 'maintenance/**', 'release/**']
   pull_request:
     branches: [main]
   workflow_dispatch:
