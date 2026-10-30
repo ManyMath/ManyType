@@ -4,7 +4,7 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 // AccountProfile is not re-exported by the manytype_cli barrel.
 // ignore: implementation_imports
-import 'package:manytype_client/manytype_client.dart' show AccountProfile;
+import 'package:anytype/anytype.dart' show AccountProfile;
 
 import 'package:manytype/src/state/guest_demo.dart';
 

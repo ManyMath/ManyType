@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:manytype_client/manytype_client.dart';
+import 'package:anytype/anytype.dart';
 
 const _key = 'manytype.native-package-smoke';
 const _value = 'manytype-native-package-smoke-v1';

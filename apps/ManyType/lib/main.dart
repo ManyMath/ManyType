@@ -4,7 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 // AccountRegistry remains an internal CLI implementation detail until its
 // host-configuration API is promoted through the package barrel.
 // ignore: implementation_imports
-import 'package:manytype_client/manytype_client.dart';
+import 'package:anytype/anytype.dart';
 
 import 'src/app.dart';
 import 'src/security/platform_recovery_phrase_store.dart';

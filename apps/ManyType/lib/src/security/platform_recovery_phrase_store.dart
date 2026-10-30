@@ -1,5 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:manytype_client/manytype_client.dart' show RecoveryPhraseStore;
+import 'package:anytype/anytype.dart' show RecoveryPhraseStore;
 
 class PlatformRecoveryPhraseStore implements RecoveryPhraseStore {
   PlatformRecoveryPhraseStore({FlutterSecureStorage? storage})

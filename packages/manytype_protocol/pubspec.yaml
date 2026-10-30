@@ -1,7 +1,13 @@
 name: manytype_protocol
-description: Generated protobuf types for Anytype wire protocol
-version: 0.0.1-dev.1
-publish_to: none
+description: >-
+  Generated protobuf types for the Any-Sync and Anytype block protocols, used
+  by the anytype Dart SDK. Contains upstream-derived MIT and ASAL 1.0 material.
+version: 0.0.2
+repository: https://github.com/ManyMath/ManyType/tree/main/packages/manytype_protocol
+issue_tracker: https://github.com/ManyMath/ManyType/issues
+topics:
+  - anytype
+  - protobuf
 resolution: workspace
 environment:
   sdk: ^3.5.3

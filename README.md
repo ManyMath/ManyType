@@ -8,7 +8,7 @@ bidirectional interoperability with the official Anytype stack.
 - `packages/manytype_protocol`: protobuf-generated wire types.
 - `packages/manytype_core`: CRDT object model and sync logic shared across
   clients.
-- `packages/manytype_client`: the reusable native/web account, session, storage,
+- `packages/anytype`: the reusable native/web account, session, storage,
   synchronization, and recovery library.
 - `packages/manytype_cli`: the command-line entry point and operator tools,
   consuming the public client API.

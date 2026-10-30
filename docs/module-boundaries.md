@@ -1,9 +1,9 @@
 # ManyType module boundaries
 
-The repository stays together. `manytype_client` owns the reusable account,
+The repository stays together. `anytype` (formerly `manytype_client`) owns the reusable account,
 session, storage, sync, recovery, and transport API. The Flutter app and CLI
-consume `package:manytype_client/manytype_client.dart`; application tests use
-`package:manytype_client/testing.dart` for platform-specific in-memory storage.
+consume `package:anytype/anytype.dart`; application tests use
+`package:anytype/testing.dart` for platform-specific in-memory storage.
 The legacy `manytype_cli.dart` export remains a compatibility facade. CLI argument
 parsing, process output, and developer/operator tools remain in `manytype_cli`.
 Existing `*Command` function names and `CliConfig` are retained for source
@@ -25,7 +25,7 @@ configuration for loopback tests, never in its production dependency graph.
 Run `python3 scripts/check_module_boundaries.py` with Rust 1.94.0 to enforce
 public consumer imports and verify the actual Cargo production graph excludes
 the server and its `redb` storage dependency. Run client tests from
-`packages/manytype_client`, CLI subprocess tests from `packages/manytype_cli`,
+`packages/anytype`, CLI subprocess tests from `packages/manytype_cli`,
 and app tests with Flutter from `apps/ManyType`. Existing shell harnesses retain
 the CLI executable and operator-tool paths.
 

@@ -23,8 +23,8 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:manytype_client/manytype_client.dart';
-import 'package:manytype_client/testing.dart' show openDatabaseForTesting;
+import 'package:anytype/anytype.dart';
+import 'package:anytype/testing.dart' show openDatabaseForTesting;
 import 'package:manyui/manyui.dart';
 
 import 'package:manytype/src/home/account_page.dart';

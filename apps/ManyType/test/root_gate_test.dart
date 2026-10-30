@@ -12,7 +12,7 @@ import 'package:manytype/src/onboarding/onboarding_page.dart';
 import 'package:manytype/src/state/accounts_providers.dart';
 import 'package:manytype/src/state/session_provider.dart';
 import 'package:manytype/src/state/sync_controller.dart';
-import 'package:manytype_client/manytype_client.dart';
+import 'package:anytype/anytype.dart';
 
 void main() {
   late Directory tempBase;

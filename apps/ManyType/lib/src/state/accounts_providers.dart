@@ -2,7 +2,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 // AccountRegistry/AccountProfile are not re-exported by the manytype_cli
 // barrel; import them from src the same way the package's own tests do.
 // ignore: implementation_imports
-import 'package:manytype_client/manytype_client.dart';
+import 'package:anytype/anytype.dart';
 // ignore: implementation_imports
 
 import 'legacy_account_bootstrap.dart';

@@ -205,7 +205,7 @@ Future<Map<String, ResolvedOption>> loadLocalOptionIndex(
 /// type 0 = varint).
 ///
 /// Mirrors `_extractSmartBlockType` + `_decodeVarint` in
-/// `packages/manytype_client/lib/src/commands/read.dart`: moved into
+/// `packages/anytype/lib/src/commands/read.dart`: moved into
 /// `manytype_core` so Phase 38's [loadLocalOptionIndex] can scan root
 /// changes without depending on the CLI.
 ///

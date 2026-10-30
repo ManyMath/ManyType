@@ -14,23 +14,23 @@ The workspace has three melos test targets:
   `scripts/README.md` for prerequisites.
 
 - **`melos run test:web`**: fetches web test assets (sqlite3.wasm, the drift
-  worker bundle) via `packages/manytype_client/tool/fetch_web_test_assets.dart`
+  worker bundle) via `packages/anytype/tool/fetch_web_test_assets.dart`
   where needed, then runs `dart test -p chrome -j 1` for every package with a
   `test/` directory. `-j 1` avoids headless-chrome resource contention across
   concurrently loaded browser instances (M014/S05). Both `manytype_core` and
   `manytype_protocol` run their full VM-equivalent suite on chrome.
-  `manytype_client` runs every test that does not require FFI, a live
+  `anytype` runs every test that does not require FFI, a live
   network connection, subprocess spawning, or real-filesystem access: those
   are marked `@TestOn('vm')` with a one-line justification comment and are
   automatically skipped by `dart test` on the `chrome` platform. See
-  `packages/manytype_client/test/web/persistence_test.dart` for the end-to-end
+  `packages/anytype/test/web/persistence_test.dart` for the end-to-end
   IndexedDB open/write/close/reopen/read acceptance test, exercised through
-  the public library entrypoint (`package:manytype_client/manytype_client.dart`).
+  the public library entrypoint (`package:anytype/anytype.dart`).
   The CLI's process tests and Flutter app are excluded from this Dart browser
   target; the app has its own Flutter Chrome test.
 
 Browser test assets are generated under the ignored
-`packages/manytype_client/test/web_assets/` directory rather than committed.
+`packages/anytype/test/web_assets/` directory rather than committed.
 The asset tool downloads sqlite3.wasm for the version in the workspace lockfile,
 records its source and hash, and compiles the checked-in Drift worker source
 with the provisioned Dart SDK before the browser suite runs.
@@ -41,7 +41,7 @@ to skip melos's package picker prompt, e.g. `melos run test:web --no-select`.
 - **`melos run test:ci`**: runs `dart test --exclude-tags=round_trip -j 1`
   for every package with a `test/` directory: the VM suite minus tests
   tagged `round_trip` (docker any-sync oracle / live external-server
-  integration tests, e.g. `packages/manytype_client/test/oracle_*.dart`,
+  integration tests, e.g. `packages/anytype/test/oracle_*.dart`,
   `round_trip_test.dart`, `consensus_service_test.dart`). Every other VM
   test either has no live-infra dependency or self-skips via an env-var
   gate (`MANYTYPE_LIVE_SERVER_TESTS`, `MANYTYPE_RUN_PHASE*`) when its

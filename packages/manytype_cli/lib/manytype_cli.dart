@@ -1,5 +1,5 @@
-/// Compatibility facade. New clients should depend on manytype_client.
+/// Compatibility facade. New clients should depend on anytype.
 library;
 
-export 'package:manytype_client/manytype_client.dart';
+export 'package:anytype/anytype.dart';
 export 'src/account_parser.dart';

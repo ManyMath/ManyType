@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:args/args.dart';
-import 'package:manytype_client/manytype_client.dart';
+import 'package:anytype/anytype.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/coordinator.dart';
 import 'package:manytype_protocol/consensus.dart';

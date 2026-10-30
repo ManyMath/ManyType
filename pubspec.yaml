@@ -5,7 +5,7 @@ environment:
 workspace:
   - packages/manytype_protocol
   - packages/manytype_core
-  - packages/manytype_client
+  - packages/anytype
   - packages/manytype_cli
   - apps/ManyType
 dev_dependencies:
@@ -90,13 +90,13 @@ melos:
         oracle stack to be up (`docker/any-sync`: `make start`), the release
         FFI library built (`cargo build -p manytype_quic_ffi --release`),
         and `LD_LIBRARY_PATH` including `rust/target/release`. See
-        `.github/workflows/oracle-tests.yml`. Scoped to `manytype_client`: it's
+        `.github/workflows/oracle-tests.yml`. Scoped to `anytype`: it's
         the only package with any `round_trip`-tagged tests, and `dart test
         --tags=` errors out (exit 79) in packages with zero matches.
       exec:
         concurrency: 1
       packageFilters:
-        scope: manytype_client
+        scope: anytype
     analyze:
       run: dart analyze .
       exec:

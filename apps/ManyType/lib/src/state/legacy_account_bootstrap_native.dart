@@ -3,7 +3,7 @@ import 'dart:io';
 // AccountRegistry/active-account resolution remain host integration APIs
 // rather than part of manytype_cli's command-oriented public barrel.
 // ignore: implementation_imports
-import 'package:manytype_client/manytype_client.dart';
+import 'package:anytype/anytype.dart';
 
 // ignore: implementation_imports
 // ignore: implementation_imports

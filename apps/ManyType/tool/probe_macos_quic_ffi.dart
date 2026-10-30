@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:manytype_client/manytype_client.dart';
+import 'package:anytype/anytype.dart';
 
 const expectedAbiVersion = 2;
 

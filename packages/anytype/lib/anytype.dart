@@ -1,0 +1,42 @@
+/// Reusable ManyType account, storage, synchronization, and recovery API.
+library anytype;
+
+export 'src/acl_codec.dart';
+export 'src/acl_sync_service.dart';
+export 'src/account_sync_metadata.dart';
+export 'src/collection_keys.dart';
+export 'src/commands/account.dart';
+export 'src/commands/account_delete.dart';
+export 'src/commands/acl_lifecycle.dart';
+export 'src/commands/consensus_flow.dart';
+export 'src/commands/create.dart';
+export 'src/commands/delete.dart';
+export 'src/commands/edit.dart';
+export 'src/commands/file_transfer.dart';
+export 'src/commands/list.dart';
+export 'src/commands/probe_file_node.dart';
+export 'src/commands/probe_network.dart';
+export 'src/commands/read.dart';
+export 'src/commands/space_delete.dart';
+export 'src/commands/space_pull_flow.dart';
+export 'src/commands/sync.dart';
+export 'src/config.dart';
+export 'src/consensus_service.dart';
+export 'src/coordinator_service.dart';
+export 'src/head_sync_client.dart';
+export 'src/identity.dart';
+export 'src/network_config.dart';
+export 'src/peer_id.dart';
+export 'src/recovery_phrase_store.dart';
+export 'src/session.dart';
+export 'src/space_pull_bootstrap.dart';
+export 'src/store/database.dart';
+export 'src/structured_replay.dart';
+
+export 'src/account_profile.dart';
+export 'src/account_registry.dart';
+export 'src/account_resolver.dart';
+export 'src/active_account.dart';
+export 'src/ffi/native_bridge.dart';
+export 'src/private_files.dart';
+export 'src/tree_write_metadata.dart';

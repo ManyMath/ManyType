@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:manytype_client/manytype_client.dart';
+import 'package:anytype/anytype.dart';
 import 'package:manytype_core/manytype_core.dart' show computeCid;
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';

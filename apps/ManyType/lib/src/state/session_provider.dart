@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:manytype_client/manytype_client.dart';
+import 'package:anytype/anytype.dart';
 
 import 'accounts_providers.dart';
 

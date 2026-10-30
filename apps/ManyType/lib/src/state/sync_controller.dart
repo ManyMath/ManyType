@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:manytype_client/manytype_client.dart';
+import 'package:anytype/anytype.dart';
 // AccountRegistry's host persistence API is not yet exported by the package
 // barrel.
 // ignore: implementation_imports

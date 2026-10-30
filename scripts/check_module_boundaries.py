@@ -8,11 +8,11 @@ ROOT = Path(__file__).resolve().parents[1]
 for directory in ['apps/ManyType', 'packages/manytype_cli']:
     for source in (ROOT / directory).rglob('*.dart'):
         text = source.read_text()
-        if 'package:manytype_client/src/' in text:
+        if 'package:anytype/src/' in text:
             raise SystemExit(f'Private client import in consumer: {source}')
         if directory.startswith('apps/') and 'package:manytype_cli/' in text:
             raise SystemExit(f'App still depends on CLI: {source}')
-for source in (ROOT / 'packages/manytype_client/lib').rglob('*.dart'):
+for source in (ROOT / 'packages/anytype/lib').rglob('*.dart'):
     if 'package:manytype_cli/' in source.read_text():
         raise SystemExit(f'Client depends on CLI: {source}')
 tree = subprocess.check_output(['cargo', 'tree', '--locked', '--manifest-path',

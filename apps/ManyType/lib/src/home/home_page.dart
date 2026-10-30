@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:manytype_client/manytype_client.dart' show ObjectMeta;
+import 'package:anytype/anytype.dart' show ObjectMeta;
 import 'package:manyui/manyui.dart';
 import 'package:manyui_hooks/manyui_hooks.dart';
 import 'package:manyui_riverpod/manyui_riverpod.dart';

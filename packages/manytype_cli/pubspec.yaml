@@ -6,12 +6,9 @@ resolution: workspace
 environment:
   sdk: ^3.5.3
 dependencies:
-  manytype_client:
-    path: ../manytype_client
-  manytype_core:
-    path: ../manytype_core
-  manytype_protocol:
-    path: ../manytype_protocol
+  anytype: ^0.0.2
+  manytype_core: ^0.0.2
+  manytype_protocol: ^0.0.2
   args: ^2.5.0
   ffi: ^2.1.0
   fixnum: ^1.1.0

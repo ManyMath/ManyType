@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:manytype_client/manytype_client.dart';
+import 'package:anytype/anytype.dart';
 import 'package:manyui/manyui.dart';
 
 import 'package:manytype/src/onboarding/onboarding_page.dart';

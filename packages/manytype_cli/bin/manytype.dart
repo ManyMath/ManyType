@@ -7,7 +7,7 @@ import 'package:manytype_cli/src/account_parser.dart';
 import 'package:manytype_core/manytype_core.dart';
 import 'package:manytype_protocol/models.dart';
 
-import 'package:manytype_client/manytype_client.dart';
+import 'package:anytype/anytype.dart';
 
 /// Handles the `manytype account <subcommand>` command group: parses the
 /// subcommand's args, calls the typed `commands/account.dart` functions,

@@ -9,8 +9,8 @@ import 'package:manytype/src/app.dart';
 import 'package:manytype/src/state/accounts_providers.dart';
 import 'package:manytype/src/state/objects_providers.dart';
 import 'package:manytype/src/state/session_provider.dart';
-import 'package:manytype_client/manytype_client.dart' show ManytypeSession;
-import 'package:manytype_client/manytype_client.dart' show AccountSummary;
+import 'package:anytype/anytype.dart' show ManytypeSession;
+import 'package:anytype/anytype.dart' show AccountSummary;
 
 void main() {
   testWidgets('pending starter template gates Home and its session list', (
