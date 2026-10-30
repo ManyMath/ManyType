@@ -16,38 +16,64 @@ ABI names. The public barrel exposes the API the app and CLI already used; at
 
 ## Public SDK packages
 
-`anytype`, `manytype_core` and `manytype_protocol` are the publishable SDK
-family, all at the same version and depending on each other through hosted
-caret constraints. The pub workspace resolves those constraints to the local
-members, so development needs no overrides. The app, CLI and server stay
-`publish_to: none`, and the SDK must not depend on them, on Flutter, or on
-ManyUI. `anytype` is the only client implementation; there is no separate
-facade package. `manytype_protocol` stays separate because its generated
-Anytype-heart types carry ASAL 1.0 terms that the MIT packages do not, and
-`manytype_core` is the IO-free layer that the app and CLI also import.
+The publishable family is `manytype_protocol`, `manytype_core` and `anytype`
+(pure Dart) plus `anytype_flutter` (Flutter ffiPlugin), all at the same version
+and depending on each other through hosted caret constraints. The pub workspace
+resolves those constraints to the local members, so development needs no
+overrides. The app, CLI and server stay `publish_to: none`. The Dart packages
+must not depend on them, on Flutter, or on ManyUI; the plugin may depend on
+Flutter but not on the others. `anytype` is the only client implementation and
+`anytype_flutter` re-exports it. `manytype_protocol` stays separate because
+its generated Anytype-heart types carry ASAL 1.0 terms that the MIT packages
+do not, and `manytype_core` is the IO-free layer that the app and CLI also
+import.
 
-Publish in dependency order: `manytype_protocol`, then `manytype_core`, then
-`anytype`. Before packing `anytype`, `scripts/stage_sdk_native.py` copies the
-production Rust crates into `packages/anytype/native` (ignored by git,
-included by `.pubignore`) as a standalone Cargo workspace without the
-server dev-dependency and with a pruned lockfile. `dart run
-anytype:build_native` builds that copy for a consumer.
+The plugin follows the other ManyMath `<x>_dart` + plugin pairs (sound,
+bluetooth, ratex). It owns the production Rust crates in
+`packages/anytype_flutter/rust`, so they ship in its archive, and builds them
+with the pinned, patched cargokit fork vendored in
+`packages/anytype_flutter/cargokit` (see `tool/cargokit/README.md`).
+`manytype_quic_ffi` is the root package of that directory, because cargokit
+needs a `[package]` in its manifest dir, and `manytype_proto`,
+`manytype_core` and `manytype_transport` sit under `rust/crates/` in the same
+Cargo workspace with their own lockfile. The server workspace in `rust/`
+depends on them by path. Its `manytype_quic_ffi_host` member only keeps the
+bridge in that build graph, so repository harnesses can still run `cargo
+build -p manytype_quic_ffi` from `rust/` and find the library in
+`rust/target`; cargo cannot select a package reachable only as a
+dev-dependency. The boundary check fails if the two lockfiles disagree on any
+shared crate.
+
+The ManyType app keeps depending on `anytype` and its own macOS bundling
+(`apps/ManyType/tool/build_macos_quic_ffi.sh`), which places a signed
+`libmanytype_quic_ffi.dylib` in `Contents/Frameworks`. Switching it to
+`anytype_flutter` would force-load a static library into the plugin
+framework instead and break what `verify_macos_quic_ffi.sh` checks.
+
+Publish in dependency order: `manytype_protocol`, `manytype_core`, `anytype`,
+then `anytype_flutter`.
 
 `scripts/check_sdk_archives.sh` is the release gate. It writes the real
-archives with `dart pub publish --to-archive`, checks their contents, serves
-them from a disposable local registry (`scripts/sdk_registry.dart`), and
-resolves a fresh consumer against it with an empty pub cache and no
-overrides. The consumer runs the published offline example at the newest and
-lowest allowed versions, builds the bridge from the pub-cache sources, and
-runs the published sync example against a loopback `manytype_server`
-(`scripts/sdk_loopback.sh`). `.gitea/workflows/sdk-archives.yml` runs it.
+archives with `dart pub publish --to-archive`, checks their contents and the
+plugin's platform wiring, serves them from a disposable local registry
+(`scripts/sdk_registry.dart`), and resolves fresh consumers against it with an
+empty pub cache and no overrides. A pure Dart consumer runs the published
+offline example at the newest and lowest allowed versions. The gate then
+builds the bridge with cargo from the hosted plugin's sources, as the
+`anytype` README tells Dart programs to, and builds a fresh Flutter desktop
+app on the hosted plugin so cargokit compiles it. On Linux both libraries
+must be the only bridge mapped into the process and must sync with the
+published example over a loopback `manytype_server`
+(`scripts/sdk_loopback.sh`); on macOS the launched app must map the plugin
+framework and report the ABI. `.gitea/workflows/sdk-archives.yml` runs it on
+Linux.
 
 `manytype_transport` owns DRPC framing/streams, deadlines, and credential
 handshake helpers shared by the server and QUIC FFI client. Server-side routing,
 listener setup, persistence, and application behavior remain in
 `manytype_server`. The server reexports the old helper module paths for existing
-internal consumers. The client FFI has a server dependency only in its test
-configuration for loopback tests, never in its production dependency graph.
+internal consumers. The client FFI has no server dependency at all; its
+loopback handshake tests build an equivalent QUIC listener themselves.
 
 Run `python3 scripts/check_module_boundaries.py` with Rust 1.94.0 to enforce
 public consumer imports, keep the SDK pubspecs hosted-only and free of

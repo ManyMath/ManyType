@@ -9,15 +9,20 @@ bidirectional interoperability with the official Anytype stack.
 - `packages/manytype_core`: CRDT object model and sync logic shared across
   clients.
 - `packages/anytype`: the reusable native/web account, session, storage,
-  synchronization, and recovery library, prepared for pub.dev as the
-  `anytype` SDK together with `manytype_core` and `manytype_protocol` (see
-  `docs/module-boundaries.md`).
+  synchronization, and recovery library, prepared for pub.dev as the pure
+  Dart `anytype` SDK together with `manytype_core` and `manytype_protocol`
+  (see `docs/module-boundaries.md`).
+- `packages/anytype_flutter`: the Flutter plugin that builds and bundles the
+  QUIC bridge with cargokit. Its `rust/` directory holds the production
+  crates: `manytype_quic_ffi` (QUIC transport FFI) and, under `crates/`,
+  `manytype_core` (Rust-side CRDT engine), `manytype_proto` and
+  `manytype_transport` (shared wire helpers).
 - `packages/manytype_cli`: the command-line entry point and operator tools,
   consuming the public client API.
-- `rust/`: Rust workspace: `manytype_core` (Rust-side CRDT engine),
-  `manytype_proto`, `manytype_transport` (shared wire helpers),
-  `manytype_quic_ffi` (QUIC transport FFI), and
-  `manytype_server` (a from-scratch Any-Sync-compatible server).
+- `rust/`: the server workspace: `manytype_server` (a from-scratch
+  Any-Sync-compatible server), which uses the plugin's crates by path, and
+  `manytype_quic_ffi_host`, which lets `cargo build -p manytype_quic_ffi` run
+  here for repository harnesses.
 - `docs/`: design notes and rationale (see `docs/testing.md` for the
   test-suite layout and `docs/oracle-capture-rationale.md` for how protocol
   regression fixtures are captured).

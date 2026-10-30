@@ -56,14 +56,18 @@ to skip melos's package picker prompt, e.g. `melos run test:web --no-select`.
 
 ## SDK archives
 
-`scripts/check_sdk_archives.sh [output-dir]` builds the `anytype`,
-`manytype_core` and `manytype_protocol` publish archives and tests them from a
-fresh consumer through a disposable local registry, including a native bridge
-build and a loopback sync (see [module boundaries](module-boundaries.md)). The
-output directory must be new or empty. The script needs Dart, Rust 1.88 or
-newer, Python 3.11 or newer, coreutils `timeout` (Homebrew `coreutils` on
-macOS), and network access to pub.dev and crates.io. A pass is loopback
-evidence, not compatibility evidence against an official Any-Sync deployment.
+`scripts/check_sdk_archives.sh [output-dir]` builds the `manytype_protocol`,
+`manytype_core`, `anytype` and `anytype_flutter` publish archives and tests
+them from fresh consumers through a disposable local registry: a pure Dart
+consumer, a cargo build of the hosted plugin's Rust sources, and a Flutter
+desktop app built on the hosted plugin, with loopback syncs on Linux (see
+[module boundaries](module-boundaries.md)). It runs on Linux or macOS. The
+output directory must be new or empty. The script needs Flutter with the
+host's desktop toolchain, Rust 1.88 or newer via rustup, Python 3.11 or newer,
+coreutils `timeout` (Homebrew `coreutils` on macOS), and network access to
+pub.dev and crates.io; on Linux the app is launched only when `xvfb-run` is
+installed. A pass is loopback evidence, not compatibility evidence against an
+official Any-Sync deployment.
 
 ## Self-hosted oracle stack
 

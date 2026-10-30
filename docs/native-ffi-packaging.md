@@ -69,18 +69,18 @@ build and two-launch smoke commands above.
 
 `NativeBridge.libraryPath` and then `MANYTYPE_QUIC_FFI_PATH` are explicit
 overrides. Without them, the loader prefers the signed library in a macOS app
-bundle, then the platform loader path, then the library `dart run
-anytype:build_native` placed in the running project's
-`.dart_tool/anytype/native`, then release and debug Rust artifacts found while
-walking up from the current directory. The platform path precedes the project
-build so a stale `.dart_tool` copy in this workspace cannot shadow a library
-a harness selects through `LD_LIBRARY_PATH`. Inside the repository,
-`build_native` builds from `rust/` rather than a staged snapshot. If a bundle or project library exists but cannot load, the load
-fails rather than falling back to another artifact. Every load checks
-`ffi_abi_version` against the Dart bindings. Package consumers outside this
-repository rely on the first four; the directory walk serves repository
-development only. The loader maps Linux and macOS only.
+bundle, then the platform library name through the platform loader path
+(`libmanytype_quic_ffi.so` on Linux and Android, `manytype_quic_ffi.dll` on
+Windows, `libmanytype_quic_ffi.dylib` on Apple platforms), then on iOS and
+macOS the `anytype_flutter` framework, then release and debug builds in
+`rust/target` and `packages/anytype_flutter/rust/target` found while walking
+up from the current directory, and finally on iOS and macOS the process's
+own symbols, checked for `ffi_abi_version`. If an override or the bundle
+library exists but cannot load, the load fails rather than falling back to
+another artifact. Every load checks `ffi_abi_version` against the Dart
+bindings. The directory walk serves repository development only.
 
-SDK consumers build the bridge from the Rust sources shipped in the `anytype`
-archive; see `packages/anytype/README.md`. No prebuilt binaries are
-published.
+Flutter apps outside this repository get the library from `anytype_flutter`,
+which builds it from source with cargokit for each platform and bundles it.
+Dart programs build it with cargo from that package's `rust/` directory; see
+`packages/anytype/README.md`. No prebuilt binaries are published.
