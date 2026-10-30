@@ -37,9 +37,11 @@ by the platform keychain if recovery phrases must not sit in plaintext files.
 ## Building
 
 Builds compile the bridge for each target with cargokit, so the build machine
-needs Rust 1.88 or newer installed with rustup. Cargokit installs the Rust
-targets it needs. No prebuilt binaries are downloaded: this release has no
-precompiled-binary configuration.
+needs rustup. Cargokit runs rustup's `stable` toolchain, which must be Rust
+1.88 or newer (rustup installs it if missing), adds the Rust targets it needs,
+and builds with `cargo build --locked` against the shipped `Cargo.lock`
+(`rust/cargokit.yaml`). No prebuilt binaries are downloaded: this release has
+no precompiled-binary configuration.
 
 | Platform | How the bridge ships |
 | --- | --- |

@@ -1,0 +1,16 @@
+# cargokit configuration for the manytype_quic_ffi crate.
+#
+# cargokit builds with rustup's stable toolchain (it accepts only stable,
+# beta or nightly), which must be Rust 1.88 or newer, and with the locked
+# dependency graph in Cargo.lock. No precompiled binaries are configured, so
+# every app build compiles the bridge from source.
+cargo:
+  debug:
+    extra_flags:
+      - --locked
+  release:
+    extra_flags:
+      - --locked
+  profile:
+    extra_flags:
+      - --locked
