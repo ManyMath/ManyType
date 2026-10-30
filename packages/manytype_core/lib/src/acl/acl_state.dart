@@ -198,7 +198,8 @@ class AclState {
     // Use the join's permissions, falling back to the invite's like any-sync.
     var permissions = join.permissions;
     if (permissions == AclUserPermissions.None) {
-      permissions = _pendingInvites[join.inviteRecordId]?.permissions ??
+      permissions =
+          _pendingInvites[join.inviteRecordId]?.permissions ??
           AclUserPermissions.None;
     }
     _permissions[identityHex] = permissions;
@@ -216,13 +217,7 @@ class AclState {
   }
 }
 
-enum AclAccountStatus {
-  active,
-  pending,
-  declined,
-  canceled,
-  removed,
-}
+enum AclAccountStatus { active, pending, declined, canceled, removed }
 
 class _PendingInvite {
   final String inviteKeyHex;

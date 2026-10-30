@@ -42,17 +42,16 @@ class AccountSyncMetadata {
   }
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'networkConfigContent': networkConfigContent,
-        if (configuredAt != null)
-          'configuredAt': configuredAt!.toUtc().toIso8601String(),
-        if (lastProbeAt != null)
-          'lastProbeAt': lastProbeAt!.toUtc().toIso8601String(),
-        if (lastSuccessfulSyncAt != null)
-          'lastSuccessfulSyncAt':
-              lastSuccessfulSyncAt!.toUtc().toIso8601String(),
-        if (pendingLocalChanges) 'pendingLocalChanges': true,
-        if (lastError != null) 'lastError': lastError,
-      };
+    'networkConfigContent': networkConfigContent,
+    if (configuredAt != null)
+      'configuredAt': configuredAt!.toUtc().toIso8601String(),
+    if (lastProbeAt != null)
+      'lastProbeAt': lastProbeAt!.toUtc().toIso8601String(),
+    if (lastSuccessfulSyncAt != null)
+      'lastSuccessfulSyncAt': lastSuccessfulSyncAt!.toUtc().toIso8601String(),
+    if (pendingLocalChanges) 'pendingLocalChanges': true,
+    if (lastError != null) 'lastError': lastError,
+  };
 
   static AccountSyncMetadata fromJson(Map<String, Object?> json) {
     return AccountSyncMetadata(

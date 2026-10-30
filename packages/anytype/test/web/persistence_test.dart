@@ -23,7 +23,8 @@ Future<WasmSqlite3> _loadSqlite3() async {
 }
 
 Future<(QueryExecutor, IndexedDbFileSystem)> _openPersistent(
-    String dbName) async {
+  String dbName,
+) async {
   final sqlite = await _loadSqlite3();
   final idb = await IndexedDbFileSystem.open(dbName: dbName);
   sqlite.registerVirtualFileSystem(idb);
@@ -44,36 +45,39 @@ void main() {
   group(
     'M014/S02 Drift web persistence',
     () {
-      test('round-trips a row across close/reopen with same databaseName',
-          () async {
-        final dbName =
-            'manytype-s02-persistence-${DateTime.now().microsecondsSinceEpoch}';
-
-        final (exec1, idb1) = await _openPersistent(dbName);
-        final db1 = ManytypeDatabase.forTesting(exec1);
-        await db1.insertObject('obj-persist-1', 'space-persist');
-        await db1.close();
-        await idb1.close();
-
-        final (exec2, idb2) = await _openPersistent(dbName);
-        final db2 = ManytypeDatabase.forTesting(exec2);
-        final deleted = await db2.isObjectDeleted('obj-persist-1');
-        expect(deleted, isFalse, reason: 'row must survive close/reopen');
-        await db2.close();
-        await idb2.close();
-      });
-
       test(
-          'chosenImplementation is loggable (R037: worker cross-origin '
+        'round-trips a row across close/reopen with same databaseName',
+        () async {
+          final dbName =
+              'manytype-s02-persistence-${DateTime.now().microsecondsSinceEpoch}';
+
+          final (exec1, idb1) = await _openPersistent(dbName);
+          final db1 = ManytypeDatabase.forTesting(exec1);
+          await db1.insertObject('obj-persist-1', 'space-persist');
+          await db1.close();
+          await idb1.close();
+
+          final (exec2, idb2) = await _openPersistent(dbName);
+          final db2 = ManytypeDatabase.forTesting(exec2);
+          final deleted = await db2.isObjectDeleted('obj-persist-1');
+          expect(deleted, isFalse, reason: 'row must survive close/reopen');
+          await db2.close();
+          await idb2.close();
+        },
+      );
+
+      test('chosenImplementation is loggable (R037: worker cross-origin '
           'falls back to inMemory under dart test -p chrome)', () async {
         final dbName =
             'manytype-s02-impl-check-${DateTime.now().microsecondsSinceEpoch}';
         final result = await WasmDatabase.open(
           databaseName: dbName,
-          sqlite3Uri:
-              Uri.parse('http://localhost:$_assetServerPort/sqlite3.wasm'),
+          sqlite3Uri: Uri.parse(
+            'http://localhost:$_assetServerPort/sqlite3.wasm',
+          ),
           driftWorkerUri: Uri.parse(
-              'http://localhost:$_assetServerPort/drift_worker.dart.js'),
+            'http://localhost:$_assetServerPort/drift_worker.dart.js',
+          ),
         );
         print('[M014/S02] chosenImplementation=${result.chosenImplementation}');
         print('[M014/S02] missingFeatures=${result.missingFeatures}');
@@ -100,13 +104,16 @@ void main() {
             'manytype-s02-features-${DateTime.now().microsecondsSinceEpoch}';
         final result = await WasmDatabase.open(
           databaseName: dbName,
-          sqlite3Uri:
-              Uri.parse('http://localhost:$_assetServerPort/sqlite3.wasm'),
+          sqlite3Uri: Uri.parse(
+            'http://localhost:$_assetServerPort/sqlite3.wasm',
+          ),
           driftWorkerUri: Uri.parse(
-              'http://localhost:$_assetServerPort/drift_worker.dart.js'),
+            'http://localhost:$_assetServerPort/drift_worker.dart.js',
+          ),
         );
         print(
-            '[M014/S02] missingFeatures=${result.missingFeatures} chosen=${result.chosenImplementation}');
+          '[M014/S02] missingFeatures=${result.missingFeatures} chosen=${result.chosenImplementation}',
+        );
         await result.resolvedExecutor.close();
       });
     },

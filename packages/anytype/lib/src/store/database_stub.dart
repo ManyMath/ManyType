@@ -2,8 +2,10 @@ import 'package:drift/drift.dart';
 
 import 'web_storage_diagnostics.dart';
 
-Future<QueryExecutor> openDatabaseForApp(String dbPath,
-    {WebStorageDiagnosticsCallback? onWebStorageDiagnostics}) {
+Future<QueryExecutor> openDatabaseForApp(
+  String dbPath, {
+  WebStorageDiagnosticsCallback? onWebStorageDiagnostics,
+}) {
   throw UnsupportedError(
     'openDatabaseForApp is not supported on this platform',
   );
@@ -16,7 +18,5 @@ Future<QueryExecutor> openDatabaseForTesting({String? name}) {
 }
 
 Future<Never> openWasmDatabaseForTesting({String? name}) {
-  throw UnsupportedError(
-    'openWasmDatabaseForTesting is only supported on web',
-  );
+  throw UnsupportedError('openWasmDatabaseForTesting is only supported on web');
 }

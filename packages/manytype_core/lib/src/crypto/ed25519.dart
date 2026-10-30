@@ -27,7 +27,9 @@ Future<Ed25519KeyPair> ed25519KeyPairFromSeed(Uint8List seed) async {
 /// Sign a message with Ed25519.
 /// Returns 64-byte signature.
 Future<Uint8List> ed25519Sign(
-    Uint8List privateKeySeed, Uint8List message) async {
+  Uint8List privateKeySeed,
+  Uint8List message,
+) async {
   final keyPair = await _ed25519.newKeyPairFromSeed(privateKeySeed);
   final signature = await _ed25519.sign(message, keyPair: keyPair);
   return Uint8List.fromList(signature.bytes);
@@ -36,7 +38,10 @@ Future<Uint8List> ed25519Sign(
 /// Verify an Ed25519 signature.
 /// Returns true if valid, false otherwise.
 Future<bool> ed25519Verify(
-    Uint8List publicKey, Uint8List message, Uint8List signature) async {
+  Uint8List publicKey,
+  Uint8List message,
+  Uint8List signature,
+) async {
   final sig = Signature(
     signature,
     publicKey: SimplePublicKey(publicKey, type: KeyPairType.ed25519),

@@ -45,19 +45,21 @@ void main() {
     );
   }
 
-  test('rejects and does not cache BlockGet data that does not match the CID',
-      () async {
-    final cid = await computeCid(Uint8List.fromList('expected'.codeUnits));
+  test(
+    'rejects and does not cache BlockGet data that does not match the CID',
+    () async {
+      final cid = await computeCid(Uint8List.fromList('expected'.codeUnits));
 
-    await expectLater(
-      open(cid, 'tampered'.codeUnits),
-      throwsA(isA<StateError>()),
-    );
-    expect(
-      await db.getCachedBlob(spaceId: 'space-a', fileId: 'file-1', cid: cid),
-      isNull,
-    );
-  });
+      await expectLater(
+        open(cid, 'tampered'.codeUnits),
+        throwsA(isA<StateError>()),
+      );
+      expect(
+        await db.getCachedBlob(spaceId: 'space-a', fileId: 'file-1', cid: cid),
+        isNull,
+      );
+    },
+  );
 
   test('accepts blocks addressed with a non-dag-cbor codec', () async {
     final payload = Uint8List.fromList('raw block'.codeUnits);

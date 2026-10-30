@@ -12,7 +12,7 @@ void main() {
           seenRequests.add(HeadSyncRequest.fromBuffer(payload));
           return HeadSyncResponse(
             results: [
-              HeadSyncResult(hash: [1], count: 0)
+              HeadSyncResult(hash: [1], count: 0),
             ],
           ).writeToBuffer();
         },
@@ -36,7 +36,7 @@ void main() {
       final responses = <HeadSyncResponse>[
         HeadSyncResponse(
           results: [
-            HeadSyncResult(hash: [1], count: 300)
+            HeadSyncResult(hash: [1], count: 300),
           ],
         ),
         HeadSyncResponse(
@@ -65,7 +65,7 @@ void main() {
       final responses = <HeadSyncResponse>[
         HeadSyncResponse(
           results: [
-            HeadSyncResult(hash: [1], count: 2)
+            HeadSyncResult(hash: [1], count: 2),
           ],
         ),
         HeadSyncResponse(
@@ -95,43 +95,45 @@ void main() {
       expect(heads['obj-2'], equals({'head-2'}));
     });
 
-    test('drops empty ranges and merges collected element heads by object id',
-        () {
-      final seenRequests = <HeadSyncRequest>[];
-      final responses = <HeadSyncResponse>[
-        HeadSyncResponse(
-          results: [
-            HeadSyncResult(hash: [1], count: 400)
-          ],
-        ),
-        HeadSyncResponse(
-          results: [
-            HeadSyncResult(
-              elements: [
-                HeadSyncResultElement(id: 'obj-1', head: 'head-a'),
-                HeadSyncResultElement(id: 'obj-1', head: 'head-b'),
-              ],
-              count: 2,
-            ),
-            ...List.generate(
-              31,
-              (_) => HeadSyncResult(hash: const [], count: 0),
-            ),
-          ],
-        ),
-      ];
-      final client = HeadSyncClient(
-        invoker: (handleId, method, payload) {
-          seenRequests.add(HeadSyncRequest.fromBuffer(payload));
-          return responses.removeAt(0).writeToBuffer();
-        },
-      );
+    test(
+      'drops empty ranges and merges collected element heads by object id',
+      () {
+        final seenRequests = <HeadSyncRequest>[];
+        final responses = <HeadSyncResponse>[
+          HeadSyncResponse(
+            results: [
+              HeadSyncResult(hash: [1], count: 400),
+            ],
+          ),
+          HeadSyncResponse(
+            results: [
+              HeadSyncResult(
+                elements: [
+                  HeadSyncResultElement(id: 'obj-1', head: 'head-a'),
+                  HeadSyncResultElement(id: 'obj-1', head: 'head-b'),
+                ],
+                count: 2,
+              ),
+              ...List.generate(
+                31,
+                (_) => HeadSyncResult(hash: const [], count: 0),
+              ),
+            ],
+          ),
+        ];
+        final client = HeadSyncClient(
+          invoker: (handleId, method, payload) {
+            seenRequests.add(HeadSyncRequest.fromBuffer(payload));
+            return responses.removeAt(0).writeToBuffer();
+          },
+        );
 
-      final heads = client.fetchServerHeads(7, 'space-1');
+        final heads = client.fetchServerHeads(7, 'space-1');
 
-      expect(seenRequests, hasLength(2));
-      expect(heads['obj-1'], equals({'head-a', 'head-b'}));
-      expect(heads.keys, hasLength(1));
-    });
+        expect(seenRequests, hasLength(2));
+        expect(heads['obj-1'], equals({'head-a', 'head-b'}));
+        expect(heads.keys, hasLength(1));
+      },
+    );
   });
 }

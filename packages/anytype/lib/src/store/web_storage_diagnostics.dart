@@ -34,7 +34,8 @@ class WebStorageDiagnostics {
   });
 
   @override
-  String toString() => 'WebStorageDiagnostics($implementationName, '
+  String toString() =>
+      'WebStorageDiagnostics($implementationName, '
       'durable: $isDurable, multiTabSafe: $isMultiTabSafe, '
       'missingFeatures: $missingFeatures)';
 }
@@ -42,5 +43,5 @@ class WebStorageDiagnostics {
 /// Invoked with [WebStorageDiagnostics] once a web [ManytypeDatabase] has
 /// resolved its storage backend. Ignored on native, where storage is always
 /// a real file on disk.
-typedef WebStorageDiagnosticsCallback = void Function(
-    WebStorageDiagnostics diagnostics);
+typedef WebStorageDiagnosticsCallback =
+    void Function(WebStorageDiagnostics diagnostics);

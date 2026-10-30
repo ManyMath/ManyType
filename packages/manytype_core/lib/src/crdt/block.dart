@@ -29,10 +29,7 @@ Block createHeaderBlock(String id, String text, int level) {
   };
   return Block(
     id: id,
-    text: Block_Content_Text(
-      text: text,
-      style: style,
-    ),
+    text: Block_Content_Text(text: text, style: style),
   );
 }
 
@@ -43,19 +40,20 @@ Block createHeaderBlock(String id, String text, int level) {
 /// - [checkbox]: checkbox/todo list ([Block_Content_Text_Style.Checkbox])
 ///
 /// If both [checkbox] and [numbered] are true, checkbox takes precedence.
-Block createListBlock(String id, String text,
-    {bool numbered = false, bool checkbox = false}) {
+Block createListBlock(
+  String id,
+  String text, {
+  bool numbered = false,
+  bool checkbox = false,
+}) {
   final style = checkbox
       ? Block_Content_Text_Style.Checkbox
       : numbered
-          ? Block_Content_Text_Style.Numbered
-          : Block_Content_Text_Style.Marked;
+      ? Block_Content_Text_Style.Numbered
+      : Block_Content_Text_Style.Marked;
   return Block(
     id: id,
-    text: Block_Content_Text(
-      text: text,
-      style: style,
-    ),
+    text: Block_Content_Text(text: text, style: style),
   );
 }
 
@@ -65,10 +63,7 @@ Block createListBlock(String id, String text,
 Block createQuoteBlock(String id, String text) {
   return Block(
     id: id,
-    text: Block_Content_Text(
-      text: text,
-      style: Block_Content_Text_Style.Quote,
-    ),
+    text: Block_Content_Text(text: text, style: Block_Content_Text_Style.Quote),
   );
 }
 
@@ -107,7 +102,9 @@ Block createCalloutBlock(String id, String text) {
 ///
 /// This is the minimum viable structure for a document snapshot.
 SmartBlockSnapshotBase createMinimalSnapshot(
-    String rootId, List<Block> contentBlocks) {
+  String rootId,
+  List<Block> contentBlocks,
+) {
   final layoutId = 'layout-$rootId';
 
   final rootBlock = Block(
@@ -118,9 +115,7 @@ SmartBlockSnapshotBase createMinimalSnapshot(
 
   final layoutBlock = Block(
     id: layoutId,
-    layout: Block_Content_Layout(
-      style: Block_Content_Layout_Style.Column,
-    ),
+    layout: Block_Content_Layout(style: Block_Content_Layout_Style.Column),
     childrenIds: contentBlocks.map((b) => b.id),
   );
 
@@ -147,9 +142,7 @@ SmartBlockSnapshotBase createMinimalPageSnapshotBase({
 
   final headerBlock = Block(
     id: 'header',
-    layout: Block_Content_Layout(
-      style: Block_Content_Layout_Style.Header,
-    ),
+    layout: Block_Content_Layout(style: Block_Content_Layout_Style.Header),
     childrenIds: const ['title', 'featuredRelations'],
   );
 

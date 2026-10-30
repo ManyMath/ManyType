@@ -3,11 +3,8 @@ import 'dart:typed_data';
 import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/spacesync.dart';
 
-typedef SpacePullUnaryInvoker = Uint8List Function(
-  int handleId,
-  String method,
-  Uint8List payload,
-);
+typedef SpacePullUnaryInvoker =
+    Uint8List Function(int handleId, String method, Uint8List payload);
 
 class SpacePullBootstrapResult {
   const SpacePullBootstrapResult({
@@ -21,7 +18,7 @@ class SpacePullBootstrapResult {
 
 class SpacePullBootstrap {
   SpacePullBootstrap({required SpacePullUnaryInvoker invoker})
-      : _invoker = invoker;
+    : _invoker = invoker;
 
   final SpacePullUnaryInvoker _invoker;
 
@@ -42,8 +39,9 @@ class SpacePullBootstrap {
 
     return SpacePullBootstrapResult(
       payload: response.payload,
-      aclRecords:
-          response.aclRecords.map(_normalizeAclRecord).toList(growable: false),
+      aclRecords: response.aclRecords
+          .map(_normalizeAclRecord)
+          .toList(growable: false),
     );
   }
 
@@ -58,9 +56,6 @@ class SpacePullBootstrap {
     } catch (_) {
       // Fall back to the explicit ID field if the payload is only a raw record.
     }
-    return RawRecordWithId(
-      id: record.id,
-      payload: record.aclPayload,
-    );
+    return RawRecordWithId(id: record.id, payload: record.aclPayload);
   }
 }

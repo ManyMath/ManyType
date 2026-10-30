@@ -1,5 +1,6 @@
 @TestOn(
-    'vm') // shells out via Process.run to the manytype.dart CLI + live docker oracle stack
+  'vm',
+) // shells out via Process.run to the manytype.dart CLI + live docker oracle stack
 @Tags(['round_trip'])
 library;
 
@@ -46,8 +47,13 @@ void main() {
     'file-upload then file-open round-trips bytes through the live filenode',
     () async {
       final repoRoot = findRepoRoot();
-      final networkConfigPath =
-          p.join(repoRoot, 'docker', 'any-sync', 'etc', 'client.yml');
+      final networkConfigPath = p.join(
+        repoRoot,
+        'docker',
+        'any-sync',
+        'etc',
+        'client.yml',
+      );
       final manytypeDir = Directory(p.join(home.path, '.manytype'));
       await manytypeDir.create(recursive: true);
 
@@ -56,11 +62,12 @@ void main() {
         mnemonic: mnemonic,
         serverAddress: '127.0.0.1:33020',
       );
-      final configToml = 'mnemonic = "${config.mnemonic}"\n'
+      final configToml =
+          'mnemonic = "${config.mnemonic}"\n'
           'server_address = "${config.serverAddress}"\n';
-      await File(p.join(manytypeDir.path, 'config.toml')).writeAsString(
-        configToml,
-      );
+      await File(
+        p.join(manytypeDir.path, 'config.toml'),
+      ).writeAsString(configToml);
 
       // A space must exist server-side (SpacePush) before the filenode will
       // accept blocks scoped to it -- same bootstrap seedLiveSpaceForSync
@@ -79,7 +86,8 @@ void main() {
       final env = {
         ...Platform.environment,
         'HOME': home.path,
-        'LD_LIBRARY_PATH': '${Platform.environment['LD_LIBRARY_PATH'] ?? ''}:'
+        'LD_LIBRARY_PATH':
+            '${Platform.environment['LD_LIBRARY_PATH'] ?? ''}:'
             '$repoRoot/rust/target/release',
       };
 
@@ -105,15 +113,24 @@ void main() {
         environment: env,
         workingDirectory: repoRoot,
       );
-      expect(uploadResult.exitCode, equals(0),
-          reason: 'file-upload failed: ${uploadResult.stderr}');
+      expect(
+        uploadResult.exitCode,
+        equals(0),
+        reason: 'file-upload failed: ${uploadResult.stderr}',
+      );
       final uploadOutput = uploadResult.stdout.toString();
-      expect(uploadOutput, contains('Uploaded phase30-file'),
-          reason: 'expected a fresh upload, not a dedup skip: $uploadOutput');
+      expect(
+        uploadOutput,
+        contains('Uploaded phase30-file'),
+        reason: 'expected a fresh upload, not a dedup skip: $uploadOutput',
+      );
 
       final cidMatch = RegExp(r'cid=([^)]+)\)').firstMatch(uploadOutput);
-      expect(cidMatch, isNotNull,
-          reason: 'Could not find cid in upload output: $uploadOutput');
+      expect(
+        cidMatch,
+        isNotNull,
+        reason: 'Could not find cid in upload output: $uploadOutput',
+      );
       final cid = cidMatch!.group(1)!;
 
       final outputPath = p.join(home.path, 'downloaded.bin');
@@ -135,11 +152,18 @@ void main() {
         environment: env,
         workingDirectory: repoRoot,
       );
-      expect(openResult.exitCode, equals(0),
-          reason: 'file-open failed: ${openResult.stderr}');
-      expect(openResult.stdout.toString(), contains('(network)'),
-          reason: 'expected a genuine filenode fetch, not a cache hit: '
-              '${openResult.stdout}');
+      expect(
+        openResult.exitCode,
+        equals(0),
+        reason: 'file-open failed: ${openResult.stderr}',
+      );
+      expect(
+        openResult.stdout.toString(),
+        contains('(network)'),
+        reason:
+            'expected a genuine filenode fetch, not a cache hit: '
+            '${openResult.stdout}',
+      );
 
       final downloadedContent = await File(outputPath).readAsString();
       expect(downloadedContent, equals(uploadedContent));

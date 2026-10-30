@@ -76,9 +76,7 @@ void main() {
         requests++;
         final request = HeadSyncRequest.fromBuffer(payload);
         return HeadSyncResponse(
-          results: [
-            for (final _ in request.ranges) HeadSyncResult(count: 300),
-          ],
+          results: [for (final _ in request.ranges) HeadSyncResult(count: 300)],
         ).writeToBuffer();
       },
       maxPendingRanges: 4096,

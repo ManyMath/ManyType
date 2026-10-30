@@ -183,7 +183,8 @@ Future<Map<String, ResolvedOption>> loadLocalOptionIndex(
     // never touched again by a plain color edit, so it must not shadow a
     // later `color`-only update from either implementation.
     final name = details['name']?.stringValue ?? details['text']?.stringValue;
-    final color = details['color']?.stringValue ??
+    final color =
+        details['color']?.stringValue ??
         details['relationOptionColor']?.stringValue;
     final relationKey = details['relationKey']?.stringValue;
 
@@ -191,8 +192,9 @@ Future<Map<String, ResolvedOption>> loadLocalOptionIndex(
       id: input.objectId,
       name: (name != null && name.isNotEmpty) ? name : null,
       color: (color != null && color.isNotEmpty) ? color : null,
-      relationKey:
-          (relationKey != null && relationKey.isNotEmpty) ? relationKey : null,
+      relationKey: (relationKey != null && relationKey.isNotEmpty)
+          ? relationKey
+          : null,
     );
   }
   return result;

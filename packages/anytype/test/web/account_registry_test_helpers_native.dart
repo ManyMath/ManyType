@@ -7,7 +7,8 @@ import 'package:anytype/src/account_registry.dart';
 /// off `baseDir`, not a string prefix: see
 /// account_registry_test_helpers_web.dart for the web-side equivalent).
 Future<void> resetAccountRegistryForTest(String uniqueSuffix) async {
-  final tempDir = await Directory.systemTemp
-      .createTemp('manytype_account_registry_test_$uniqueSuffix');
+  final tempDir = await Directory.systemTemp.createTemp(
+    'manytype_account_registry_test_$uniqueSuffix',
+  );
   AccountRegistry.testBaseDirOverride = tempDir.path;
 }

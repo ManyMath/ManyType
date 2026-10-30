@@ -49,8 +49,10 @@ Future<void> main() async {
       );
       final checked = after!.blocks.firstWhere((b) => b.id == checkbox.id);
       final changes = await session.db.getChangesForObject(task.objectId);
-      stdout.writeln('Task checked: ${checked.checked}; '
-          '${changes.length} signed, encrypted changes stored locally');
+      stdout.writeln(
+        'Task checked: ${checked.checked}; '
+        '${changes.length} signed, encrypted changes stored locally',
+      );
     } finally {
       await session.close();
     }
@@ -62,8 +64,10 @@ Future<void> main() async {
       mnemonic: recoveryPhrase,
       displayName: 'Restored',
     );
-    stdout.writeln('Restored account ${restored.id} '
-        '(matches: ${restored.id == account.id})');
+    stdout.writeln(
+      'Restored account ${restored.id} '
+      '(matches: ${restored.id == account.id})',
+    );
   } finally {
     ManytypeStorage.directory = null;
     await root.delete(recursive: true);

@@ -7,11 +7,10 @@ import 'repo_root.dart';
 /// when they are all in place. `dart test` runs from the package directory,
 /// so the script path must not be resolved against the cwd.
 Future<String?> oracleSkipReason() async {
-  final result = await Process.run(
-    'bash',
-    ['scripts/self_hosted_oracle_preflight.sh', '--quiet'],
-    workingDirectory: findRepoRoot(),
-  );
+  final result = await Process.run('bash', [
+    'scripts/self_hosted_oracle_preflight.sh',
+    '--quiet',
+  ], workingDirectory: findRepoRoot());
   if (result.exitCode == 0) return null;
   final detail = result.stderr.toString().trim();
   return 'docker oracle prerequisites unavailable'

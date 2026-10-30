@@ -36,8 +36,9 @@ Future<NetworkProbeResult> probeNetworkCommand(
     networkConfigPath: networkConfigPath,
     networkConfigContent: networkConfigContent,
   );
-  final coordinatorAddress =
-      chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
+  final coordinatorAddress = chooseBestAddress(
+    requireCoordinatorNode(networkConfig).addresses,
+  );
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final bridge = NativeBridge();
 
@@ -45,13 +46,16 @@ Future<NetworkProbeResult> probeNetworkCommand(
     coordinatorAddress,
     identity.seed,
     identity.accountSeed,
-    expectedPeerId:
-        expectedPeerIdForAddress(coordinatorAddress, config: networkConfig),
+    expectedPeerId: expectedPeerIdForAddress(
+      coordinatorAddress,
+      config: networkConfig,
+    ),
   );
 
   try {
-    final requestBytes =
-        Uint8List.fromList(NetworkConfigurationRequest().writeToBuffer());
+    final requestBytes = Uint8List.fromList(
+      NetworkConfigurationRequest().writeToBuffer(),
+    );
     final responseBytes = bridge.invoke(
       handleId,
       '/coordinator.Coordinator/NetworkConfiguration',

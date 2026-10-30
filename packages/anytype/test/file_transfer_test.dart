@@ -16,85 +16,89 @@ void main() {
 
   group('file transfer helpers', () {
     test(
-        'upload skips BlockPush when BlocksCheck reports the blob exists in space',
-        () async {
-      final payload = Uint8List.fromList('hello anytype'.codeUnits);
-      final cid = await computeCid(payload);
-      final cidBytes = cidToBytes(cid);
-      final methods = <String>[];
+      'upload skips BlockPush when BlocksCheck reports the blob exists in space',
+      () async {
+        final payload = Uint8List.fromList('hello anytype'.codeUnits);
+        final cid = await computeCid(payload);
+        final cidBytes = cidToBytes(cid);
+        final methods = <String>[];
 
-      final result = await uploadBlobToFileNode(
-        fileHandleId: 1,
-        invoke: (handleId, method, requestBytes) {
-          methods.add(method);
-          expect(handleId, 1);
-          if (method == '/filesync.File/BlocksCheck') {
-            return filesync.BlocksCheckResponse(
-              blocksAvailability: [
-                filesync.BlockAvailability(
-                  cid: cidBytes,
-                  status: filesync.AvailabilityStatus.ExistsInSpace,
-                ),
-              ],
-            ).writeToBuffer();
-          }
-          fail('unexpected RPC: $method');
-        },
-        spaceId: 'space-a',
-        fileId: 'file-1',
-        bytes: payload,
-      );
-
-      expect(result.cid, cid);
-      expect(result.uploaded, isFalse);
-      expect(methods, ['/filesync.File/BlocksCheck']);
-    });
-
-    test('upload binds when BlocksCheck reports the blob exists outside space',
-        () async {
-      final payload = Uint8List.fromList('hello anytype'.codeUnits);
-      final cid = await computeCid(payload);
-      final cidBytes = cidToBytes(cid);
-      final methods = <String>[];
-
-      final result = await uploadBlobToFileNode(
-        fileHandleId: 2,
-        invoke: (handleId, method, requestBytes) {
-          methods.add(method);
-          expect(handleId, 2);
-          switch (method) {
-            case '/filesync.File/BlocksCheck':
+        final result = await uploadBlobToFileNode(
+          fileHandleId: 1,
+          invoke: (handleId, method, requestBytes) {
+            methods.add(method);
+            expect(handleId, 1);
+            if (method == '/filesync.File/BlocksCheck') {
               return filesync.BlocksCheckResponse(
                 blocksAvailability: [
                   filesync.BlockAvailability(
                     cid: cidBytes,
-                    status: filesync.AvailabilityStatus.Exists,
+                    status: filesync.AvailabilityStatus.ExistsInSpace,
                   ),
                 ],
               ).writeToBuffer();
-            case '/filesync.File/BlocksBind':
-              final request =
-                  filesync.BlocksBindRequest.fromBuffer(requestBytes);
-              expect(request.spaceId, 'space-a');
-              expect(request.fileId, 'file-1');
-              expect(request.cids, [cidBytes]);
-              return filesync.Ok().writeToBuffer();
-            default:
-              fail('unexpected RPC: $method');
-          }
-        },
-        spaceId: 'space-a',
-        fileId: 'file-1',
-        bytes: payload,
-      );
+            }
+            fail('unexpected RPC: $method');
+          },
+          spaceId: 'space-a',
+          fileId: 'file-1',
+          bytes: payload,
+        );
 
-      expect(result.cid, cid);
-      expect(result.uploaded, isFalse);
-      expect(methods, [
-        '/filesync.File/BlocksCheck',
-        '/filesync.File/BlocksBind',
-      ]);
-    });
+        expect(result.cid, cid);
+        expect(result.uploaded, isFalse);
+        expect(methods, ['/filesync.File/BlocksCheck']);
+      },
+    );
+
+    test(
+      'upload binds when BlocksCheck reports the blob exists outside space',
+      () async {
+        final payload = Uint8List.fromList('hello anytype'.codeUnits);
+        final cid = await computeCid(payload);
+        final cidBytes = cidToBytes(cid);
+        final methods = <String>[];
+
+        final result = await uploadBlobToFileNode(
+          fileHandleId: 2,
+          invoke: (handleId, method, requestBytes) {
+            methods.add(method);
+            expect(handleId, 2);
+            switch (method) {
+              case '/filesync.File/BlocksCheck':
+                return filesync.BlocksCheckResponse(
+                  blocksAvailability: [
+                    filesync.BlockAvailability(
+                      cid: cidBytes,
+                      status: filesync.AvailabilityStatus.Exists,
+                    ),
+                  ],
+                ).writeToBuffer();
+              case '/filesync.File/BlocksBind':
+                final request = filesync.BlocksBindRequest.fromBuffer(
+                  requestBytes,
+                );
+                expect(request.spaceId, 'space-a');
+                expect(request.fileId, 'file-1');
+                expect(request.cids, [cidBytes]);
+                return filesync.Ok().writeToBuffer();
+              default:
+                fail('unexpected RPC: $method');
+            }
+          },
+          spaceId: 'space-a',
+          fileId: 'file-1',
+          bytes: payload,
+        );
+
+        expect(result.cid, cid);
+        expect(result.uploaded, isFalse);
+        expect(methods, [
+          '/filesync.File/BlocksCheck',
+          '/filesync.File/BlocksBind',
+        ]);
+      },
+    );
 
     test('upload pushes exactly one missing block', () async {
       final payload = Uint8List.fromList('hello anytype'.codeUnits);
@@ -117,8 +121,9 @@ void main() {
                 ],
               ).writeToBuffer();
             case '/filesync.File/BlockPush':
-              final request =
-                  filesync.BlockPushRequest.fromBuffer(requestBytes);
+              final request = filesync.BlockPushRequest.fromBuffer(
+                requestBytes,
+              );
               expect(request.fileId, 'file-1');
               expect(request.spaceId, 'space-a');
               expect(request.cid, cidBytes);
@@ -182,11 +187,7 @@ void main() {
       expect(second.bytes, payload);
       expect(blockGetCalls, 1);
       expect(
-        await db.getCachedBlob(
-          spaceId: 'space-a',
-          fileId: 'file-1',
-          cid: cid,
-        ),
+        await db.getCachedBlob(spaceId: 'space-a', fileId: 'file-1', cid: cid),
         isNotNull,
       );
     });

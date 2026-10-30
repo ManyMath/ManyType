@@ -22,8 +22,7 @@ void main() {
   setUpAll(configureWebAppDatabaseAssets);
 
   group('R041 ManytypeDatabase(dbPath) production web connection', () {
-    test(
-        'succeeds (no UnsupportedError) and persists across close/reopen '
+    test('succeeds (no UnsupportedError) and persists across close/reopen '
         'when a durable implementation is available', () async {
       final dbName =
           'manytype-r041-app-persist-${DateTime.now().microsecondsSinceEpoch}';
@@ -34,11 +33,14 @@ void main() {
       // real deployment serves the worker same-origin and gets IndexedDB or
       // OPFS. Check which one this run got before asserting persistence, so
       // the test is honest about what it can observe here.
-      final diagnostic =
-          await database_web.openWasmDatabaseForApp('$dbName-diagnostic');
+      final diagnostic = await database_web.openWasmDatabaseForApp(
+        '$dbName-diagnostic',
+      );
       final implementation = diagnostic.chosenImplementation;
-      printOnFailure('chosenImplementation=$implementation '
-          'missingFeatures=${diagnostic.missingFeatures}');
+      printOnFailure(
+        'chosenImplementation=$implementation '
+        'missingFeatures=${diagnostic.missingFeatures}',
+      );
       await diagnostic.resolvedExecutor.close();
 
       final db1 = ManytypeDatabase(dbName);
@@ -50,10 +52,12 @@ void main() {
       await db2.close();
 
       if (implementation == WasmStorageImplementation.inMemory) {
-        printOnFailure('chosenImplementation was inMemory in this environment: '
-            'cross-instance persistence cannot be observed here, but the '
-            'production constructor completed without the UnsupportedError '
-            'it used to throw unconditionally.');
+        printOnFailure(
+          'chosenImplementation was inMemory in this environment: '
+          'cross-instance persistence cannot be observed here, but the '
+          'production constructor completed without the UnsupportedError '
+          'it used to throw unconditionally.',
+        );
         return;
       }
       expect(objects.map((o) => o.id), contains('obj-app-persist-1'));

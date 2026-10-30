@@ -1,5 +1,6 @@
 @TestOn(
-    'vm') // connects to a live coordinator/sync node via NativeBridge (FFI): no web transport
+  'vm',
+) // connects to a live coordinator/sync node via NativeBridge (FFI): no web transport
 library;
 
 import 'dart:io';
@@ -67,15 +68,15 @@ void main() {
       final second = RawRecordWithId(id: 'cid-2', payload: [4, 5, 6]);
       final service = AclSyncService(
         invoker: (handleId, method, payload) => AclGetRecordsResponse(
-          records: [
-            first.writeToBuffer(),
-            second.writeToBuffer(),
-          ],
+          records: [first.writeToBuffer(), second.writeToBuffer()],
         ).writeToBuffer(),
       );
 
-      final records =
-          service.getRecords(handleId: 1, spaceId: 'space-1', aclHead: 'cid-1');
+      final records = service.getRecords(
+        handleId: 1,
+        spaceId: 'space-1',
+        aclHead: 'cid-1',
+      );
 
       expect(records.map((record) => record.id), ['cid-1', 'cid-2']);
     });
@@ -93,8 +94,8 @@ void main() {
           final libName = Platform.isLinux
               ? 'libmanytype_quic_ffi.so'
               : Platform.isMacOS
-                  ? 'libmanytype_quic_ffi.dylib'
-                  : null;
+              ? 'libmanytype_quic_ffi.dylib'
+              : null;
           if (libName == null) return false;
 
           var dir = Directory.current.absolute;
@@ -126,8 +127,9 @@ void main() {
           final networkConfigPath = await writeLocalNetworkConfig(
             Directory.systemTemp.createTempSync('manytype_phase17_local_cfg_'),
           );
-          fixture =
-              await createPhase17Fixture(networkConfigPath: networkConfigPath);
+          fixture = await createPhase17Fixture(
+            networkConfigPath: networkConfigPath,
+          );
           await seedPhase17Fixture(fixture);
           handleId = bridge.connect(
             fixture.config.serverAddress,
@@ -144,8 +146,9 @@ void main() {
           final statusBytes = bridge.invoke(
             handleId,
             '/coordinator.Coordinator/SpaceStatusCheck',
-            SpaceStatusCheckRequest(spaceId: fixture.identity.spaceId)
-                .writeToBuffer(),
+            SpaceStatusCheckRequest(
+              spaceId: fixture.identity.spaceId,
+            ).writeToBuffer(),
           );
           final status = SpaceStatusCheckResponse.fromBuffer(statusBytes);
           expect(status.payload.isShared, isTrue);
@@ -159,9 +162,7 @@ void main() {
               aclContent: [
                 AclContentValue(
                   invite: AclAccountInvite(
-                    inviteKey: marshalEd25519PublicKey(
-                      inviteKeyPair.publicKey,
-                    ),
+                    inviteKey: marshalEd25519PublicKey(inviteKeyPair.publicKey),
                     permissions: AclUserPermissions.Writer,
                   ),
                 ),

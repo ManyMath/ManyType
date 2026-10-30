@@ -83,12 +83,8 @@ void main() {
             'b': Value(stringValue: '2'),
           }),
         ),
-        _wrapAsRawTreeChange(
-          _detailsSetChange('a', Value(stringValue: '10')),
-        ),
-        _wrapAsRawTreeChange(
-          _detailsSetChange('c', Value(stringValue: '3')),
-        ),
+        _wrapAsRawTreeChange(_detailsSetChange('a', Value(stringValue: '10'))),
+        _wrapAsRawTreeChange(_detailsSetChange('c', Value(stringValue: '3'))),
       ];
       final out = await replayObjectDetails(
         rawTreeChanges: rows,
@@ -148,29 +144,31 @@ void main() {
       expect(out, isEmpty);
     });
 
-    test('a concurrent snapshot keeps details set on a sibling branch',
-        () async {
-      final base = _wrapAsRawTreeChange(
-        _snapshotChange(<String, Value>{'a': Value(stringValue: '1')}),
-      );
-      final baseId = await computeCid(base);
-      final rows = <Uint8List>[
-        base,
-        _wrapAsRawTreeChange(
-          _detailsSetChange('a', Value(stringValue: '10')),
-          [baseId],
-        ),
-        _wrapAsRawTreeChange(
+    test(
+      'a concurrent snapshot keeps details set on a sibling branch',
+      () async {
+        final base = _wrapAsRawTreeChange(
           _snapshotChange(<String, Value>{'a': Value(stringValue: '1')}),
-          [baseId],
-        ),
-      ];
-      final out = await replayObjectDetails(
-        rawTreeChanges: rows,
-        treeKey: emptyKey,
-      );
-      expect(out['a']!.stringValue, '10');
-    });
+        );
+        final baseId = await computeCid(base);
+        final rows = <Uint8List>[
+          base,
+          _wrapAsRawTreeChange(
+            _detailsSetChange('a', Value(stringValue: '10')),
+            [baseId],
+          ),
+          _wrapAsRawTreeChange(
+            _snapshotChange(<String, Value>{'a': Value(stringValue: '1')}),
+            [baseId],
+          ),
+        ];
+        final out = await replayObjectDetails(
+          rawTreeChanges: rows,
+          treeKey: emptyKey,
+        );
+        expect(out['a']!.stringValue, '10');
+      },
+    );
 
     test('returned values are deep-copied (mutating them is safe)', () async {
       final rows = <Uint8List>[

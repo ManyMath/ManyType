@@ -31,8 +31,10 @@ void main() {
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
-    config =
-        CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
+    config = CliConfig(
+      mnemonic: testMnemonic,
+      serverAddress: '127.0.0.1:33020',
+    );
     spaceId = (await Identity.fromMnemonic(testMnemonic)).spaceId;
   });
 
@@ -68,53 +70,59 @@ void main() {
       isSnapshot: true,
     );
 
-    final meta = (await listCommand(db, config)).singleWhere(
-      (object) => object.id == objectId,
-    );
+    final meta = (await listCommand(
+      db,
+      config,
+    )).singleWhere((object) => object.id == objectId);
     expect(meta.name, 'Edited');
   });
 
-  test('detailsUnset and a valueless detailsSet remove listed details',
-      () async {
-    final objectId = await _insertRoot(db, spaceId);
-    final base = await _insertChange(
-      db,
-      objectId,
-      [objectId],
-      _snapshot({'name': 'Doc', 'tag': 'x', 'status': 'y'}),
-      timestamp: 100,
-      isSnapshot: true,
-    );
-    await _insertChange(
-      db,
-      objectId,
-      [base],
-      _content([
-        changes_proto.Change_Content(
-          detailsUnset: changes_proto.Change_DetailsUnset(key: 'tag'),
-        ),
-        _detailsSet('status', null),
-      ]),
-      timestamp: 200,
-    );
+  test(
+    'detailsUnset and a valueless detailsSet remove listed details',
+    () async {
+      final objectId = await _insertRoot(db, spaceId);
+      final base = await _insertChange(
+        db,
+        objectId,
+        [objectId],
+        _snapshot({'name': 'Doc', 'tag': 'x', 'status': 'y'}),
+        timestamp: 100,
+        isSnapshot: true,
+      );
+      await _insertChange(
+        db,
+        objectId,
+        [base],
+        _content([
+          changes_proto.Change_Content(
+            detailsUnset: changes_proto.Change_DetailsUnset(key: 'tag'),
+          ),
+          _detailsSet('status', null),
+        ]),
+        timestamp: 200,
+      );
 
-    final meta = (await listCommand(db, config)).singleWhere(
-      (object) => object.id == objectId,
-    );
-    expect(meta.details.keys, ['name']);
-  });
+      final meta = (await listCommand(
+        db,
+        config,
+      )).singleWhere((object) => object.id == objectId);
+      expect(meta.details.keys, ['name']);
+    },
+  );
 }
 
 /// Insert a Page root change and its object row; returns the object id.
 Future<String> _insertRoot(ManytypeDatabase db, String spaceId) async {
-  final raw = Uint8List.fromList(RawTreeChange(
-    payload: RootChange(
-      spaceId: spaceId,
-      changeType: 'anytype.object',
-      // SmartBlockType 16 (Page).
-      changePayload: const [0x08, 0x10],
+  final raw = Uint8List.fromList(
+    RawTreeChange(
+      payload: RootChange(
+        spaceId: spaceId,
+        changeType: 'anytype.object',
+        // SmartBlockType 16 (Page).
+        changePayload: const [0x08, 0x10],
+      ).writeToBuffer(),
     ).writeToBuffer(),
-  ).writeToBuffer());
+  );
   final id = await computeCid(raw);
   await db.insertObject(id, spaceId);
   await db.insertChange(id, id, raw, '[]');
@@ -130,14 +138,16 @@ Future<String> _insertChange(
   required int timestamp,
   bool isSnapshot = false,
 }) async {
-  final raw = Uint8List.fromList(RawTreeChange(
-    payload: TreeChange(
-      treeHeadIds: parents,
-      changesData: change.writeToBuffer(),
-      timestamp: Int64(timestamp),
-      isSnapshot: isSnapshot,
+  final raw = Uint8List.fromList(
+    RawTreeChange(
+      payload: TreeChange(
+        treeHeadIds: parents,
+        changesData: change.writeToBuffer(),
+        timestamp: Int64(timestamp),
+        isSnapshot: isSnapshot,
+      ).writeToBuffer(),
     ).writeToBuffer(),
-  ).writeToBuffer());
+  );
   final id = await computeCid(raw);
   await db.insertChange(id, objectId, raw, jsonEncode(parents));
   return id;
@@ -147,10 +157,12 @@ changes_proto.Change _snapshot(Map<String, String> details) =>
     changes_proto.Change(
       snapshot: changes_proto.Change_Snapshot(
         data: SmartBlockSnapshotBase(
-          details: Struct(fields: [
-            for (final entry in details.entries)
-              MapEntry(entry.key, Value(stringValue: entry.value)),
-          ]),
+          details: Struct(
+            fields: [
+              for (final entry in details.entries)
+                MapEntry(entry.key, Value(stringValue: entry.value)),
+            ],
+          ),
         ),
       ),
     );

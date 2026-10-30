@@ -67,17 +67,24 @@ void main() {
     test('account and identity keys are distinct', () async {
       final identity = await Identity.fromMnemonic(testMnemonic);
       expect(identity.accountSeed, isNot(equals(identity.seed)));
-      expect(identity.accountKeyPair.publicKey,
-          isNot(equals(identity.keyPair.publicKey)));
+      expect(
+        identity.accountKeyPair.publicKey,
+        isNot(equals(identity.keyPair.publicKey)),
+      );
     });
 
-    test('spaceId is derived from raw space header CID and replication key',
-        () async {
-      final identity = await Identity.fromMnemonic(testMnemonic);
-      expect(identity.spaceId, matches(RegExp(r'^bafy[a-z2-7]+\.[0-9a-z]+$')));
-      expect(identity.spaceHeader.id, identity.spaceId);
-      expect(identity.spaceHeader.rawHeader, isNotEmpty);
-    });
+    test(
+      'spaceId is derived from raw space header CID and replication key',
+      () async {
+        final identity = await Identity.fromMnemonic(testMnemonic);
+        expect(
+          identity.spaceId,
+          matches(RegExp(r'^bafy[a-z2-7]+\.[0-9a-z]+$')),
+        );
+        expect(identity.spaceHeader.id, identity.spaceId);
+        expect(identity.spaceHeader.rawHeader, isNotEmpty);
+      },
+    );
 
     test('spaceId uses unsigned base36 replication keys', () async {
       final identity = await Identity.fromMnemonic(highBitReplicationMnemonic);
@@ -95,8 +102,9 @@ void main() {
 
     test('space header is signed by the account key', () async {
       final identity = await Identity.fromMnemonic(testMnemonic);
-      final rawHeader =
-          RawSpaceHeader.fromBuffer(identity.spaceHeader.rawHeader);
+      final rawHeader = RawSpaceHeader.fromBuffer(
+        identity.spaceHeader.rawHeader,
+      );
       final header = SpaceHeader.fromBuffer(rawHeader.spaceHeader);
 
       final expectedIdentityKey = Key(
@@ -115,10 +123,12 @@ void main() {
     test('space header timestamp is non-zero and deterministic', () async {
       final identity1 = await Identity.fromMnemonic(testMnemonic);
       final identity2 = await Identity.fromMnemonic(testMnemonic);
-      final header1 =
-          RawSpaceHeader.fromBuffer(identity1.spaceHeader.rawHeader);
-      final header2 =
-          RawSpaceHeader.fromBuffer(identity2.spaceHeader.rawHeader);
+      final header1 = RawSpaceHeader.fromBuffer(
+        identity1.spaceHeader.rawHeader,
+      );
+      final header2 = RawSpaceHeader.fromBuffer(
+        identity2.spaceHeader.rawHeader,
+      );
       final spaceHeader1 = SpaceHeader.fromBuffer(header1.spaceHeader);
       final spaceHeader2 = SpaceHeader.fromBuffer(header2.spaceHeader);
 

@@ -68,10 +68,7 @@ void main() {
       );
       expect(response.results, hasLength(1));
       expect(response.results.first.elements, hasLength(1));
-      expect(
-        response.results.first.elements.first.id,
-        equals('obj-tree-3'),
-      );
+      expect(response.results.first.elements.first.id, equals('obj-tree-3'));
     });
   });
 
@@ -101,19 +98,21 @@ void main() {
       expect(message.payload, isNotEmpty);
     });
 
-    test('Step 2: Server replies with ObjectSyncMessage containing changes',
-        () {
-      // Document: Server sends back its changes for the same object.
-      // The replyId references the client's requestId for correlation.
-      final reply = ObjectSyncMessage(
-        spaceId: 'bafyspace123.abc',
-        replyId: 'req-001', // Correlates to client's requestId
-        objectId: 'obj-tree-1',
-        payload: [0x0b, 0x11, 0x21], // Server's TreeSyncMessage
-      );
-      expect(reply.replyId, equals('req-001'));
-      expect(reply.objectId, equals('obj-tree-1'));
-    });
+    test(
+      'Step 2: Server replies with ObjectSyncMessage containing changes',
+      () {
+        // Document: Server sends back its changes for the same object.
+        // The replyId references the client's requestId for correlation.
+        final reply = ObjectSyncMessage(
+          spaceId: 'bafyspace123.abc',
+          replyId: 'req-001', // Correlates to client's requestId
+          objectId: 'obj-tree-1',
+          payload: [0x0b, 0x11, 0x21], // Server's TreeSyncMessage
+        );
+        expect(reply.replyId, equals('req-001'));
+        expect(reply.objectId, equals('obj-tree-1'));
+      },
+    );
 
     test('Step 3: StoreDiff for key-value sync', () {
       // Document: StoreDiffRequest is used for key-value store synchronization.
@@ -121,12 +120,7 @@ void main() {
       // object trees.
       final request = StoreDiffRequest(
         spaceId: 'bafyspace123.abc',
-        ranges: [
-          HeadSyncRange(
-            from: Int64(0),
-            to: Int64(100),
-          ),
-        ],
+        ranges: [HeadSyncRange(from: Int64(0), to: Int64(100))],
       );
       expect(request.spaceId, isNotEmpty);
       expect(request.ranges, hasLength(1));
@@ -156,9 +150,7 @@ void main() {
     test('SpacePullRequest retrieves space data from sync node', () {
       // Document: Client requests full space data from sync node.
       // Used when joining an existing space.
-      final request = SpacePullRequest(
-        id: 'bafyspace123.abc',
-      );
+      final request = SpacePullRequest(id: 'bafyspace123.abc');
       expect(request.id, isNotEmpty);
     });
   });

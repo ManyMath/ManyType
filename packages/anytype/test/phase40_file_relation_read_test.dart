@@ -92,42 +92,44 @@ void main() {
       expect(output, contains('[attachment] <unknown-file:missing->'));
     });
 
-    test('falls back to local FileObject detection without relation links',
-        () async {
-      final config = await _testConfig();
-      final identity = await Identity.fromMnemonic(config.mnemonic);
-      const parentId = 'obj-parent';
-      const fileObjectId = 'obj-file';
+    test(
+      'falls back to local FileObject detection without relation links',
+      () async {
+        final config = await _testConfig();
+        final identity = await Identity.fromMnemonic(config.mnemonic);
+        const parentId = 'obj-parent';
+        const fileObjectId = 'obj-file';
 
-      await _insertObjectTree(
-        db,
-        objectId: parentId,
-        spaceId: identity.spaceId,
-        smartBlockType: SmartBlockType.Page.value,
-        snapshot: _parentSnapshot(
-          parentId,
-          relationKey: 'attachment',
-          relationValue: fileObjectId,
-          includeRelationLink: false,
-        ),
-      );
-      await _insertObjectTree(
-        db,
-        objectId: fileObjectId,
-        spaceId: identity.spaceId,
-        smartBlockType: SmartBlockType.FileObject.value,
-        snapshot: _fileSnapshot(
-          fileObjectId,
-          name: 'diagram.png',
-          mime: 'image/png',
-        ),
-      );
+        await _insertObjectTree(
+          db,
+          objectId: parentId,
+          spaceId: identity.spaceId,
+          smartBlockType: SmartBlockType.Page.value,
+          snapshot: _parentSnapshot(
+            parentId,
+            relationKey: 'attachment',
+            relationValue: fileObjectId,
+            includeRelationLink: false,
+          ),
+        );
+        await _insertObjectTree(
+          db,
+          objectId: fileObjectId,
+          spaceId: identity.spaceId,
+          smartBlockType: SmartBlockType.FileObject.value,
+          snapshot: _fileSnapshot(
+            fileObjectId,
+            name: 'diagram.png',
+            mime: 'image/png',
+          ),
+        );
 
-      final readResult = await readCommand(db, config, objectId: parentId);
-      final output = readResult.detail!.lines.join('\n');
+        final readResult = await readCommand(db, config, objectId: parentId);
+        final output = readResult.detail!.lines.join('\n');
 
-      expect(output, contains('[attachment] diagram.png (image/png)'));
-    });
+        expect(output, contains('[attachment] diagram.png (image/png)'));
+      },
+    );
   });
 }
 
@@ -175,10 +177,7 @@ SmartBlockSnapshotBase _parentSnapshot(
     ..fields[relationKey] = Value(stringValue: relationValue);
   if (includeRelationLink) {
     snapshot.relationLinks.add(
-      RelationLink(
-        key: relationKey,
-        format: RelationFormat.file,
-      ),
+      RelationLink(key: relationKey, format: RelationFormat.file),
     );
   }
   return snapshot;

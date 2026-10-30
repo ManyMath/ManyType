@@ -52,34 +52,38 @@ void main() {
   });
 
   group('createMinimalSnapshot', () {
-    test('produces SmartBlockSnapshotBase with root + layout + content blocks',
-        () {
-      final contentBlocks = [
-        createTextBlock('p1', 'First paragraph'),
-        createTextBlock('p2', 'Second paragraph'),
-      ];
-      final snapshot = createMinimalSnapshot('root-1', contentBlocks);
+    test(
+      'produces SmartBlockSnapshotBase with root + layout + content blocks',
+      () {
+        final contentBlocks = [
+          createTextBlock('p1', 'First paragraph'),
+          createTextBlock('p2', 'Second paragraph'),
+        ];
+        final snapshot = createMinimalSnapshot('root-1', contentBlocks);
 
-      expect(snapshot.blocks, hasLength(4)); // root + layout + 2 content
+        expect(snapshot.blocks, hasLength(4)); // root + layout + 2 content
 
-      // Root block: smartblock type with layout child
-      final rootBlock = snapshot.blocks[0];
-      expect(rootBlock.id, equals('root-1'));
-      expect(rootBlock.hasSmartblock(), isTrue);
-      expect(rootBlock.childrenIds, equals(['layout-root-1']));
+        // Root block: smartblock type with layout child
+        final rootBlock = snapshot.blocks[0];
+        expect(rootBlock.id, equals('root-1'));
+        expect(rootBlock.hasSmartblock(), isTrue);
+        expect(rootBlock.childrenIds, equals(['layout-root-1']));
 
-      // Layout block: Column style with content block children
-      final layoutBlock = snapshot.blocks[1];
-      expect(layoutBlock.id, equals('layout-root-1'));
-      expect(layoutBlock.hasLayout(), isTrue);
-      expect(
-          layoutBlock.layout.style, equals(Block_Content_Layout_Style.Column));
-      expect(layoutBlock.childrenIds, equals(['p1', 'p2']));
+        // Layout block: Column style with content block children
+        final layoutBlock = snapshot.blocks[1];
+        expect(layoutBlock.id, equals('layout-root-1'));
+        expect(layoutBlock.hasLayout(), isTrue);
+        expect(
+          layoutBlock.layout.style,
+          equals(Block_Content_Layout_Style.Column),
+        );
+        expect(layoutBlock.childrenIds, equals(['p1', 'p2']));
 
-      // Content blocks preserved
-      expect(snapshot.blocks[2].id, equals('p1'));
-      expect(snapshot.blocks[3].id, equals('p2'));
-    });
+        // Content blocks preserved
+        expect(snapshot.blocks[2].id, equals('p1'));
+        expect(snapshot.blocks[3].id, equals('p2'));
+      },
+    );
   });
 
   group('marshalChangeContent', () {
@@ -101,8 +105,10 @@ void main() {
       expect(change.content, hasLength(1));
       expect(change.content.first.hasBlockCreate(), isTrue);
       expect(change.content.first.blockCreate.blocks.first.id, equals('p1'));
-      expect(change.content.first.blockCreate.blocks.first.text.text,
-          equals('Hello'));
+      expect(
+        change.content.first.blockCreate.blocks.first.text.text,
+        equals('Hello'),
+      );
     });
   });
 }

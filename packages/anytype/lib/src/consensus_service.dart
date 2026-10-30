@@ -2,15 +2,12 @@ import 'dart:typed_data';
 
 import 'package:manytype_protocol/consensus.dart';
 
-typedef ConsensusUnaryInvoker = Uint8List Function(
-  int handleId,
-  String method,
-  Uint8List payload,
-);
+typedef ConsensusUnaryInvoker =
+    Uint8List Function(int handleId, String method, Uint8List payload);
 
 class ConsensusService {
   ConsensusService({required ConsensusUnaryInvoker invoker})
-      : _invoker = invoker;
+    : _invoker = invoker;
 
   final ConsensusUnaryInvoker _invoker;
 
@@ -33,8 +30,10 @@ class ConsensusService {
     required String logId,
     required RawRecord record,
   }) {
-    final request =
-        RecordAddRequest(logId: logId, record: record).writeToBuffer();
+    final request = RecordAddRequest(
+      logId: logId,
+      record: record,
+    ).writeToBuffer();
     final responseBytes = _invoker(
       handleId,
       '/consensusProto.Consensus/RecordAdd',

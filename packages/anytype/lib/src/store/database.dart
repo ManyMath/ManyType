@@ -70,17 +70,23 @@ class CachedBlobs extends Table {
 }
 
 @DriftDatabase(
-    tables: [Objects, Changes, StoreEntries, AttachmentRefs, CachedBlobs])
+  tables: [Objects, Changes, StoreEntries, AttachmentRefs, CachedBlobs],
+)
 class ManytypeDatabase extends _$ManytypeDatabase {
   /// [onWebStorageDiagnostics], if given, is invoked once the storage
   /// backend resolves on web (ignored on native). Use it to warn callers
   /// when the browser fell back to an implementation that isn't durable
   /// (`inMemory`) or isn't safe across multiple tabs (`unsafeIndexedDb`) :
   /// see [WebStorageDiagnostics].
-  ManytypeDatabase(String dbPath,
-      {WebStorageDiagnosticsCallback? onWebStorageDiagnostics})
-      : super(openConnectionForApp(dbPath,
-            onWebStorageDiagnostics: onWebStorageDiagnostics));
+  ManytypeDatabase(
+    String dbPath, {
+    WebStorageDiagnosticsCallback? onWebStorageDiagnostics,
+  }) : super(
+         openConnectionForApp(
+           dbPath,
+           onWebStorageDiagnostics: onWebStorageDiagnostics,
+         ),
+       );
 
   ManytypeDatabase.forTesting(super.executor);
 
@@ -131,8 +137,9 @@ class ManytypeDatabase extends _$ManytypeDatabase {
       ),
       mode: InsertMode.insertOrIgnore,
     );
-    final stored =
-        await (select(changes)..where((c) => c.id.equals(id))).getSingle();
+    final stored = await (select(
+      changes,
+    )..where((c) => c.id.equals(id))).getSingle();
     if (stored.objectId != objectId) {
       throw StateError(
         'Change $id already belongs to object ${stored.objectId}',
@@ -149,9 +156,9 @@ class ManytypeDatabase extends _$ManytypeDatabase {
 
   /// Get all changes for an object in replay-safe order.
   Future<List<Change>> getChangesForObject(String objectId) async {
-    final rows = await (select(changes)
-          ..where((c) => c.objectId.equals(objectId)))
-        .get();
+    final rows = await (select(
+      changes,
+    )..where((c) => c.objectId.equals(objectId))).get();
     return _orderChangesForReplay(rows);
   }
 
@@ -230,7 +237,8 @@ class ManytypeDatabase extends _$ManytypeDatabase {
   }
 
   Future<List<StoredAttachmentRef>> getAttachmentRefsByObject(
-          String objectId) =>
+    String objectId,
+  ) =>
       (select(attachmentRefs)
             ..where((entry) => entry.objectId.equals(objectId))
             ..orderBy([
@@ -276,32 +284,33 @@ class ManytypeDatabase extends _$ManytypeDatabase {
     required String fileId,
     required String cid,
   }) =>
-      (select(cachedBlobs)
-            ..where(
-              (entry) =>
-                  entry.spaceId.equals(spaceId) &
-                  entry.fileId.equals(fileId) &
-                  entry.cid.equals(cid),
-            ))
+      (select(cachedBlobs)..where(
+            (entry) =>
+                entry.spaceId.equals(spaceId) &
+                entry.fileId.equals(fileId) &
+                entry.cid.equals(cid),
+          ))
           .getSingleOrNull();
 
   /// Mark an object as deleted (soft-delete via isDeleted flag).
   Future<void> markObjectDeleted(String objectId) async {
-    await (update(objects)..where((o) => o.id.equals(objectId)))
-        .write(const ObjectsCompanion(isDeleted: Value(true)));
+    await (update(objects)..where((o) => o.id.equals(objectId))).write(
+      const ObjectsCompanion(isDeleted: Value(true)),
+    );
   }
 
   /// Get all non-deleted objects for a space.
   Future<List<StoredObject>> getNonDeletedObjectsBySpace(String spaceId) =>
-      (select(objects)
-            ..where(
-                (o) => o.spaceId.equals(spaceId) & o.isDeleted.equals(false)))
+      (select(objects)..where(
+            (o) => o.spaceId.equals(spaceId) & o.isDeleted.equals(false),
+          ))
           .get();
 
   /// Check if an object is marked as deleted.
   Future<bool> isObjectDeleted(String objectId) async {
-    final obj = await (select(objects)..where((o) => o.id.equals(objectId)))
-        .getSingleOrNull();
+    final obj = await (select(
+      objects,
+    )..where((o) => o.id.equals(objectId))).getSingleOrNull();
     return obj?.isDeleted ?? false;
   }
 }
@@ -311,24 +320,19 @@ List<Change> _orderChangesForReplay(List<Change> rows) {
     return rows;
   }
 
-  final byId = <String, Change>{
-    for (final row in rows) row.id: row,
-  };
+  final byId = <String, Change>{for (final row in rows) row.id: row};
   final childrenByParent = <String, List<String>>{};
   final indegree = <String, int>{};
   final orderKeys = <String, _ChangeOrderKey>{};
 
   for (final row in rows) {
-    final parents = _decodeParentHeads(row.parentHeads)
-        .where(byId.containsKey)
-        .toList(growable: false);
+    final parents = _decodeParentHeads(
+      row.parentHeads,
+    ).where(byId.containsKey).toList(growable: false);
     indegree[row.id] = parents.length;
     orderKeys[row.id] = _ChangeOrderKey(
       isRoot: parents.isEmpty,
-      timestamp: _extractStoredChangeTimestamp(
-        row,
-        isRoot: parents.isEmpty,
-      ),
+      timestamp: _extractStoredChangeTimestamp(row, isRoot: parents.isEmpty),
       id: row.id,
     );
     for (final parent in parents) {
@@ -363,13 +367,15 @@ List<Change> _orderChangesForReplay(List<Change> rows) {
 
   final fallback = List<Change>.from(rows);
   fallback.sort((left, right) {
-    final leftKey = orderKeys[left.id] ??
+    final leftKey =
+        orderKeys[left.id] ??
         _ChangeOrderKey(
           isRoot: false,
           timestamp: _extractStoredChangeTimestamp(left),
           id: left.id,
         );
-    final rightKey = orderKeys[right.id] ??
+    final rightKey =
+        orderKeys[right.id] ??
         _ChangeOrderKey(
           isRoot: false,
           timestamp: _extractStoredChangeTimestamp(right),
@@ -388,10 +394,7 @@ List<String> _decodeParentHeads(String parentHeadsJson) {
   }
 }
 
-int _extractStoredChangeTimestamp(
-  Change row, {
-  bool isRoot = false,
-}) {
+int _extractStoredChangeTimestamp(Change row, {bool isRoot = false}) {
   try {
     final rawTreeChange = RawTreeChange.fromBuffer(row.rawBytes);
     if (rawTreeChange.payload.isEmpty) {

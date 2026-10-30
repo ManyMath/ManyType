@@ -34,7 +34,8 @@ void main() {
       expect(
         harnessResult.exitCode,
         0,
-        reason: 'phase39 harness failed:\n'
+        reason:
+            'phase39 harness failed:\n'
             'STDOUT:\n${harnessResult.stdout}\n'
             'STDERR:\n${harnessResult.stderr}',
       );
@@ -44,23 +45,20 @@ void main() {
         reason: 'harness did not print PASSED marker',
       );
 
-      final verifierResult = await Process.run(
-        'python3',
-        [
-          'scripts/verify_phase39_artifacts.py',
-          '--scenario-a',
-          '${artifactDir.path}/scenario_a_create_add.json',
-          '--scenario-b',
-          '${artifactDir.path}/scenario_b_remove.json',
-          '--scenario-c',
-          '${artifactDir.path}/scenario_c_move.json',
-        ],
-        workingDirectory: repoRoot,
-      );
+      final verifierResult = await Process.run('python3', [
+        'scripts/verify_phase39_artifacts.py',
+        '--scenario-a',
+        '${artifactDir.path}/scenario_a_create_add.json',
+        '--scenario-b',
+        '${artifactDir.path}/scenario_b_remove.json',
+        '--scenario-c',
+        '${artifactDir.path}/scenario_c_move.json',
+      ], workingDirectory: repoRoot);
       expect(
         verifierResult.exitCode,
         0,
-        reason: 'phase39 verifier failed:\n'
+        reason:
+            'phase39 verifier failed:\n'
             'STDOUT:\n${verifierResult.stdout}\n'
             'STDERR:\n${verifierResult.stderr}',
       );
@@ -77,8 +75,9 @@ void main() {
 String _findRepoRoot() {
   Directory dir = Directory.current;
   for (var i = 0; i < 6; i++) {
-    if (File('${dir.path}/scripts/phase39_collection_harness.sh')
-            .existsSync() &&
+    if (File(
+          '${dir.path}/scripts/phase39_collection_harness.sh',
+        ).existsSync() &&
         Directory('${dir.path}/packages').existsSync()) {
       return dir.path;
     }

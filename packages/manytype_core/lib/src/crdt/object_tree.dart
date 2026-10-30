@@ -32,11 +32,13 @@ class ObjectTree {
   /// carry no identity or signature), its Ed25519 signature. The root change
   /// becomes the initial single head.
   static Future<ObjectTree> fromRoot(RawTreeChangeWithId rootChange) async {
-    final recomputedCid =
-        await computeCid(Uint8List.fromList(rootChange.rawChange));
+    final recomputedCid = await computeCid(
+      Uint8List.fromList(rootChange.rawChange),
+    );
     if (recomputedCid != rootChange.id) {
       throw StateError(
-          'CID mismatch: expected ${rootChange.id}, computed $recomputedCid');
+        'CID mismatch: expected ${rootChange.id}, computed $recomputedCid',
+      );
     }
 
     final rawTreeChange = RawTreeChange.fromBuffer(rootChange.rawChange);
@@ -67,11 +69,13 @@ class ObjectTree {
     if (_changes.containsKey(change.id)) return;
 
     // 1. Verify CID: computeCid(change.rawChange) == change.id
-    final recomputedCid =
-        await computeCid(Uint8List.fromList(change.rawChange));
+    final recomputedCid = await computeCid(
+      Uint8List.fromList(change.rawChange),
+    );
     if (recomputedCid != change.id) {
       throw StateError(
-          'CID mismatch: expected ${change.id}, computed $recomputedCid');
+        'CID mismatch: expected ${change.id}, computed $recomputedCid',
+      );
     }
 
     // 2. Decode RawTreeChange from change.rawChange
@@ -95,7 +99,8 @@ class ObjectTree {
     for (final parentId in parentIds) {
       if (!_changes.containsKey(parentId)) {
         throw StateError(
-            'Parent change $parentId not found in tree for ${change.id}');
+          'Parent change $parentId not found in tree for ${change.id}',
+        );
       }
     }
 
@@ -149,7 +154,8 @@ class ObjectTree {
   /// The first change must be the root change. It and the subsequent changes
   /// are added in order, with CID and signature verification.
   static Future<ObjectTree> deserialize(
-      List<RawTreeChangeWithId> changes) async {
+    List<RawTreeChangeWithId> changes,
+  ) async {
     if (changes.isEmpty) {
       throw ArgumentError('Cannot deserialize empty change list');
     }

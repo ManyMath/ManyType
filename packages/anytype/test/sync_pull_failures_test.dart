@@ -62,8 +62,10 @@ void main() {
 
     expect(
       lines,
-      contains('WARN: could not pull 1 object(s) from any sync node: '
-          'remote-obj'),
+      contains(
+        'WARN: could not pull 1 object(s) from any sync node: '
+        'remote-obj',
+      ),
     );
     expect(lines.last, startsWith('Sync complete:'));
   });
@@ -93,16 +95,16 @@ class _FakeBridge implements NativeBridge {
       '/coordinator.Coordinator/SpaceStatusCheck' => SpaceStatusCheckResponse(),
       '/coordinator.Coordinator/SpaceSign' => SpaceSignResponse(),
       '/spacesync.SpaceSync/HeadSync' => HeadSyncResponse(
-          results: [
-            HeadSyncResult(
-              count: remoteObjectIds.length,
-              elements: [
-                for (final id in remoteObjectIds)
-                  HeadSyncResultElement(id: id, head: 'remote-head'),
-              ],
-            ),
-          ],
-        ),
+        results: [
+          HeadSyncResult(
+            count: remoteObjectIds.length,
+            elements: [
+              for (final id in remoteObjectIds)
+                HeadSyncResultElement(id: id, head: 'remote-head'),
+            ],
+          ),
+        ],
+      ),
       '/spacesync.SpaceSync/StoreDiff' => StoreDiffResponse(),
       _ => null,
     };
@@ -115,8 +117,7 @@ class _FakeBridge implements NativeBridge {
     String spaceId,
     String objectId,
     Uint8List payload,
-  ) =>
-      Uint8List(0);
+  ) => Uint8List(0);
 
   @override
   Uint8List requestObject(

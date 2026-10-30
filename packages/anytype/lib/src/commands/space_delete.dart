@@ -36,11 +36,11 @@ class SpaceDeleteAssessment {
   final String reason;
 
   Map<String, Object?> toJson() => {
-        'outcome': outcome,
-        'supported': supported,
-        'observed_surface_label': observedSurfaceLabel,
-        'reason': reason,
-      };
+    'outcome': outcome,
+    'supported': supported,
+    'observed_surface_label': observedSurfaceLabel,
+    'reason': reason,
+  };
 }
 
 SpaceDeleteAssessment assessSpaceDeleteContract({
@@ -146,23 +146,23 @@ class SpaceDeleteReport {
   final Map<String, Object?> afterReconnect;
 
   Map<String, Object?> toJson() => {
-        'captured_at': capturedAt.toIso8601String(),
-        'command': 'space-delete',
-        'accepted_contract': {
-          'truth_surface': kAcceptedSpaceDeleteTruthSurface,
-          'proof_mode': kAcceptedSpaceDeleteProofMode,
-          'supported_preconditions': kAcceptedSpaceDeletePreconditions,
-          'required_observations': kAcceptedSpaceDeleteObservations,
-        },
-        'assessment': assessment.toJson(),
-        'network_config_path': networkConfigPath,
-        'coordinator_address': coordinatorAddress,
-        'space_id': spaceId,
-        'wait_seconds': waitSeconds,
-        'deletion_duration_minutes': deletionDurationMinutes,
-        'initial': initial,
-        'after_reconnect': afterReconnect,
-      };
+    'captured_at': capturedAt.toIso8601String(),
+    'command': 'space-delete',
+    'accepted_contract': {
+      'truth_surface': kAcceptedSpaceDeleteTruthSurface,
+      'proof_mode': kAcceptedSpaceDeleteProofMode,
+      'supported_preconditions': kAcceptedSpaceDeletePreconditions,
+      'required_observations': kAcceptedSpaceDeleteObservations,
+    },
+    'assessment': assessment.toJson(),
+    'network_config_path': networkConfigPath,
+    'coordinator_address': coordinatorAddress,
+    'space_id': spaceId,
+    'wait_seconds': waitSeconds,
+    'deletion_duration_minutes': deletionDurationMinutes,
+    'initial': initial,
+    'after_reconnect': afterReconnect,
+  };
 }
 
 Future<SpaceDeleteReport> spaceDeleteCommand({
@@ -188,10 +188,13 @@ Future<SpaceDeleteReport> spaceDeleteCommand({
     networkConfigPath: networkConfigPath,
     networkConfigContent: networkConfigContent,
   );
-  final coordinatorAddress =
-      chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
-  final coordinatorPeerId =
-      expectedPeerIdForAddress(coordinatorAddress, config: networkConfig);
+  final coordinatorAddress = chooseBestAddress(
+    requireCoordinatorNode(networkConfig).addresses,
+  );
+  final coordinatorPeerId = expectedPeerIdForAddress(
+    coordinatorAddress,
+    config: networkConfig,
+  );
 
   final initialCapture = await _captureInitialDelete(
     identity: identity,
@@ -281,13 +284,13 @@ class _InitialDeleteCapture {
   final _CapturedResult<SpaceStatusPayload> postStatus;
 
   Map<String, Object?> toJson() => {
-        'network_id': networkId,
-        'network_configuration_id': networkConfigurationId,
-        'request': request,
-        'response': response.toJson(_spaceDeleteResponseToJson),
-        'pre_status': preStatus.toJson(_spaceStatusToJson),
-        'post_status': postStatus.toJson(_spaceStatusToJson),
-      };
+    'network_id': networkId,
+    'network_configuration_id': networkConfigurationId,
+    'request': request,
+    'response': response.toJson(_spaceDeleteResponseToJson),
+    'pre_status': preStatus.toJson(_spaceStatusToJson),
+    'post_status': postStatus.toJson(_spaceStatusToJson),
+  };
 }
 
 class _ReconnectCapture {
@@ -302,10 +305,10 @@ class _ReconnectCapture {
   final _CapturedResult<SpaceStatusPayload> status;
 
   Map<String, Object?> toJson() => {
-        'network_id': networkId,
-        'network_configuration_id': networkConfigurationId,
-        'status': status.toJson(_spaceStatusToJson),
-      };
+    'network_id': networkId,
+    'network_configuration_id': networkConfigurationId,
+    'status': status.toJson(_spaceStatusToJson),
+  };
 }
 
 Future<_InitialDeleteCapture> _captureInitialDelete({
@@ -326,13 +329,11 @@ Future<_InitialDeleteCapture> _captureInitialDelete({
   final coordinator = CoordinatorService(invoker: bridge.invoke);
 
   try {
-    final networkConfiguration =
-        coordinator.networkConfigurationForHandle(handleId);
+    final networkConfiguration = coordinator.networkConfigurationForHandle(
+      handleId,
+    );
     final preStatus = _capture(
-      () => coordinator.spaceStatusCheck(
-        handleId: handleId,
-        spaceId: spaceId,
-      ),
+      () => coordinator.spaceStatusCheck(handleId: handleId, spaceId: spaceId),
     );
 
     Map<String, Object?>? request;
@@ -366,10 +367,7 @@ Future<_InitialDeleteCapture> _captureInitialDelete({
     }
 
     final postStatus = _capture(
-      () => coordinator.spaceStatusCheck(
-        handleId: handleId,
-        spaceId: spaceId,
-      ),
+      () => coordinator.spaceStatusCheck(handleId: handleId, spaceId: spaceId),
     );
 
     return _InitialDeleteCapture(
@@ -401,13 +399,11 @@ Future<_ReconnectCapture> _captureReconnectStatus({
   final coordinator = CoordinatorService(invoker: bridge.invoke);
 
   try {
-    final networkConfiguration =
-        coordinator.networkConfigurationForHandle(handleId);
+    final networkConfiguration = coordinator.networkConfigurationForHandle(
+      handleId,
+    );
     final status = _capture(
-      () => coordinator.spaceStatusCheck(
-        handleId: handleId,
-        spaceId: spaceId,
-      ),
+      () => coordinator.spaceStatusCheck(handleId: handleId, spaceId: spaceId),
     );
     return _ReconnectCapture(
       networkId: networkConfiguration.networkId,
@@ -433,15 +429,9 @@ class _CapturedResult<T> {
     Map<String, Object?> Function(T value) serializer,
   ) {
     if (ok && value != null) {
-      return {
-        'ok': true,
-        'value': serializer(value as T),
-      };
+      return {'ok': true, 'value': serializer(value as T)};
     }
-    return {
-      'ok': false,
-      'error': error,
-    };
+    return {'ok': false, 'error': error};
   }
 }
 
@@ -470,19 +460,17 @@ String? _permissionName(_CapturedResult<SpaceStatusPayload> result) {
 }
 
 Map<String, Object?> _spaceDeleteResponseToJson(SpaceDeleteResponse response) =>
-    {
-      'to_be_deleted_timestamp': response.toBeDeletedTimestamp.toInt(),
-    };
+    {'to_be_deleted_timestamp': response.toBeDeletedTimestamp.toInt()};
 
 Map<String, Object?> _spaceStatusToJson(SpaceStatusPayload payload) => {
-      'status': payload.status.name,
-      'deletion_timestamp': payload.deletionTimestamp.toInt(),
-      'permissions': payload.permissions.name,
-      'is_shared': payload.isShared,
-      'limits': payload.hasLimits()
-          ? {
-              'read_members': payload.limits.readMembers,
-              'write_members': payload.limits.writeMembers,
-            }
-          : null,
-    };
+  'status': payload.status.name,
+  'deletion_timestamp': payload.deletionTimestamp.toInt(),
+  'permissions': payload.permissions.name,
+  'is_shared': payload.isShared,
+  'limits': payload.hasLimits()
+      ? {
+          'read_members': payload.limits.readMembers,
+          'write_members': payload.limits.writeMembers,
+        }
+      : null,
+};

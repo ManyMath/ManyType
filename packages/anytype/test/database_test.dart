@@ -46,19 +46,22 @@ void main() {
       expect(changes[1].parentHeads, '["change-1"]');
     });
 
-    test('orders replay changes causally even when IDs are lexically shuffled',
-        () async {
-      await db.insertObject('obj-1', 'space-abc');
-      await db.insertChange('change-z', 'obj-1', [3], '["change-m"]');
-      await db.insertChange('change-a', 'obj-1', [1], '[]');
-      await db.insertChange('change-m', 'obj-1', [2], '["change-a"]');
+    test(
+      'orders replay changes causally even when IDs are lexically shuffled',
+      () async {
+        await db.insertObject('obj-1', 'space-abc');
+        await db.insertChange('change-z', 'obj-1', [3], '["change-m"]');
+        await db.insertChange('change-a', 'obj-1', [1], '[]');
+        await db.insertChange('change-m', 'obj-1', [2], '["change-a"]');
 
-      final changes = await db.getChangesForObject('obj-1');
-      expect(
-        changes.map((change) => change.id).toList(),
-        ['change-a', 'change-m', 'change-z'],
-      );
-    });
+        final changes = await db.getChangesForObject('obj-1');
+        expect(changes.map((change) => change.id).toList(), [
+          'change-a',
+          'change-m',
+          'change-z',
+        ]);
+      },
+    );
 
     test('getObjectsBySpace filters correctly', () async {
       await db.insertObject('obj-1', 'space-a');
@@ -146,85 +149,97 @@ void main() {
       );
 
       final entries = await db.getStoreEntriesBySpace('space-a');
-      expect(entries.map((entry) => entry.keyPeerId).toList(),
-          ['peer-a', 'peer-b']);
+      expect(entries.map((entry) => entry.keyPeerId).toList(), [
+        'peer-a',
+        'peer-b',
+      ]);
       expect(entries.first.value, [3]);
       expect(entries.first.identitySignature, [30]);
       expect(entries.first.peerSignature, [31]);
     });
 
-    test('upserts attachment refs and queries them by object and file ID',
-        () async {
-      await db.insertObject('obj-1', 'space-a');
-      await db.insertObject('obj-2', 'space-a');
-      await db.upsertAttachmentRef(
-        spaceId: 'space-a',
-        objectId: 'obj-1',
-        fileId: 'file-1',
-        cid: 'bafy-a',
-      );
-      await db.upsertAttachmentRef(
-        spaceId: 'space-a',
-        objectId: 'obj-1',
-        fileId: 'file-1',
-        cid: 'bafy-a',
-      );
-      await db.upsertAttachmentRef(
-        spaceId: 'space-a',
-        objectId: 'obj-1',
-        fileId: 'file-1',
-        cid: '',
-      );
-      await db.upsertAttachmentRef(
-        spaceId: 'space-a',
-        objectId: 'obj-2',
-        fileId: 'file-1',
-        cid: 'bafy-b',
-      );
+    test(
+      'upserts attachment refs and queries them by object and file ID',
+      () async {
+        await db.insertObject('obj-1', 'space-a');
+        await db.insertObject('obj-2', 'space-a');
+        await db.upsertAttachmentRef(
+          spaceId: 'space-a',
+          objectId: 'obj-1',
+          fileId: 'file-1',
+          cid: 'bafy-a',
+        );
+        await db.upsertAttachmentRef(
+          spaceId: 'space-a',
+          objectId: 'obj-1',
+          fileId: 'file-1',
+          cid: 'bafy-a',
+        );
+        await db.upsertAttachmentRef(
+          spaceId: 'space-a',
+          objectId: 'obj-1',
+          fileId: 'file-1',
+          cid: '',
+        );
+        await db.upsertAttachmentRef(
+          spaceId: 'space-a',
+          objectId: 'obj-2',
+          fileId: 'file-1',
+          cid: 'bafy-b',
+        );
 
-      final objectRefs = await db.getAttachmentRefsByObject('obj-1');
-      expect(objectRefs.length, 2);
-      expect(objectRefs.map((entry) => entry.cid).toList(), ['', 'bafy-a']);
+        final objectRefs = await db.getAttachmentRefsByObject('obj-1');
+        expect(objectRefs.length, 2);
+        expect(objectRefs.map((entry) => entry.cid).toList(), ['', 'bafy-a']);
 
-      final fileRefs = await db.getAttachmentRefsByFileId('space-a', 'file-1');
-      expect(fileRefs.length, 3);
-      expect(fileRefs.map((entry) => entry.objectId).toList(),
-          ['obj-1', 'obj-1', 'obj-2']);
-    });
+        final fileRefs = await db.getAttachmentRefsByFileId(
+          'space-a',
+          'file-1',
+        );
+        expect(fileRefs.length, 3);
+        expect(fileRefs.map((entry) => entry.objectId).toList(), [
+          'obj-1',
+          'obj-1',
+          'obj-2',
+        ]);
+      },
+    );
 
-    test('stores cached blobs independently from attachment metadata',
-        () async {
-      await db.insertObject('obj-1', 'space-a');
-      await db.upsertAttachmentRef(
-        spaceId: 'space-a',
-        objectId: 'obj-1',
-        fileId: 'file-1',
-        cid: 'bafy-a',
-      );
+    test(
+      'stores cached blobs independently from attachment metadata',
+      () async {
+        await db.insertObject('obj-1', 'space-a');
+        await db.upsertAttachmentRef(
+          spaceId: 'space-a',
+          objectId: 'obj-1',
+          fileId: 'file-1',
+          cid: 'bafy-a',
+        );
 
-      expect(
-        await db.getCachedBlob(
+        expect(
+          await db.getCachedBlob(
+            spaceId: 'space-a',
+            fileId: 'file-1',
+            cid: 'bafy-a',
+          ),
+          isNull,
+        );
+
+        await db.cacheBlob(
           spaceId: 'space-a',
           fileId: 'file-1',
           cid: 'bafy-a',
-        ),
-        isNull,
-      );
+          bytes: [1, 2, 3],
+        );
 
-      await db.cacheBlob(
-        spaceId: 'space-a',
-        fileId: 'file-1',
-        cid: 'bafy-a',
-        bytes: [1, 2, 3],
-      );
-
-      final cached = await db.getCachedBlob(
-        spaceId: 'space-a',
-        fileId: 'file-1',
-        cid: 'bafy-a',
-      );
-      expect(cached, isNotNull);
-      expect(cached!.bytes, [1, 2, 3]);
-    });
+        final cached = await db.getCachedBlob(
+          spaceId: 'space-a',
+          fileId: 'file-1',
+          cid: 'bafy-a',
+        );
+        expect(cached, isNotNull);
+        expect(cached!.bytes, [1, 2, 3]);
+      },
+    );
   });
 }

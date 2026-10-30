@@ -12,8 +12,14 @@ import 'web_storage_diagnostics.dart';
 /// [QueryExecutor]. [onWebStorageDiagnostics], if given, is invoked once the
 /// backend resolves so a caller can warn when persistence degraded (see
 /// [WebStorageDiagnostics]).
-QueryExecutor openConnectionForApp(String dbPath,
-    {WebStorageDiagnosticsCallback? onWebStorageDiagnostics}) {
-  return LazyDatabase(() => openDatabaseForApp(dbPath,
-      onWebStorageDiagnostics: onWebStorageDiagnostics));
+QueryExecutor openConnectionForApp(
+  String dbPath, {
+  WebStorageDiagnosticsCallback? onWebStorageDiagnostics,
+}) {
+  return LazyDatabase(
+    () => openDatabaseForApp(
+      dbPath,
+      onWebStorageDiagnostics: onWebStorageDiagnostics,
+    ),
+  );
 }

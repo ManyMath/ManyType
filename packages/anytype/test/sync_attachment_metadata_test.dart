@@ -46,9 +46,7 @@ void main() {
         ),
       );
 
-      expect(refs, [
-        (fileId: 'file-1', cid: 'bafy-metadata-hash'),
-      ]);
+      expect(refs, [(fileId: 'file-1', cid: 'bafy-metadata-hash')]);
     });
 
     test('stores attachment refs without populating the blob cache', () async {
@@ -61,9 +59,7 @@ void main() {
               ),
             ),
           ],
-          fileKeys: [
-            changes_proto.Change_FileKeys(hash: 'bafy-metadata-hash'),
-          ],
+          fileKeys: [changes_proto.Change_FileKeys(hash: 'bafy-metadata-hash')],
         ),
       );
 
@@ -98,8 +94,9 @@ void main() {
           ).writeToBuffer(),
         ),
       );
-      final settingsObjectId =
-          await computeCid(Uint8List.fromList(settingsRoot.writeToBuffer()));
+      final settingsObjectId = await computeCid(
+        Uint8List.fromList(settingsRoot.writeToBuffer()),
+      );
       final spaceKey = Uint8List.fromList(List<int>.filled(32, 7));
       final treeKey = await deriveTreeKey(spaceKey, settingsObjectId);
 
@@ -107,9 +104,7 @@ void main() {
 
       final settingsDelete = SettingsData(
         content: [
-          SpaceSettingsContent(
-            objectDelete: ObjectDelete(id: deletedObjectId),
-          ),
+          SpaceSettingsContent(objectDelete: ObjectDelete(id: deletedObjectId)),
         ],
       );
       final encryptedDelete = await aesGcmEncrypt(
@@ -147,30 +142,32 @@ void main() {
       expect(await db.isObjectDeleted(deletedObjectId), isTrue);
     });
 
-    test('read command surfaces attachment metadata separately from bytes',
-        () async {
-      await db.insertObject('obj-1', 'space-a');
-      await db.insertChange('change-1', 'obj-1', [1, 2, 3], '[]');
-      await db.upsertAttachmentRef(
-        spaceId: 'space-a',
-        objectId: 'obj-1',
-        fileId: 'file-1',
-        cid: 'bafy-metadata-hash',
-      );
+    test(
+      'read command surfaces attachment metadata separately from bytes',
+      () async {
+        await db.insertObject('obj-1', 'space-a');
+        await db.insertChange('change-1', 'obj-1', [1, 2, 3], '[]');
+        await db.upsertAttachmentRef(
+          spaceId: 'space-a',
+          objectId: 'obj-1',
+          fileId: 'file-1',
+          cid: 'bafy-metadata-hash',
+        );
 
-      final readResult = await readCommand(
-        db,
-        CliConfig(
-          mnemonic: generateMnemonic(),
-          serverAddress: '127.0.0.1:33020',
-        ),
-        objectId: 'obj-1',
-      );
-      final output = readResult.detail!.lines.join('\n');
+        final readResult = await readCommand(
+          db,
+          CliConfig(
+            mnemonic: generateMnemonic(),
+            serverAddress: '127.0.0.1:33020',
+          ),
+          objectId: 'obj-1',
+        );
+        final output = readResult.detail!.lines.join('\n');
 
-      expect(output, contains('Attachments:'));
-      expect(output, contains('file-1 (cid=bafy-metadata-hash)'));
-    });
+        expect(output, contains('Attachments:'));
+        expect(output, contains('file-1 (cid=bafy-metadata-hash)'));
+      },
+    );
   });
 }
 

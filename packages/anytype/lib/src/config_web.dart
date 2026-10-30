@@ -32,16 +32,20 @@ class CliConfig {
   static String? testConfigDirOverride;
 
   static String get configDir => throw UnsupportedError(
-      'config I/O is vm-only; construct CliConfig directly on web');
+    'config I/O is vm-only; construct CliConfig directly on web',
+  );
 
   static String get configPath => throw UnsupportedError(
-      'config I/O is vm-only; construct CliConfig directly on web');
+    'config I/O is vm-only; construct CliConfig directly on web',
+  );
 
   static String get dbPath => throw UnsupportedError(
-      'config I/O is vm-only; construct CliConfig directly on web');
+    'config I/O is vm-only; construct CliConfig directly on web',
+  );
 
   static String get downloadsDir => throw UnsupportedError(
-      'config I/O is vm-only; construct CliConfig directly on web');
+    'config I/O is vm-only; construct CliConfig directly on web',
+  );
 
   static String downloadPath(
     String fileId,
@@ -55,17 +59,22 @@ class CliConfig {
 
   static Future<CliConfig> load({String? serverOverride}) async {
     throw UnsupportedError(
-        'config I/O is vm-only; construct CliConfig directly on web');
+      'config I/O is vm-only; construct CliConfig directly on web',
+    );
   }
 
-  static Future<CliConfig> loadFrom(String path,
-      {String? serverOverride}) async {
+  static Future<CliConfig> loadFrom(
+    String path, {
+    String? serverOverride,
+  }) async {
     throw UnsupportedError(
-        'config I/O is vm-only; construct CliConfig directly on web');
+      'config I/O is vm-only; construct CliConfig directly on web',
+    );
   }
 
   static Future<CliConfig> initialize({bool force = false}) async {
     throw UnsupportedError(
-        'config I/O is vm-only; construct CliConfig directly on web');
+      'config I/O is vm-only; construct CliConfig directly on web',
+    );
   }
 }

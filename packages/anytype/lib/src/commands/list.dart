@@ -95,15 +95,19 @@ Future<List<ObjectMeta>> listCommand(
     final rawRows = await db.getChangesForObject(obj.id);
     rawChangesByObject[obj.id] = rawRows;
     final objTreeKey = await deriveTreeKey(spaceKey, obj.id);
-    optionInputs.add(OptionIndexInput(
-      objectId: obj.id,
-      rawTreeChanges:
-          rawRows.map((r) => Uint8List.fromList(r.rawBytes)).toList(),
-      treeKey: objTreeKey,
-    ));
+    optionInputs.add(
+      OptionIndexInput(
+        objectId: obj.id,
+        rawTreeChanges: rawRows
+            .map((r) => Uint8List.fromList(r.rawBytes))
+            .toList(),
+        treeKey: objTreeKey,
+      ),
+    );
   }
-  final Map<String, ResolvedOption> optIndex =
-      await loadLocalOptionIndex(optionInputs);
+  final Map<String, ResolvedOption> optIndex = await loadLocalOptionIndex(
+    optionInputs,
+  );
 
   // Extract metadata for each object, filtering out nulls (system/undecryptable).
   final metas = <ObjectMeta>[];
@@ -372,8 +376,9 @@ Future<ObjectMeta?> _extractObjectMeta(
 
   // Replay the change tree into the object's current state.
   final snapshot = await replayObjectSnapshot(
-    rawTreeChanges:
-        changes.map((change) => Uint8List.fromList(change.rawBytes)).toList(),
+    rawTreeChanges: changes
+        .map((change) => Uint8List.fromList(change.rawBytes))
+        .toList(),
     treeKey: treeKey,
   );
   final details = <String, String>{
@@ -392,8 +397,10 @@ Future<ObjectMeta?> _extractObjectMeta(
     details: details,
     isArchived: details['isArchived'] == 'true',
     isCollection: collectionDataview != null,
-    collectionMemberCount:
-        _collectionMemberCount(snapshot.collections.fields, collectionDataview),
+    collectionMemberCount: _collectionMemberCount(
+      snapshot.collections.fields,
+      collectionDataview,
+    ),
   );
 }
 
@@ -428,16 +435,18 @@ String _valueToString(Value val, {Map<String, ResolvedOption>? optIndex}) {
     // Phase 38: RESEARCH Pitfall 1 fix: tag relations (list_value of
     // stringValues) used to fall through to `.toString()` and emit a raw
     // protobuf debug string. Now they join resolved names with ", ".
-    return val.listValue.values.map((v) {
-      if (!v.hasStringValue()) return v.toString();
-      final id = v.stringValue;
-      if (optIndex == null) return id;
-      final opt = optIndex[id];
-      if (opt == null || opt.isOrphaned) {
-        return '<unknown:${_truncate8(id)}>';
-      }
-      return opt.name!;
-    }).join(', ');
+    return val.listValue.values
+        .map((v) {
+          if (!v.hasStringValue()) return v.toString();
+          final id = v.stringValue;
+          if (optIndex == null) return id;
+          final opt = optIndex[id];
+          if (opt == null || opt.isOrphaned) {
+            return '<unknown:${_truncate8(id)}>';
+          }
+          return opt.name!;
+        })
+        .join(', ');
   }
   return val.toString();
 }

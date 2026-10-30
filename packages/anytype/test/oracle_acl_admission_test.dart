@@ -24,10 +24,12 @@ void main() {
       final repoRoot = findRepoRoot();
       final networkConfigPath = '$repoRoot/docker/any-sync/etc/client.yml';
       final networkConfig = await loadNetworkConfig(networkConfigPath);
-      final coordinatorAddress =
-          chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
-      final ownerFixture =
-          await createPhase17Fixture(networkConfigPath: networkConfigPath);
+      final coordinatorAddress = chooseBestAddress(
+        requireCoordinatorNode(networkConfig).addresses,
+      );
+      final ownerFixture = await createPhase17Fixture(
+        networkConfigPath: networkConfigPath,
+      );
       await seedPhase17Fixture(ownerFixture);
 
       final ownerBridge = NativeBridge();
@@ -45,8 +47,9 @@ void main() {
           spaceId: ownerFixture.identity.spaceId,
         );
 
-        final inviteSeed =
-            Uint8List.fromList(List<int>.generate(32, (index) => index + 71));
+        final inviteSeed = Uint8List.fromList(
+          List<int>.generate(32, (index) => index + 71),
+        );
         final inviteKeyPair = await ed25519KeyPairFromSeed(inviteSeed);
         final inviteRecord = await buildAclRecord(
           prevId: ownerFixture.aclRootId,
@@ -84,10 +87,12 @@ void main() {
       final repoRoot = findRepoRoot();
       final networkConfigPath = '$repoRoot/docker/any-sync/etc/client.yml';
       final networkConfig = await loadNetworkConfig(networkConfigPath);
-      final coordinatorAddress =
-          chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
-      final ownerFixture =
-          await createPhase17Fixture(networkConfigPath: networkConfigPath);
+      final coordinatorAddress = chooseBestAddress(
+        requireCoordinatorNode(networkConfig).addresses,
+      );
+      final ownerFixture = await createPhase17Fixture(
+        networkConfigPath: networkConfigPath,
+      );
       await seedPhase17Fixture(ownerFixture);
       final joinerIdentity = await Identity.fromMnemonic(generateMnemonic());
 
@@ -115,8 +120,9 @@ void main() {
           spaceId: ownerFixture.identity.spaceId,
         );
 
-        final inviteSeed =
-            Uint8List.fromList(List<int>.generate(32, (index) => index + 91));
+        final inviteSeed = Uint8List.fromList(
+          List<int>.generate(32, (index) => index + 91),
+        );
         final inviteKeyPair = await ed25519KeyPairFromSeed(inviteSeed);
         final inviteRecord = await buildAclRecord(
           prevId: ownerFixture.aclRootId,
@@ -149,7 +155,8 @@ void main() {
               AclContentValue(
                 requestJoin: AclAccountRequestJoin(
                   inviteIdentity: marshalEd25519PublicKey(
-                      joinerIdentity.accountKeyPair.publicKey),
+                    joinerIdentity.accountKeyPair.publicKey,
+                  ),
                   inviteRecordId: inviteResponse.id,
                   inviteIdentitySignature: inviteSignature,
                   metadata: Uint8List(0),

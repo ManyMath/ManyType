@@ -69,8 +69,9 @@ List<String> applyStoreSliceUpdate(
   ];
   switch (update.whichOperation()) {
     case changes_proto.Change_StoreSliceUpdate_Operation.add:
-      final afterIndex =
-          update.add.afterId.isEmpty ? -1 : result.indexOf(update.add.afterId);
+      final afterIndex = update.add.afterId.isEmpty
+          ? -1
+          : result.indexOf(update.add.afterId);
       result.insertAll(afterIndex + 1, update.add.ids);
       break;
     case changes_proto.Change_StoreSliceUpdate_Operation.remove:

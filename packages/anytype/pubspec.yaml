@@ -12,7 +12,7 @@ topics:
   - sync
 resolution: workspace
 environment:
-  sdk: ^3.5.3
+  sdk: ^3.8.1
 dependencies:
   manytype_core: ^0.0.2
   manytype_protocol: ^0.0.2

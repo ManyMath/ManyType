@@ -1,5 +1,6 @@
 @TestOn(
-    'vm') // shells out via Process.run to a bash harness (cargo build + live server); see file header
+  'vm',
+) // shells out via Process.run to a bash harness (cargo build + live server); see file header
 library;
 
 import 'dart:io';
@@ -21,15 +22,14 @@ void main() {
 
       final repoRoot = findRepoRoot();
 
-      final harnessResult = await Process.run(
-        'bash',
-        ['scripts/phase40_file_relation_harness.sh'],
-        workingDirectory: repoRoot,
-      );
+      final harnessResult = await Process.run('bash', [
+        'scripts/phase40_file_relation_harness.sh',
+      ], workingDirectory: repoRoot);
       expect(
         harnessResult.exitCode,
         0,
-        reason: 'phase40 harness failed:\n'
+        reason:
+            'phase40 harness failed:\n'
             'STDOUT:\n${harnessResult.stdout}\n'
             'STDERR:\n${harnessResult.stderr}',
       );
@@ -38,15 +38,14 @@ void main() {
         contains('phase40 harness: PASSED'),
       );
 
-      final verifierResult = await Process.run(
-        'python3',
-        ['scripts/verify_phase40_artifacts.py'],
-        workingDirectory: repoRoot,
-      );
+      final verifierResult = await Process.run('python3', [
+        'scripts/verify_phase40_artifacts.py',
+      ], workingDirectory: repoRoot);
       expect(
         verifierResult.exitCode,
         0,
-        reason: 'phase40 verifier failed:\n'
+        reason:
+            'phase40 verifier failed:\n'
             'STDOUT:\n${verifierResult.stdout}\n'
             'STDERR:\n${verifierResult.stderr}',
       );

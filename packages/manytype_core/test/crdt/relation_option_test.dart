@@ -97,23 +97,25 @@ void main() {
   });
 
   group('buildRelationOptionDetails', () {
-    test('rejects unknown color with ArgumentError containing "Not in palette"',
-        () {
-      expect(
-        () => buildRelationOptionDetails(
-          name: 'Done',
-          color: 'green',
-          relationKey: 'status',
-        ),
-        throwsA(
-          isA<ArgumentError>().having(
-            (e) => e.message.toString(),
-            'message',
-            contains('Not in palette'),
+    test(
+      'rejects unknown color with ArgumentError containing "Not in palette"',
+      () {
+        expect(
+          () => buildRelationOptionDetails(
+            name: 'Done',
+            color: 'green',
+            relationKey: 'status',
           ),
-        ),
-      );
-    });
+          throwsA(
+            isA<ArgumentError>().having(
+              (e) => e.message.toString(),
+              'message',
+              contains('Not in palette'),
+            ),
+          ),
+        );
+      },
+    );
 
     test('accepts the default sentinel as a valid color', () {
       expect(
@@ -126,8 +128,7 @@ void main() {
       );
     });
 
-    test(
-        'writes exactly 6 keys: name, text, relationOptionColor, color, '
+    test('writes exactly 6 keys: name, text, relationOptionColor, color, '
         'relationKey, layout=13.0', () {
       final s = buildRelationOptionDetails(
         name: 'Done',
@@ -262,8 +263,7 @@ void main() {
       expect(extractRootSmartBlockType(<Uint8List>[raw]), 16);
     });
 
-    test(
-        'decodes multi-byte varint 529 (STRelationOption = 0x211, '
+    test('decodes multi-byte varint 529 (STRelationOption = 0x211, '
         'two-byte encoding)', () {
       final raw = _rootRawTreeChangeWithSbType(smartBlockTypeRelationOption);
       expect(
@@ -286,8 +286,7 @@ void main() {
       expect(out, isEmpty);
     });
 
-    test(
-        'single STRelationOption input -> ResolvedOption with name/color/'
+    test('single STRelationOption input -> ResolvedOption with name/color/'
         'relationKey and isOrphaned=false', () async {
       final input = OptionIndexInput(
         objectId: 'opt-done',
@@ -330,24 +329,26 @@ void main() {
       expect(out, isEmpty);
     });
 
-    test('STRelationOption with missing details yields isOrphaned=true',
-        () async {
-      final input = OptionIndexInput(
-        objectId: 'opt-broken',
-        rawTreeChanges: <Uint8List>[
-          _rootRawTreeChangeWithSbType(smartBlockTypeRelationOption),
-          // No snapshot change at all: replay returns an empty map.
-        ],
-        treeKey: emptyKey,
-      );
-      final out = await loadLocalOptionIndex(<OptionIndexInput>[input]);
-      expect(out.keys, contains('opt-broken'));
-      final resolved = out['opt-broken']!;
-      expect(resolved.name, isNull);
-      expect(resolved.color, isNull);
-      expect(resolved.relationKey, isNull);
-      expect(resolved.isOrphaned, isTrue);
-    });
+    test(
+      'STRelationOption with missing details yields isOrphaned=true',
+      () async {
+        final input = OptionIndexInput(
+          objectId: 'opt-broken',
+          rawTreeChanges: <Uint8List>[
+            _rootRawTreeChangeWithSbType(smartBlockTypeRelationOption),
+            // No snapshot change at all: replay returns an empty map.
+          ],
+          treeKey: emptyKey,
+        );
+        final out = await loadLocalOptionIndex(<OptionIndexInput>[input]);
+        expect(out.keys, contains('opt-broken'));
+        final resolved = out['opt-broken']!;
+        expect(resolved.name, isNull);
+        expect(resolved.color, isNull);
+        expect(resolved.relationKey, isNull);
+        expect(resolved.isOrphaned, isTrue);
+      },
+    );
 
     test('mixed inputs return only the option entries', () async {
       final optionInput = OptionIndexInput(
@@ -372,17 +373,17 @@ void main() {
         ],
         treeKey: emptyKey,
       );
-      final out = await loadLocalOptionIndex(
-        <OptionIndexInput>[optionInput, nonOptionInput],
-      );
+      final out = await loadLocalOptionIndex(<OptionIndexInput>[
+        optionInput,
+        nonOptionInput,
+      ]);
       expect(out.keys.toSet(), <String>{'opt-a'});
       expect(out['opt-a']!.name, 'A');
       expect(out['opt-a']!.color, 'blue');
       expect(out['opt-a']!.relationKey, 'tag');
     });
 
-    test(
-        'a post-creation `color`-only edit is not shadowed by the stale '
+    test('a post-creation `color`-only edit is not shadowed by the stale '
         'creation-time `relationOptionColor` (BREADTH-05 regression: '
         '`color` is the official-client canonical key and must win)', () async {
       final input = OptionIndexInput(

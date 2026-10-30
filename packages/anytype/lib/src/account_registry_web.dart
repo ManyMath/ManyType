@@ -112,26 +112,23 @@ class AccountRegistry {
   }
 
   /// Persist whether [id] still needs its app-provided starter template.
-  static Future<void> setStarterTemplatePending(
-    String id,
-    bool pending,
-  ) async {
+  static Future<void> setStarterTemplatePending(String id, bool pending) async {
     final accounts = await listAccounts();
     final index = accounts.indexWhere((account) => account.id == id);
     if (index < 0) {
       throw StateError('no account registered with id $id');
     }
     final updated = List<AccountSummary>.of(accounts);
-    updated[index] = accounts[index].copyWith(
-      pendingStarterTemplate: pending,
-    );
+    updated[index] = accounts[index].copyWith(pendingStarterTemplate: pending);
     _writeAccounts(updated);
   }
 
   /// Update an account's stored server address. Throws [StateError] if no
   /// account is registered under [id].
   static Future<void> updateServerAddress(
-      String id, String serverAddress) async {
+    String id,
+    String serverAddress,
+  ) async {
     if (_storage.getItem(_mnemonicKey(id)) == null) {
       throw StateError('no account registered with id $id');
     }
@@ -142,8 +139,10 @@ class AccountRegistry {
   ///: the web counterpart to native's `CliConfig.loadFrom(config.toml)`,
   /// since there is no config.toml on web. Throws [StateError] if no
   /// account is registered under [id].
-  static Future<CliConfig> loadConfig(String id,
-      {String? serverOverride}) async {
+  static Future<CliConfig> loadConfig(
+    String id, {
+    String? serverOverride,
+  }) async {
     final mnemonic = _storage.getItem(_mnemonicKey(id));
     if (mnemonic == null) {
       throw StateError('no account registered with id $id');
@@ -238,12 +237,14 @@ class AccountRegistry {
     _storage.setItem(_serverKey(id), serverAddress);
 
     final createdAt = DateTime.now().toUtc();
-    await registerAccount(AccountSummary(
-      id: id,
-      displayName: displayName,
-      createdAt: createdAt,
-      pendingStarterTemplate: pendingStarterTemplate,
-    ));
+    await registerAccount(
+      AccountSummary(
+        id: id,
+        displayName: displayName,
+        createdAt: createdAt,
+        pendingStarterTemplate: pendingStarterTemplate,
+      ),
+    );
 
     return AccountProfile(
       id: id,

@@ -24,10 +24,12 @@ void main() {
       final repoRoot = findRepoRoot();
       final networkConfigPath = '$repoRoot/docker/any-sync/etc/client.yml';
       final networkConfig = await loadNetworkConfig(networkConfigPath);
-      final coordinatorAddress =
-          chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
-      final ownerFixture =
-          await createPhase17Fixture(networkConfigPath: networkConfigPath);
+      final coordinatorAddress = chooseBestAddress(
+        requireCoordinatorNode(networkConfig).addresses,
+      );
+      final ownerFixture = await createPhase17Fixture(
+        networkConfigPath: networkConfigPath,
+      );
       await seedPhase17Fixture(ownerFixture);
       final joinerIdentity = await Identity.fromMnemonic(generateMnemonic());
 
@@ -55,8 +57,9 @@ void main() {
           spaceId: ownerFixture.identity.spaceId,
         );
 
-        final inviteSeed =
-            Uint8List.fromList(List<int>.generate(32, (index) => index + 111));
+        final inviteSeed = Uint8List.fromList(
+          List<int>.generate(32, (index) => index + 111),
+        );
         final inviteKeyPair = await ed25519KeyPairFromSeed(inviteSeed);
         final inviteRecord = await buildAclRecord(
           prevId: ownerFixture.aclRootId,
@@ -126,10 +129,7 @@ void main() {
           spaceId: ownerFixture.identity.spaceId,
         );
         expect(recordsAfterAccept, hasLength(4));
-        await _expectPersistedChain(
-          ownerFixture.aclRootId,
-          recordsAfterAccept,
-        );
+        await _expectPersistedChain(ownerFixture.aclRootId, recordsAfterAccept);
 
         final acceptedState = AclState()
           ..applyRoot(
@@ -156,7 +156,7 @@ void main() {
           aclData: buildOracleAccountRemoveAclData(
             removedAccountPublicKeys: [joinerIdentity.accountKeyPair.publicKey],
             activeAccountPublicKeys: [
-              ownerFixture.identity.accountKeyPair.publicKey
+              ownerFixture.identity.accountKeyPair.publicKey,
             ],
           ),
           identityPrivateKey: ownerFixture.identity.accountSeed,
@@ -173,10 +173,7 @@ void main() {
           spaceId: ownerFixture.identity.spaceId,
         );
         expect(recordsAfterRemove, hasLength(5));
-        await _expectPersistedChain(
-          ownerFixture.aclRootId,
-          recordsAfterRemove,
-        );
+        await _expectPersistedChain(ownerFixture.aclRootId, recordsAfterRemove);
 
         final removedState = AclState()
           ..applyRoot(

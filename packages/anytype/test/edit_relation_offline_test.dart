@@ -25,27 +25,31 @@ void main() {
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
-    config =
-        CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
+    config = CliConfig(
+      mnemonic: testMnemonic,
+      serverAddress: '127.0.0.1:33020',
+    );
   });
 
   tearDown(() async {
     await db.close();
   });
 
-  test('writes a string relation value without any network dependency',
-      () async {
-    final created = await createCommand('Original text', db, config);
+  test(
+    'writes a string relation value without any network dependency',
+    () async {
+      final created = await createCommand('Original text', db, config);
 
-    final result = await editRelationOffline(
-      created.objectId,
-      db,
-      config,
-      relationKey: 'description',
-      stringValue: 'A description',
-    );
-    expect(result.relationKey, 'description');
-  });
+      final result = await editRelationOffline(
+        created.objectId,
+        db,
+        config,
+        relationKey: 'description',
+        stringValue: 'A description',
+      );
+      expect(result.relationKey, 'description');
+    },
+  );
 
   test('written string relation value is visible on replay', () async {
     final created = await createCommand('Original text', db, config);
@@ -65,8 +69,9 @@ void main() {
     final spaceKey = await deriveSpaceKey(accountPrivRaw);
     final treeKey = await deriveTreeKey(spaceKey, created.objectId);
     final details = await replayObjectDetails(
-      rawTreeChanges:
-          changes.map((c) => Uint8List.fromList(c.rawBytes)).toList(),
+      rawTreeChanges: changes
+          .map((c) => Uint8List.fromList(c.rawBytes))
+          .toList(),
       treeKey: treeKey,
     );
     expect(details['description']?.stringValue, 'A description');

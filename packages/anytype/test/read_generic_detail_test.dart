@@ -27,8 +27,10 @@ void main() {
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
-    config =
-        CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
+    config = CliConfig(
+      mnemonic: testMnemonic,
+      serverAddress: '127.0.0.1:33020',
+    );
   });
 
   tearDown(() async {
@@ -66,10 +68,7 @@ void main() {
     final output = result.detail!.lines.join('\n');
 
     expect(output, contains('[description] Readable description'));
-    expect(
-      output,
-      contains('[featuredRelations] description, sourceObject'),
-    );
+    expect(output, contains('[featuredRelations] description, sourceObject'));
   });
 }
 
@@ -111,10 +110,7 @@ Future<ReplayedObjectState> _replayObject(
   final rawTreeChanges = (await db.getChangesForObject(objectId))
       .map((change) => Uint8List.fromList(change.rawBytes))
       .toList(growable: false);
-  return replayObjectState(
-    rawTreeChanges: rawTreeChanges,
-    treeKey: treeKey,
-  );
+  return replayObjectState(rawTreeChanges: rawTreeChanges, treeKey: treeKey);
 }
 
 Future<Uint8List> _treeKeyForObject(CliConfig config, String objectId) async {

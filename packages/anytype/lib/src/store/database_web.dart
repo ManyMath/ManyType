@@ -18,13 +18,15 @@ const _multiTabSafeImplementations = {
 /// Maps drift's [WasmDatabaseResult] onto the platform-agnostic
 /// [WebStorageDiagnostics] surfaced through [openDatabaseForApp].
 WebStorageDiagnostics webStorageDiagnosticsFromWasmResult(
-    WasmDatabaseResult result) {
+  WasmDatabaseResult result,
+) {
   return WebStorageDiagnostics(
     implementationName: result.chosenImplementation.name,
     isDurable:
         result.chosenImplementation != WasmStorageImplementation.inMemory,
-    isMultiTabSafe:
-        _multiTabSafeImplementations.contains(result.chosenImplementation),
+    isMultiTabSafe: _multiTabSafeImplementations.contains(
+      result.chosenImplementation,
+    ),
     missingFeatures: result.missingFeatures.map((f) => f.name).toList(),
   );
 }
@@ -42,8 +44,10 @@ WebStorageDiagnostics webStorageDiagnosticsFromWasmResult(
 /// storage probe so both OPFS and IndexedDB databases are covered.
 Future<void> Function(String databaseName)? webDatabaseDeleteOverride;
 
-Future<QueryExecutor> openDatabaseForApp(String dbPath,
-    {WebStorageDiagnosticsCallback? onWebStorageDiagnostics}) async {
+Future<QueryExecutor> openDatabaseForApp(
+  String dbPath, {
+  WebStorageDiagnosticsCallback? onWebStorageDiagnostics,
+}) async {
   final result = await openWasmDatabaseForApp(dbPath);
   onWebStorageDiagnostics?.call(webStorageDiagnosticsFromWasmResult(result));
   return result.resolvedExecutor;

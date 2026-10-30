@@ -30,8 +30,10 @@ void main() {
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
-    config =
-        CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
+    config = CliConfig(
+      mnemonic: testMnemonic,
+      serverAddress: '127.0.0.1:33020',
+    );
   });
 
   tearDown(() async {
@@ -54,8 +56,10 @@ void main() {
     );
 
     final replayed = await _replayObject(db, config, objectId);
-    expect(replayed.snapshot.details.fields['name']?.stringValue,
-        equals('Updated title'));
+    expect(
+      replayed.snapshot.details.fields['name']?.stringValue,
+      equals('Updated title'),
+    );
 
     final titleBlock = replayed.snapshot.blocks.firstWhere(
       (block) => block.id == 'title',
@@ -140,34 +144,42 @@ void main() {
     );
   });
 
-  test('edit rejects fileRelationPath and fileRelationBytes together',
-      () async {
-    await createCommand('File relation object', db, config);
-    final objectId =
-        await _findObjectIdByName(db, config, 'File relation object');
-    expect(objectId, isNotNull);
-
-    expect(
-      () => editCommand(
-        objectId!,
-        null,
+  test(
+    'edit rejects fileRelationPath and fileRelationBytes together',
+    () async {
+      await createCommand('File relation object', db, config);
+      final objectId = await _findObjectIdByName(
         db,
         config,
-        networkConfigPath: 'unused-network.yml',
-        syncService: _NoopSyncService(),
-        relationKey: 'coverImage',
-        fileRelationPath: 'some/path.png',
-        fileRelationBytes: Uint8List.fromList([1, 2, 3]),
-        fileRelationFileName: 'cover.png',
-      ),
-      throwsA(isA<ArgumentError>()),
-    );
-  });
+        'File relation object',
+      );
+      expect(objectId, isNotNull);
+
+      expect(
+        () => editCommand(
+          objectId!,
+          null,
+          db,
+          config,
+          networkConfigPath: 'unused-network.yml',
+          syncService: _NoopSyncService(),
+          relationKey: 'coverImage',
+          fileRelationPath: 'some/path.png',
+          fileRelationBytes: Uint8List.fromList([1, 2, 3]),
+          fileRelationFileName: 'cover.png',
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    },
+  );
 
   test('edit rejects fileRelationBytes without fileRelationFileName', () async {
     await createCommand('File relation object 2', db, config);
-    final objectId =
-        await _findObjectIdByName(db, config, 'File relation object 2');
+    final objectId = await _findObjectIdByName(
+      db,
+      config,
+      'File relation object 2',
+    );
     expect(objectId, isNotNull);
 
     expect(
@@ -226,8 +238,9 @@ void main() {
           content.detailsSet.key == 'featuredRelations',
     );
     expect(
-      featuredRelationsSet.detailsSet.value.listValue.values
-          .map((value) => value.stringValue),
+      featuredRelationsSet.detailsSet.value.listValue.values.map(
+        (value) => value.stringValue,
+      ),
       orderedEquals(const ['description', 'sourceObject']),
     );
   });
@@ -271,10 +284,7 @@ Future<ReplayedObjectState> _replayObject(
   final rawTreeChanges = (await db.getChangesForObject(objectId))
       .map((change) => Uint8List.fromList(change.rawBytes))
       .toList(growable: false);
-  return replayObjectState(
-    rawTreeChanges: rawTreeChanges,
-    treeKey: treeKey,
-  );
+  return replayObjectState(rawTreeChanges: rawTreeChanges, treeKey: treeKey);
 }
 
 Future<Uint8List> _treeKeyForObject(CliConfig config, String objectId) async {

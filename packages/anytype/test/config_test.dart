@@ -1,5 +1,6 @@
 @TestOn(
-    'vm') // reads/writes real config.toml files via dart:io Directory/File: no browser filesystem equivalent used here
+  'vm',
+) // reads/writes real config.toml files via dart:io Directory/File: no browser filesystem equivalent used here
 library;
 
 import 'dart:io';
@@ -28,8 +29,10 @@ void main() {
 
       final config = await CliConfig.loadFrom(configFile.path);
 
-      expect(config.mnemonic,
-          'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
+      expect(
+        config.mnemonic,
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+      );
       expect(config.serverAddress, '10.0.0.1:5000');
     });
 
@@ -99,10 +102,9 @@ void main() {
 
       final reloaded = await CliConfig.load();
       expect(reloaded.mnemonic, first.mnemonic);
-      expect(
-        tempDir.listSync().map((entity) => entity.path),
-        [CliConfig.configPath],
-      );
+      expect(tempDir.listSync().map((entity) => entity.path), [
+        CliConfig.configPath,
+      ]);
     });
 
     test('replaces an existing config with force', () async {

@@ -1,5 +1,6 @@
 @TestOn(
-    'vm') // reads/writes real client.yml files via dart:io Directory/File: no browser filesystem equivalent used here
+  'vm',
+) // reads/writes real client.yml files via dart:io Directory/File: no browser filesystem equivalent used here
 library;
 
 import 'dart:io';
@@ -15,8 +16,9 @@ void main() {
     late Directory tempDir;
 
     setUp(() async {
-      tempDir =
-          await Directory.systemTemp.createTemp('manytype_network_config_');
+      tempDir = await Directory.systemTemp.createTemp(
+        'manytype_network_config_',
+      );
     });
 
     tearDown(() async {
@@ -143,10 +145,7 @@ nodes:
     });
 
     test('resolveNetworkConfig rejects neither path nor content', () {
-      expect(
-        () => resolveNetworkConfig(),
-        throwsArgumentError,
-      );
+      expect(() => resolveNetworkConfig(), throwsArgumentError);
     });
 
     test('prefers localhost file address from coordinator response', () {
@@ -161,8 +160,9 @@ nodes:
     });
 
     test('expects the peer ID of the node advertising an address', () {
-      final coordinatorPeerId =
-          encodeLibp2pPeerId(Uint8List(32)..fillRange(0, 32, 1));
+      final coordinatorPeerId = encodeLibp2pPeerId(
+        Uint8List(32)..fillRange(0, 32, 1),
+      );
       final treePeerId = encodeLibp2pPeerId(Uint8List(32)..fillRange(0, 32, 2));
       final config = parseNetworkConfig('''
 id: test

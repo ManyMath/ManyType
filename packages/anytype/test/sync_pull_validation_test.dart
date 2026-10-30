@@ -40,56 +40,63 @@ void main() {
     if (await tempDir.exists()) await tempDir.delete(recursive: true);
   });
 
-  test('a pulled change cannot overwrite or move an existing change row',
-      () async {
-    final created = await createCommand('hello', db, config);
-    final before = await db.getChangesForObject(created.objectId);
-    final victim = before.last;
+  test(
+    'a pulled change cannot overwrite or move an existing change row',
+    () async {
+      final created = await createCommand('hello', db, config);
+      final before = await db.getChangesForObject(created.objectId);
+      final victim = before.last;
 
-    await storePulledChanges(
-      db,
-      created.spaceId,
-      'attacker-object',
-      _frame([
-        _headUpdate(created.spaceId, 'attacker-object', [
-          RawTreeChangeWithId(id: victim.id, rawChange: [1, 2, 3]),
-          RawTreeChangeWithId(id: victim.id, rawChange: victim.rawBytes),
+      await storePulledChanges(
+        db,
+        created.spaceId,
+        'attacker-object',
+        _frame([
+          _headUpdate(created.spaceId, 'attacker-object', [
+            RawTreeChangeWithId(id: victim.id, rawChange: [1, 2, 3]),
+            RawTreeChangeWithId(id: victim.id, rawChange: victim.rawBytes),
+          ]),
         ]),
-      ]),
-    );
+      );
 
-    final after = await db.getChangesForObject(created.objectId);
-    expect(after.map((change) => change.id), before.map((change) => change.id));
-    expect(after.last.rawBytes, victim.rawBytes);
-    expect(await db.getChangesForObject('attacker-object'), isEmpty);
-  });
+      final after = await db.getChangesForObject(created.objectId);
+      expect(
+        after.map((change) => change.id),
+        before.map((change) => change.id),
+      );
+      expect(after.last.rawBytes, victim.rawBytes);
+      expect(await db.getChangesForObject('attacker-object'), isEmpty);
+    },
+  );
 
-  test('drops pulled changes whose id is empty or not the CID of their bytes',
-      () async {
-    final valid = _rawTreeChange([1]);
-    final mislabeled = _rawTreeChange([2]);
-    final unlabeled = _rawTreeChange([3]);
+  test(
+    'drops pulled changes whose id is empty or not the CID of their bytes',
+    () async {
+      final valid = _rawTreeChange([1]);
+      final mislabeled = _rawTreeChange([2]);
+      final unlabeled = _rawTreeChange([3]);
 
-    await storePulledChanges(
-      db,
-      'space-a',
-      'obj-1',
-      _frame([
-        _headUpdate('space-a', 'obj-1', [
-          RawTreeChangeWithId(id: await computeCid(valid), rawChange: valid),
-          RawTreeChangeWithId(
-            id: await computeCid(valid),
-            rawChange: mislabeled,
-          ),
-          RawTreeChangeWithId(id: '', rawChange: unlabeled),
+      await storePulledChanges(
+        db,
+        'space-a',
+        'obj-1',
+        _frame([
+          _headUpdate('space-a', 'obj-1', [
+            RawTreeChangeWithId(id: await computeCid(valid), rawChange: valid),
+            RawTreeChangeWithId(
+              id: await computeCid(valid),
+              rawChange: mislabeled,
+            ),
+            RawTreeChangeWithId(id: '', rawChange: unlabeled),
+          ]),
         ]),
-      ]),
-    );
+      );
 
-    final stored = await db.getChangesForObject('obj-1');
-    expect(stored.map((change) => change.id), [await computeCid(valid)]);
-    expect(stored.single.rawBytes, valid);
-  });
+      final stored = await db.getChangesForObject('obj-1');
+      expect(stored.map((change) => change.id), [await computeCid(valid)]);
+      expect(stored.single.rawBytes, valid);
+    },
+  );
 
   test('insertChange keeps the first row and refuses to move it', () async {
     await db.insertObject('obj-1', 'space-a');
@@ -106,75 +113,79 @@ void main() {
     expect(await db.getChangesForObject('obj-2'), isEmpty);
   });
 
-  test('ignores settings deletes from a tree whose id is not its root CID',
-      () async {
-    final spaceKey = Uint8List.fromList(List<int>.filled(32, 7));
-    await db.insertObject('victim', 'space-a');
-    final fakeSettingsRoot = RawTreeChange(
-      payload: RootChange(
-        spaceId: 'space-a',
-        changeType: 'anytype.space',
-      ).writeToBuffer(),
-    ).writeToBuffer();
-    final deleteChange = RawTreeChange(
-      payload: TreeChange(
-        changesData: SettingsData(
-          content: [
-            SpaceSettingsContent(objectDelete: ObjectDelete(id: 'victim')),
-          ],
+  test(
+    'ignores settings deletes from a tree whose id is not its root CID',
+    () async {
+      final spaceKey = Uint8List.fromList(List<int>.filled(32, 7));
+      await db.insertObject('victim', 'space-a');
+      final fakeSettingsRoot = RawTreeChange(
+        payload: RootChange(
+          spaceId: 'space-a',
+          changeType: 'anytype.space',
         ).writeToBuffer(),
-      ).writeToBuffer(),
-    ).writeToBuffer();
+      ).writeToBuffer();
+      final deleteChange = RawTreeChange(
+        payload: TreeChange(
+          changesData: SettingsData(
+            content: [
+              SpaceSettingsContent(objectDelete: ObjectDelete(id: 'victim')),
+            ],
+          ).writeToBuffer(),
+        ).writeToBuffer(),
+      ).writeToBuffer();
 
-    await storePulledChanges(
-      db,
-      'space-a',
-      'not-the-settings-tree',
-      _frame([
-        Uint8List.fromList(fakeSettingsRoot),
-        Uint8List.fromList(deleteChange),
-      ]),
-      spaceKey: spaceKey,
-    );
+      await storePulledChanges(
+        db,
+        'space-a',
+        'not-the-settings-tree',
+        _frame([
+          Uint8List.fromList(fakeSettingsRoot),
+          Uint8List.fromList(deleteChange),
+        ]),
+        spaceKey: spaceKey,
+      );
 
-    expect(await db.isObjectDeleted('victim'), isFalse);
-  });
+      expect(await db.isObjectDeleted('victim'), isFalse);
+    },
+  );
 
-  test('pulled store values cannot cross spaces or roll back local values',
-      () async {
-    await db.upsertStoreEntry(
-      keyPeerId: 'key-a',
-      spaceId: 'space-a',
-      valueBytes: _storeValue(200),
-      identitySignatureBytes: [1],
-      peerSignatureBytes: [1],
-    );
+  test(
+    'pulled store values cannot cross spaces or roll back local values',
+    () async {
+      await db.upsertStoreEntry(
+        keyPeerId: 'key-a',
+        spaceId: 'space-a',
+        valueBytes: _storeValue(200),
+        identitySignatureBytes: [1],
+        peerSignatureBytes: [1],
+      );
 
-    final pulled = await storePulledStoreValues(
-      db,
-      'space-a',
-      _frame([
-        _storeKeyValue('key-a', 'space-a', _storeValue(100)),
-        _storeKeyValue('key-b', 'space-b', _storeValue(300)),
-        _storeKeyValue('key-c', 'space-a', [0xff, 0xff]),
-        _storeKeyValue('key-d', '', _storeValue(400)),
-        Uint8List.fromList(StoreKeyValue().writeToBuffer()),
-      ]),
-      requestedKeys: {'key-a', 'key-b', 'key-c', 'key-d'},
-    );
+      final pulled = await storePulledStoreValues(
+        db,
+        'space-a',
+        _frame([
+          _storeKeyValue('key-a', 'space-a', _storeValue(100)),
+          _storeKeyValue('key-b', 'space-b', _storeValue(300)),
+          _storeKeyValue('key-c', 'space-a', [0xff, 0xff]),
+          _storeKeyValue('key-d', '', _storeValue(400)),
+          Uint8List.fromList(StoreKeyValue().writeToBuffer()),
+        ]),
+        requestedKeys: {'key-a', 'key-b', 'key-c', 'key-d'},
+      );
 
-    expect(pulled, 1);
-    final entries = await db.getStoreEntriesBySpace('space-a');
-    expect(entries.map((entry) => entry.keyPeerId), ['key-a', 'key-d']);
-    expect(entries.first.value, _storeValue(200));
-    expect(await db.getStoreEntriesBySpace('space-b'), isEmpty);
-  });
+      expect(pulled, 1);
+      final entries = await db.getStoreEntriesBySpace('space-a');
+      expect(entries.map((entry) => entry.keyPeerId), ['key-a', 'key-d']);
+      expect(entries.first.value, _storeValue(200));
+      expect(await db.getStoreEntriesBySpace('space-b'), isEmpty);
+    },
+  );
 }
 
 List<int> _storeValue(int timestampMicro) => StoreKeyInner(
-      key: 'key',
-      timestampMicro: Int64(timestampMicro),
-    ).writeToBuffer();
+  key: 'key',
+  timestampMicro: Int64(timestampMicro),
+).writeToBuffer();
 
 Uint8List _storeKeyValue(String keyPeerId, String spaceId, List<int> value) =>
     Uint8List.fromList(
@@ -186,38 +197,37 @@ Uint8List _storeKeyValue(String keyPeerId, String spaceId, List<int> value) =>
     );
 
 Uint8List _rawTreeChange(List<int> changesData) => Uint8List.fromList(
-      RawTreeChange(
-        payload: TreeChange(changesData: changesData).writeToBuffer(),
-      ).writeToBuffer(),
-    );
+  RawTreeChange(
+    payload: TreeChange(changesData: changesData).writeToBuffer(),
+  ).writeToBuffer(),
+);
 
 Uint8List _headUpdate(
   String spaceId,
   String objectId,
   List<RawTreeChangeWithId> changes,
-) =>
-    Uint8List.fromList(
-      ObjectSyncMessage(
-        spaceId: spaceId,
-        objectId: objectId,
-        payload: TreeSyncMessage(
-          content: TreeSyncContentValue(
-            headUpdate: TreeHeadUpdate(
-              heads: [for (final change in changes) change.id],
-              changes: changes,
-            ),
-          ),
-        ).writeToBuffer(),
-      ).writeToBuffer(),
-    );
+) => Uint8List.fromList(
+  ObjectSyncMessage(
+    spaceId: spaceId,
+    objectId: objectId,
+    payload: TreeSyncMessage(
+      content: TreeSyncContentValue(
+        headUpdate: TreeHeadUpdate(
+          heads: [for (final change in changes) change.id],
+          changes: changes,
+        ),
+      ),
+    ).writeToBuffer(),
+  ).writeToBuffer(),
+);
 
 Uint8List _frame(List<Uint8List> messages) {
   final builder = BytesBuilder();
   for (final message in messages) {
     builder.add(
-      (ByteData(4)..setUint32(0, message.length, Endian.little))
-          .buffer
-          .asUint8List(),
+      (ByteData(
+        4,
+      )..setUint32(0, message.length, Endian.little)).buffer.asUint8List(),
     );
     builder.add(message);
   }

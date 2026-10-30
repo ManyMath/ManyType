@@ -8,11 +8,8 @@ import 'package:manytype_protocol/manytype_protocol.dart' show Key, KeyType;
 import 'identity.dart';
 import 'peer_id.dart';
 
-typedef CoordinatorUnaryInvoker = Uint8List Function(
-  int handleId,
-  String method,
-  Uint8List payload,
-);
+typedef CoordinatorUnaryInvoker =
+    Uint8List Function(int handleId, String method, Uint8List payload);
 
 class PreparedSpaceDeleteRequest {
   const PreparedSpaceDeleteRequest({
@@ -44,7 +41,7 @@ class PreparedAccountDeleteRequest {
 
 class CoordinatorService {
   CoordinatorService({required CoordinatorUnaryInvoker invoker})
-      : _invoker = invoker;
+    : _invoker = invoker;
 
   final CoordinatorUnaryInvoker _invoker;
 
@@ -79,9 +76,7 @@ class CoordinatorService {
     required int handleId,
     required String spaceId,
   }) {
-    final request = SpaceStatusCheckRequest(
-      spaceId: spaceId,
-    ).writeToBuffer();
+    final request = SpaceStatusCheckRequest(spaceId: spaceId).writeToBuffer();
     final responseBytes = _invoker(
       handleId,
       '/coordinator.Coordinator/SpaceStatusCheck',
@@ -227,8 +222,9 @@ Future<DeletionConfirmPayloadWithSignature> prepareSpaceDeleteConfirmation({
   final payload = DeletionConfirmPayload(
     spaceId: spaceId,
     peerId: resolvedPeerId,
-    accountIdentity:
-        _marshalEd25519PublicKey(identity.accountKeyPair.publicKey),
+    accountIdentity: _marshalEd25519PublicKey(
+      identity.accountKeyPair.publicKey,
+    ),
     networkId: networkId,
     timestamp: Int64(DateTime.now().millisecondsSinceEpoch ~/ 1000),
   );
@@ -247,8 +243,9 @@ Future<DeletionConfirmPayloadWithSignature> prepareAccountDeleteConfirmation({
       peerId ?? encodeLibp2pPeerId(identity.keyPair.publicKey);
   final payload = AccountDeletionConfirmPayload(
     peerId: resolvedPeerId,
-    accountIdentity:
-        _marshalEd25519PublicKey(identity.accountKeyPair.publicKey),
+    accountIdentity: _marshalEd25519PublicKey(
+      identity.accountKeyPair.publicKey,
+    ),
     networkId: networkId,
     timestamp: Int64(DateTime.now().millisecondsSinceEpoch ~/ 1000),
   );
@@ -270,8 +267,5 @@ Future<DeletionConfirmPayloadWithSignature> _signDeletePayload({
 }
 
 Uint8List _marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
-      Key(
-        type: KeyType.Ed25519Public,
-        data: publicKey,
-      ).writeToBuffer(),
-    );
+  Key(type: KeyType.Ed25519Public, data: publicKey).writeToBuffer(),
+);

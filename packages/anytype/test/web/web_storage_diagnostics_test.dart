@@ -17,18 +17,20 @@ import 'web_db_test_helpers.dart';
 void main() {
   setUpAll(configureWebAppDatabaseAssets);
 
-  test(
-      'ManytypeDatabase(dbPath) invokes onWebStorageDiagnostics exactly once '
+  test('ManytypeDatabase(dbPath) invokes onWebStorageDiagnostics exactly once '
       'with the resolved implementation', () async {
     final dbName =
         'manytype-web-storage-diag-${DateTime.now().microsecondsSinceEpoch}';
 
     WebStorageDiagnostics? seen;
     var callCount = 0;
-    final db = ManytypeDatabase(dbName, onWebStorageDiagnostics: (d) {
-      callCount++;
-      seen = d;
-    });
+    final db = ManytypeDatabase(
+      dbName,
+      onWebStorageDiagnostics: (d) {
+        callCount++;
+        seen = d;
+      },
+    );
 
     // The callback fires from within the LazyDatabase's async opener, so
     // force it to run by issuing a query before asserting.

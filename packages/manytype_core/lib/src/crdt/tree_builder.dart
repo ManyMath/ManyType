@@ -60,9 +60,7 @@ Future<RawTreeChangeWithId> buildRootChange({
 
   // Generate 32 random bytes for uniqueness
   final rng = Random.secure();
-  final seed = Uint8List.fromList(
-    List.generate(32, (_) => rng.nextInt(256)),
-  );
+  final seed = Uint8List.fromList(List.generate(32, (_) => rng.nextInt(256)));
 
   // Create RootChange proto
   final rootChange = RootChange(
@@ -82,10 +80,7 @@ Future<RawTreeChangeWithId> buildRootChange({
   final signature = await ed25519Sign(identityPrivateKey, payload);
 
   // Wrap in RawTreeChange
-  final rawTreeChange = RawTreeChange(
-    payload: payload,
-    signature: signature,
-  );
+  final rawTreeChange = RawTreeChange(payload: payload, signature: signature);
 
   // Marshal RawTreeChange to bytes
   final rawBytes = Uint8List.fromList(rawTreeChange.writeToBuffer());
@@ -132,10 +127,7 @@ Future<RawTreeChangeWithId> buildTreeChange({
   final signature = await ed25519Sign(identityPrivateKey, payload);
 
   // Wrap in RawTreeChange
-  final rawTreeChange = RawTreeChange(
-    payload: payload,
-    signature: signature,
-  );
+  final rawTreeChange = RawTreeChange(payload: payload, signature: signature);
 
   // Marshal RawTreeChange to bytes
   final rawBytes = Uint8List.fromList(rawTreeChange.writeToBuffer());
@@ -147,8 +139,5 @@ Future<RawTreeChangeWithId> buildTreeChange({
 }
 
 Uint8List _marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
-      Key(
-        type: KeyType.Ed25519Public,
-        data: publicKey,
-      ).writeToBuffer(),
-    );
+  Key(type: KeyType.Ed25519Public, data: publicKey).writeToBuffer(),
+);

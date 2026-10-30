@@ -41,10 +41,7 @@ class SyncFacade {
 
   final ManytypeSession _session;
 
-  Future<void> run({
-    String? networkConfigPath,
-    String? networkConfigContent,
-  }) {
+  Future<void> run({String? networkConfigPath, String? networkConfigContent}) {
     return syncCommand(
       _session.db,
       _session.config,

@@ -63,8 +63,9 @@ Future<FileNodeProbeResult> probeFileNodeCommand(
     networkConfigPath: networkConfigPath,
     networkConfigContent: networkConfigContent,
   );
-  final coordinatorAddress =
-      chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
+  final coordinatorAddress = chooseBestAddress(
+    requireCoordinatorNode(networkConfig).addresses,
+  );
   final identity = await Identity.fromMnemonic(config.mnemonic);
   final bridge = NativeBridge();
   final capture = _FileProbeCapture.start(readOnly: readOnly);
@@ -74,14 +75,17 @@ Future<FileNodeProbeResult> probeFileNodeCommand(
     coordinatorAddress,
     identity.seed,
     identity.accountSeed,
-    expectedPeerId:
-        expectedPeerIdForAddress(coordinatorAddress, config: networkConfig),
+    expectedPeerId: expectedPeerIdForAddress(
+      coordinatorAddress,
+      config: networkConfig,
+    ),
   );
   capture.recordConnection(role: 'coordinator', address: coordinatorAddress);
 
   try {
-    final requestBytes =
-        Uint8List.fromList(NetworkConfigurationRequest().writeToBuffer());
+    final requestBytes = Uint8List.fromList(
+      NetworkConfigurationRequest().writeToBuffer(),
+    );
     final responseBytes = bridge.invoke(
       coordinatorHandleId,
       '/coordinator.Coordinator/NetworkConfiguration',
@@ -95,7 +99,8 @@ Future<FileNodeProbeResult> probeFileNodeCommand(
     );
     final response = NetworkConfigurationResponse.fromBuffer(responseBytes);
 
-    final fileAddress = chooseFileAddressFromResponse(response.nodes) ??
+    final fileAddress =
+        chooseFileAddressFromResponse(response.nodes) ??
         chooseBestAddress(requireFileNode(networkConfig).addresses);
     capture.recordNote('probe_mode', {'read_only': readOnly});
     capture.recordNote('resolved_file_node', {
@@ -118,59 +123,67 @@ Future<FileNodeProbeResult> probeFileNodeCommand(
     capture.recordConnection(role: 'file-node', address: fileAddress);
 
     try {
-      attempts.add(await _attemptProbe(
-        bridge: bridge,
-        capture: capture,
-        handleId: fileHandleId,
-        role: 'file-node',
-        method: '/filesync.File/Check',
-        requestBytes: Uint8List.fromList(CheckRequest().writeToBuffer()),
-      ));
-      attempts.add(await _attemptProbe(
-        bridge: bridge,
-        capture: capture,
-        handleId: fileHandleId,
-        role: 'file-node',
-        method: '/filesync.File/BlocksCheck',
-        requestBytes: Uint8List.fromList(
-          BlocksCheckRequest(
-            spaceId: identity.spaceId,
-            cids: [
-              Uint8List.fromList(const [1, 2, 3, 4])
-            ],
-          ).writeToBuffer(),
-        ),
-      ));
-      attempts.add(await _attemptProbe(
-        bridge: bridge,
-        capture: capture,
-        handleId: fileHandleId,
-        role: 'file-node',
-        method: '/filesync.File/BlockGet',
-        requestBytes: Uint8List.fromList(
-          BlockGetRequest(
-            spaceId: identity.spaceId,
-            cid: Uint8List.fromList(const [1, 2, 3, 4]),
-            wait: false,
-          ).writeToBuffer(),
-        ),
-      ));
-      if (!readOnly) {
-        attempts.add(await _attemptProbe(
+      attempts.add(
+        await _attemptProbe(
           bridge: bridge,
           capture: capture,
           handleId: fileHandleId,
           role: 'file-node',
-          method: '/filesync.File/BlockPush',
+          method: '/filesync.File/Check',
+          requestBytes: Uint8List.fromList(CheckRequest().writeToBuffer()),
+        ),
+      );
+      attempts.add(
+        await _attemptProbe(
+          bridge: bridge,
+          capture: capture,
+          handleId: fileHandleId,
+          role: 'file-node',
+          method: '/filesync.File/BlocksCheck',
           requestBytes: Uint8List.fromList(
-            BlockPushRequest(
+            BlocksCheckRequest(
               spaceId: identity.spaceId,
-              fileId: 'phase21-contract-freeze-probe',
-              cid: Uint8List.fromList(const [1, 2, 3, 4]),
-              data: Uint8List.fromList('phase-21-probe'.codeUnits),
+              cids: [
+                Uint8List.fromList(const [1, 2, 3, 4]),
+              ],
             ).writeToBuffer(),
           ),
-        ));
+        ),
+      );
+      attempts.add(
+        await _attemptProbe(
+          bridge: bridge,
+          capture: capture,
+          handleId: fileHandleId,
+          role: 'file-node',
+          method: '/filesync.File/BlockGet',
+          requestBytes: Uint8List.fromList(
+            BlockGetRequest(
+              spaceId: identity.spaceId,
+              cid: Uint8List.fromList(const [1, 2, 3, 4]),
+              wait: false,
+            ).writeToBuffer(),
+          ),
+        ),
+      );
+      if (!readOnly) {
+        attempts.add(
+          await _attemptProbe(
+            bridge: bridge,
+            capture: capture,
+            handleId: fileHandleId,
+            role: 'file-node',
+            method: '/filesync.File/BlockPush',
+            requestBytes: Uint8List.fromList(
+              BlockPushRequest(
+                spaceId: identity.spaceId,
+                fileId: 'phase21-contract-freeze-probe',
+                cid: Uint8List.fromList(const [1, 2, 3, 4]),
+                data: Uint8List.fromList('phase-21-probe'.codeUnits),
+              ).writeToBuffer(),
+            ),
+          ),
+        );
       }
     } finally {
       bridge.freeHandle(fileHandleId);
@@ -247,18 +260,19 @@ Future<FileNodeProbeAttempt> _attemptProbe({
 
 class _FileProbeCapture {
   _FileProbeCapture._({required this.path, required bool readOnly})
-      : _payload = {
-          'captured_at': DateTime.now().toUtc().toIso8601String(),
-          'read_only': readOnly,
-          'events': <Map<String, Object?>>[],
-        };
+    : _payload = {
+        'captured_at': DateTime.now().toUtc().toIso8601String(),
+        'read_only': readOnly,
+        'events': <Map<String, Object?>>[],
+      };
 
   final String? path;
   final Map<String, Object?> _payload;
 
   static _FileProbeCapture start({required bool readOnly}) {
     return _FileProbeCapture._(
-      path: readDebugCaptureEnv('MANYTYPE_FILE_CAPTURE_PATH') ??
+      path:
+          readDebugCaptureEnv('MANYTYPE_FILE_CAPTURE_PATH') ??
           readDebugCaptureEnv('MANYTYPE_SYNC_CAPTURE_PATH'),
       readOnly: readOnly,
     );

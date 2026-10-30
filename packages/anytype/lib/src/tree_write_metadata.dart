@@ -41,15 +41,17 @@ TreeWriteMetadata resolveTreeWriteMetadata(
     if (decoded == null) {
       continue;
     }
-    final aclHeadId =
-        decoded.aclHeadId.isNotEmpty ? decoded.aclHeadId : fallbackAclHeadId;
+    final aclHeadId = decoded.aclHeadId.isNotEmpty
+        ? decoded.aclHeadId
+        : fallbackAclHeadId;
     final snapshotBaseId = decoded.isSnapshot
         ? stored.id
         : decoded.snapshotBaseId.isNotEmpty
-            ? decoded.snapshotBaseId
-            : fallbackSnapshotBaseId;
-    final readKeyId =
-        decoded.readKeyId.isNotEmpty ? decoded.readKeyId : aclHeadId;
+        ? decoded.snapshotBaseId
+        : fallbackSnapshotBaseId;
+    final readKeyId = decoded.readKeyId.isNotEmpty
+        ? decoded.readKeyId
+        : aclHeadId;
     return TreeWriteMetadata(
       aclHeadId: aclHeadId,
       snapshotBaseId: snapshotBaseId,

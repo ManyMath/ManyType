@@ -20,65 +20,73 @@ final class FfiResult extends Struct {
 }
 
 // Native (C ABI) function signatures.
-typedef FfiConnectNative = Pointer<FfiResult> Function(
-  Pointer<Utf8> addr,
-  Pointer<Utf8> expectedPeerId,
-  Pointer<Uint8> peerSeed,
-  Uint32 peerSeedLen,
-  Pointer<Uint8> accountSeed,
-  Uint32 accountSeedLen,
-);
-typedef FfiConnectDart = Pointer<FfiResult> Function(
-  Pointer<Utf8> addr,
-  Pointer<Utf8> expectedPeerId,
-  Pointer<Uint8> peerSeed,
-  int peerSeedLen,
-  Pointer<Uint8> accountSeed,
-  int accountSeedLen,
-);
+typedef FfiConnectNative =
+    Pointer<FfiResult> Function(
+      Pointer<Utf8> addr,
+      Pointer<Utf8> expectedPeerId,
+      Pointer<Uint8> peerSeed,
+      Uint32 peerSeedLen,
+      Pointer<Uint8> accountSeed,
+      Uint32 accountSeedLen,
+    );
+typedef FfiConnectDart =
+    Pointer<FfiResult> Function(
+      Pointer<Utf8> addr,
+      Pointer<Utf8> expectedPeerId,
+      Pointer<Uint8> peerSeed,
+      int peerSeedLen,
+      Pointer<Uint8> accountSeed,
+      int accountSeedLen,
+    );
 
-typedef FfiInvokeNative = Pointer<FfiResult> Function(
-  Uint64 handleId,
-  Pointer<Utf8> method,
-  Pointer<Uint8> payload,
-  Uint32 payloadLen,
-);
-typedef FfiInvokeDart = Pointer<FfiResult> Function(
-  int handleId,
-  Pointer<Utf8> method,
-  Pointer<Uint8> payload,
-  int payloadLen,
-);
+typedef FfiInvokeNative =
+    Pointer<FfiResult> Function(
+      Uint64 handleId,
+      Pointer<Utf8> method,
+      Pointer<Uint8> payload,
+      Uint32 payloadLen,
+    );
+typedef FfiInvokeDart =
+    Pointer<FfiResult> Function(
+      int handleId,
+      Pointer<Utf8> method,
+      Pointer<Uint8> payload,
+      int payloadLen,
+    );
 
-typedef FfiSyncObjectNative = Pointer<FfiResult> Function(
-  Uint64 handleId,
-  Pointer<Utf8> spaceId,
-  Pointer<Utf8> objectId,
-  Pointer<Uint8> changesData,
-  Uint32 changesLen,
-);
-typedef FfiSyncObjectDart = Pointer<FfiResult> Function(
-  int handleId,
-  Pointer<Utf8> spaceId,
-  Pointer<Utf8> objectId,
-  Pointer<Uint8> changesData,
-  int changesLen,
-);
+typedef FfiSyncObjectNative =
+    Pointer<FfiResult> Function(
+      Uint64 handleId,
+      Pointer<Utf8> spaceId,
+      Pointer<Utf8> objectId,
+      Pointer<Uint8> changesData,
+      Uint32 changesLen,
+    );
+typedef FfiSyncObjectDart =
+    Pointer<FfiResult> Function(
+      int handleId,
+      Pointer<Utf8> spaceId,
+      Pointer<Utf8> objectId,
+      Pointer<Uint8> changesData,
+      int changesLen,
+    );
 
-typedef FfiRequestObjectNative = Pointer<FfiResult> Function(
-  Uint64 handleId,
-  Pointer<Utf8> spaceId,
-  Pointer<Utf8> objectId,
-  Pointer<Uint8> requestData,
-  Uint32 requestLen,
-);
-typedef FfiRequestObjectDart = Pointer<FfiResult> Function(
-  int handleId,
-  Pointer<Utf8> spaceId,
-  Pointer<Utf8> objectId,
-  Pointer<Uint8> requestData,
-  int requestLen,
-);
+typedef FfiRequestObjectNative =
+    Pointer<FfiResult> Function(
+      Uint64 handleId,
+      Pointer<Utf8> spaceId,
+      Pointer<Utf8> objectId,
+      Pointer<Uint8> requestData,
+      Uint32 requestLen,
+    );
+typedef FfiRequestObjectDart =
+    Pointer<FfiResult> Function(
+      int handleId,
+      Pointer<Utf8> spaceId,
+      Pointer<Utf8> objectId,
+      Pointer<Uint8> requestData,
+      int requestLen,
+    );
 
 typedef FfiFreeHandleNative = Void Function(Uint64 handleId);
 typedef FfiFreeHandleDart = void Function(int handleId);
@@ -96,16 +104,18 @@ typedef FfiFreeResultDart = void Function(Pointer<FfiResult> result);
 /// - [syncStore] -> ffi_sync_store
 /// - [freeHandle] -> ffi_free_handle
 /// - (internal) ffi_free_result
-typedef FfiSyncStoreNative = Pointer<FfiResult> Function(
-  Uint64 handleId,
-  Pointer<Uint8> messagesData,
-  Uint32 messagesLen,
-);
-typedef FfiSyncStoreDart = Pointer<FfiResult> Function(
-  int handleId,
-  Pointer<Uint8> messagesData,
-  int messagesLen,
-);
+typedef FfiSyncStoreNative =
+    Pointer<FfiResult> Function(
+      Uint64 handleId,
+      Pointer<Uint8> messagesData,
+      Uint32 messagesLen,
+    );
+typedef FfiSyncStoreDart =
+    Pointer<FfiResult> Function(
+      int handleId,
+      Pointer<Uint8> messagesData,
+      int messagesLen,
+    );
 
 typedef FfiAbiVersionNative = Uint32 Function();
 typedef FfiAbiVersionDart = int Function();
@@ -195,40 +205,50 @@ class NativeBridge {
   /// implementation so release tooling can probe an assembled `.app` using
   /// the exact production bundle-path resolver.
   NativeBridge.forExecutablePath(String executablePath)
-      : this._(_loadLibrary(resolvedExecutablePath: executablePath));
+    : this._(_loadLibrary(resolvedExecutablePath: executablePath));
 
   NativeBridge._(this._lib) {
     _abiVersion = _lib.lookupFunction<FfiAbiVersionNative, FfiAbiVersionDart>(
-        'ffi_abi_version');
+      'ffi_abi_version',
+    );
     final loadedAbiVersion = _abiVersion();
     if (loadedAbiVersion != expectedAbiVersion) {
       throw StateError(
-          'ManyType QUIC FFI ABI $loadedAbiVersion does not match the '
-          'expected ABI $expectedAbiVersion; rebuild manytype_quic_ffi');
+        'ManyType QUIC FFI ABI $loadedAbiVersion does not match the '
+        'expected ABI $expectedAbiVersion; rebuild manytype_quic_ffi',
+      );
     }
-    _connect =
-        _lib.lookupFunction<FfiConnectNative, FfiConnectDart>('ffi_connect');
+    _connect = _lib.lookupFunction<FfiConnectNative, FfiConnectDart>(
+      'ffi_connect',
+    );
     _invoke = _lib.lookupFunction<FfiInvokeNative, FfiInvokeDart>('ffi_invoke');
     _syncObject = _lib.lookupFunction<FfiSyncObjectNative, FfiSyncObjectDart>(
-        'ffi_sync_object');
-    _requestObject =
-        _lib.lookupFunction<FfiRequestObjectNative, FfiRequestObjectDart>(
-            'ffi_request_object');
-    _syncStore = _lib
-        .lookupFunction<FfiSyncStoreNative, FfiSyncStoreDart>('ffi_sync_store');
+      'ffi_sync_object',
+    );
+    _requestObject = _lib
+        .lookupFunction<FfiRequestObjectNative, FfiRequestObjectDart>(
+          'ffi_request_object',
+        );
+    _syncStore = _lib.lookupFunction<FfiSyncStoreNative, FfiSyncStoreDart>(
+      'ffi_sync_store',
+    );
     _freeHandle = _lib.lookupFunction<FfiFreeHandleNative, FfiFreeHandleDart>(
-        'ffi_free_handle');
+      'ffi_free_handle',
+    );
     _freeResult = _lib.lookupFunction<FfiFreeResultNative, FfiFreeResultDart>(
-        'ffi_free_result');
+      'ffi_free_result',
+    );
   }
 
   /// Load the platform-specific shared library.
   static DynamicLibrary _loadLibrary({String? resolvedExecutablePath}) {
     final libName = NativeLibraryLocator.libraryNameForOperatingSystem(
-        Platform.operatingSystem);
+      Platform.operatingSystem,
+    );
     if (libName == null) {
       throw UnsupportedError(
-          'Unsupported platform: ${Platform.operatingSystem}');
+        'Unsupported platform: ${Platform.operatingSystem}',
+      );
     }
 
     final configuredPath = libraryPath;
@@ -243,7 +263,8 @@ class NativeBridge {
 
     if (Platform.isMacOS) {
       final packagedPath = NativeLibraryLocator.macOSBundleLibraryPath(
-          resolvedExecutablePath ?? Platform.resolvedExecutable);
+        resolvedExecutablePath ?? Platform.resolvedExecutable,
+      );
       if (File(packagedPath).existsSync()) {
         // A present bundle library is authoritative. Do not silently load a
         // developer build if its signature, architecture, or ABI is invalid.
@@ -374,8 +395,13 @@ class NativeBridge {
     final dataPtr = calloc<Uint8>(payload.length);
     dataPtr.asTypedList(payload.length).setAll(0, payload);
 
-    final result =
-        _syncObject(handleId, spacePtr, objPtr, dataPtr, payload.length);
+    final result = _syncObject(
+      handleId,
+      spacePtr,
+      objPtr,
+      dataPtr,
+      payload.length,
+    );
 
     calloc.free(spacePtr);
     calloc.free(objPtr);
@@ -399,8 +425,13 @@ class NativeBridge {
     final dataPtr = calloc<Uint8>(payload.length);
     dataPtr.asTypedList(payload.length).setAll(0, payload);
 
-    final result =
-        _requestObject(handleId, spacePtr, objPtr, dataPtr, payload.length);
+    final result = _requestObject(
+      handleId,
+      spacePtr,
+      objPtr,
+      dataPtr,
+      payload.length,
+    );
 
     calloc.free(spacePtr);
     calloc.free(objPtr);

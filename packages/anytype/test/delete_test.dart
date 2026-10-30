@@ -32,99 +32,109 @@ void main() {
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
-    config =
-        CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
+    config = CliConfig(
+      mnemonic: testMnemonic,
+      serverAddress: '127.0.0.1:33020',
+    );
   });
 
   tearDown(() async {
     await db.close();
   });
 
-  test('delete archives the object and writes ObjectDelete in settings',
-      () async {
-    await createCommand('Delete me', db, config);
+  test(
+    'delete archives the object and writes ObjectDelete in settings',
+    () async {
+      await createCommand('Delete me', db, config);
 
-    final objectId = await _findObjectIdByName(db, config, 'Delete me');
-    expect(objectId, isNotNull);
-    final id = objectId!;
+      final objectId = await _findObjectIdByName(db, config, 'Delete me');
+      expect(objectId, isNotNull);
+      final id = objectId!;
 
-    final result = await deleteCommand(
-      id,
-      db,
-      config,
-      networkConfigPath: 'unused-network.yml',
-      syncService: _NoopSyncService(),
-    );
+      final result = await deleteCommand(
+        id,
+        db,
+        config,
+        networkConfigPath: 'unused-network.yml',
+        syncService: _NoopSyncService(),
+      );
 
-    expect(result.objectId, id);
-    expect(await db.isObjectDeleted(id), isTrue);
+      expect(result.objectId, id);
+      expect(await db.isObjectDeleted(id), isTrue);
 
-    final objectDetails = await _replayDetails(db, config, id);
-    expect(objectDetails['isArchived']?.boolValue, isTrue);
+      final objectDetails = await _replayDetails(db, config, id);
+      expect(objectDetails['isArchived']?.boolValue, isTrue);
 
-    final objectTreeKey = await _treeKeyForObject(config, id);
-    final objectChanges = await db.getChangesForObject(id);
-    final archiveRawTreeChange =
-        RawTreeChange.fromBuffer(objectChanges.last.rawBytes);
-    final archiveTreeChange =
-        TreeChange.fromBuffer(archiveRawTreeChange.payload);
-    final archiveDecoded = await aesGcmDecrypt(
-      objectTreeKey,
-      Uint8List.fromList(archiveTreeChange.changesData),
-    );
-    final archiveChange = changes_proto.Change.fromBuffer(archiveDecoded);
-    expect(
-      archiveChange.content.any(
-        (content) =>
-            content.hasDetailsSet() &&
-            content.detailsSet.key == 'isArchived' &&
-            content.detailsSet.value.hasBoolValue() &&
-            content.detailsSet.value.boolValue,
-      ),
-      isTrue,
-    );
+      final objectTreeKey = await _treeKeyForObject(config, id);
+      final objectChanges = await db.getChangesForObject(id);
+      final archiveRawTreeChange = RawTreeChange.fromBuffer(
+        objectChanges.last.rawBytes,
+      );
+      final archiveTreeChange = TreeChange.fromBuffer(
+        archiveRawTreeChange.payload,
+      );
+      final archiveDecoded = await aesGcmDecrypt(
+        objectTreeKey,
+        Uint8List.fromList(archiveTreeChange.changesData),
+      );
+      final archiveChange = changes_proto.Change.fromBuffer(archiveDecoded);
+      expect(
+        archiveChange.content.any(
+          (content) =>
+              content.hasDetailsSet() &&
+              content.detailsSet.key == 'isArchived' &&
+              content.detailsSet.value.hasBoolValue() &&
+              content.detailsSet.value.boolValue,
+        ),
+        isTrue,
+      );
 
-    final settingsObjectId = await _findSettingsObjectId(db, config);
-    expect(settingsObjectId, isNotNull);
+      final settingsObjectId = await _findSettingsObjectId(db, config);
+      expect(settingsObjectId, isNotNull);
 
-    final settingsChanges = await db.getChangesForObject(settingsObjectId!);
-    final settingsTreeKey = await _treeKeyForObject(config, settingsObjectId);
-    final settingsRawTreeChange =
-        RawTreeChange.fromBuffer(settingsChanges.last.rawBytes);
-    final settingsTreeChange =
-        TreeChange.fromBuffer(settingsRawTreeChange.payload);
-    final settingsDecoded = await aesGcmDecrypt(
-      settingsTreeKey,
-      Uint8List.fromList(settingsTreeChange.changesData),
-    );
-    final settingsData = SettingsData.fromBuffer(settingsDecoded);
-    expect(settingsData.content, isNotEmpty);
-    expect(settingsData.content.last.hasObjectDelete(), isTrue);
-    expect(settingsData.content.last.objectDelete.id, equals(id));
-  });
+      final settingsChanges = await db.getChangesForObject(settingsObjectId!);
+      final settingsTreeKey = await _treeKeyForObject(config, settingsObjectId);
+      final settingsRawTreeChange = RawTreeChange.fromBuffer(
+        settingsChanges.last.rawBytes,
+      );
+      final settingsTreeChange = TreeChange.fromBuffer(
+        settingsRawTreeChange.payload,
+      );
+      final settingsDecoded = await aesGcmDecrypt(
+        settingsTreeKey,
+        Uint8List.fromList(settingsTreeChange.changesData),
+      );
+      final settingsData = SettingsData.fromBuffer(settingsDecoded);
+      expect(settingsData.content, isNotEmpty);
+      expect(settingsData.content.last.hasObjectDelete(), isTrue);
+      expect(settingsData.content.last.objectDelete.id, equals(id));
+    },
+  );
 
-  test('re-seeing an object row does not clear an existing delete flag',
-      () async {
-    await createCommand('Delete me twice', db, config);
+  test(
+    're-seeing an object row does not clear an existing delete flag',
+    () async {
+      await createCommand('Delete me twice', db, config);
 
-    final objectId = await _findObjectIdByName(db, config, 'Delete me twice');
-    expect(objectId, isNotNull);
-    final id = objectId!;
+      final objectId = await _findObjectIdByName(db, config, 'Delete me twice');
+      expect(objectId, isNotNull);
+      final id = objectId!;
 
-    await deleteCommand(
-      id,
-      db,
-      config,
-      networkConfigPath: 'unused-network.yml',
-      syncService: _NoopSyncService(),
-    );
-    expect(await db.isObjectDeleted(id), isTrue);
+      await deleteCommand(
+        id,
+        db,
+        config,
+        networkConfigPath: 'unused-network.yml',
+        syncService: _NoopSyncService(),
+      );
+      expect(await db.isObjectDeleted(id), isTrue);
 
-    final identity = await Identity.fromMnemonic(config.mnemonic);
-    await db.insertObject(id, identity.spaceId);
+      final identity = await Identity.fromMnemonic(config.mnemonic);
+      await db.insertObject(id, identity.spaceId);
 
-    expect(await db.isObjectDeleted(id), isTrue);
-  });
+      expect(await db.isObjectDeleted(id), isTrue);
+    },
+  );
 }
 
 class _NoopSyncService extends SyncService {

@@ -39,21 +39,23 @@ void main() {
     if (await tempBase.exists()) await tempBase.delete(recursive: true);
   });
 
-  test('first native resolution secures legacy plaintext before returning',
-      () async {
-    final active = await resolveActiveAccount();
-    final accounts = await AccountRegistry.listAccounts();
+  test(
+    'first native resolution secures legacy plaintext before returning',
+    () async {
+      final active = await resolveActiveAccount();
+      final accounts = await AccountRegistry.listAccounts();
 
-    expect(accounts, hasLength(1));
-    expect(active.config.mnemonic, _mnemonic);
-    expect(active.dbPath, CliConfig.dbPath);
-    expect(secureStore.values[accounts.single.id], _mnemonic);
-    final migratedConfig = await File(CliConfig.configPath).readAsString();
-    expect(migratedConfig, isNot(contains(_mnemonic)));
-    expect(migratedConfig, contains('recovery_phrase_store = "platform"'));
-    expect(await File(CliConfig.dbPath).readAsString(), 'legacy workspace');
-    expect(await AccountRegistry.getCurrentAccountId(), accounts.single.id);
-  });
+      expect(accounts, hasLength(1));
+      expect(active.config.mnemonic, _mnemonic);
+      expect(active.dbPath, CliConfig.dbPath);
+      expect(secureStore.values[accounts.single.id], _mnemonic);
+      final migratedConfig = await File(CliConfig.configPath).readAsString();
+      expect(migratedConfig, isNot(contains(_mnemonic)));
+      expect(migratedConfig, contains('recovery_phrase_store = "platform"'));
+      expect(await File(CliConfig.dbPath).readAsString(), 'legacy workspace');
+      expect(await AccountRegistry.getCurrentAccountId(), accounts.single.id);
+    },
+  );
 
   test('secure write failure preserves plaintext for a later retry', () async {
     secureStore.failWrites = true;

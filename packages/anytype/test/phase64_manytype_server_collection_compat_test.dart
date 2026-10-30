@@ -1,5 +1,6 @@
 @TestOn(
-    'vm') // shells out via Process.run to a cargo-build + bash harness against a live server (see file header)
+  'vm',
+) // shells out via Process.run to a cargo-build + bash harness against a live server (see file header)
 library;
 
 import 'dart:io';
@@ -28,15 +29,14 @@ void main() {
 
       final repoRoot = findRepoRoot();
 
-      final harnessResult = await Process.run(
-        'bash',
-        ['scripts/phase64_official_to_manytype_collection_harness.sh'],
-        workingDirectory: repoRoot,
-      );
+      final harnessResult = await Process.run('bash', [
+        'scripts/phase64_official_to_manytype_collection_harness.sh',
+      ], workingDirectory: repoRoot);
       expect(
         harnessResult.exitCode,
         0,
-        reason: 'phase64 harness failed:\n'
+        reason:
+            'phase64 harness failed:\n'
             'STDOUT:\n${harnessResult.stdout}\n'
             'STDERR:\n${harnessResult.stderr}',
       );
@@ -45,15 +45,14 @@ void main() {
         contains('phase64 harness: PASSED'),
       );
 
-      final verifierResult = await Process.run(
-        'python3',
-        ['scripts/verify_phase64_manytype_server_collection_compat.py'],
-        workingDirectory: repoRoot,
-      );
+      final verifierResult = await Process.run('python3', [
+        'scripts/verify_phase64_manytype_server_collection_compat.py',
+      ], workingDirectory: repoRoot);
       expect(
         verifierResult.exitCode,
         0,
-        reason: 'phase64 verifier failed:\n'
+        reason:
+            'phase64 verifier failed:\n'
             'STDOUT:\n${verifierResult.stdout}\n'
             'STDERR:\n${verifierResult.stderr}',
       );

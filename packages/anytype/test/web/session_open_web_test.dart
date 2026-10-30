@@ -27,36 +27,38 @@ void main() {
     });
 
     test(
-        'opens a session for a registered account and drives create -> edit -> read',
-        () async {
-      final profile = await AccountRegistry.createAccount(
-        mnemonic: _mnemonic,
-        displayName: 'work',
-      );
+      'opens a session for a registered account and drives create -> edit -> read',
+      () async {
+        final profile = await AccountRegistry.createAccount(
+          mnemonic: _mnemonic,
+          displayName: 'work',
+        );
 
-      final session = await ManytypeSession.openWeb(accountId: profile.id);
-      addTearDown(session.close);
+        final session = await ManytypeSession.openWeb(accountId: profile.id);
+        addTearDown(session.close);
 
-      expect(session.config.mnemonic, _mnemonic);
-      expect(session.identity.spaceId, isNotEmpty);
+        expect(session.config.mnemonic, _mnemonic);
+        expect(session.identity.spaceId, isNotEmpty);
 
-      final created = await session.objects.create('Session object');
+        final created = await session.objects.create('Session object');
 
-      await session.objects.edit(
-        created.objectId,
-        'Session object (edited)',
-        syncService: _NoopSyncService(),
-      );
+        await session.objects.edit(
+          created.objectId,
+          'Session object (edited)',
+          syncService: _NoopSyncService(),
+        );
 
-      final read = await session.objects.read(objectId: created.objectId);
+        final read = await session.objects.read(objectId: created.objectId);
 
-      expect(read.detail, isNotNull);
-      expect(
-        read.detail!.lines
-            .any((line) => line.contains('Session object (edited)')),
-        isTrue,
-      );
-    });
+        expect(read.detail, isNotNull);
+        expect(
+          read.detail!.lines.any(
+            (line) => line.contains('Session object (edited)'),
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('throws StateError for an unregistered account id', () async {
       await expectLater(

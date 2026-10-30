@@ -12,11 +12,13 @@ void main() {
   final emptyBytes = Uint8List(0);
 
   group('computeCid', () {
-    test('produces string starting with b (base32lower multibase prefix)',
-        () async {
-      final cid = await computeCid(knownBytes);
-      expect(cid, startsWith('b'));
-    });
+    test(
+      'produces string starting with b (base32lower multibase prefix)',
+      () async {
+        final cid = await computeCid(knownBytes);
+        expect(cid, startsWith('b'));
+      },
+    );
 
     test('produces valid CID for empty bytes', () async {
       final cid = await computeCid(emptyBytes);
@@ -24,11 +26,13 @@ void main() {
       expect(cid, startsWith('b'));
     });
 
-    test('produces string starting with bafy (CIDv1 + dag-cbor + SHA-256)',
-        () async {
-      final cid = await computeCid(knownBytes);
-      expect(cid, startsWith('bafy'));
-    });
+    test(
+      'produces string starting with bafy (CIDv1 + dag-cbor + SHA-256)',
+      () async {
+        final cid = await computeCid(knownBytes);
+        expect(cid, startsWith('bafy'));
+      },
+    );
 
     test('two different inputs produce different CIDs', () async {
       final cid1 = await computeCid(knownBytes);

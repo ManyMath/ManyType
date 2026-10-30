@@ -26,20 +26,23 @@ void main() {
     final temporaryDirectory = Directory.systemTemp.createTempSync();
     addTearDown(() => temporaryDirectory.deleteSync(recursive: true));
     final separator = Platform.pathSeparator;
-    final executable = '${temporaryDirectory.path}${separator}ManyType.app'
+    final executable =
+        '${temporaryDirectory.path}${separator}ManyType.app'
         '${separator}Contents${separator}MacOS${separator}manytype';
 
     expect(
-        NativeLibraryLocator.macOSBundleLibraryPath(executable),
-        '${temporaryDirectory.path}${separator}ManyType.app'
-        '${separator}Contents${separator}Frameworks${separator}'
-        '${NativeLibraryLocator.macOSLibraryName}');
+      NativeLibraryLocator.macOSBundleLibraryPath(executable),
+      '${temporaryDirectory.path}${separator}ManyType.app'
+      '${separator}Contents${separator}Frameworks${separator}'
+      '${NativeLibraryLocator.macOSLibraryName}',
+    );
   });
 
   test('places project builds beside the package config', () {
     final separator = Platform.pathSeparator;
     final root = Directory.systemTemp.path;
-    final packageConfig = '$root${separator}consumer$separator.dart_tool'
+    final packageConfig =
+        '$root${separator}consumer$separator.dart_tool'
         '${separator}package_config.json';
 
     expect(
@@ -64,14 +67,11 @@ void main() {
       workingDirectory: workingDirectory,
     );
 
-    expect(
-      paths.take(4),
-      [
-        '$workingDirectory${separator}rust${separator}target${separator}release${separator}${NativeLibraryLocator.macOSLibraryName}',
-        '$workingDirectory${separator}rust${separator}target${separator}debug${separator}${NativeLibraryLocator.macOSLibraryName}',
-        '$apps${separator}rust${separator}target${separator}release${separator}${NativeLibraryLocator.macOSLibraryName}',
-        '$apps${separator}rust${separator}target${separator}debug${separator}${NativeLibraryLocator.macOSLibraryName}',
-      ],
-    );
+    expect(paths.take(4), [
+      '$workingDirectory${separator}rust${separator}target${separator}release${separator}${NativeLibraryLocator.macOSLibraryName}',
+      '$workingDirectory${separator}rust${separator}target${separator}debug${separator}${NativeLibraryLocator.macOSLibraryName}',
+      '$apps${separator}rust${separator}target${separator}release${separator}${NativeLibraryLocator.macOSLibraryName}',
+      '$apps${separator}rust${separator}target${separator}debug${separator}${NativeLibraryLocator.macOSLibraryName}',
+    ]);
   });
 }

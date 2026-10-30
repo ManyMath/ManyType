@@ -9,9 +9,7 @@ void main() {
         id: 'tmpl-1',
         types: const ['ot-template', 'project'],
         name: 'Project Template',
-        details: const {
-          'targetObjectType': 'type-project',
-        },
+        details: const {'targetObjectType': 'type-project'},
       );
 
       expect(
@@ -29,9 +27,7 @@ void main() {
         id: 'obj-1',
         types: const ['project'],
         name: 'Project 1',
-        details: const {
-          'targetObjectType': 'type-project',
-        },
+        details: const {'targetObjectType': 'type-project'},
       );
 
       expect(
@@ -49,9 +45,7 @@ void main() {
         id: 'tmpl-2',
         types: const ['ot-template', 'project'],
         name: 'Project Template',
-        details: const {
-          'targetObjectType': 'type-task',
-        },
+        details: const {'targetObjectType': 'type-task'},
       );
 
       expect(

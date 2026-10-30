@@ -75,10 +75,7 @@ void main() {
         parseStyleName('header3'),
         equals(Block_Content_Text_Style.Header3),
       );
-      expect(
-        parseStyleName('quote'),
-        equals(Block_Content_Text_Style.Quote),
-      );
+      expect(parseStyleName('quote'), equals(Block_Content_Text_Style.Quote));
       expect(
         parseStyleName('checkbox'),
         equals(Block_Content_Text_Style.Checkbox),
@@ -87,10 +84,7 @@ void main() {
         parseStyleName('numbered'),
         equals(Block_Content_Text_Style.Numbered),
       );
-      expect(
-        parseStyleName('toggle'),
-        equals(Block_Content_Text_Style.Toggle),
-      );
+      expect(parseStyleName('toggle'), equals(Block_Content_Text_Style.Toggle));
       expect(
         parseStyleName('callout'),
         equals(Block_Content_Text_Style.Callout),

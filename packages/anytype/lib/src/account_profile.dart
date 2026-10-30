@@ -32,18 +32,18 @@ class AccountProfile {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'displayName': displayName,
-        'mnemonic': mnemonic,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'displayName': displayName,
+    'mnemonic': mnemonic,
+    'createdAt': createdAt.toIso8601String(),
+  };
 
   static AccountProfile fromJson(Map<String, dynamic> json) => AccountProfile(
-        id: json['id'] as String,
-        displayName: json['displayName'] as String,
-        mnemonic: json['mnemonic'] as String,
-        createdAt: DateTime.parse(json['createdAt'] as String),
-      );
+    id: json['id'] as String,
+    displayName: json['displayName'] as String,
+    mnemonic: json['mnemonic'] as String,
+    createdAt: DateTime.parse(json['createdAt'] as String),
+  );
 }
 
 /// Registry-facing summary of an account profile (no mnemonic: the secret
@@ -78,34 +78,31 @@ class AccountSummary {
   AccountSummary copyWith({
     String? displayName,
     bool? pendingStarterTemplate,
-  }) =>
-      AccountSummary(
-        id: id,
-        displayName: displayName ?? this.displayName,
-        createdAt: createdAt,
-        pendingStarterTemplate:
-            pendingStarterTemplate ?? this.pendingStarterTemplate,
-        configPathOverride: configPathOverride,
-        dbPathOverride: dbPathOverride,
-      );
+  }) => AccountSummary(
+    id: id,
+    displayName: displayName ?? this.displayName,
+    createdAt: createdAt,
+    pendingStarterTemplate:
+        pendingStarterTemplate ?? this.pendingStarterTemplate,
+    configPathOverride: configPathOverride,
+    dbPathOverride: dbPathOverride,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'displayName': displayName,
-        'createdAt': createdAt.toIso8601String(),
-        if (pendingStarterTemplate) 'pendingStarterTemplate': true,
-        if (configPathOverride != null)
-          'configPathOverride': configPathOverride,
-        if (dbPathOverride != null) 'dbPathOverride': dbPathOverride,
-      };
+    'id': id,
+    'displayName': displayName,
+    'createdAt': createdAt.toIso8601String(),
+    if (pendingStarterTemplate) 'pendingStarterTemplate': true,
+    if (configPathOverride != null) 'configPathOverride': configPathOverride,
+    if (dbPathOverride != null) 'dbPathOverride': dbPathOverride,
+  };
 
   static AccountSummary fromJson(Map<String, dynamic> json) => AccountSummary(
-        id: json['id'] as String,
-        displayName: json['displayName'] as String,
-        createdAt: DateTime.parse(json['createdAt'] as String),
-        pendingStarterTemplate:
-            json['pendingStarterTemplate'] as bool? ?? false,
-        configPathOverride: json['configPathOverride'] as String?,
-        dbPathOverride: json['dbPathOverride'] as String?,
-      );
+    id: json['id'] as String,
+    displayName: json['displayName'] as String,
+    createdAt: DateTime.parse(json['createdAt'] as String),
+    pendingStarterTemplate: json['pendingStarterTemplate'] as bool? ?? false,
+    configPathOverride: json['configPathOverride'] as String?,
+    dbPathOverride: json['dbPathOverride'] as String?,
+  );
 }

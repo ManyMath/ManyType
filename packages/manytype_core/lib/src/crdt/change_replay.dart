@@ -28,8 +28,9 @@ Future<ChangeReplayState> replayRawTreeChanges(
   bool skipUnreadable = false,
 }) async {
   final state = ChangeReplayState(
-    rootId:
-        rawTreeChanges.isEmpty ? '' : await computeCid(rawTreeChanges.first),
+    rootId: rawTreeChanges.isEmpty
+        ? ''
+        : await computeCid(rawTreeChanges.first),
   );
 
   for (final rawChange in rawTreeChanges) {
@@ -112,8 +113,8 @@ void _applyContent(ChangeReplayState state, Change_Content content) {
       break;
     case Change_Content_Value.detailsSet:
       if (content.detailsSet.hasValue()) {
-        state.details.fields[content.detailsSet.key] =
-            content.detailsSet.value.deepCopy();
+        state.details.fields[content.detailsSet.key] = content.detailsSet.value
+            .deepCopy();
       } else {
         state.details.fields.remove(content.detailsSet.key);
       }
@@ -279,8 +280,9 @@ void _applyBlockUpdateEvent(ChangeReplayState state, List<int> eventBytes) {
     case Event_Message_Value.blockSetRelation:
       final block = state.blocks[event.blockSetRelation.id];
       if (block != null) {
-        block.relation =
-            block.hasRelation() ? block.relation : Block_Content_Relation();
+        block.relation = block.hasRelation()
+            ? block.relation
+            : Block_Content_Relation();
         if (event.blockSetRelation.hasKey()) {
           block.relation.key = event.blockSetRelation.key.value;
         }
@@ -307,8 +309,9 @@ void _applyBlockUpdateEvent(ChangeReplayState state, List<int> eventBytes) {
     case Event_Message_Value.blockSetTableRow:
       final block = state.blocks[event.blockSetTableRow.id];
       if (block != null) {
-        block.tableRow =
-            block.hasTableRow() ? block.tableRow : Block_Content_TableRow();
+        block.tableRow = block.hasTableRow()
+            ? block.tableRow
+            : Block_Content_TableRow();
         if (event.blockSetTableRow.hasIsHeader()) {
           block.tableRow.isHeader = event.blockSetTableRow.isHeader.value;
         }
@@ -317,8 +320,9 @@ void _applyBlockUpdateEvent(ChangeReplayState state, List<int> eventBytes) {
     case Event_Message_Value.blockSetWidget:
       final block = state.blocks[event.blockSetWidget.id];
       if (block != null) {
-        block.widget =
-            block.hasWidget() ? block.widget : Block_Content_Widget();
+        block.widget = block.hasWidget()
+            ? block.widget
+            : Block_Content_Widget();
         if (event.blockSetWidget.hasLayout()) {
           block.widget.layout = event.blockSetWidget.layout.value;
         }
@@ -459,7 +463,9 @@ void _removeStructPath(Struct root, List<String> path) {
 }
 
 void _applyStoreSliceUpdate(
-    Struct collections, Change_StoreSliceUpdate update) {
+  Struct collections,
+  Change_StoreSliceUpdate update,
+) {
   final current = applyStoreSliceUpdate(
     _readStringList(collections.fields[update.key]),
     update,

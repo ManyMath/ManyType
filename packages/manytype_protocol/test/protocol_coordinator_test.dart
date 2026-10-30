@@ -63,9 +63,10 @@ void main() {
       expect(response.nodes, hasLength(3));
 
       // Client filters nodes by type to find sync nodes:
-      final syncNodes = response.nodes
-          .where((n) => n.types.contains(NodeType.TreeAPI))
-          .toList();
+      final syncNodes =
+          response.nodes
+              .where((n) => n.types.contains(NodeType.TreeAPI))
+              .toList();
       expect(syncNodes, hasLength(1));
       expect(syncNodes.first.peerId, equals('12D3KooWExampleSyncNode'));
     });

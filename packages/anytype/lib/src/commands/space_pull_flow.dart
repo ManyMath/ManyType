@@ -49,20 +49,20 @@ class SpacePullBootstrapReport {
   final String? statePath;
 
   Map<String, Object?> toJson() => {
-        'captured_at': capturedAt.toIso8601String(),
-        'command': 'space-pull-bootstrap',
-        'backend_label': kSpacePullBackendLabel,
-        'backend_requirements': kSpacePullBackendRequirements,
-        'network_config_path': networkConfigPath,
-        'server_address': serverAddress,
-        'space_id': spaceId,
-        'acl_root_id': aclRootId,
-        'invite_record_id': inviteRecordId,
-        'space_header_id': spaceHeaderId,
-        'acl_payload_id': aclPayloadId,
-        'acl_record_ids': aclRecordIds,
-        'state_path': statePath,
-      };
+    'captured_at': capturedAt.toIso8601String(),
+    'command': 'space-pull-bootstrap',
+    'backend_label': kSpacePullBackendLabel,
+    'backend_requirements': kSpacePullBackendRequirements,
+    'network_config_path': networkConfigPath,
+    'server_address': serverAddress,
+    'space_id': spaceId,
+    'acl_root_id': aclRootId,
+    'invite_record_id': inviteRecordId,
+    'space_header_id': spaceHeaderId,
+    'acl_payload_id': aclPayloadId,
+    'acl_record_ids': aclRecordIds,
+    'state_path': statePath,
+  };
 }
 
 /// Report produced by [spacePullRefetchCommand]. `toJson()` matches the
@@ -91,19 +91,19 @@ class SpacePullRefetchReport {
   final List<String> aclRecordIds;
 
   Map<String, Object?> toJson() => {
-        'captured_at': capturedAt.toIso8601String(),
-        'command': 'space-pull-refetch',
-        'backend_label': kSpacePullBackendLabel,
-        'backend_requirements': kSpacePullBackendRequirements,
-        'server_address': serverAddress,
-        'state_in': stateIn,
-        'space_id': spaceId,
-        'acl_root_id': aclRootId,
-        'invite_record_id': inviteRecordId,
-        'space_header_id': spaceHeaderId,
-        'acl_payload_id': aclPayloadId,
-        'acl_record_ids': aclRecordIds,
-      };
+    'captured_at': capturedAt.toIso8601String(),
+    'command': 'space-pull-refetch',
+    'backend_label': kSpacePullBackendLabel,
+    'backend_requirements': kSpacePullBackendRequirements,
+    'server_address': serverAddress,
+    'state_in': stateIn,
+    'space_id': spaceId,
+    'acl_root_id': aclRootId,
+    'invite_record_id': inviteRecordId,
+    'space_header_id': spaceHeaderId,
+    'acl_payload_id': aclPayloadId,
+    'acl_record_ids': aclRecordIds,
+  };
 }
 
 Future<SpacePullBootstrapReport> spacePullBootstrapCommand({
@@ -170,16 +170,7 @@ Future<SpacePullBootstrapReport> spacePullBootstrapCommand({
         result.aclRecords.single.id != inviteResponse.id) {
       throw StateError(
         'Initial SpacePull fetch did not match expected continuity: '
-        '${jsonEncode({
-              'expected_space_id': fixture.identity.spaceId,
-              'expected_acl_root_id': fixture.aclRootId,
-              'expected_invite_record_id': inviteResponse.id,
-              'has_space_header': payload.hasSpaceHeader(),
-              'actual_space_header_id':
-                  payload.hasSpaceHeader() ? payload.spaceHeader.id : null,
-              'actual_acl_payload_id': payload.aclPayloadId,
-              'actual_acl_record_ids': aclRecordIds,
-            })}',
+        '${jsonEncode({'expected_space_id': fixture.identity.spaceId, 'expected_acl_root_id': fixture.aclRootId, 'expected_invite_record_id': inviteResponse.id, 'has_space_header': payload.hasSpaceHeader(), 'actual_space_header_id': payload.hasSpaceHeader() ? payload.spaceHeader.id : null, 'actual_acl_payload_id': payload.aclPayloadId, 'actual_acl_record_ids': aclRecordIds})}',
       );
     }
 
@@ -225,8 +216,11 @@ Future<SpacePullRefetchReport> spacePullRefetchCommand({
   final serverAddress = serverOverride ?? state.serverAddress;
   final identity = await Identity.fromMnemonic(state.mnemonic);
   final bridge = NativeBridge();
-  final handleId =
-      bridge.connect(serverAddress, identity.seed, identity.accountSeed);
+  final handleId = bridge.connect(
+    serverAddress,
+    identity.seed,
+    identity.accountSeed,
+  );
 
   try {
     final bootstrap = SpacePullBootstrap(invoker: bridge.invoke);
@@ -240,16 +234,7 @@ Future<SpacePullRefetchReport> spacePullRefetchCommand({
         result.aclRecords.single.id != state.inviteRecordId) {
       throw StateError(
         'Restarted SpacePull fetch did not match expected continuity: '
-        '${jsonEncode({
-              'expected_space_id': state.spaceId,
-              'expected_acl_root_id': state.aclRootId,
-              'expected_invite_record_id': state.inviteRecordId,
-              'has_space_header': payload.hasSpaceHeader(),
-              'actual_space_header_id':
-                  payload.hasSpaceHeader() ? payload.spaceHeader.id : null,
-              'actual_acl_payload_id': payload.aclPayloadId,
-              'actual_acl_record_ids': aclRecordIds,
-            })}',
+        '${jsonEncode({'expected_space_id': state.spaceId, 'expected_acl_root_id': state.aclRootId, 'expected_invite_record_id': state.inviteRecordId, 'has_space_header': payload.hasSpaceHeader(), 'actual_space_header_id': payload.hasSpaceHeader() ? payload.spaceHeader.id : null, 'actual_acl_payload_id': payload.aclPayloadId, 'actual_acl_record_ids': aclRecordIds})}',
       );
     }
 

@@ -1,5 +1,6 @@
 @TestOn(
-    'vm') // connects to a live consensus node via NativeBridge (FFI): no web transport
+  'vm',
+) // connects to a live consensus node via NativeBridge (FFI): no web transport
 @Tags(['round_trip'])
 library;
 
@@ -24,8 +25,11 @@ void main() {
   setUp(() async {
     bridge = NativeBridge();
     identity = await Identity.fromMnemonic(generateMnemonic());
-    handleId =
-        bridge.connect('127.0.0.1:33020', identity.seed, identity.accountSeed);
+    handleId = bridge.connect(
+      '127.0.0.1:33020',
+      identity.seed,
+      identity.accountSeed,
+    );
     service = ConsensusService(invoker: bridge.invoke);
   });
 
@@ -55,14 +59,11 @@ void main() {
       spaceId: identity.spaceId,
       masterKeySeed: identity.accountSeed,
       identityPrivateKey: identity.seed,
-      readKey:
-          Uint8List.fromList(List<int>.generate(32, (index) => index + 11)),
+      readKey: Uint8List.fromList(
+        List<int>.generate(32, (index) => index + 11),
+      ),
     );
-    service.logAdd(
-      handleId: handleId,
-      logId: identity.spaceId,
-      record: root,
-    );
+    service.logAdd(handleId: handleId, logId: identity.spaceId, record: root);
 
     final inviteKeyPair = await ed25519KeyPairFromSeed(
       Uint8List.fromList(List<int>.generate(32, (index) => index + 51)),

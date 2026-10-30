@@ -33,8 +33,10 @@ Future<RawRecordWithId> buildAclRoot({
   final encryptedReadKey = await aesGcmEncrypt(masterKeySeed, readKey);
 
   // 3. Sign the identity public key with the master key to produce identitySignature
-  final identitySignature =
-      await ed25519Sign(masterKeySeed, identityKeyPair.publicKey);
+  final identitySignature = await ed25519Sign(
+    masterKeySeed,
+    identityKeyPair.publicKey,
+  );
 
   // 4. Create AclRoot proto (any-sync timestamps are Unix seconds)
   final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -65,10 +67,7 @@ Future<RawRecordWithId> buildAclRoot({
   final signature = await ed25519Sign(identityPrivateKey, recordBytes);
 
   // 9. Create RawRecord with payload and signature
-  final rawRecord = RawRecord(
-    payload: recordBytes,
-    signature: signature,
-  );
+  final rawRecord = RawRecord(payload: recordBytes, signature: signature);
 
   // 10. Marshal RawRecord to get the final bytes
   final rawRecordBytes = rawRecord.writeToBuffer();
@@ -77,10 +76,7 @@ Future<RawRecordWithId> buildAclRoot({
   final cid = await computeCid(Uint8List.fromList(rawRecordBytes));
 
   // 12. Return RawRecordWithId
-  return RawRecordWithId(
-    payload: rawRecordBytes,
-    id: cid,
-  );
+  return RawRecordWithId(payload: rawRecordBytes, id: cid);
 }
 
 /// Build a signed ACL record for subsequent operations (invite, join, permission change, etc).
@@ -115,10 +111,7 @@ Future<RawRecordWithId> buildAclRecord({
   final signature = await ed25519Sign(identityPrivateKey, recordBytes);
 
   // 6. Create RawRecord
-  final rawRecord = RawRecord(
-    payload: recordBytes,
-    signature: signature,
-  );
+  final rawRecord = RawRecord(payload: recordBytes, signature: signature);
 
   // 7. Marshal RawRecord
   final rawRecordBytes = rawRecord.writeToBuffer();
@@ -127,10 +120,7 @@ Future<RawRecordWithId> buildAclRecord({
   final cid = await computeCid(Uint8List.fromList(rawRecordBytes));
 
   // 9. Return RawRecordWithId
-  return RawRecordWithId(
-    payload: rawRecordBytes,
-    id: cid,
-  );
+  return RawRecordWithId(payload: rawRecordBytes, id: cid);
 }
 
 /// Verify and decode an ACL record from its RawRecordWithId representation.
@@ -141,12 +131,14 @@ Future<RawRecordWithId> buildAclRecord({
 ///
 /// Returns a [VerifiedAclRecord] with decoded fields.
 Future<VerifiedAclRecord> verifyAndDecodeAclRecord(
-    RawRecordWithId rawWithId) async {
+  RawRecordWithId rawWithId,
+) async {
   // 1. Verify CID
   final computedCid = await computeCid(Uint8List.fromList(rawWithId.payload));
   if (computedCid != rawWithId.id) {
     throw StateError(
-        'CID mismatch: computed=$computedCid, expected=${rawWithId.id}');
+      'CID mismatch: computed=$computedCid, expected=${rawWithId.id}',
+    );
   }
 
   // 2. Decode RawRecord
@@ -187,11 +179,8 @@ Future<VerifiedAclRecord> verifyAndDecodeAclRecord(
 }
 
 Uint8List _marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
-      Key(
-        type: KeyType.Ed25519Public,
-        data: publicKey,
-      ).writeToBuffer(),
-    );
+  Key(type: KeyType.Ed25519Public, data: publicKey).writeToBuffer(),
+);
 
 Uint8List _decodeIdentityPublicKey(List<int> identityBytes) {
   if (identityBytes.length == 32) {

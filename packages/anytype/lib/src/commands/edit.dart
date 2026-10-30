@@ -325,8 +325,9 @@ Future<EditResult> editCommand(
       // deltas idempotently (re-add/no-op, remove-missing/no-op), and
       // write the new full list. Uses `freshChanges` which reflects the
       // post-sync state loaded above.
-      final rawBytesList =
-          freshChanges.map((r) => Uint8List.fromList(r.rawBytes)).toList();
+      final rawBytesList = freshChanges
+          .map((r) => Uint8List.fromList(r.rawBytes))
+          .toList();
       final currentDetails = await replayObjectDetails(
         rawTreeChanges: rawBytesList,
         treeKey: treeKey,
@@ -443,10 +444,7 @@ Future<EditResult> editCommand(
   if (collectionAddId != null ||
       collectionRemoveId != null ||
       collectionMoveId != null) {
-    final collectionState = await _loadCollectionState(
-      freshChanges,
-      treeKey,
-    );
+    final collectionState = await _loadCollectionState(freshChanges, treeKey);
     if (collectionState == null) {
       throw StateError('Error: object $objectId is not a collection');
     }
@@ -550,8 +548,9 @@ Future<EditResult> editCommand(
         'expected value after sync',
       );
     }
-    final fileObjectChanges =
-        await db.getChangesForObject(fileRelationResult.fileObjectId);
+    final fileObjectChanges = await db.getChangesForObject(
+      fileRelationResult.fileObjectId,
+    );
     if (fileObjectChanges.isEmpty) {
       throw StateError(
         'Verification failed: FileObject ${fileRelationResult.fileObjectId} '
@@ -695,9 +694,7 @@ Future<EditOfflineResult> editOffline(
     eventBytes = buildBlockSetStyleEvent(blockId, setStyle);
     description = 'set-style=${setStyle.name}';
   } else {
-    throw StateError(
-      'editOffline requires setText, setChecked, or setStyle',
-    );
+    throw StateError('editOffline requires setText, setChecked, or setStyle');
   }
 
   final updateContents = <changes_proto.Change_Content>[
@@ -953,8 +950,9 @@ Future<EditRelationOfflineResult> editRelationOffline(
   } else if (stringListValue != null) {
     relationValue = Value(
       listValue: ListValue(
-        values:
-            stringListValue.map((value) => Value(stringValue: value)).toList(),
+        values: stringListValue
+            .map((value) => Value(stringValue: value))
+            .toList(),
       ),
     );
   } else if (boolValue != null) {
@@ -1032,9 +1030,7 @@ Future<({String storeKey, List<String> memberIds})?> _loadCollectionState(
   );
   return (
     storeKey: storeKey,
-    memberIds: List<String>.from(
-      collections[storeKey] ?? const <String>[],
-    ),
+    memberIds: List<String>.from(collections[storeKey] ?? const <String>[]),
   );
 }
 
@@ -1157,15 +1153,17 @@ _TreeWriteMetadata _resolveTreeWriteMetadata(
     if (decoded == null) {
       continue;
     }
-    final aclHeadId =
-        decoded.aclHeadId.isNotEmpty ? decoded.aclHeadId : fallbackAclHeadId;
+    final aclHeadId = decoded.aclHeadId.isNotEmpty
+        ? decoded.aclHeadId
+        : fallbackAclHeadId;
     final snapshotBaseId = decoded.isSnapshot
         ? stored.id
         : decoded.snapshotBaseId.isNotEmpty
-            ? decoded.snapshotBaseId
-            : fallbackSnapshotBaseId;
-    final readKeyId =
-        decoded.readKeyId.isNotEmpty ? decoded.readKeyId : aclHeadId;
+        ? decoded.snapshotBaseId
+        : fallbackSnapshotBaseId;
+    final readKeyId = decoded.readKeyId.isNotEmpty
+        ? decoded.readKeyId
+        : aclHeadId;
     return _TreeWriteMetadata(
       aclHeadId: aclHeadId,
       snapshotBaseId: snapshotBaseId,
@@ -1282,8 +1280,9 @@ Future<_FileRelationWriteResult> _createFileObjectForRelation({
     ..fields['internalFlags'] = Value(listValue: ListValue());
   snapshotBase.fileInfo = FileInfo(fileId: fileObjectId);
 
-  final headerBlock =
-      snapshotBase.blocks.firstWhere((block) => block.id == 'header');
+  final headerBlock = snapshotBase.blocks.firstWhere(
+    (block) => block.id == 'header',
+  );
   headerBlock.childrenIds.add('file');
   snapshotBase.blocks.add(
     Block(
@@ -1306,9 +1305,7 @@ Future<_FileRelationWriteResult> _createFileObjectForRelation({
     changes_proto.Change(
       snapshot: changes_proto.Change_Snapshot(
         data: snapshotBase,
-        fileKeys: [
-          changes_proto.Change_FileKeys(hash: uploadResult.cid),
-        ],
+        fileKeys: [changes_proto.Change_FileKeys(hash: uploadResult.cid)],
       ),
     ).writeToBuffer(),
   );

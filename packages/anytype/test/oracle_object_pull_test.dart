@@ -1,5 +1,6 @@
 @TestOn(
-    'vm') // shells out via Process.run to a bash harness + live docker oracle stack
+  'vm',
+) // shells out via Process.run to a bash harness + live docker oracle stack
 @Tags(['round_trip'])
 library;
 
@@ -33,8 +34,13 @@ void main() {
     'fresh store with same mnemonic can pull and reread object from oracle',
     () async {
       final repoRoot = findRepoRoot();
-      final networkConfigPath =
-          p.join(repoRoot, 'docker', 'any-sync', 'etc', 'client.yml');
+      final networkConfigPath = p.join(
+        repoRoot,
+        'docker',
+        'any-sync',
+        'etc',
+        'client.yml',
+      );
       final manytypeDirA = Directory(p.join(homeA.path, '.manytype'));
       final manytypeDirB = Directory(p.join(homeB.path, '.manytype'));
       await manytypeDirA.create(recursive: true);
@@ -46,18 +52,22 @@ void main() {
         mnemonic: mnemonic,
         serverAddress: '127.0.0.1:33020',
       );
-      final configToml = 'mnemonic = "${config.mnemonic}"\n'
+      final configToml =
+          'mnemonic = "${config.mnemonic}"\n'
           'server_address = "${config.serverAddress}"\n';
-      await File(p.join(manytypeDirA.path, 'config.toml')).writeAsString(
-        configToml,
-      );
-      await File(p.join(manytypeDirB.path, 'config.toml')).writeAsString(
-        configToml,
-      );
+      await File(
+        p.join(manytypeDirA.path, 'config.toml'),
+      ).writeAsString(configToml);
+      await File(
+        p.join(manytypeDirB.path, 'config.toml'),
+      ).writeAsString(configToml);
 
       final dbA = ManytypeDatabase(p.join(manytypeDirA.path, 'store.db'));
-      final createResult =
-          await createCommand('Phase 28: oracle pull reread', dbA, config);
+      final createResult = await createCommand(
+        'Phase 28: oracle pull reread',
+        dbA,
+        config,
+      );
       createdObjectId = createResult.objectId;
       await seedLiveSpaceForSync(
         dbA,
@@ -71,13 +81,15 @@ void main() {
       final envA = {
         ...Platform.environment,
         'HOME': homeA.path,
-        'LD_LIBRARY_PATH': '${Platform.environment['LD_LIBRARY_PATH'] ?? ''}:'
+        'LD_LIBRARY_PATH':
+            '${Platform.environment['LD_LIBRARY_PATH'] ?? ''}:'
             '$repoRoot/rust/target/release',
       };
       final envB = {
         ...Platform.environment,
         'HOME': homeB.path,
-        'LD_LIBRARY_PATH': '${Platform.environment['LD_LIBRARY_PATH'] ?? ''}:'
+        'LD_LIBRARY_PATH':
+            '${Platform.environment['LD_LIBRARY_PATH'] ?? ''}:'
             '$repoRoot/rust/target/release',
       };
 
@@ -94,8 +106,11 @@ void main() {
         workingDirectory: repoRoot,
       );
       print('syncA stderr:\n${syncA.stderr}');
-      expect(syncA.exitCode, equals(0),
-          reason: 'home A sync failed: ${syncA.stderr}');
+      expect(
+        syncA.exitCode,
+        equals(0),
+        reason: 'home A sync failed: ${syncA.stderr}',
+      );
       final syncAOutput = syncA.stdout.toString();
 
       final syncA2 = await Process.run(
@@ -110,8 +125,11 @@ void main() {
         environment: envA,
         workingDirectory: repoRoot,
       );
-      expect(syncA2.exitCode, equals(0),
-          reason: 'home A sync 2 failed: ${syncA2.stderr}');
+      expect(
+        syncA2.exitCode,
+        equals(0),
+        reason: 'home A sync 2 failed: ${syncA2.stderr}',
+      );
 
       final syncB = await Process.run(
         'dart',
@@ -126,8 +144,11 @@ void main() {
         workingDirectory: repoRoot,
       );
       print('syncB stderr:\n${syncB.stderr}');
-      expect(syncB.exitCode, equals(0),
-          reason: 'home B sync failed: ${syncB.stderr}');
+      expect(
+        syncB.exitCode,
+        equals(0),
+        reason: 'home B sync failed: ${syncB.stderr}',
+      );
       final syncBOutput = syncB.stdout.toString();
 
       final syncBAgain = await Process.run(
@@ -157,7 +178,8 @@ void main() {
         syncBOutput.contains('Pulled: $createdObjectId') ||
             syncBAgainOutput.contains('Pulled: $createdObjectId'),
         isTrue,
-        reason: 'home B never pulled the oracle object.\n'
+        reason:
+            'home B never pulled the oracle object.\n'
             'home A sync:\n$syncAOutput\n'
             'first sync:\n$syncBOutput\n'
             'second sync:\n$syncBAgainOutput',
@@ -169,8 +191,11 @@ void main() {
         environment: envB,
         workingDirectory: repoRoot,
       );
-      expect(readB.exitCode, equals(0),
-          reason: 'home B read failed: ${readB.stderr}');
+      expect(
+        readB.exitCode,
+        equals(0),
+        reason: 'home B read failed: ${readB.stderr}',
+      );
       expect(readB.stdout.toString(), contains('Phase 28: oracle pull reread'));
     },
     timeout: const Timeout(Duration(minutes: 4)),

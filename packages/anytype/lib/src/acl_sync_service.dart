@@ -3,21 +3,15 @@ import 'dart:typed_data';
 import 'package:manytype_protocol/consensus.dart';
 import 'package:manytype_protocol/coordinator.dart';
 
-typedef AclSyncUnaryInvoker = Uint8List Function(
-  int handleId,
-  String method,
-  Uint8List payload,
-);
+typedef AclSyncUnaryInvoker =
+    Uint8List Function(int handleId, String method, Uint8List payload);
 
 class AclSyncService {
   AclSyncService({required AclSyncUnaryInvoker invoker}) : _invoker = invoker;
 
   final AclSyncUnaryInvoker _invoker;
 
-  void spaceMakeShareable({
-    required int handleId,
-    required String spaceId,
-  }) {
+  void spaceMakeShareable({required int handleId, required String spaceId}) {
     final request = SpaceMakeShareableRequest(spaceId: spaceId).writeToBuffer();
     _invoker(
       handleId,
@@ -44,10 +38,7 @@ class AclSyncService {
     if (response.recordId.isEmpty) {
       throw StateError('AclAddRecord returned an empty recordId');
     }
-    return RawRecordWithId(
-      id: response.recordId,
-      payload: response.payload,
-    );
+    return RawRecordWithId(id: response.recordId, payload: response.payload);
   }
 
   List<RawRecordWithId> getRecords({

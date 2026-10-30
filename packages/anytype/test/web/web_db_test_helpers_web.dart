@@ -13,8 +13,9 @@ Future<void> configureWebTestDatabaseAssets() async {
   _configured = true;
   final channel = spawnHybridUri('/test/web/asset_server.dart');
   final port = (await channel.stream.first as num).toInt();
-  database_web.webTestSqlite3Uri =
-      Uri.parse('http://localhost:$port/sqlite3.wasm');
+  database_web.webTestSqlite3Uri = Uri.parse(
+    'http://localhost:$port/sqlite3.wasm',
+  );
 }
 
 /// Spawns the shared asset server and points

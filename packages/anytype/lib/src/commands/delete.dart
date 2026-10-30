@@ -153,11 +153,7 @@ Future<DeleteResult> deleteCommand(
   // 7. Build SettingsData with ObjectDelete to preserve local delete
   // semantics and the existing settings-tree contract.
   final settingsData = SettingsData(
-    content: [
-      SpaceSettingsContent(
-        objectDelete: ObjectDelete(id: objectId),
-      ),
-    ],
+    content: [SpaceSettingsContent(objectDelete: ObjectDelete(id: objectId))],
   );
   final settingsDataBytes = Uint8List.fromList(settingsData.writeToBuffer());
 
@@ -322,11 +318,7 @@ Future<DeleteResult> deleteOffline(
   // 6. Build SettingsData with ObjectDelete to preserve local delete
   // semantics and the existing settings-tree contract.
   final settingsData = SettingsData(
-    content: [
-      SpaceSettingsContent(
-        objectDelete: ObjectDelete(id: objectId),
-      ),
-    ],
+    content: [SpaceSettingsContent(objectDelete: ObjectDelete(id: objectId))],
   );
   final settingsDataBytes = Uint8List.fromList(settingsData.writeToBuffer());
 
@@ -392,15 +384,17 @@ _TreeWriteMetadata _resolveTreeWriteMetadata(
     if (decoded == null) {
       continue;
     }
-    final aclHeadId =
-        decoded.aclHeadId.isNotEmpty ? decoded.aclHeadId : fallbackAclHeadId;
+    final aclHeadId = decoded.aclHeadId.isNotEmpty
+        ? decoded.aclHeadId
+        : fallbackAclHeadId;
     final snapshotBaseId = decoded.isSnapshot
         ? stored.id
         : decoded.snapshotBaseId.isNotEmpty
-            ? decoded.snapshotBaseId
-            : fallbackSnapshotBaseId;
-    final readKeyId =
-        decoded.readKeyId.isNotEmpty ? decoded.readKeyId : aclHeadId;
+        ? decoded.snapshotBaseId
+        : fallbackSnapshotBaseId;
+    final readKeyId = decoded.readKeyId.isNotEmpty
+        ? decoded.readKeyId
+        : aclHeadId;
     return _TreeWriteMetadata(
       aclHeadId: aclHeadId,
       snapshotBaseId: snapshotBaseId,
@@ -437,7 +431,8 @@ Future<String> _findAclRootId(
     if (changes.isEmpty) continue;
     try {
       final aclRoot = tryDecodeAclRootFromRawRecordBytes(
-          Uint8List.fromList(changes.first.rawBytes));
+        Uint8List.fromList(changes.first.rawBytes),
+      );
       if (aclRoot != null && aclRoot.spaceId == spaceId) {
         return object.id;
       }

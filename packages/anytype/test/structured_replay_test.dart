@@ -23,8 +23,10 @@ void main() {
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
-    config =
-        CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
+    config = CliConfig(
+      mnemonic: testMnemonic,
+      serverAddress: '127.0.0.1:33020',
+    );
   });
 
   tearDown(() async {
@@ -54,12 +56,7 @@ void main() {
   });
 
   test('reflects a checkbox block with its checked state', () async {
-    final created = await createCommand(
-      'Buy milk',
-      db,
-      config,
-      checkbox: true,
-    );
+    final created = await createCommand('Buy milk', db, config, checkbox: true);
 
     final result = await replayObjectBlocks(db, config, created.objectId);
     final checkboxBlock = result!.blocks.singleWhere(
@@ -69,35 +66,37 @@ void main() {
     expect(checkboxBlock.checked, isFalse);
   });
 
-  test('reflects a BlockUpdate(blockSetText) mutation on next replay',
-      () async {
-    final created = await createCommand(
-      'Buy milk',
-      db,
-      config,
-      checkbox: true,
-    );
-    final before = await replayObjectBlocks(db, config, created.objectId);
-    final blockId = before!.blocks
-        .singleWhere((b) => b.style == Block_Content_Text_Style.Checkbox)
-        .id;
+  test(
+    'reflects a BlockUpdate(blockSetText) mutation on next replay',
+    () async {
+      final created = await createCommand(
+        'Buy milk',
+        db,
+        config,
+        checkbox: true,
+      );
+      final before = await replayObjectBlocks(db, config, created.objectId);
+      final blockId = before!.blocks
+          .singleWhere((b) => b.style == Block_Content_Text_Style.Checkbox)
+          .id;
 
-    await editCommand(
-      created.objectId,
-      null,
-      db,
-      config,
-      networkConfigPath: 'unused-network.yml',
-      syncService: _NoopSyncService(),
-      blockId: blockId,
-      setChecked: true,
-    );
+      await editCommand(
+        created.objectId,
+        null,
+        db,
+        config,
+        networkConfigPath: 'unused-network.yml',
+        syncService: _NoopSyncService(),
+        blockId: blockId,
+        setChecked: true,
+      );
 
-    final after = await replayObjectBlocks(db, config, created.objectId);
-    final updated = after!.blocks.singleWhere((b) => b.id == blockId);
-    expect(updated.checked, isTrue);
-    expect(updated.text, 'Buy milk');
-  });
+      final after = await replayObjectBlocks(db, config, created.objectId);
+      final updated = after!.blocks.singleWhere((b) => b.id == blockId);
+      expect(updated.checked, isTrue);
+      expect(updated.text, 'Buy milk');
+    },
+  );
 }
 
 class _NoopSyncService extends SyncService {

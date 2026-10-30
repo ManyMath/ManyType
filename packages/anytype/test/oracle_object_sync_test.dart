@@ -1,5 +1,6 @@
 @TestOn(
-    'vm') // shells out via Process.start to a bash harness + live docker oracle stack
+  'vm',
+) // shells out via Process.start to a bash harness + live docker oracle stack
 @Tags(['round_trip'])
 library;
 
@@ -21,8 +22,9 @@ void main() {
   late Directory tempHome;
 
   setUp(() {
-    tempHome =
-        Directory.systemTemp.createTempSync('manytype_oracle_object_sync_');
+    tempHome = Directory.systemTemp.createTempSync(
+      'manytype_oracle_object_sync_',
+    );
   });
 
   tearDown(() {
@@ -35,10 +37,16 @@ void main() {
     await manytypeDir.create(recursive: true);
     final configPath = p.join(manytypeDir.path, 'config.toml');
     final dbPath = p.join(manytypeDir.path, 'store.db');
-    final capturePath = Platform.environment['PHASE27_OBJECT_TRUTH_PATH'] ??
+    final capturePath =
+        Platform.environment['PHASE27_OBJECT_TRUTH_PATH'] ??
         p.join(repoRoot, 'test_vectors', 'phase27-object-truth.json');
-    final networkConfigPath =
-        p.join(repoRoot, 'docker', 'any-sync', 'etc', 'client.yml');
+    final networkConfigPath = p.join(
+      repoRoot,
+      'docker',
+      'any-sync',
+      'etc',
+      'client.yml',
+    );
 
     final config = CliConfig(
       mnemonic: generateMnemonic(),
@@ -84,10 +92,14 @@ void main() {
       workingDirectory: repoRoot,
     );
 
-    final stdoutFuture =
-        process.stdout.transform(utf8.decoder).listen(print).asFuture();
-    final stderrFuture =
-        process.stderr.transform(utf8.decoder).listen(print).asFuture();
+    final stdoutFuture = process.stdout
+        .transform(utf8.decoder)
+        .listen(print)
+        .asFuture();
+    final stderrFuture = process.stderr
+        .transform(utf8.decoder)
+        .listen(print)
+        .asFuture();
 
     final exitCode = await process.exitCode;
     await stdoutFuture;
@@ -110,21 +122,27 @@ void main() {
         .where((m) => m.contains('ObjectSync'))
         .toList();
 
-    expect(objectSyncMethods, isNotEmpty,
-        reason: 'No ObjectSync RPCs found in capture');
+    expect(
+      objectSyncMethods,
+      isNotEmpty,
+      reason: 'No ObjectSync RPCs found in capture',
+    );
     print('Found ObjectSync RPCs: $objectSyncMethods');
 
     final objectSyncStreamMessages = events
-        .where((event) =>
-            event['type'] == 'stream_rpc' &&
-            event['method'] == '/spacesync.SpaceSync/ObjectSyncStream')
+        .where(
+          (event) =>
+              event['type'] == 'stream_rpc' &&
+              event['method'] == '/spacesync.SpaceSync/ObjectSyncStream',
+        )
         .expand(
           (event) => (event['request_messages'] as List<dynamic>)
               .cast<Map<String, dynamic>>(),
         )
         .map<TreeSyncMessage>(
           (message) => TreeSyncMessage.fromBuffer(
-              base64Decode(message['base64'] as String)),
+            base64Decode(message['base64'] as String),
+          ),
         )
         .where(
           (TreeSyncMessage message) =>
@@ -138,14 +156,15 @@ void main() {
       reason: 'No ObjectSyncStream head updates found in capture',
     );
 
-    final snapshotBackedHeadUpdates =
-        objectSyncStreamMessages.where((TreeSyncMessage message) {
-      if (!message.hasRootChange()) {
-        return false;
-      }
-      final headUpdate = message.content.headUpdate;
-      return headUpdate.snapshotPath.length >= 2;
-    }).toList(growable: false);
+    final snapshotBackedHeadUpdates = objectSyncStreamMessages
+        .where((TreeSyncMessage message) {
+          if (!message.hasRootChange()) {
+            return false;
+          }
+          final headUpdate = message.content.headUpdate;
+          return headUpdate.snapshotPath.length >= 2;
+        })
+        .toList(growable: false);
 
     expect(
       snapshotBackedHeadUpdates,
@@ -156,8 +175,9 @@ void main() {
 
     for (final message in snapshotBackedHeadUpdates) {
       final headUpdate = message.content.headUpdate;
-      final changeIds =
-          headUpdate.changes.map((change) => change.id).toList(growable: false);
+      final changeIds = headUpdate.changes
+          .map((change) => change.id)
+          .toList(growable: false);
 
       expect(
         changeIds,

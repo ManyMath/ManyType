@@ -35,11 +35,14 @@ Future<void> main() async {
     final response = await request.close();
     if (response.statusCode != 200) {
       stderr.writeln(
-          'Error: Failed to download sqlite3.wasm (HTTP ${response.statusCode})');
+        'Error: Failed to download sqlite3.wasm (HTTP ${response.statusCode})',
+      );
       exit(1);
     }
-    final bytes = await response
-        .fold<List<int>>([], (prev, chunk) => prev..addAll(chunk));
+    final bytes = await response.fold<List<int>>(
+      [],
+      (prev, chunk) => prev..addAll(chunk),
+    );
     wasmFile.writeAsBytesSync(bytes);
     print('sqlite3.wasm downloaded (${bytes.length} bytes)');
 
@@ -48,17 +51,13 @@ Future<void> main() async {
     print('sha256: $sha256');
 
     print('Compiling drift_worker.dart.js ...');
-    final compileResult = await Process.run(
-      'dart',
-      [
-        'compile',
-        'js',
-        'tool/drift_web_worker.dart',
-        '-o',
-        'test/web_assets/drift_worker.dart.js',
-      ],
-      workingDirectory: packageDir.path,
-    );
+    final compileResult = await Process.run('dart', [
+      'compile',
+      'js',
+      'tool/drift_web_worker.dart',
+      '-o',
+      'test/web_assets/drift_worker.dart.js',
+    ], workingDirectory: packageDir.path);
     if (compileResult.exitCode != 0) {
       stderr.writeln('Error: dart compile js failed');
       stderr.writeln(compileResult.stderr);
@@ -85,7 +84,8 @@ Future<void> main() async {
       ..writeln()
       ..writeln('## drift_worker.dart.js')
       ..writeln(
-          '- **compile command**: `dart compile js tool/drift_web_worker.dart -o test/web_assets/drift_worker.dart.js`')
+        '- **compile command**: `dart compile js tool/drift_web_worker.dart -o test/web_assets/drift_worker.dart.js`',
+      )
       ..writeln('- **compiled**: $now')
       ..writeln('- **working directory**: packages/anytype');
     File(provenancePath).writeAsStringSync(provenance.toString());

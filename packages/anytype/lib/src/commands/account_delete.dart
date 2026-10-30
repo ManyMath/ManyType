@@ -44,11 +44,11 @@ class AccountDeleteAssessment {
   final String reason;
 
   Map<String, Object?> toJson() => {
-        'outcome': outcome,
-        'supported': supported,
-        'observed_surface_label': observedSurfaceLabel,
-        'reason': reason,
-      };
+    'outcome': outcome,
+    'supported': supported,
+    'observed_surface_label': observedSurfaceLabel,
+    'reason': reason,
+  };
 }
 
 /// [secondCallOk]/[secondCallError] describe a second `AccountDelete` call
@@ -71,14 +71,16 @@ AccountDeleteAssessment assessAccountDeleteContract({
     );
   }
 
-  final rejectedAsDeleted = secondCallOk == false &&
+  final rejectedAsDeleted =
+      secondCallOk == false &&
       (secondCallError?.toLowerCase().contains('account is deleted') ?? false);
   if (rejectedAsDeleted) {
     return const AccountDeleteAssessment(
       outcome: 'supported-and-verified',
       supported: true,
       observedSurfaceLabel: 'accepted-account-delete-idempotency-surface',
-      reason: 'The first AccountDelete request succeeded. A second request '
+      reason:
+          'The first AccountDelete request succeeded. A second request '
           'for the same identity was rejected with "account is '
           'deleted", confirming the expected response to a repeated '
           'AccountDelete request.',
@@ -89,7 +91,8 @@ AccountDeleteAssessment assessAccountDeleteContract({
     outcome: 'unsupported-surface-or-scenario',
     supported: false,
     observedSurfaceLabel: 'response-succeeded-but-unverifiable',
-    reason: 'The delete request returned ok, but the repeat-call idempotency '
+    reason:
+        'The delete request returned ok, but the repeat-call idempotency '
         'check did not confirm deletion (secondCallOk: $secondCallOk, '
         'secondCallError: ${secondCallError ?? 'none'}). '
         '$kAccountDeleteVerificationCaveat',
@@ -121,15 +124,15 @@ class AccountDeleteReport {
   final Map<String, Object?> secondResponse;
 
   Map<String, Object?> toJson() => {
-        'captured_at': capturedAt.toIso8601String(),
-        'command': 'account-delete',
-        'verification_caveat': kAccountDeleteVerificationCaveat,
-        'assessment': assessment.toJson(),
-        'network_config_path': networkConfigPath,
-        'coordinator_address': coordinatorAddress,
-        'response': response,
-        'second_response': secondResponse,
-      };
+    'captured_at': capturedAt.toIso8601String(),
+    'command': 'account-delete',
+    'verification_caveat': kAccountDeleteVerificationCaveat,
+    'assessment': assessment.toJson(),
+    'network_config_path': networkConfigPath,
+    'coordinator_address': coordinatorAddress,
+    'response': response,
+    'second_response': secondResponse,
+  };
 }
 
 Future<AccountDeleteReport> accountDeleteCommand({
@@ -142,16 +145,19 @@ Future<AccountDeleteReport> accountDeleteCommand({
     networkConfigPath: networkConfigPath,
     networkConfigContent: networkConfigContent,
   );
-  final coordinatorAddress =
-      chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
+  final coordinatorAddress = chooseBestAddress(
+    requireCoordinatorNode(networkConfig).addresses,
+  );
 
   final bridge = NativeBridge();
   final handleId = bridge.connect(
     coordinatorAddress,
     identity.seed,
     identity.accountSeed,
-    expectedPeerId:
-        expectedPeerIdForAddress(coordinatorAddress, config: networkConfig),
+    expectedPeerId: expectedPeerIdForAddress(
+      coordinatorAddress,
+      config: networkConfig,
+    ),
   );
   final coordinator = CoordinatorService(invoker: bridge.invoke);
 
@@ -162,8 +168,9 @@ Future<AccountDeleteReport> accountDeleteCommand({
   bool? secondResponseOk;
   String? secondResponseError;
   try {
-    final networkConfiguration =
-        coordinator.networkConfigurationForHandle(handleId);
+    final networkConfiguration = coordinator.networkConfigurationForHandle(
+      handleId,
+    );
     try {
       final response = await coordinator.accountDelete(
         handleId: handleId,
@@ -181,10 +188,7 @@ Future<AccountDeleteReport> accountDeleteCommand({
     } catch (error) {
       responseOk = false;
       responseError = error.toString();
-      responseJson = {
-        'ok': false,
-        'error': responseError,
-      };
+      responseJson = {'ok': false, 'error': responseError};
     }
 
     if (responseOk) {
@@ -202,24 +206,21 @@ Future<AccountDeleteReport> accountDeleteCommand({
         secondResponseJson = {
           'ok': true,
           'value': {
-            'to_be_deleted_timestamp':
-                secondResponse.toBeDeletedTimestamp.toInt(),
+            'to_be_deleted_timestamp': secondResponse.toBeDeletedTimestamp
+                .toInt(),
           },
         };
       } catch (error) {
         secondResponseOk = false;
         secondResponseError = error.toString();
-        secondResponseJson = {
-          'ok': false,
-          'error': secondResponseError,
-        };
+        secondResponseJson = {'ok': false, 'error': secondResponseError};
       }
     } else {
       secondResponseOk = null;
       secondResponseError = null;
       secondResponseJson = {
         'ok': null,
-        'skipped': 'first call did not succeed'
+        'skipped': 'first call did not succeed',
       };
     }
   } finally {

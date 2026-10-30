@@ -15,8 +15,11 @@ void main() {
 
     test('prepends when afterId is empty or not found', () {
       final first = buildStoreSliceUpdateAdd(key: 'k', ids: ['x']);
-      final missing =
-          buildStoreSliceUpdateAdd(key: 'k', ids: ['x'], afterId: 'missing');
+      final missing = buildStoreSliceUpdateAdd(
+        key: 'k',
+        ids: ['x'],
+        afterId: 'missing',
+      );
       expect(apply(['a', 'b'], first), ['x', 'a', 'b']);
       expect(apply(['a', 'b'], missing), ['x', 'a', 'b']);
     });
@@ -29,14 +32,20 @@ void main() {
 
   group('applyStoreSliceUpdate move', () {
     test('only re-inserts ids that were already in the slice', () {
-      final move =
-          buildStoreSliceUpdateMove(key: 'k', ids: ['c', 'z'], afterId: 'a');
+      final move = buildStoreSliceUpdateMove(
+        key: 'k',
+        ids: ['c', 'z'],
+        afterId: 'a',
+      );
       expect(apply(['a', 'b', 'c'], move), ['a', 'c', 'b']);
     });
 
     test('moves to the front when afterId is not found', () {
-      final move =
-          buildStoreSliceUpdateMove(key: 'k', ids: ['c'], afterId: 'missing');
+      final move = buildStoreSliceUpdateMove(
+        key: 'k',
+        ids: ['c'],
+        afterId: 'missing',
+      );
       expect(apply(['a', 'b', 'c'], move), ['c', 'a', 'b']);
     });
   });

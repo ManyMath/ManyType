@@ -17,18 +17,17 @@ void main() {
     });
 
     test(
-        'encrypt produces output with correct format: nonce + ciphertext + tag',
-        () async {
-      final plaintext = Uint8List.fromList([1, 2, 3, 4, 5]);
-      final encrypted = await aesGcmEncrypt(key, plaintext);
-      // Format: 12-byte nonce + plaintext_len + 16-byte GCM tag
-      expect(encrypted.length, equals(12 + 5 + 16));
-    });
+      'encrypt produces output with correct format: nonce + ciphertext + tag',
+      () async {
+        final plaintext = Uint8List.fromList([1, 2, 3, 4, 5]);
+        final encrypted = await aesGcmEncrypt(key, plaintext);
+        // Format: 12-byte nonce + plaintext_len + 16-byte GCM tag
+        expect(encrypted.length, equals(12 + 5 + 16));
+      },
+    );
 
     test('decrypt(encrypt(x)) == x round-trip', () async {
-      final plaintext = Uint8List.fromList(
-        List.generate(100, (i) => i % 256),
-      );
+      final plaintext = Uint8List.fromList(List.generate(100, (i) => i % 256));
       final encrypted = await aesGcmEncrypt(key, plaintext);
       final decrypted = await aesGcmDecrypt(key, encrypted);
       expect(decrypted, equals(plaintext));
@@ -59,10 +58,7 @@ void main() {
 
       final wrongKey = Uint8List(32);
       wrongKey.fillRange(0, 32, 0xFF);
-      expect(
-        () => aesGcmDecrypt(wrongKey, encrypted),
-        throwsA(anything),
-      );
+      expect(() => aesGcmDecrypt(wrongKey, encrypted), throwsA(anything));
     });
 
     test('decrypt with tampered ciphertext fails', () async {
@@ -70,10 +66,7 @@ void main() {
       final encrypted = await aesGcmEncrypt(key, plaintext);
       // Tamper with a ciphertext byte (after nonce)
       encrypted[15] ^= 0xFF;
-      expect(
-        () => aesGcmDecrypt(key, encrypted),
-        throwsA(anything),
-      );
+      expect(() => aesGcmDecrypt(key, encrypted), throwsA(anything));
     });
 
     test('large plaintext round-trip', () async {

@@ -50,7 +50,7 @@ class AccountRegistry {
 
   /// Test-only fault injection hook invoked after a removal stage is durable.
   static Future<void> Function(AccountRemovalStage stage)?
-      testAccountRemovalStageHook;
+  testAccountRemovalStageHook;
 
   /// Test-only fault injection hook invoked after an atomic temporary file is flushed
   /// but before it replaces [path]. Throwing leaves the prior file untouched.
@@ -61,9 +61,7 @@ class AccountRegistry {
   static Future<void> _lifecycleTail = Future<void>.value();
   static var _queuedLifecycleOperations = 0;
 
-  static Future<T> _serializeLifecycle<T>(
-    Future<T> Function() operation,
-  ) {
+  static Future<T> _serializeLifecycle<T>(Future<T> Function() operation) {
     if (Zone.current[_lifecycleZoneKey] == true) {
       return operation();
     }
@@ -131,7 +129,8 @@ class AccountRegistry {
     }
     final configured = ManytypeStorage.directory;
     if (configured != null) return configured;
-    final home = Platform.environment['HOME'] ??
+    final home =
+        Platform.environment['HOME'] ??
         Platform.environment['USERPROFILE'] ??
         '.';
     return p.join(home, '.manytype');
@@ -199,8 +198,9 @@ class AccountRegistry {
     return _serializeLifecycle(() async {
       _validateAccountSummary(summary);
       final accounts = await listAccounts();
-      final withoutExisting =
-          accounts.where((a) => a.id != summary.id).toList();
+      final withoutExisting = accounts
+          .where((a) => a.id != summary.id)
+          .toList();
       await _writeAccounts([...withoutExisting, summary]);
     });
   }
@@ -332,10 +332,7 @@ class AccountRegistry {
             phase: _AccountRemovalPhase.committed,
           );
           await _writeRemovalRecord(committed);
-          await _continueRemoval(
-            committed,
-            invokeTestHooks: invokeTestHooks,
-          );
+          await _continueRemoval(committed, invokeTestHooks: invokeTestHooks);
           return;
         }
       }
@@ -492,8 +489,9 @@ class AccountRegistry {
       record,
       accountRemovalJournalPath(record.account.id),
     );
-    final recordDirectory =
-        p.dirname(accountRemovalJournalPath(record.account.id));
+    final recordDirectory = p.dirname(
+      accountRemovalJournalPath(record.account.id),
+    );
     if (await FileSystemEntity.type(recordDirectory, followLinks: false) !=
         FileSystemEntityType.notFound) {
       throw StateError(
@@ -615,10 +613,7 @@ class AccountRegistry {
     );
     if (stagedType == FileSystemEntityType.notFound) return;
     _requireEntryType(entry, stagedType);
-    if (await FileSystemEntity.type(
-          entry.originalPath,
-          followLinks: false,
-        ) !=
+    if (await FileSystemEntity.type(entry.originalPath, followLinks: false) !=
         FileSystemEntityType.notFound) {
       throw StateError(
         'Cannot restore ${entry.originalPath}: an active path already exists.',
@@ -667,9 +662,7 @@ class AccountRegistry {
     }
   }
 
-  static Future<void> _writeRemovalRecord(
-    _AccountRemovalRecord record,
-  ) {
+  static Future<void> _writeRemovalRecord(_AccountRemovalRecord record) {
     _validateRemovalRecordContents(
       record,
       accountRemovalJournalPath(record.account.id),
@@ -739,10 +732,7 @@ class AccountRegistry {
   }
 
   /// Persist whether [id] still needs its app-provided starter template.
-  static Future<void> setStarterTemplatePending(
-    String id,
-    bool pending,
-  ) {
+  static Future<void> setStarterTemplatePending(String id, bool pending) {
     return _serializeLifecycle(() async {
       final accounts = await listAccounts();
       final index = accounts.indexWhere((account) => account.id == id);
@@ -780,10 +770,7 @@ class AccountRegistry {
   /// [resolveActiveAccount] does for the currently-active account :
   /// respecting [AccountSummary.configPathOverride] for migrated legacy
   /// accounts. Throws [StateError] if no account is registered under [id].
-  static Future<CliConfig> loadConfig(
-    String id, {
-    String? serverOverride,
-  }) {
+  static Future<CliConfig> loadConfig(String id, {String? serverOverride}) {
     return _serializeLifecycle(() async {
       final summary = await _requireSummary(id);
       final configPath = summary.configPathOverride ?? accountConfigPath(id);
@@ -1055,21 +1042,20 @@ class AccountRegistry {
       if (existing.isNotEmpty) {
         return null;
       }
-      _validateLegacyPaths(
-        configPath: legacyConfigPath,
-        dbPath: legacyDbPath,
-      );
+      _validateLegacyPaths(configPath: legacyConfigPath, dbPath: legacyDbPath);
 
       final id = await AccountProfile.deriveAccountId(legacyMnemonic);
       final createdAt = DateTime.now().toUtc();
 
-      await registerAccount(AccountSummary(
-        id: id,
-        displayName: displayName,
-        createdAt: createdAt,
-        configPathOverride: legacyConfigPath,
-        dbPathOverride: legacyDbPath,
-      ));
+      await registerAccount(
+        AccountSummary(
+          id: id,
+          displayName: displayName,
+          createdAt: createdAt,
+          configPathOverride: legacyConfigPath,
+          dbPathOverride: legacyDbPath,
+        ),
+      );
       await setCurrentAccountId(id);
 
       return AccountProfile(
@@ -1114,10 +1100,10 @@ final class _AccountRemovalEntry {
   final String stagedPath;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'kind': kind.name,
-        'originalPath': originalPath,
-        'stagedPath': stagedPath,
-      };
+    'kind': kind.name,
+    'originalPath': originalPath,
+    'stagedPath': stagedPath,
+  };
 
   static _AccountRemovalEntry fromJson(Map<String, Object?> json) {
     return _AccountRemovalEntry(
@@ -1154,13 +1140,13 @@ final class _AccountRemovalRecord {
   }
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'version': 1,
-        'account': account.toJson(),
-        'wasCurrent': wasCurrent,
-        'deleteSecurePhrase': deleteSecurePhrase,
-        'phase': phase.name,
-        'entries': entries.map((entry) => entry.toJson()).toList(),
-      };
+    'version': 1,
+    'account': account.toJson(),
+    'wasCurrent': wasCurrent,
+    'deleteSecurePhrase': deleteSecurePhrase,
+    'phase': phase.name,
+    'entries': entries.map((entry) => entry.toJson()).toList(),
+  };
 
   static _AccountRemovalRecord fromJson(Map<String, Object?> json) {
     if (json['version'] != 1) {

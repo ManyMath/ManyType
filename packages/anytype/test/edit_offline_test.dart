@@ -23,8 +23,10 @@ void main() {
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
-    config =
-        CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
+    config = CliConfig(
+      mnemonic: testMnemonic,
+      serverAddress: '127.0.0.1:33020',
+    );
   });
 
   tearDown(() async {
@@ -49,19 +51,15 @@ void main() {
     final after = await replayObjectBlocks(db, config, created.objectId);
     final updated = after!.blocks.singleWhere((b) => b.id == titleBlockId);
     expect(updated.text, 'Edited text');
-    final meta = (await listCommand(db, config)).singleWhere(
-      (object) => object.id == created.objectId,
-    );
+    final meta = (await listCommand(
+      db,
+      config,
+    )).singleWhere((object) => object.id == created.objectId);
     expect(meta.name, 'Edited text');
   });
 
   test('mutates a checkbox\'s checked state offline', () async {
-    final created = await createCommand(
-      'Buy milk',
-      db,
-      config,
-      checkbox: true,
-    );
+    final created = await createCommand('Buy milk', db, config, checkbox: true);
     final before = await replayObjectBlocks(db, config, created.objectId);
     final checkboxId = before!.blocks
         .singleWhere((b) => b.style == Block_Content_Text_Style.Checkbox)

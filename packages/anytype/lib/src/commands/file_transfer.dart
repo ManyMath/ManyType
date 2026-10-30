@@ -15,27 +15,18 @@ import '../session.dart';
 import '../store/database.dart';
 import 'sync.dart' show seedLiveSpaceForSync;
 
-typedef FileUnaryInvoker = Uint8List Function(
-  int handleId,
-  String method,
-  Uint8List payload,
-);
+typedef FileUnaryInvoker =
+    Uint8List Function(int handleId, String method, Uint8List payload);
 
 class UploadedBlobResult {
-  const UploadedBlobResult({
-    required this.cid,
-    required this.uploaded,
-  });
+  const UploadedBlobResult({required this.cid, required this.uploaded});
 
   final String cid;
   final bool uploaded;
 }
 
 class OpenedBlobResult {
-  const OpenedBlobResult({
-    required this.bytes,
-    required this.fromCache,
-  });
+  const OpenedBlobResult({required this.bytes, required this.fromCache});
 
   final Uint8List bytes;
   final bool fromCache;
@@ -146,12 +137,9 @@ Future<OpenedFileResult> fileOpenCommand(
     fileId: fileId,
     cid: resolvedCid,
   );
-  final destinationPath = outputPath ??
-      CliConfig.downloadPath(
-        fileId,
-        resolvedCid,
-        downloadsDir: downloadsDir,
-      );
+  final destinationPath =
+      outputPath ??
+      CliConfig.downloadPath(fileId, resolvedCid, downloadsDir: downloadsDir);
   final outputFile = File(destinationPath);
   await outputFile.parent.create(recursive: true);
   await outputFile.writeAsBytes(result.bytes, flush: true);
@@ -255,7 +243,8 @@ class FileTransferFacade {
     required String fileId,
     String? cid,
   }) async {
-    final resolvedCid = cid ??
+    final resolvedCid =
+        cid ??
         await _resolveStoredCid(_session.db, _session.identity.spaceId, fileId);
     if (resolvedCid == null || resolvedCid.isEmpty) {
       throw StateError(
@@ -301,8 +290,9 @@ Future<UploadedBlobResult> uploadBlobToFileNode({
     requestBytes: checkRequestBytes,
     responseBytes: checkResponseBytes,
   );
-  final checkResponse =
-      filesync.BlocksCheckResponse.fromBuffer(checkResponseBytes);
+  final checkResponse = filesync.BlocksCheckResponse.fromBuffer(
+    checkResponseBytes,
+  );
   final availability = checkResponse.blocksAvailability
       .where((entry) => _byteListsEqual(entry.cid, cidBytes))
       .map((entry) => entry.status)
@@ -357,15 +347,12 @@ Future<UploadedBlobResult> uploadBlobToFileNode({
       break;
   }
 
-  capture?.recordNote(
-    'upload_result',
-    {
-      'file_id': fileId,
-      'cid': cid,
-      'uploaded': uploaded,
-      'availability': availability.name,
-    },
-  );
+  capture?.recordNote('upload_result', {
+    'file_id': fileId,
+    'cid': cid,
+    'uploaded': uploaded,
+    'availability': availability.name,
+  });
   return UploadedBlobResult(cid: cid, uploaded: uploaded);
 }
 
@@ -384,10 +371,11 @@ Future<OpenedBlobResult> openBlobFromFileNode({
     cid: cid,
   );
   if (cached != null) {
-    capture?.recordNote(
-      'cache_hit',
-      {'file_id': fileId, 'cid': cid, 'bytes': cached.bytes.length},
-    );
+    capture?.recordNote('cache_hit', {
+      'file_id': fileId,
+      'cid': cid,
+      'bytes': cached.bytes.length,
+    });
     return OpenedBlobResult(bytes: cached.bytes, fromCache: true);
   }
 
@@ -402,8 +390,11 @@ Future<OpenedBlobResult> openBlobFromFileNode({
     wait: false,
   );
   final requestBytes = Uint8List.fromList(request.writeToBuffer());
-  final responseBytes =
-      invoke(fileHandleId, '/filesync.File/BlockGet', requestBytes);
+  final responseBytes = invoke(
+    fileHandleId,
+    '/filesync.File/BlockGet',
+    requestBytes,
+  );
   capture?.recordUnaryRpc(
     role: 'file-node',
     method: '/filesync.File/BlockGet',
@@ -436,20 +427,24 @@ Future<int> _connectToFileNode({
     networkConfigPath: networkConfigPath,
     networkConfigContent: networkConfigContent,
   );
-  final coordinatorAddress =
-      chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
+  final coordinatorAddress = chooseBestAddress(
+    requireCoordinatorNode(networkConfig).addresses,
+  );
   final coordinatorHandleId = bridge.connect(
     coordinatorAddress,
     identity.seed,
     identity.accountSeed,
-    expectedPeerId:
-        expectedPeerIdForAddress(coordinatorAddress, config: networkConfig),
+    expectedPeerId: expectedPeerIdForAddress(
+      coordinatorAddress,
+      config: networkConfig,
+    ),
   );
   capture.recordConnection(role: 'coordinator', address: coordinatorAddress);
 
   try {
-    final requestBytes =
-        Uint8List.fromList(NetworkConfigurationRequest().writeToBuffer());
+    final requestBytes = Uint8List.fromList(
+      NetworkConfigurationRequest().writeToBuffer(),
+    );
     final responseBytes = bridge.invoke(
       coordinatorHandleId,
       '/coordinator.Coordinator/NetworkConfiguration',
@@ -462,16 +457,14 @@ Future<int> _connectToFileNode({
       responseBytes: responseBytes,
     );
     final response = NetworkConfigurationResponse.fromBuffer(responseBytes);
-    final fileAddress = chooseFileAddressFromResponse(response.nodes) ??
+    final fileAddress =
+        chooseFileAddressFromResponse(response.nodes) ??
         chooseBestAddress(requireFileNode(networkConfig).addresses);
-    capture.recordNote(
-      'resolved_file_node',
-      {
-        'network_id': response.networkId,
-        'configuration_id': response.configurationId,
-        'file_address': fileAddress,
-      },
-    );
+    capture.recordNote('resolved_file_node', {
+      'network_id': response.networkId,
+      'configuration_id': response.configurationId,
+      'file_address': fileAddress,
+    });
 
     final fileHandleId = bridge.connect(
       fileAddress,
@@ -552,7 +545,8 @@ class _FileTransferCapture {
   final Map<String, Object?> _payload;
 
   static _FileTransferCapture start() {
-    final path = readDebugCaptureEnv('MANYTYPE_FILE_TRANSFER_CAPTURE_PATH') ??
+    final path =
+        readDebugCaptureEnv('MANYTYPE_FILE_TRANSFER_CAPTURE_PATH') ??
         readDebugCaptureEnv('MANYTYPE_FILE_CAPTURE_PATH');
     final payload = <String, Object?>{
       'captured_at': DateTime.now().toUtc().toIso8601String(),
@@ -591,10 +585,7 @@ class _FileTransferCapture {
         }
       }
     }
-    return _FileTransferCapture._(
-      path: path,
-      payload: payload,
-    );
+    return _FileTransferCapture._(path: path, payload: payload);
   }
 
   bool get _enabled => path != null && path!.isNotEmpty;

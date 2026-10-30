@@ -43,19 +43,19 @@ class ConsensusBootstrapReport {
   final String? statePath;
 
   Map<String, Object?> toJson() => {
-        'captured_at': capturedAt.toIso8601String(),
-        'command': 'consensus-bootstrap',
-        'backend_label': kConsensusBackendLabel,
-        'backend_requirements': kConsensusBackendRequirements,
-        'server_address': serverAddress,
-        'log_id': logId,
-        'space_id': spaceId,
-        'root_id': rootId,
-        'first_record_id': firstRecordId,
-        'record_ids_after_first': recordIdsAfterFirst,
-        'tail_after_root_ids': tailAfterRootIds,
-        'state_path': statePath,
-      };
+    'captured_at': capturedAt.toIso8601String(),
+    'command': 'consensus-bootstrap',
+    'backend_label': kConsensusBackendLabel,
+    'backend_requirements': kConsensusBackendRequirements,
+    'server_address': serverAddress,
+    'log_id': logId,
+    'space_id': spaceId,
+    'root_id': rootId,
+    'first_record_id': firstRecordId,
+    'record_ids_after_first': recordIdsAfterFirst,
+    'tail_after_root_ids': tailAfterRootIds,
+    'state_path': statePath,
+  };
 }
 
 /// Report produced by [consensusContinueCommand]. `toJson()` matches the
@@ -88,21 +88,21 @@ class ConsensusContinueReport {
   final List<String> tailAfterFirstIds;
 
   Map<String, Object?> toJson() => {
-        'captured_at': capturedAt.toIso8601String(),
-        'command': 'consensus-continue',
-        'backend_label': kConsensusBackendLabel,
-        'backend_requirements': kConsensusBackendRequirements,
-        'server_address': serverAddress,
-        'state_in': stateIn,
-        'log_id': logId,
-        'space_id': spaceId,
-        'root_id': rootId,
-        'first_record_id': firstRecordId,
-        'second_record_id': secondRecordId,
-        'record_ids_before_continue': recordIdsBeforeContinue,
-        'record_ids_after_continue': recordIdsAfterContinue,
-        'tail_after_first_ids': tailAfterFirstIds,
-      };
+    'captured_at': capturedAt.toIso8601String(),
+    'command': 'consensus-continue',
+    'backend_label': kConsensusBackendLabel,
+    'backend_requirements': kConsensusBackendRequirements,
+    'server_address': serverAddress,
+    'state_in': stateIn,
+    'log_id': logId,
+    'space_id': spaceId,
+    'root_id': rootId,
+    'first_record_id': firstRecordId,
+    'second_record_id': secondRecordId,
+    'record_ids_before_continue': recordIdsBeforeContinue,
+    'record_ids_after_continue': recordIdsAfterContinue,
+    'tail_after_first_ids': tailAfterFirstIds,
+  };
 }
 
 Future<ConsensusBootstrapReport> consensusBootstrapCommand({
@@ -112,8 +112,11 @@ Future<ConsensusBootstrapReport> consensusBootstrapCommand({
   final mnemonic = generateMnemonic();
   final identity = await Identity.fromMnemonic(mnemonic);
   final bridge = NativeBridge();
-  final handleId =
-      bridge.connect(serverAddress, identity.seed, identity.accountSeed);
+  final handleId = bridge.connect(
+    serverAddress,
+    identity.seed,
+    identity.accountSeed,
+  );
 
   try {
     final consensus = ConsensusService(invoker: bridge.invoke);
@@ -122,8 +125,9 @@ Future<ConsensusBootstrapReport> consensusBootstrapCommand({
       spaceId: identity.spaceId,
       masterKeySeed: identity.accountSeed,
       identityPrivateKey: identity.seed,
-      readKey:
-          Uint8List.fromList(List<int>.generate(32, (index) => index + 11)),
+      readKey: Uint8List.fromList(
+        List<int>.generate(32, (index) => index + 11),
+      ),
     );
     consensus.logAdd(handleId: handleId, logId: identity.spaceId, record: root);
 
@@ -192,8 +196,9 @@ Future<ConsensusBootstrapReport> consensusBootstrapCommand({
       spaceId: identity.spaceId,
       rootId: root.id,
       firstRecordId: firstResponse.id,
-      recordIdsAfterFirst:
-          recordsAfterFirst.map((record) => record.id).toList(),
+      recordIdsAfterFirst: recordsAfterFirst
+          .map((record) => record.id)
+          .toList(),
       tailAfterRootIds: tailAfterRoot.map((record) => record.id).toList(),
       statePath: stateOut,
     );
@@ -210,8 +215,11 @@ Future<ConsensusContinueReport> consensusContinueCommand({
   final serverAddress = serverOverride ?? state.serverAddress;
   final identity = await Identity.fromMnemonic(state.mnemonic);
   final bridge = NativeBridge();
-  final handleId =
-      bridge.connect(serverAddress, identity.seed, identity.accountSeed);
+  final handleId = bridge.connect(
+    serverAddress,
+    identity.seed,
+    identity.accountSeed,
+  );
 
   try {
     final consensus = ConsensusService(invoker: bridge.invoke);
@@ -274,8 +282,9 @@ Future<ConsensusContinueReport> consensusContinueCommand({
       rootId: state.rootId,
       firstRecordId: state.firstRecordId,
       secondRecordId: secondResponse.id,
-      recordIdsBeforeContinue:
-          recordsBefore.map((record) => record.id).toList(),
+      recordIdsBeforeContinue: recordsBefore
+          .map((record) => record.id)
+          .toList(),
       recordIdsAfterContinue: recordsAfter.map((record) => record.id).toList(),
       tailAfterFirstIds: tailAfterFirst.map((record) => record.id).toList(),
     );

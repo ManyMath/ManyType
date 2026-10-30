@@ -1,5 +1,6 @@
 @TestOn(
-    'vm') // shells out via Process.run to spawn a real manytype_server subprocess
+  'vm',
+) // shells out via Process.run to spawn a real manytype_server subprocess
 library;
 
 import 'dart:async';
@@ -27,8 +28,10 @@ void main() {
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
-    config =
-        CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
+    config = CliConfig(
+      mnemonic: testMnemonic,
+      serverAddress: '127.0.0.1:33020',
+    );
   });
 
   tearDown(() async {
@@ -103,8 +106,10 @@ void main() {
       await fileDb.close();
     });
 
-    final fileConfig =
-        CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
+    final fileConfig = CliConfig(
+      mnemonic: testMnemonic,
+      serverAddress: '127.0.0.1:33020',
+    );
 
     await createCommand('Archived subprocess object', fileDb, fileConfig);
     final objectId = await _findObjectIdByName(
@@ -129,10 +134,7 @@ void main() {
       'dart',
       ['run', 'packages/manytype_cli/bin/manytype.dart', 'read', objectId],
       workingDirectory: _findRepoRoot(),
-      environment: {
-        ...Platform.environment,
-        'HOME': tempDir.path,
-      },
+      environment: {...Platform.environment, 'HOME': tempDir.path},
     );
 
     expect(result.exitCode, equals(1));
@@ -193,10 +195,7 @@ Future<ReplayedObjectState> _replayObject(
   final rawTreeChanges = (await db.getChangesForObject(objectId))
       .map((change) => Uint8List.fromList(change.rawBytes))
       .toList(growable: false);
-  return replayObjectState(
-    rawTreeChanges: rawTreeChanges,
-    treeKey: treeKey,
-  );
+  return replayObjectState(rawTreeChanges: rawTreeChanges, treeKey: treeKey);
 }
 
 Future<Uint8List> _treeKeyForObject(CliConfig config, String objectId) async {
@@ -211,8 +210,9 @@ Future<Uint8List> _treeKeyForObject(CliConfig config, String objectId) async {
 String _findRepoRoot() {
   Directory dir = Directory.current;
   for (var i = 0; i < 6; i++) {
-    if (File('${dir.path}/packages/manytype_cli/bin/manytype.dart')
-            .existsSync() &&
+    if (File(
+          '${dir.path}/packages/manytype_cli/bin/manytype.dart',
+        ).existsSync() &&
         Directory('${dir.path}/packages').existsSync()) {
       return dir.path;
     }

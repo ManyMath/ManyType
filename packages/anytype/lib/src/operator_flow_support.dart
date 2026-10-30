@@ -57,12 +57,12 @@ class ConsensusFlowState {
   final String firstRecordId;
 
   Map<String, Object?> toJson() => {
-        'mnemonic': mnemonic,
-        'server_address': serverAddress,
-        'space_id': spaceId,
-        'root_id': rootId,
-        'first_record_id': firstRecordId,
-      };
+    'mnemonic': mnemonic,
+    'server_address': serverAddress,
+    'space_id': spaceId,
+    'root_id': rootId,
+    'first_record_id': firstRecordId,
+  };
 
   static ConsensusFlowState fromJson(Map<String, Object?> json) {
     return ConsensusFlowState(
@@ -91,12 +91,12 @@ class SpacePullFlowState {
   final String inviteRecordId;
 
   Map<String, Object?> toJson() => {
-        'mnemonic': mnemonic,
-        'server_address': serverAddress,
-        'space_id': spaceId,
-        'acl_root_id': aclRootId,
-        'invite_record_id': inviteRecordId,
-      };
+    'mnemonic': mnemonic,
+    'server_address': serverAddress,
+    'space_id': spaceId,
+    'acl_root_id': aclRootId,
+    'invite_record_id': inviteRecordId,
+  };
 
   static SpacePullFlowState fromJson(Map<String, Object?> json) {
     return SpacePullFlowState(
@@ -168,9 +168,7 @@ Future<String> findAclRootId(ManytypeDatabase db, String spaceId) async {
 Future<T> runSilently<T>(Future<T> Function() fn) {
   return runZoned(
     fn,
-    zoneSpecification: ZoneSpecification(
-      print: (self, parent, zone, line) {},
-    ),
+    zoneSpecification: ZoneSpecification(print: (self, parent, zone, line) {}),
   );
 }
 
@@ -203,11 +201,8 @@ String toHex(List<int> bytes) =>
     bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
 
 Uint8List marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
-      Key(
-        type: KeyType.Ed25519Public,
-        data: publicKey,
-      ).writeToBuffer(),
-    );
+  Key(type: KeyType.Ed25519Public, data: publicKey).writeToBuffer(),
+);
 
 VerifiedAclRecord synthesizeAclRootRecord({
   required String aclRootId,

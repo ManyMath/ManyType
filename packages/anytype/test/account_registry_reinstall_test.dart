@@ -39,23 +39,27 @@ void main() {
     if (await tempBase.exists()) await tempBase.delete(recursive: true);
   });
 
-  test('importing after a reinstall adopts the matching surviving phrase',
-      () async {
-    secureStore.values[accountId] = _mnemonic;
+  test(
+    'importing after a reinstall adopts the matching surviving phrase',
+    () async {
+      secureStore.values[accountId] = _mnemonic;
 
-    final profile = await AccountRegistry.createAccount(
-      mnemonic: _mnemonic,
-      displayName: 'restored',
-    );
+      final profile = await AccountRegistry.createAccount(
+        mnemonic: _mnemonic,
+        displayName: 'restored',
+      );
 
-    expect(profile.id, accountId);
-    expect(secureStore.values[accountId], _mnemonic);
-    expect(secureStore.writeCalls, 0);
-    expect(secureStore.deleteCalls, 0);
-    expect((await AccountRegistry.loadConfig(accountId)).mnemonic, _mnemonic);
-    expect(
-        (await AccountRegistry.listAccounts()).single.displayName, 'restored');
-  });
+      expect(profile.id, accountId);
+      expect(secureStore.values[accountId], _mnemonic);
+      expect(secureStore.writeCalls, 0);
+      expect(secureStore.deleteCalls, 0);
+      expect((await AccountRegistry.loadConfig(accountId)).mnemonic, _mnemonic);
+      expect(
+        (await AccountRegistry.listAccounts()).single.displayName,
+        'restored',
+      );
+    },
+  );
 
   test('a failed import keeps the surviving phrase it adopted', () async {
     secureStore.values[accountId] = _mnemonic;

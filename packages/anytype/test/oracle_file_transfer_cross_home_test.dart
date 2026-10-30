@@ -1,5 +1,6 @@
 @TestOn(
-    'vm') // shells out via Process.run to the manytype.dart CLI + live docker oracle stack
+  'vm',
+) // shells out via Process.run to the manytype.dart CLI + live docker oracle stack
 @Tags(['round_trip'])
 library;
 
@@ -43,8 +44,13 @@ void main() {
     'a freshly joined home can file-open a blob uploaded by the creating home',
     () async {
       final repoRoot = findRepoRoot();
-      final networkConfigPath =
-          p.join(repoRoot, 'docker', 'any-sync', 'etc', 'client.yml');
+      final networkConfigPath = p.join(
+        repoRoot,
+        'docker',
+        'any-sync',
+        'etc',
+        'client.yml',
+      );
       final manytypeDirA = Directory(p.join(homeA.path, '.manytype'));
       final manytypeDirB = Directory(p.join(homeB.path, '.manytype'));
       await manytypeDirA.create(recursive: true);
@@ -55,12 +61,15 @@ void main() {
         mnemonic: mnemonic,
         serverAddress: '127.0.0.1:33020',
       );
-      final configToml = 'mnemonic = "${config.mnemonic}"\n'
+      final configToml =
+          'mnemonic = "${config.mnemonic}"\n'
           'server_address = "${config.serverAddress}"\n';
-      await File(p.join(manytypeDirA.path, 'config.toml'))
-          .writeAsString(configToml);
-      await File(p.join(manytypeDirB.path, 'config.toml'))
-          .writeAsString(configToml);
+      await File(
+        p.join(manytypeDirA.path, 'config.toml'),
+      ).writeAsString(configToml);
+      await File(
+        p.join(manytypeDirB.path, 'config.toml'),
+      ).writeAsString(configToml);
 
       final dbA = ManytypeDatabase(p.join(manytypeDirA.path, 'store.db'));
       await createCommand('M036: cross-home file transfer', dbA, config);
@@ -76,13 +85,15 @@ void main() {
       final envA = {
         ...Platform.environment,
         'HOME': homeA.path,
-        'LD_LIBRARY_PATH': '${Platform.environment['LD_LIBRARY_PATH'] ?? ''}:'
+        'LD_LIBRARY_PATH':
+            '${Platform.environment['LD_LIBRARY_PATH'] ?? ''}:'
             '$repoRoot/rust/target/release',
       };
       final envB = {
         ...Platform.environment,
         'HOME': homeB.path,
-        'LD_LIBRARY_PATH': '${Platform.environment['LD_LIBRARY_PATH'] ?? ''}:'
+        'LD_LIBRARY_PATH':
+            '${Platform.environment['LD_LIBRARY_PATH'] ?? ''}:'
             '$repoRoot/rust/target/release',
       };
 
@@ -108,15 +119,24 @@ void main() {
         environment: envA,
         workingDirectory: repoRoot,
       );
-      expect(uploadResult.exitCode, equals(0),
-          reason: 'home A file-upload failed: ${uploadResult.stderr}');
+      expect(
+        uploadResult.exitCode,
+        equals(0),
+        reason: 'home A file-upload failed: ${uploadResult.stderr}',
+      );
       final uploadOutput = uploadResult.stdout.toString();
-      expect(uploadOutput, contains('Uploaded m036-file'),
-          reason: 'expected a fresh upload, not a dedup skip: $uploadOutput');
+      expect(
+        uploadOutput,
+        contains('Uploaded m036-file'),
+        reason: 'expected a fresh upload, not a dedup skip: $uploadOutput',
+      );
 
       final cidMatch = RegExp(r'cid=([^)]+)\)').firstMatch(uploadOutput);
-      expect(cidMatch, isNotNull,
-          reason: 'Could not find cid in upload output: $uploadOutput');
+      expect(
+        cidMatch,
+        isNotNull,
+        reason: 'Could not find cid in upload output: $uploadOutput',
+      );
       final cid = cidMatch!.group(1)!;
 
       // Home B only ever joins via `sync` -- it never runs `create`, so it
@@ -134,8 +154,11 @@ void main() {
         environment: envB,
         workingDirectory: repoRoot,
       );
-      expect(syncB.exitCode, equals(0),
-          reason: 'home B sync failed: ${syncB.stderr}');
+      expect(
+        syncB.exitCode,
+        equals(0),
+        reason: 'home B sync failed: ${syncB.stderr}',
+      );
 
       final outputPath = p.join(homeB.path, 'downloaded.bin');
       final openResult = await Process.run(
@@ -156,11 +179,18 @@ void main() {
         environment: envB,
         workingDirectory: repoRoot,
       );
-      expect(openResult.exitCode, equals(0),
-          reason: 'home B file-open failed: ${openResult.stderr}');
-      expect(openResult.stdout.toString(), contains('(network)'),
-          reason: 'expected a genuine filenode fetch, not a cache hit: '
-              '${openResult.stdout}');
+      expect(
+        openResult.exitCode,
+        equals(0),
+        reason: 'home B file-open failed: ${openResult.stderr}',
+      );
+      expect(
+        openResult.stdout.toString(),
+        contains('(network)'),
+        reason:
+            'expected a genuine filenode fetch, not a cache hit: '
+            '${openResult.stdout}',
+      );
 
       final downloadedContent = await File(outputPath).readAsString();
       expect(downloadedContent, equals(uploadedContent));

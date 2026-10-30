@@ -47,7 +47,8 @@ class NativeBridge {
     Uint8List payload,
   ) {
     throw UnsupportedError(
-        'NativeBridge.requestObject is not available on web');
+      'NativeBridge.requestObject is not available on web',
+    );
   }
 
   Uint8List syncStore(int handleId, Uint8List messagesData) {

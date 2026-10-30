@@ -43,8 +43,9 @@ class Identity {
     final bip39Seed = mnemonicToSeed(mnemonic);
     final accountDerived = await deriveAccountKey(bip39Seed);
     final identityDerived = await deriveIdentityKey(bip39Seed);
-    final accountKeyPair =
-        await ed25519KeyPairFromSeed(accountDerived.privateKey);
+    final accountKeyPair = await ed25519KeyPairFromSeed(
+      accountDerived.privateKey,
+    );
     final keyPair = await ed25519KeyPairFromSeed(identityDerived.privateKey);
     final peerId = keyPair.publicKey;
     final spaceHeader = await _buildDerivedSpaceHeader(
@@ -107,11 +108,8 @@ Future<RawSpaceHeaderWithId> _buildDerivedSpaceHeader({
 }
 
 Uint8List _marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
-      Key(
-        type: KeyType.Ed25519Public,
-        data: publicKey,
-      ).writeToBuffer(),
-    );
+  Key(type: KeyType.Ed25519Public, data: publicKey).writeToBuffer(),
+);
 
 BigInt _fnv64(List<int> bytes) {
   var hash = _fnv64OffsetBasis;
@@ -124,8 +122,9 @@ BigInt _fnv64(List<int> bytes) {
 
 Int64 _toProtoUint64(BigInt value) {
   final normalized = value & _u64Mask;
-  final signed =
-      normalized >= _u64SignBit ? normalized - _u64Modulus : normalized;
+  final signed = normalized >= _u64SignBit
+      ? normalized - _u64Modulus
+      : normalized;
   return Int64.parseInt(signed.toString());
 }
 

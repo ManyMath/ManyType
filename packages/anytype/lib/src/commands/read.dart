@@ -58,7 +58,7 @@ class ReadResult {
 /// error: see [ReadDetailResult.notFound]).
 class ObjectUnavailableError extends StateError {
   ObjectUnavailableError(this.objectId)
-      : super('Object $objectId has been deleted or archived');
+    : super('Object $objectId has been deleted or archived');
 
   final String objectId;
 }
@@ -107,8 +107,9 @@ Future<ReadListResult> _listObjects(
     final changes = await db.getChangesForObject(obj.id);
     final heads = await db.getObjectHeads(obj.id);
     final attachments = await db.getAttachmentRefsByObject(obj.id);
-    final treeKey =
-        spaceKey == null ? null : await deriveTreeKey(spaceKey, obj.id);
+    final treeKey = spaceKey == null
+        ? null
+        : await deriveTreeKey(spaceKey, obj.id);
     final textPreview = await extractTextPreview(changes, treeKey: treeKey);
 
     emit('  ${obj.id}');
@@ -180,12 +181,15 @@ Future<ReadDetailResult> _showObject(
         final rawRows = await db.getChangesForObject(obj.id);
         cachedChangesByObject[obj.id] = rawRows;
         final objTreeKey = await deriveTreeKey(spaceKey, obj.id);
-        optionInputs.add(OptionIndexInput(
-          objectId: obj.id,
-          rawTreeChanges:
-              rawRows.map((r) => Uint8List.fromList(r.rawBytes)).toList(),
-          treeKey: objTreeKey,
-        ));
+        optionInputs.add(
+          OptionIndexInput(
+            objectId: obj.id,
+            rawTreeChanges: rawRows
+                .map((r) => Uint8List.fromList(r.rawBytes))
+                .toList(),
+            treeKey: objTreeKey,
+          ),
+        );
       }
       optIndex = await loadLocalOptionIndex(optionInputs);
     } catch (_) {
@@ -242,11 +246,7 @@ Future<ReadDetailResult> _showObject(
         try {
           final treeChange = TreeChange.fromBuffer(rawTreeChange.payload);
           if (treeChange.changesData.isNotEmpty) {
-            await _printBlockChanges(
-              treeChange,
-              emit,
-              treeKey: treeKey,
-            );
+            await _printBlockChanges(treeChange, emit, treeKey: treeKey);
           } else {
             emit('    (no block data)');
           }
@@ -291,8 +291,9 @@ Future<bool> _isObjectArchived(
     }
     final treeKey = await deriveTreeKey(spaceKey, objectId);
     final details = await replayObjectDetails(
-      rawTreeChanges:
-          changes.map((change) => Uint8List.fromList(change.rawBytes)).toList(),
+      rawTreeChanges: changes
+          .map((change) => Uint8List.fromList(change.rawBytes))
+          .toList(),
       treeKey: treeKey,
     );
     final isArchived = details['isArchived'];
@@ -315,8 +316,9 @@ void _printAttachmentRefs(
 
   emit('${indent}Attachments:');
   for (final attachment in attachments) {
-    final cidLabel =
-        attachment.cid.isEmpty ? 'metadata only' : 'cid=${attachment.cid}';
+    final cidLabel = attachment.cid.isEmpty
+        ? 'metadata only'
+        : 'cid=${attachment.cid}';
     emit('${indent}  ${attachment.fileId} ($cidLabel)');
   }
 }
@@ -426,8 +428,9 @@ Future<void> _printSnapshotMetadata(
 }) async {
   // Without a tree key, encrypted changes fail to decrypt and are skipped.
   final snapData = await replayObjectSnapshot(
-    rawTreeChanges:
-        changes.map((change) => Uint8List.fromList(change.rawBytes)).toList(),
+    rawTreeChanges: changes
+        .map((change) => Uint8List.fromList(change.rawBytes))
+        .toList(),
     treeKey: treeKey ?? Uint8List(32),
   );
 
@@ -616,11 +619,7 @@ void _printSnapshotBlocks(
 ) {
   // Structural blocks with well-known fixed ids (see
   // manytype_core/lib/src/crdt/block.dart createMinimalPageSnapshotBase).
-  const structuralIds = <String>{
-    'header',
-    'title',
-    'featuredRelations',
-  };
+  const structuralIds = <String>{'header', 'title', 'featuredRelations'};
 
   for (final id in blockOrder) {
     if (structuralIds.contains(id)) continue;
@@ -722,8 +721,9 @@ Future<String?> _resolveMemberName(
 
     final treeKey = await deriveTreeKey(spaceKey, objectId);
     final details = await replayObjectDetails(
-      rawTreeChanges:
-          changes.map((change) => Uint8List.fromList(change.rawBytes)).toList(),
+      rawTreeChanges: changes
+          .map((change) => Uint8List.fromList(change.rawBytes))
+          .toList(),
       treeKey: treeKey,
     );
     final name = details['name'];
@@ -815,7 +815,8 @@ Future<void> _printBlockChanges(
           if (block.hasDataview()) {
             final dv = block.dataview;
             emit(
-                '    [${block.id}] [Dataview] source: ${dv.source.join(', ')}, views: ${dv.views.length}');
+              '    [${block.id}] [Dataview] source: ${dv.source.join(', ')}, views: ${dv.views.length}',
+            );
           }
         }
       }
@@ -966,15 +967,17 @@ String _formatOptionRelationValue(
   }
   if (val.hasListValue()) {
     // Tag relation: list of option IDs (order preserved).
-    return val.listValue.values.map((v) {
-      if (!v.hasStringValue()) return v.toString();
-      final id = v.stringValue;
-      final opt = optIndex[id];
-      if (opt == null || opt.isOrphaned) {
-        return '<unknown:${id.length <= 8 ? id : id.substring(0, 8)}>';
-      }
-      return opt.name!;
-    }).join(', ');
+    return val.listValue.values
+        .map((v) {
+          if (!v.hasStringValue()) return v.toString();
+          final id = v.stringValue;
+          final opt = optIndex[id];
+          if (opt == null || opt.isOrphaned) {
+            return '<unknown:${id.length <= 8 ? id : id.substring(0, 8)}>';
+          }
+          return opt.name!;
+        })
+        .join(', ');
   }
   return val.toString();
 }
@@ -1045,7 +1048,8 @@ Future<String?> _formatSingleFileRelationId(
     return assumeFileRelation ? _unknownFileLabel(trimmedId) : null;
   }
 
-  final changes = cachedChangesByObject[trimmedId] ??
+  final changes =
+      cachedChangesByObject[trimmedId] ??
       await db.getChangesForObject(trimmedId);
   if (changes.isEmpty) {
     return assumeFileRelation ? _unknownFileLabel(trimmedId) : null;
@@ -1063,8 +1067,9 @@ Future<String?> _formatSingleFileRelationId(
   try {
     final treeKey = await deriveTreeKey(spaceKey, trimmedId);
     final details = await replayObjectDetails(
-      rawTreeChanges:
-          changes.map((change) => Uint8List.fromList(change.rawBytes)).toList(),
+      rawTreeChanges: changes
+          .map((change) => Uint8List.fromList(change.rawBytes))
+          .toList(),
       treeKey: treeKey,
     );
     final name = _stringDetail(details, 'name');

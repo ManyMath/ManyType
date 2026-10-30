@@ -99,8 +99,9 @@ Future<String> findAclRootId(ManytypeDatabase db, String spaceId) async {
     final changes = await db.getChangesForObject(object.id);
     if (changes.isEmpty) continue;
     try {
-      final rawRecord =
-          RawRecord.fromBuffer(Uint8List.fromList(changes.first.rawBytes));
+      final rawRecord = RawRecord.fromBuffer(
+        Uint8List.fromList(changes.first.rawBytes),
+      );
       final aclRoot = AclRoot.fromBuffer(rawRecord.payload);
       if (aclRoot.spaceId == spaceId) {
         return object.id;
@@ -113,11 +114,8 @@ Future<String> findAclRootId(ManytypeDatabase db, String spaceId) async {
 }
 
 Uint8List marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
-      Key(
-        type: KeyType.Ed25519Public,
-        data: publicKey,
-      ).writeToBuffer(),
-    );
+  Key(type: KeyType.Ed25519Public, data: publicKey).writeToBuffer(),
+);
 
 VerifiedAclRecord synthesizeAclRootRecord({
   required String aclRootId,
@@ -160,7 +158,8 @@ AclData buildOracleAccountRemoveAclData({
   Uint8List? encryptedMetadataPrivateKey,
   Uint8List? encryptedOldReadKey,
 }) {
-  final metadataKey = metadataPublicKey ??
+  final metadataKey =
+      metadataPublicKey ??
       (activeAccountPublicKeys.isNotEmpty
           ? activeAccountPublicKeys.first
           : throw ArgumentError('activeAccountPublicKeys cannot be empty'));
@@ -177,13 +176,19 @@ AclData buildOracleAccountRemoveAclData({
                 .map(
                   (publicKey) => AclEncryptedReadKey(
                     identity: marshalEd25519PublicKey(publicKey),
-                    encryptedReadKey:
-                        Uint8List.fromList(const [2, 9, 26, 81, 3]),
+                    encryptedReadKey: Uint8List.fromList(const [
+                      2,
+                      9,
+                      26,
+                      81,
+                      3,
+                    ]),
                   ),
                 )
                 .toList(growable: false),
             metadataPubKey: marshalEd25519PublicKey(metadataKey),
-            encryptedMetadataPrivKey: encryptedMetadataPrivateKey ??
+            encryptedMetadataPrivKey:
+                encryptedMetadataPrivateKey ??
                 Uint8List.fromList(const [3, 14, 15, 92]),
             encryptedOldReadKey:
                 encryptedOldReadKey ?? Uint8List.fromList(const [4, 65, 35]),
@@ -191,8 +196,12 @@ AclData buildOracleAccountRemoveAclData({
                 .map(
                   (publicKey) => AclEncryptedReadKey(
                     identity: marshalEd25519PublicKey(publicKey),
-                    encryptedReadKey:
-                        Uint8List.fromList(const [5, 35, 89, 144]),
+                    encryptedReadKey: Uint8List.fromList(const [
+                      5,
+                      35,
+                      89,
+                      144,
+                    ]),
                   ),
                 )
                 .toList(growable: false),

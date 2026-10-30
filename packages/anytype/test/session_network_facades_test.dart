@@ -62,8 +62,9 @@ void main() {
       addTearDown(session.close);
 
       await expectLater(
-        session.probeFileNode
-            .probe(networkConfigContent: _minimalNetworkConfig),
+        session.probeFileNode.probe(
+          networkConfigContent: _minimalNetworkConfig,
+        ),
         throwsA(isA<UnsupportedError>()),
       );
     });

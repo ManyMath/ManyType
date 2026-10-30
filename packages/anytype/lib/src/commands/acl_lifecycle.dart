@@ -55,23 +55,23 @@ class AclLifecycleReport {
   final String? joinerStatus;
 
   Map<String, Object?> toJson() => {
-        'captured_at': capturedAt.toIso8601String(),
-        'command': 'acl-lifecycle',
-        'backend_label': kAclLifecycleBackendLabel,
-        'backend_requirements': kAclLifecycleBackendRequirements,
-        'network_config_path': networkConfigPath,
-        'coordinator_address': coordinatorAddress,
-        'space_id': spaceId,
-        'acl_root_id': aclRootId,
-        'invite_record_id': inviteRecordId,
-        'join_record_id': joinRecordId,
-        'accept_record_id': acceptRecordId,
-        'record_ids_after_accept': recordIdsAfterAccept,
-        'tail_after_join_ids': tailAfterJoinIds,
-        'joiner_identity_hex': joinerIdentityHex,
-        'joiner_permission': joinerPermission,
-        'joiner_status': joinerStatus,
-      };
+    'captured_at': capturedAt.toIso8601String(),
+    'command': 'acl-lifecycle',
+    'backend_label': kAclLifecycleBackendLabel,
+    'backend_requirements': kAclLifecycleBackendRequirements,
+    'network_config_path': networkConfigPath,
+    'coordinator_address': coordinatorAddress,
+    'space_id': spaceId,
+    'acl_root_id': aclRootId,
+    'invite_record_id': inviteRecordId,
+    'join_record_id': joinRecordId,
+    'accept_record_id': acceptRecordId,
+    'record_ids_after_accept': recordIdsAfterAccept,
+    'tail_after_join_ids': tailAfterJoinIds,
+    'joiner_identity_hex': joinerIdentityHex,
+    'joiner_permission': joinerPermission,
+    'joiner_status': joinerStatus,
+  };
 }
 
 Future<AclLifecycleReport> aclLifecycleCommand({
@@ -82,10 +82,13 @@ Future<AclLifecycleReport> aclLifecycleCommand({
     networkConfigPath: networkConfigPath,
     networkConfigContent: networkConfigContent,
   );
-  final coordinatorAddress =
-      chooseBestAddress(requireCoordinatorNode(networkConfig).addresses);
-  final coordinatorPeerId =
-      expectedPeerIdForAddress(coordinatorAddress, config: networkConfig);
+  final coordinatorAddress = chooseBestAddress(
+    requireCoordinatorNode(networkConfig).addresses,
+  );
+  final coordinatorPeerId = expectedPeerIdForAddress(
+    coordinatorAddress,
+    config: networkConfig,
+  );
   final ownerFixture = await createEphemeralSpaceFixture(
     networkConfigPath: networkConfigPath,
     networkConfigContent: networkConfigContent,
@@ -120,8 +123,9 @@ Future<AclLifecycleReport> aclLifecycleCommand({
       spaceId: ownerFixture.identity.spaceId,
     );
 
-    final inviteSeed =
-        Uint8List.fromList(List<int>.generate(32, (index) => index + 131));
+    final inviteSeed = Uint8List.fromList(
+      List<int>.generate(32, (index) => index + 131),
+    );
     final inviteKeyPair = await ed25519KeyPairFromSeed(inviteSeed);
     final inviteRecord = await buildAclRecord(
       prevId: ownerFixture.aclRootId,
@@ -240,8 +244,9 @@ Future<AclLifecycleReport> aclLifecycleCommand({
       inviteRecordId: inviteResponse.id,
       joinRecordId: joinResponse.id,
       acceptRecordId: acceptResponse.id,
-      recordIdsAfterAccept:
-          recordsAfterAccept.map((record) => record.id).toList(),
+      recordIdsAfterAccept: recordsAfterAccept
+          .map((record) => record.id)
+          .toList(),
       tailAfterJoinIds: tailAfterJoin.map((record) => record.id).toList(),
       joinerIdentityHex: joinerHex,
       joinerPermission: permission?.name,

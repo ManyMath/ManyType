@@ -28,8 +28,10 @@ void main() {
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
-    config =
-        CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
+    config = CliConfig(
+      mnemonic: testMnemonic,
+      serverAddress: '127.0.0.1:33020',
+    );
   });
 
   tearDown(() async {
@@ -85,8 +87,9 @@ void main() {
       final nonUserChangeCounts = <int>[];
       for (final object in allObjects) {
         if (object.id == textObj.id) continue;
-        nonUserChangeCounts
-            .add((await db.getChangesForObject(object.id)).length);
+        nonUserChangeCounts.add(
+          (await db.getChangesForObject(object.id)).length,
+        );
       }
       expect(nonUserChangeCounts.where((count) => count == 1), hasLength(2));
       expect(nonUserChangeCounts.where((count) => count == 2), hasLength(4));
@@ -183,44 +186,45 @@ void main() {
       );
     });
 
-    test('assigns an existing STType to a plain object via assignedType',
-        () async {
-      final typeResult = await createCommand(
-        'ignored',
-        db,
-        config,
-        asType: true,
-        name: 'Project',
-      );
-      final typeId = typeResult.objectId;
+    test(
+      'assigns an existing STType to a plain object via assignedType',
+      () async {
+        final typeResult = await createCommand(
+          'ignored',
+          db,
+          config,
+          asType: true,
+          name: 'Project',
+        );
+        final typeId = typeResult.objectId;
 
-      final objectResult = await createCommand(
-        'My project',
-        db,
-        config,
-        assignedType: typeId,
-      );
+        final objectResult = await createCommand(
+          'My project',
+          db,
+          config,
+          assignedType: typeId,
+        );
 
-      final replayed = await _replayObject(db, config, objectResult.objectId);
-      expect(replayed.smartBlockType, SmartBlockType.Page.value);
-      expect(replayed.snapshot.objectTypes, ['project']);
-      expect(
-        replayed.snapshot.details.fields['type']?.stringValue,
-        typeId,
-      );
-      expect(
-        replayed.snapshot.details.fields['name']?.stringValue,
-        'My project',
-      );
-    });
+        final replayed = await _replayObject(db, config, objectResult.objectId);
+        expect(replayed.smartBlockType, SmartBlockType.Page.value);
+        expect(replayed.snapshot.objectTypes, ['project']);
+        expect(replayed.snapshot.details.fields['type']?.stringValue, typeId);
+        expect(
+          replayed.snapshot.details.fields['name']?.stringValue,
+          'My project',
+        );
+      },
+    );
 
-    test('createCommand without assignedType keeps the default ot-page type',
-        () async {
-      final objectResult = await createCommand('Plain object', db, config);
-      final replayed = await _replayObject(db, config, objectResult.objectId);
-      expect(replayed.snapshot.objectTypes, ['ot-page']);
-      expect(replayed.snapshot.details.fields.containsKey('type'), isFalse);
-    });
+    test(
+      'createCommand without assignedType keeps the default ot-page type',
+      () async {
+        final objectResult = await createCommand('Plain object', db, config);
+        final replayed = await _replayObject(db, config, objectResult.objectId);
+        expect(replayed.snapshot.objectTypes, ['ot-page']);
+        expect(replayed.snapshot.details.fields.containsKey('type'), isFalse);
+      },
+    );
 
     test('creates normal objects by cloning template state', () async {
       final typeResult = await createCommand(
@@ -279,46 +283,48 @@ void main() {
       );
     });
 
-    test('applies template name prefill when no positional text is provided',
-        () async {
-      final typeResult = await createCommand(
-        'ignored',
-        db,
-        config,
-        asType: true,
-        name: 'Recipe',
-      );
-      final typeId = typeResult.objectId;
+    test(
+      'applies template name prefill when no positional text is provided',
+      () async {
+        final typeResult = await createCommand(
+          'ignored',
+          db,
+          config,
+          asType: true,
+          name: 'Recipe',
+        );
+        final typeId = typeResult.objectId;
 
-      final templateResult = await createCommand(
-        'seed body',
-        db,
-        config,
-        asTemplate: true,
-        name: 'Recipe Template',
-        targetObjectType: typeId,
-      );
-      final templateId = templateResult.objectId;
+        final templateResult = await createCommand(
+          'seed body',
+          db,
+          config,
+          asTemplate: true,
+          name: 'Recipe Template',
+          targetObjectType: typeId,
+        );
+        final templateId = templateResult.objectId;
 
-      final objectResult = await createCommand(
-        '',
-        db,
-        config,
-        templateId: templateId,
-        textProvided: false,
-      );
-      final objectId = objectResult.objectId;
+        final objectResult = await createCommand(
+          '',
+          db,
+          config,
+          templateId: templateId,
+          textProvided: false,
+        );
+        final objectId = objectResult.objectId;
 
-      final replayed = await _replayObject(db, config, objectId);
-      expect(
-        replayed.snapshot.details.fields['name']?.stringValue,
-        'Recipe Template',
-      );
-      final titleBlock = replayed.snapshot.blocks.firstWhere(
-        (block) => block.id == 'title',
-      );
-      expect(titleBlock.text.text, 'Recipe Template');
-    });
+        final replayed = await _replayObject(db, config, objectId);
+        expect(
+          replayed.snapshot.details.fields['name']?.stringValue,
+          'Recipe Template',
+        );
+        final titleBlock = replayed.snapshot.blocks.firstWhere(
+          (block) => block.id == 'title',
+        );
+        expect(titleBlock.text.text, 'Recipe Template');
+      },
+    );
   });
 }
 
@@ -333,11 +339,8 @@ Future<ReplayedObjectState> _replayObject(
     ..setRange(32, 64, identity.accountKeyPair.publicKey);
   final spaceKey = await deriveSpaceKey(accountPrivRaw);
   final treeKey = await deriveTreeKey(spaceKey, objectId);
-  final rawTreeChanges = (await db.getChangesForObject(objectId))
-      .map((change) => Uint8List.fromList(change.rawBytes))
-      .toList();
-  return replayObjectState(
-    rawTreeChanges: rawTreeChanges,
-    treeKey: treeKey,
-  );
+  final rawTreeChanges = (await db.getChangesForObject(
+    objectId,
+  )).map((change) => Uint8List.fromList(change.rawBytes)).toList();
+  return replayObjectState(rawTreeChanges: rawTreeChanges, treeKey: treeKey);
 }

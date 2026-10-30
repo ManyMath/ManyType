@@ -34,14 +34,15 @@ SmartBlockSnapshotBase _buildSnapshotBaseFromReplay(
     // No root block was replayed: hang the top-level blocks off a fresh
     // root + layout skeleton and keep nested blocks under their parents.
     final childIds = {for (final block in blocks) ...block.childrenIds};
-    snapshot = createMinimalSnapshot(rootId, [
-      for (final block in blocks)
-        if (!childIds.contains(block.id)) block,
-    ])
-      ..blocks.addAll([
-        for (final block in blocks)
-          if (childIds.contains(block.id)) block,
-      ]);
+    snapshot =
+        createMinimalSnapshot(rootId, [
+            for (final block in blocks)
+              if (!childIds.contains(block.id)) block,
+          ])
+          ..blocks.addAll([
+            for (final block in blocks)
+              if (childIds.contains(block.id)) block,
+          ]);
   }
   if (replayed.details.fields.isNotEmpty) {
     snapshot.details = replayed.details.deepCopy();
@@ -50,8 +51,9 @@ SmartBlockSnapshotBase _buildSnapshotBaseFromReplay(
     snapshot.collections = replayed.collections.deepCopy();
   }
   snapshot.objectTypes.addAll(replayed.objectTypes);
-  snapshot.relationLinks
-      .addAll(replayed.relationLinks.values.map((link) => link.deepCopy()));
+  snapshot.relationLinks.addAll(
+    replayed.relationLinks.values.map((link) => link.deepCopy()),
+  );
   snapshot.removedCollectionKeys.addAll(replayed.removedCollectionKeys);
   if (replayed.originalCreatedTimestamp != null) {
     snapshot.originalCreatedTimestamp = replayed.originalCreatedTimestamp!;

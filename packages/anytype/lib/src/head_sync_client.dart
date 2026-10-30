@@ -3,11 +3,8 @@ import 'dart:typed_data';
 import 'package:fixnum/fixnum.dart';
 import 'package:manytype_protocol/spacesync.dart';
 
-typedef HeadSyncUnaryInvoker = Uint8List Function(
-  int handleId,
-  String method,
-  Uint8List payload,
-);
+typedef HeadSyncUnaryInvoker =
+    Uint8List Function(int handleId, String method, Uint8List payload);
 
 class HeadSyncClient {
   HeadSyncClient({
@@ -17,12 +14,12 @@ class HeadSyncClient {
     int compareThreshold = 256,
     int maxRounds = 64,
     int maxPendingRanges = 1 << 16,
-  })  : _invoker = invoker,
-        _diffType = diffType,
-        _divideFactor = divideFactor,
-        _compareThreshold = compareThreshold,
-        _maxRounds = maxRounds,
-        _maxPendingRanges = maxPendingRanges;
+  }) : _invoker = invoker,
+       _diffType = diffType,
+       _divideFactor = divideFactor,
+       _compareThreshold = compareThreshold,
+       _maxRounds = maxRounds,
+       _maxPendingRanges = maxPendingRanges;
 
   final HeadSyncUnaryInvoker _invoker;
   final DiffType _diffType;
@@ -41,9 +38,7 @@ class HeadSyncClient {
 
     while (pending.isNotEmpty) {
       if (++rounds > _maxRounds) {
-        throw StateError(
-          'HeadSync did not converge after $_maxRounds rounds',
-        );
+        throw StateError('HeadSync did not converge after $_maxRounds rounds');
       }
       print('HeadSync: pending ranges=${pending.length}');
       final request = HeadSyncRequest(
@@ -52,8 +47,11 @@ class HeadSyncClient {
         ranges: pending,
       );
       final requestBytes = Uint8List.fromList(request.writeToBuffer());
-      final responseBytes =
-          _invoker(handleId, '/spacesync.SpaceSync/HeadSync', requestBytes);
+      final responseBytes = _invoker(
+        handleId,
+        '/spacesync.SpaceSync/HeadSync',
+        requestBytes,
+      );
       final response = HeadSyncResponse.fromBuffer(responseBytes);
       if (response.results.length != pending.length) {
         throw StateError(
@@ -116,11 +114,11 @@ class HeadSyncClient {
   }
 
   HeadSyncRange _fullRange({required bool elements}) => HeadSyncRange(
-        from: Int64.ZERO,
-        to: _uint64ToProto(_u64Mask),
-        elements: elements,
-        limit: 0,
-      );
+    from: Int64.ZERO,
+    to: _uint64ToProto(_u64Mask),
+    elements: elements,
+    limit: 0,
+  );
 
   void _addSubdivided(List<HeadSyncRange> ranges, HeadSyncRange range) {
     ranges.addAll(_subdivide(range));
@@ -152,7 +150,8 @@ class HeadSyncClient {
       ];
     }
     var perRange = (to - from) ~/ BigInt.from(_divideFactor);
-    final align = ((to - from) % BigInt.from(_divideFactor) + BigInt.one) %
+    final align =
+        ((to - from) % BigInt.from(_divideFactor) + BigInt.one) %
         BigInt.from(_divideFactor);
     if (align == BigInt.zero) {
       perRange += BigInt.one;
@@ -191,7 +190,8 @@ BigInt _protoToUint64(Int64 value) {
 
 Int64 _uint64ToProto(BigInt value) {
   final normalized = value & _u64Mask;
-  final signed =
-      normalized >= _u64SignBit ? normalized - _u64Modulus : normalized;
+  final signed = normalized >= _u64SignBit
+      ? normalized - _u64Modulus
+      : normalized;
   return Int64.parseInt(signed.toString());
 }

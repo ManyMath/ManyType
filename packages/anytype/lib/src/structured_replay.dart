@@ -126,8 +126,9 @@ Future<ReplayedObjectBlocks?> replayObjectBlocks(
   final spaceKey = await deriveSpaceKey(accountPrivRaw);
   final treeKey = await deriveTreeKey(spaceKey, objectId);
 
-  final rawTreeChanges =
-      changes.map((change) => Uint8List.fromList(change.rawBytes)).toList();
+  final rawTreeChanges = changes
+      .map((change) => Uint8List.fromList(change.rawBytes))
+      .toList();
   final replayed = await replayObjectState(
     rawTreeChanges: rawTreeChanges,
     treeKey: treeKey,
@@ -214,11 +215,7 @@ class ReplayedRelationView {
 
 /// One resolved (or unresolved) tag-relation option value.
 class ReplayedTagOption {
-  const ReplayedTagOption({
-    required this.optionId,
-    this.name,
-    this.color,
-  });
+  const ReplayedTagOption({required this.optionId, this.name, this.color});
 
   final String optionId;
   final String? name;
@@ -262,8 +259,9 @@ Future<ReplayedObjectRelations?> replayObjectRelations(
   final spaceKey = await deriveSpaceKey(accountPrivRaw);
   final treeKey = await deriveTreeKey(spaceKey, objectId);
 
-  final rawTreeChanges =
-      changes.map((change) => Uint8List.fromList(change.rawBytes)).toList();
+  final rawTreeChanges = changes
+      .map((change) => Uint8List.fromList(change.rawBytes))
+      .toList();
   final replayed = await replayObjectState(
     rawTreeChanges: rawTreeChanges,
     treeKey: treeKey,
@@ -277,14 +275,17 @@ Future<ReplayedObjectRelations?> replayObjectRelations(
     final relationFormats = <String, RelationFormat>{};
     for (final obj in spaceObjects) {
       final rawRows = await db.getChangesForObject(obj.id);
-      final rawTreeChanges =
-          rawRows.map((r) => Uint8List.fromList(r.rawBytes)).toList();
+      final rawTreeChanges = rawRows
+          .map((r) => Uint8List.fromList(r.rawBytes))
+          .toList();
       final objTreeKey = await deriveTreeKey(spaceKey, obj.id);
-      optionInputs.add(OptionIndexInput(
-        objectId: obj.id,
-        rawTreeChanges: rawTreeChanges,
-        treeKey: objTreeKey,
-      ));
+      optionInputs.add(
+        OptionIndexInput(
+          objectId: obj.id,
+          rawTreeChanges: rawTreeChanges,
+          treeKey: objTreeKey,
+        ),
+      );
       if (extractRootSmartBlockType(rawTreeChanges) !=
           SmartBlockType.STRelation.value) {
         continue;
@@ -360,8 +361,8 @@ RelationFormat? _relationFormatFromValue(Value? value) {
   final intValue = value.hasNumberValue()
       ? value.numberValue.round()
       : value.hasStringValue()
-          ? double.tryParse(value.stringValue)?.round()
-          : null;
+      ? double.tryParse(value.stringValue)?.round()
+      : null;
   return intValue == null ? null : RelationFormat.valueOf(intValue);
 }
 

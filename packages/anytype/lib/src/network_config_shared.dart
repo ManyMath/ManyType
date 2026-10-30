@@ -92,9 +92,7 @@ String chooseBestAddress(Iterable<String> addresses) {
     throw StateError('No usable addresses available');
   }
 
-  int score(
-    ({String raw, String normalized, bool isQuic}) candidate,
-  ) {
+  int score(({String raw, String normalized, bool isQuic}) candidate) {
     final host = candidate.normalized.split(':').first;
     final isLocal = host == '127.0.0.1' || host == 'localhost';
     if (candidate.isQuic && isLocal) return 0;
@@ -128,10 +126,7 @@ NetworkConfigNode requireFileNode(NetworkConfigFile config) {
   return requireNodeByType(config, 'file');
 }
 
-NetworkConfigNode requireNodeByType(
-  NetworkConfigFile config,
-  String nodeType,
-) {
+NetworkConfigNode requireNodeByType(NetworkConfigFile config, String nodeType) {
   final normalized = nodeType.toLowerCase();
   return config.nodes.firstWhere(
     (node) =>

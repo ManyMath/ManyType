@@ -329,8 +329,9 @@ Future<CreateResult> createCommand(
       ..fields['name'] = Value(stringValue: displayName)
       ..fields['uniqueKey'] = Value(stringValue: _toUniqueKey(displayName))
       ..fields['layout'] = Value(numberValue: 5.0)
-      ..fields['relationFormat'] =
-          Value(numberValue: _parseRelationFormat(format).value.toDouble())
+      ..fields['relationFormat'] = Value(
+        numberValue: _parseRelationFormat(format).value.toDouble(),
+      )
       ..fields['tag'] = Value(listValue: ListValue())
       ..fields['internalFlags'] = Value(listValue: ListValue());
   } else if (asSet) {
@@ -394,9 +395,7 @@ Future<CreateResult> createCommand(
       ..addAll(['ot-template', targetType.uniqueKey]);
     snapshotBase.details = Struct()
       ..fields['name'] = Value(stringValue: displayName)
-      ..fields['targetObjectType'] = Value(
-        stringValue: targetType.objectId,
-      )
+      ..fields['targetObjectType'] = Value(stringValue: targetType.objectId)
       ..fields['templateNamePrefillType'] = Value(
         numberValue: TemplateNamePrefillType.FromTemplateName.value.toDouble(),
       )
@@ -427,20 +426,23 @@ Future<CreateResult> createCommand(
         snapshotBase.objectTypes
           ..clear()
           ..add(resolvedType.uniqueKey);
-        snapshotBase.details.fields['type'] =
-            Value(stringValue: resolvedType.objectId);
+        snapshotBase.details.fields['type'] = Value(
+          stringValue: resolvedType.objectId,
+        );
       }
     }
   }
 
   final initialContentBlocks = <Block>[];
   if (checkbox) {
-    initialContentBlocks
-        .add(createListBlock(_blockId('cb-'), text, checkbox: true));
+    initialContentBlocks.add(
+      createListBlock(_blockId('cb-'), text, checkbox: true),
+    );
   }
   if (numberedList) {
-    initialContentBlocks
-        .add(createListBlock(_blockId('num-'), text, numbered: true));
+    initialContentBlocks.add(
+      createListBlock(_blockId('num-'), text, numbered: true),
+    );
   }
   if (toggle) {
     initialContentBlocks.add(createToggleBlock(_blockId('tog-'), text));
@@ -509,8 +511,9 @@ Future<CreateResult> createCommand(
       if (obj.id == objectId) continue;
       final parentRawChanges = await db.getChangesForObject(obj.id);
       if (parentRawChanges.isEmpty) continue;
-      final rawBytesList =
-          parentRawChanges.map((r) => Uint8List.fromList(r.rawBytes)).toList();
+      final rawBytesList = parentRawChanges
+          .map((r) => Uint8List.fromList(r.rawBytes))
+          .toList();
       // Filter by smart_block_type == STRelation (527) via the root-change
       // varint helper shipped by Plan 01. This matches the list.dart pattern.
       final sbType = extractRootSmartBlockType(rawBytesList);
@@ -533,7 +536,8 @@ Future<CreateResult> createCommand(
       // way.
       final storedUnique = candidateDetails['uniqueKey']?.stringValue ?? '';
       final storedRelKey = candidateDetails['relationKey']?.stringValue ?? '';
-      final matches = storedUnique == forRelation ||
+      final matches =
+          storedUnique == forRelation ||
           storedUnique == 'rel-$forRelation' ||
           storedRelKey == forRelation ||
           storedRelKey == 'rel-$forRelation';
@@ -562,8 +566,10 @@ Future<CreateResult> createCommand(
       ..relationKey = forRelation!;
 
     final currentSelectDict = parentDetails!['selectDict'];
-    final updatedSelectDict =
-        appendOptionToSelectDict(currentSelectDict, newOption);
+    final updatedSelectDict = appendOptionToSelectDict(
+      currentSelectDict,
+      newOption,
+    );
 
     // Locate the parent's snapshot base (its root change: parents.isEmpty).
     final parentChanges = await db.getChangesForObject(parentStRelationId);
@@ -654,18 +660,18 @@ Future<CreateResult> createCommand(
   final objectKind = asType
       ? 'type'
       : asRelation
-          ? 'relation'
-          : asSet
-              ? 'set'
-              : asCollection
-                  ? 'collection'
-                  : asTemplate
-                      ? 'template'
-                      : templateId != null
-                          ? 'object'
-                          : asRelationOption
-                              ? 'relation-option'
-                              : 'object';
+      ? 'relation'
+      : asSet
+      ? 'set'
+      : asCollection
+      ? 'collection'
+      : asTemplate
+      ? 'template'
+      : templateId != null
+      ? 'object'
+      : asRelationOption
+      ? 'relation-option'
+      : 'object';
   return CreateResult(
     objectId: objectId,
     spaceId: spaceId,
@@ -691,10 +697,7 @@ class _PreparedSnapshot {
   final SmartBlockSnapshotBase snapshot;
   final String displayName;
 
-  const _PreparedSnapshot({
-    required this.snapshot,
-    required this.displayName,
-  });
+  const _PreparedSnapshot({required this.snapshot, required this.displayName});
 }
 
 Future<_ResolvedTargetObjectType> _resolveTargetObjectType(
@@ -707,8 +710,9 @@ Future<_ResolvedTargetObjectType> _resolveTargetObjectType(
     throw StateError('Target object type not found: $objectId');
   }
 
-  final rawTreeChanges =
-      changes.map((change) => Uint8List.fromList(change.rawBytes)).toList();
+  final rawTreeChanges = changes
+      .map((change) => Uint8List.fromList(change.rawBytes))
+      .toList();
   final smartBlockType = extractRootSmartBlockType(rawTreeChanges);
   if (smartBlockType != SmartBlockType.STType.value) {
     throw StateError(
@@ -729,10 +733,7 @@ Future<_ResolvedTargetObjectType> _resolveTargetObjectType(
     );
   }
 
-  return _ResolvedTargetObjectType(
-    objectId: objectId,
-    uniqueKey: uniqueKey,
-  );
+  return _ResolvedTargetObjectType(objectId: objectId, uniqueKey: uniqueKey);
 }
 
 Future<_PreparedSnapshot> _buildSnapshotFromTemplate(
@@ -748,8 +749,9 @@ Future<_PreparedSnapshot> _buildSnapshotFromTemplate(
     throw StateError('Template not found: $templateId');
   }
 
-  final rawTreeChanges =
-      changes.map((change) => Uint8List.fromList(change.rawBytes)).toList();
+  final rawTreeChanges = changes
+      .map((change) => Uint8List.fromList(change.rawBytes))
+      .toList();
   final templateTreeKey = await deriveTreeKey(spaceKey, templateId);
   final replayed = await replayObjectState(
     rawTreeChanges: rawTreeChanges,
@@ -762,8 +764,10 @@ Future<_PreparedSnapshot> _buildSnapshotFromTemplate(
     );
   }
 
-  final targetObjectTypeId =
-      _stringDetail(replayed.snapshot.details, 'targetObjectType');
+  final targetObjectTypeId = _stringDetail(
+    replayed.snapshot.details,
+    'targetObjectType',
+  );
   if (targetObjectTypeId.isEmpty) {
     throw StateError('Template $templateId is missing targetObjectType');
   }
@@ -774,16 +778,16 @@ Future<_PreparedSnapshot> _buildSnapshotFromTemplate(
   );
 
   final templateName = _stringDetail(replayed.snapshot.details, 'name');
-  final prefillType = replayed
-          .snapshot.details.fields['templateNamePrefillType']?.numberValue
+  final prefillType =
+      replayed.snapshot.details.fields['templateNamePrefillType']?.numberValue
           .toInt() ??
       TemplateNamePrefillType.Empty.value;
   final displayName = textProvided
       ? requestedText
       : (prefillType == TemplateNamePrefillType.FromTemplateName.value &&
-              templateName.isNotEmpty
-          ? templateName
-          : 'Untitled');
+                templateName.isNotEmpty
+            ? templateName
+            : 'Untitled');
 
   final snapshot = replayed.snapshot.deepCopy();
   snapshot.objectTypes
@@ -811,10 +815,7 @@ Future<_PreparedSnapshot> _buildSnapshotFromTemplate(
   snapshot.details = details;
   _rewriteTitleBlock(snapshot, displayName);
 
-  return _PreparedSnapshot(
-    snapshot: snapshot,
-    displayName: displayName,
-  );
+  return _PreparedSnapshot(snapshot: snapshot, displayName: displayName);
 }
 
 String _stringDetail(Struct details, String key) {
@@ -848,10 +849,7 @@ Future<RawRecordWithId> _buildDerivedAclRoot({
     ..setRange(32, 64, accountPublicKey);
   final readKey = await deriveSpaceKey(accountPrivRaw);
   final readKeyProto = Uint8List.fromList(
-    Key(
-      type: KeyType.AES,
-      data: readKey,
-    ).writeToBuffer(),
+    Key(type: KeyType.AES, data: readKey).writeToBuffer(),
   );
 
   final metadataSeed = await slip21Derive(
@@ -864,10 +862,7 @@ Future<RawRecordWithId> _buildDerivedAclRoot({
     ..setRange(0, 32, metadataSeed)
     ..setRange(32, 64, metadataKeyPair.publicKey);
   final metadataPrivKeyProto = Uint8List.fromList(
-    Key(
-      type: KeyType.Ed25519Private,
-      data: metadataPrivKeyRaw,
-    ).writeToBuffer(),
+    Key(type: KeyType.Ed25519Private, data: metadataPrivKeyRaw).writeToBuffer(),
   );
   final encryptedMetadataPrivKey = await aesGcmEncrypt(
     readKey,
@@ -899,24 +894,15 @@ Future<RawRecordWithId> _buildDerivedAclRoot({
   );
   final aclRootBytes = Uint8List.fromList(aclRoot.writeToBuffer());
   final signature = await ed25519Sign(accountSeed, aclRootBytes);
-  final rawRecord = RawRecord(
-    payload: aclRootBytes,
-    signature: signature,
-  );
+  final rawRecord = RawRecord(payload: aclRootBytes, signature: signature);
   final rawRecordBytes = Uint8List.fromList(rawRecord.writeToBuffer());
   final cid = await computeCid(rawRecordBytes);
-  return RawRecordWithId(
-    payload: rawRecordBytes,
-    id: cid,
-  );
+  return RawRecordWithId(payload: rawRecordBytes, id: cid);
 }
 
 Uint8List _marshalEd25519PublicKey(Uint8List publicKey) => Uint8List.fromList(
-      Key(
-        type: KeyType.Ed25519Public,
-        data: publicKey,
-      ).writeToBuffer(),
-    );
+  Key(type: KeyType.Ed25519Public, data: publicKey).writeToBuffer(),
+);
 
 Future<String> _findAclRootId(
   ManytypeDatabase db,

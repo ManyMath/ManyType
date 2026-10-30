@@ -11,48 +11,56 @@ import 'package:test/test.dart';
 final _seed = Uint8List.fromList(List.generate(32, (i) => i + 1));
 
 Future<RawTreeChangeWithId> _root() => buildRootChange(
-      spaceId: 'space-1',
-      aclHeadId: 'acl-1',
-      identityPrivateKey: _seed,
-      // SmartBlockType 16 (Page).
-      changePayload: const [0x08, 0x10],
-    );
+  spaceId: 'space-1',
+  aclHeadId: 'acl-1',
+  identityPrivateKey: _seed,
+  // SmartBlockType 16 (Page).
+  changePayload: const [0x08, 0x10],
+);
 
 Future<RawTreeChangeWithId> _change(
   List<String> parents,
   Change change, {
   bool isSnapshot = false,
-}) =>
-    buildTreeChange(
-      currentHeads: parents,
-      aclHeadId: 'acl-1',
-      snapshotBaseId: '',
-      changesData: Uint8List.fromList(change.writeToBuffer()),
-      identityPrivateKey: _seed,
-      isSnapshot: isSnapshot,
-    );
+}) => buildTreeChange(
+  currentHeads: parents,
+  aclHeadId: 'acl-1',
+  snapshotBaseId: '',
+  changesData: Uint8List.fromList(change.writeToBuffer()),
+  identityPrivateKey: _seed,
+  isSnapshot: isSnapshot,
+);
 
 Change _snapshot(String text) => Change(
-      snapshot: Change_Snapshot(
-        data: SmartBlockSnapshotBase(blocks: [
-          Block(id: 'obj', childrenIds: ['t']),
-          Block(id: 't', text: Block_Content_Text(text: text)),
-        ]),
-      ),
-    );
+  snapshot: Change_Snapshot(
+    data: SmartBlockSnapshotBase(
+      blocks: [
+        Block(id: 'obj', childrenIds: ['t']),
+        Block(
+          id: 't',
+          text: Block_Content_Text(text: text),
+        ),
+      ],
+    ),
+  ),
+);
 
-Change _setText(String text) => Change(content: [
-      Change_Content(
-        blockUpdate: Change_BlockUpdate(events: [
+Change _setText(String text) => Change(
+  content: [
+    Change_Content(
+      blockUpdate: Change_BlockUpdate(
+        events: [
           Event_Message(
             blockSetText: Event_Block_Set_Text(
               id: 't',
               text: Event_Block_Set_Text_TextValue(value: text),
             ),
           ).writeToBuffer(),
-        ]),
+        ],
       ),
-    ]);
+    ),
+  ],
+);
 
 Future<SmartBlockSnapshotBase> _replay(
   List<RawTreeChangeWithId> changes,
@@ -82,12 +90,14 @@ Future<Map<String, Block>> _replayOnTree(
     [root.id],
     Change(
       snapshot: Change_Snapshot(
-        data: SmartBlockSnapshotBase(blocks: [
-          Block(id: root.id, childrenIds: ['p1', 'p2']),
-          Block(id: 'p1', childrenIds: ['x']),
-          Block(id: 'p2'),
-          Block(id: 'x'),
-        ]),
+        data: SmartBlockSnapshotBase(
+          blocks: [
+            Block(id: root.id, childrenIds: ['p1', 'p2']),
+            Block(id: 'p1', childrenIds: ['x']),
+            Block(id: 'p2'),
+            Block(id: 'x'),
+          ],
+        ),
       ),
     ),
     isSnapshot: true,
@@ -102,26 +112,40 @@ Future<Map<String, Block>> _replayOnTree(
 
 void main() {
   group('replayObjectState snapshots', () {
-    test('a concurrent snapshot does not discard sibling-branch edits',
-        () async {
-      final root = await _root();
-      final s0 =
-          await _change([root.id], _snapshot('original'), isSnapshot: true);
-      final a1 = await _change([s0.id], _setText('edited-by-A'));
-      // Snapshot made on another device from s0, without a1.
-      final s1 =
-          await _change([s0.id], _snapshot('original'), isSnapshot: true);
+    test(
+      'a concurrent snapshot does not discard sibling-branch edits',
+      () async {
+        final root = await _root();
+        final s0 = await _change(
+          [root.id],
+          _snapshot('original'),
+          isSnapshot: true,
+        );
+        final a1 = await _change([s0.id], _setText('edited-by-A'));
+        // Snapshot made on another device from s0, without a1.
+        final s1 = await _change(
+          [s0.id],
+          _snapshot('original'),
+          isSnapshot: true,
+        );
 
-      expect(await _replayedText([root, s0, a1, s1]), 'edited-by-A');
-    });
+        expect(await _replayedText([root, s0, a1, s1]), 'edited-by-A');
+      },
+    );
 
     test('a snapshot built on every replayed change resets state', () async {
       final root = await _root();
-      final s0 =
-          await _change([root.id], _snapshot('original'), isSnapshot: true);
+      final s0 = await _change(
+        [root.id],
+        _snapshot('original'),
+        isSnapshot: true,
+      );
       final a1 = await _change([s0.id], _setText('edited'));
-      final s1 =
-          await _change([a1.id], _snapshot('compacted'), isSnapshot: true);
+      final s1 = await _change(
+        [a1.id],
+        _snapshot('compacted'),
+        isSnapshot: true,
+      );
 
       expect(await _replayedText([root, s0, a1, s1]), 'compacted');
     });
@@ -131,20 +155,22 @@ void main() {
       final root = await _root();
       final set = await _change(
         [root.id],
-        Change(content: [
-          Change_Content(
-            detailsSet: Change_DetailsSet(
-              key: 'tag',
-              value: Value(stringValue: 'x'),
+        Change(
+          content: [
+            Change_Content(
+              detailsSet: Change_DetailsSet(
+                key: 'tag',
+                value: Value(stringValue: 'x'),
+              ),
             ),
-          ),
-        ]),
+          ],
+        ),
       );
       final clear = await _change(
         [set.id],
-        Change(content: [
-          Change_Content(detailsSet: Change_DetailsSet(key: 'tag')),
-        ]),
+        Change(
+          content: [Change_Content(detailsSet: Change_DetailsSet(key: 'tag'))],
+        ),
       );
 
       final snapshot = await _replay([root, set, clear]);
@@ -152,26 +178,33 @@ void main() {
     });
 
     test('blockCreate without a target inserts into the root', () async {
-      final appended = await _replayOnTree((_) => [
-            Change_Content(
-                blockCreate: Change_BlockCreate(blocks: [Block(id: 'n')])),
-          ]);
+      final appended = await _replayOnTree(
+        (_) => [
+          Change_Content(
+            blockCreate: Change_BlockCreate(blocks: [Block(id: 'n')]),
+          ),
+        ],
+      );
       expect(appended['root']!.childrenIds, ['p1', 'p2', 'n']);
 
-      final prepended = await _replayOnTree((_) => [
-            Change_Content(
-              blockCreate: Change_BlockCreate(
-                position: Block_Position.InnerFirst,
-                blocks: [Block(id: 'n')],
-              ),
+      final prepended = await _replayOnTree(
+        (_) => [
+          Change_Content(
+            blockCreate: Change_BlockCreate(
+              position: Block_Position.InnerFirst,
+              blocks: [Block(id: 'n')],
             ),
-          ]);
+          ),
+        ],
+      );
       expect(prepended['root']!.childrenIds, ['n', 'p1', 'p2']);
     });
 
-    test('blockCreate keeps an existing root and moves re-created blocks',
-        () async {
-      final blocks = await _replayOnTree((_) => [
+    test(
+      'blockCreate keeps an existing root and moves re-created blocks',
+      () async {
+        final blocks = await _replayOnTree(
+          (_) => [
             Change_Content(
               blockCreate: Change_BlockCreate(
                 targetId: 'p2',
@@ -179,31 +212,39 @@ void main() {
                 blocks: [Block(id: 'x')],
               ),
             ),
-          ]);
-      expect(blocks['p1']!.childrenIds, isEmpty);
-      expect(blocks['p2']!.childrenIds, ['x']);
+          ],
+        );
+        expect(blocks['p1']!.childrenIds, isEmpty);
+        expect(blocks['p2']!.childrenIds, ['x']);
 
-      final recreated = await _replayOnTree((rootId) => [
+        final recreated = await _replayOnTree(
+          (rootId) => [
             Change_Content(
-              blockCreate: Change_BlockCreate(blocks: [
-                Block(id: rootId),
-                Block(id: 'n'),
-              ]),
-            ),
-          ]);
-      expect(recreated['root']!.childrenIds, ['p1', 'p2', 'n']);
-    });
-
-    test('blockDuplicate is ignored', () async {
-      final blocks = await _replayOnTree((_) => [
-            Change_Content(
-              blockDuplicate: Change_BlockDuplicate(
-                targetId: 'p2',
-                position: Block_Position.Inner,
-                ids: ['x', 'missing'],
+              blockCreate: Change_BlockCreate(
+                blocks: [
+                  Block(id: rootId),
+                  Block(id: 'n'),
+                ],
               ),
             ),
-          ]);
+          ],
+        );
+        expect(recreated['root']!.childrenIds, ['p1', 'p2', 'n']);
+      },
+    );
+
+    test('blockDuplicate is ignored', () async {
+      final blocks = await _replayOnTree(
+        (_) => [
+          Change_Content(
+            blockDuplicate: Change_BlockDuplicate(
+              targetId: 'p2',
+              position: Block_Position.Inner,
+              ids: ['x', 'missing'],
+            ),
+          ),
+        ],
+      );
       expect(blocks['p1']!.childrenIds, ['x']);
       expect(blocks['p2']!.childrenIds, isEmpty);
     });
@@ -212,18 +253,24 @@ void main() {
       final root = await _root();
       final change = await _change(
         [root.id],
-        Change(content: [
-          Change_Content(
-            relationAdd: Change_RelationAdd(relationLinks: [
-              RelationLink(key: 'status', format: RelationFormat.status),
-            ]),
-          ),
-          Change_Content(
-            relationAdd: Change_RelationAdd(relationLinks: [
-              RelationLink(key: 'status', format: RelationFormat.tag),
-            ]),
-          ),
-        ]),
+        Change(
+          content: [
+            Change_Content(
+              relationAdd: Change_RelationAdd(
+                relationLinks: [
+                  RelationLink(key: 'status', format: RelationFormat.status),
+                ],
+              ),
+            ),
+            Change_Content(
+              relationAdd: Change_RelationAdd(
+                relationLinks: [
+                  RelationLink(key: 'status', format: RelationFormat.tag),
+                ],
+              ),
+            ),
+          ],
+        ),
       );
 
       final snapshot = await _replay([root, change]);
@@ -235,21 +282,29 @@ void main() {
       final root = await _root();
       final change = await _change(
         [root.id],
-        Change(content: [
-          Change_Content(
-            storeKeySet: Change_StoreKeySet(
-              path: ['objects'],
-              value: Value(
-                listValue: ListValue(values: [
-                  Value(stringValue: 'a'),
-                  Value(stringValue: 'b'),
-                ]),
+        Change(
+          content: [
+            Change_Content(
+              storeKeySet: Change_StoreKeySet(
+                path: ['objects'],
+                value: Value(
+                  listValue: ListValue(
+                    values: [
+                      Value(stringValue: 'a'),
+                      Value(stringValue: 'b'),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-          buildStoreSliceUpdateAdd(key: 'objects', ids: ['x'], afterId: 'gone'),
-          buildStoreSliceUpdateMove(key: 'objects', ids: ['b', 'gone']),
-        ]),
+            buildStoreSliceUpdateAdd(
+              key: 'objects',
+              ids: ['x'],
+              afterId: 'gone',
+            ),
+            buildStoreSliceUpdateMove(key: 'objects', ids: ['b', 'gone']),
+          ],
+        ),
       );
 
       final snapshot = await _replay([root, change]);
@@ -260,43 +315,50 @@ void main() {
   });
 
   group('replayObjectSnapshot', () {
-    test('skips unreadable changes and needs no root smart block type',
-        () async {
-      final root = await buildRootChange(
-        spaceId: 'space-1',
-        aclHeadId: 'acl-1',
-        identityPrivateKey: _seed,
-      );
-      final base =
-          await _change([root.id], _snapshot('original'), isSnapshot: true);
-      // Claims a read key, so it is decrypted with the wrong key and fails.
-      final unreadable = await buildTreeChange(
-        currentHeads: [base.id],
-        aclHeadId: 'acl-1',
-        snapshotBaseId: base.id,
-        changesData: Uint8List.fromList(_setText('lost').writeToBuffer()),
-        identityPrivateKey: _seed,
-        readKeyId: 'acl-1',
-      );
-      final edit = await _change([unreadable.id], _setText('edited'));
-      final rawTreeChanges = [
-        for (final change in [root, base, unreadable, edit])
-          Uint8List.fromList(change.rawChange),
-      ];
+    test(
+      'skips unreadable changes and needs no root smart block type',
+      () async {
+        final root = await buildRootChange(
+          spaceId: 'space-1',
+          aclHeadId: 'acl-1',
+          identityPrivateKey: _seed,
+        );
+        final base = await _change(
+          [root.id],
+          _snapshot('original'),
+          isSnapshot: true,
+        );
+        // Claims a read key, so it is decrypted with the wrong key and fails.
+        final unreadable = await buildTreeChange(
+          currentHeads: [base.id],
+          aclHeadId: 'acl-1',
+          snapshotBaseId: base.id,
+          changesData: Uint8List.fromList(_setText('lost').writeToBuffer()),
+          identityPrivateKey: _seed,
+          readKeyId: 'acl-1',
+        );
+        final edit = await _change([unreadable.id], _setText('edited'));
+        final rawTreeChanges = [
+          for (final change in [root, base, unreadable, edit])
+            Uint8List.fromList(change.rawChange),
+        ];
 
-      await expectLater(
-        replayObjectState(
-            rawTreeChanges: rawTreeChanges, treeKey: Uint8List(32)),
-        throwsStateError,
-      );
-      final snapshot = await replayObjectSnapshot(
-        rawTreeChanges: rawTreeChanges,
-        treeKey: Uint8List(32),
-      );
-      expect(
-        snapshot.blocks.firstWhere((b) => b.id == 't').text.text,
-        'edited',
-      );
-    });
+        await expectLater(
+          replayObjectState(
+            rawTreeChanges: rawTreeChanges,
+            treeKey: Uint8List(32),
+          ),
+          throwsStateError,
+        );
+        final snapshot = await replayObjectSnapshot(
+          rawTreeChanges: rawTreeChanges,
+          treeKey: Uint8List(32),
+        );
+        expect(
+          snapshot.blocks.firstWhere((b) => b.id == 't').text.text,
+          'edited',
+        );
+      },
+    );
   });
 }

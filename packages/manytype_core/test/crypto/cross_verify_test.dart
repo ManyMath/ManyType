@@ -16,29 +16,20 @@ void main() {
     test('SLIP-0010 produces expected identity private key', () async {
       final seed = mnemonicToSeed(testMnemonic);
       final derived = await deriveIdentityKey(seed, index: 0);
-      expect(
-        hex.encode(derived.privateKey),
-        equals(testIdentityPrivateKeyHex),
-      );
+      expect(hex.encode(derived.privateKey), equals(testIdentityPrivateKeyHex));
     });
 
     test('SLIP-0010 produces expected account private key', () async {
       final seed = mnemonicToSeed(testMnemonic);
       final derived = await deriveAccountKey(seed, index: 0);
-      expect(
-        hex.encode(derived.privateKey),
-        equals(testAccountPrivateKeyHex),
-      );
+      expect(hex.encode(derived.privateKey), equals(testAccountPrivateKeyHex));
     });
 
     test('Ed25519 public key from identity seed matches reference', () async {
       final seed = mnemonicToSeed(testMnemonic);
       final derived = await deriveIdentityKey(seed, index: 0);
       final keypair = await ed25519KeyPairFromSeed(derived.privateKey);
-      expect(
-        hex.encode(keypair.publicKey),
-        equals(testIdentityPublicKeyHex),
-      );
+      expect(hex.encode(keypair.publicKey), equals(testIdentityPublicKeyHex));
     });
 
     test('SLIP-0021 produces expected space key', () async {
@@ -60,20 +51,21 @@ void main() {
     });
 
     test(
-        'AES-256-GCM format matches Go: [12-byte nonce][ciphertext][16-byte tag]',
-        () async {
-      final key = Uint8List(32); // zero key for test
-      final plaintext = utf8.encode('hello anytype');
-      final encrypted = await aesGcmEncrypt(
-        key,
-        Uint8List.fromList(plaintext),
-      );
-      // Verify format: 12 bytes nonce + plaintext.length + 16 bytes tag
-      expect(encrypted.length, equals(12 + plaintext.length + 16));
-      // Verify round-trip
-      final decrypted = await aesGcmDecrypt(key, encrypted);
-      expect(decrypted, equals(plaintext));
-    });
+      'AES-256-GCM format matches Go: [12-byte nonce][ciphertext][16-byte tag]',
+      () async {
+        final key = Uint8List(32); // zero key for test
+        final plaintext = utf8.encode('hello anytype');
+        final encrypted = await aesGcmEncrypt(
+          key,
+          Uint8List.fromList(plaintext),
+        );
+        // Verify format: 12 bytes nonce + plaintext.length + 16 bytes tag
+        expect(encrypted.length, equals(12 + plaintext.length + 16));
+        // Verify round-trip
+        final decrypted = await aesGcmDecrypt(key, encrypted);
+        expect(decrypted, equals(plaintext));
+      },
+    );
 
     test('Ed25519 sign/verify round-trip with derived identity key', () async {
       final seed = mnemonicToSeed(testMnemonic);
@@ -107,10 +99,7 @@ void main() {
       final seed = mnemonicToSeed(testMnemonic);
       final derived = await deriveIdentityKey(seed, index: 0);
       // Rust derives the same private key at m/44'/2046'/0'/0'
-      expect(
-        hex.encode(derived.privateKey),
-        equals(testIdentityPrivateKeyHex),
-      );
+      expect(hex.encode(derived.privateKey), equals(testIdentityPrivateKeyHex));
     });
 
     test('Ed25519 public key matches Rust output', () async {
@@ -118,10 +107,7 @@ void main() {
       final derived = await deriveIdentityKey(seed, index: 0);
       final keypair = await ed25519KeyPairFromSeed(derived.privateKey);
       // Rust derives the same public key from the same private seed
-      expect(
-        hex.encode(keypair.publicKey),
-        equals(testIdentityPublicKeyHex),
-      );
+      expect(hex.encode(keypair.publicKey), equals(testIdentityPublicKeyHex));
     });
 
     test('SLIP-0021 space key matches Rust output', () async {

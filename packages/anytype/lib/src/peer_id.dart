@@ -104,8 +104,5 @@ Uint8List? _base58Decode(String input) {
     }
   }
 
-  return Uint8List.fromList([
-    ...List.filled(zeroCount, 0),
-    ...bytes.reversed,
-  ]);
+  return Uint8List.fromList([...List.filled(zeroCount, 0), ...bytes.reversed]);
 }

@@ -22,8 +22,10 @@ void main() {
 
   setUp(() async {
     db = ManytypeDatabase.forTesting(await openDatabaseForTesting());
-    config =
-        CliConfig(mnemonic: testMnemonic, serverAddress: '127.0.0.1:33020');
+    config = CliConfig(
+      mnemonic: testMnemonic,
+      serverAddress: '127.0.0.1:33020',
+    );
   });
 
   tearDown(() async {
@@ -82,32 +84,34 @@ void main() {
     expect(view.dateValue, 1700000000);
   });
 
-  test('preserves an object-reference relation format from STRelation',
-      () async {
-    const relationKey = 'assignee';
-    await createCommand(
-      'Assignee',
-      db,
-      config,
-      asRelation: true,
-      format: 'object',
-    );
-    final person = await createCommand('Ada Lovelace', db, config);
-    final target = await createCommand('Review draft', db, config);
-    await editRelationOffline(
-      target.objectId,
-      db,
-      config,
-      relationKey: relationKey,
-      objectIdValue: person.objectId,
-    );
+  test(
+    'preserves an object-reference relation format from STRelation',
+    () async {
+      const relationKey = 'assignee';
+      await createCommand(
+        'Assignee',
+        db,
+        config,
+        asRelation: true,
+        format: 'object',
+      );
+      final person = await createCommand('Ada Lovelace', db, config);
+      final target = await createCommand('Review draft', db, config);
+      await editRelationOffline(
+        target.objectId,
+        db,
+        config,
+        relationKey: relationKey,
+        objectIdValue: person.objectId,
+      );
 
-    final result = await replayObjectRelations(db, config, target.objectId);
-    final view = result!.relations.singleWhere((r) => r.key == relationKey);
-    expect(view.format, RelationFormat.object);
-    expect(view.objectIdValue, person.objectId);
-    expect(view.stringValue, isNull);
-  });
+      final result = await replayObjectRelations(db, config, target.objectId);
+      final view = result!.relations.singleWhere((r) => r.key == relationKey);
+      expect(view.format, RelationFormat.object);
+      expect(view.objectIdValue, person.objectId);
+      expect(view.stringValue, isNull);
+    },
+  );
 
   test('resolves a status relation value to its option name/color', () async {
     const relationKey = 'priority';
@@ -145,13 +149,7 @@ void main() {
 
   test('resolves tag relation values, in stored order', () async {
     const relationKey = 'labels';
-    await createCommand(
-      'Labels',
-      db,
-      config,
-      asRelation: true,
-      format: 'tag',
-    );
+    await createCommand('Labels', db, config, asRelation: true, format: 'tag');
     final optA = await createCommand(
       'Urgent',
       db,
@@ -186,13 +184,7 @@ void main() {
 
   test('surfaces an orphaned tag option id alongside a resolved one', () async {
     const relationKey = 'labels';
-    await createCommand(
-      'Labels',
-      db,
-      config,
-      asRelation: true,
-      format: 'tag',
-    );
+    await createCommand('Labels', db, config, asRelation: true, format: 'tag');
     final optA = await createCommand(
       'Urgent',
       db,

@@ -7,8 +7,10 @@ import 'web_storage_diagnostics.dart';
 
 /// [onWebStorageDiagnostics] is web-only diagnostics; ignored here since
 /// native storage is always a real, durable, single-process file.
-Future<QueryExecutor> openDatabaseForApp(String dbPath,
-    {WebStorageDiagnosticsCallback? onWebStorageDiagnostics}) async {
+Future<QueryExecutor> openDatabaseForApp(
+  String dbPath, {
+  WebStorageDiagnosticsCallback? onWebStorageDiagnostics,
+}) async {
   final dir = Directory(dbPath).parent;
   if (!await dir.exists()) {
     await dir.create(recursive: true);
@@ -21,7 +23,5 @@ Future<QueryExecutor> openDatabaseForTesting({String? name}) {
 }
 
 Future<Never> openWasmDatabaseForTesting({String? name}) {
-  throw UnsupportedError(
-    'openWasmDatabaseForTesting is only supported on web',
-  );
+  throw UnsupportedError('openWasmDatabaseForTesting is only supported on web');
 }
