@@ -22,6 +22,9 @@ dependencies:
   flutter:
     sdk: flutter
   anytype: ^0.0.2
+  # anytype stores accounts in SQLite through package:sqlite3, which needs a
+  # bundled library on Android and gets the current one on other platforms.
+  sqlite3_flutter_libs: ^0.5.42
 
 dev_dependencies:
   flutter_test:
