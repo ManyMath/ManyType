@@ -57,6 +57,10 @@ trap cleanup EXIT
 mkdir -p "$ARCHIVES"
 PACKAGES=(manytype_protocol manytype_core anytype anytype_flutter)
 VERSION=0.0.2
+case "$(uname -m)" in
+  aarch64 | arm64) FLUTTER_ARCH=arm64 ;;
+  *) FLUTTER_ARCH=x64 ;;
+esac
 case "$(uname -s)" in
   Linux) HOST=linux; BRIDGE_FILE=libmanytype_quic_ffi.so ;;
   Darwin) HOST=macos; BRIDGE_FILE=libmanytype_quic_ffi.dylib ;;
@@ -280,7 +284,7 @@ launch() {
   APP_PID=""
   for _ in $(seq 1 90); do
     APP_PID="$(pgrep -f "^$executable\$" | head -1 || true)"
-    [[ -n "$APP_PID" ]] && grep -q 'bridge ABI' "$OUT_DIR/flutter-app.log" && break
+    [[ -n "$APP_PID" ]] && grep -q 'anytype_flutter storage' "$OUT_DIR/flutter-app.log" && break
     sleep 1
   done
 }
@@ -297,14 +301,16 @@ stop_app() {
   APP_RUNNER=""
   APP_PID=""
   grep 'bridge ABI 2' "$OUT_DIR/flutter-app.log" || fail 'Flutter app did not load the bridge'
+  grep 'anytype_flutter storage ok' "$OUT_DIR/flutter-app.log" ||
+    fail 'Flutter app could not use the bundled SQLite'
 }
 
 if [[ "$HOST" == linux ]]; then
-  bundled="$APP/build/linux/x64/debug/bundle/lib/$BRIDGE_FILE"
+  bundled="$APP/build/linux/$FLUTTER_ARCH/debug/bundle/lib/$BRIDGE_FILE"
   [[ -f "$bundled" ]] || fail "the Linux bundle has no $BRIDGE_FILE"
   echo "Bundled $bundled (sha256 $(sha256sum "$bundled" | cut -d' ' -f1))"
   if command -v xvfb-run >/dev/null; then
-    launch "$APP/build/linux/x64/debug/bundle/anytype_flutter_consumer" xvfb-run -a
+    launch "$APP/build/linux/$FLUTTER_ARCH/debug/bundle/anytype_flutter_consumer" xvfb-run -a
     mapped=""
     [[ -n "$APP_PID" ]] &&
       mapped="$(grep manytype_quic_ffi "/proc/$APP_PID/maps" | awk '{print $6}' | sort -u || true)"
