@@ -52,7 +52,7 @@ Future<void> main() async {
 [example/example.dart](example/example.dart) is a complete offline program:
 it creates an account, adds and edits objects, reads them back, and restores
 the account from its recovery phrase into a second store. It needs no network
-and no native library.
+and no QUIC bridge, only the system SQLite library (see Supported targets).
 
 ## Accounts, storage and recovery
 
@@ -83,7 +83,8 @@ On the web, account data lives in the browser's OPFS or IndexedDB storage
 through drift's WebAssembly backend, and `ManytypeSession.openWeb` opens an
 account by ID. The page must serve `sqlite3.wasm` (matching the resolved
 `sqlite3` package version) and `drift_worker.dart.js`, compiled from this
-package's `tool/drift_web_worker.dart`, from its origin root.
+package's `tool/drift_web_worker.dart`. Both are fetched by relative URL, so
+they must sit beside the page (relative to its base URL).
 
 ## Native QUIC bridge
 
@@ -92,15 +93,16 @@ QUIC, libp2p TLS, the Any-Sync handshake and DRPC framing. Its production
 sources ship in this package under `native/`, with a locked dependency
 graph. Offline use does not load it.
 
-Build it for your project with Rust 1.85 or newer (1.94.0 is the tested
-toolchain):
+Build it for your project with Rust 1.88 or newer (tested with 1.94.0 on
+Linux and 1.89.0 on macOS):
 
 ```sh
 dart run anytype:build_native
 ```
 
-This runs `cargo build --locked --release` on the shipped sources and places
-the library in `.dart_tool/anytype/native/` of your project. Pass
+This runs `cargo build --locked --release` on the shipped sources, checks the
+library's ABI version, and places it in `.dart_tool/anytype/native/` of your
+project. Pass
 `--output-dir <dir>` to copy it somewhere else as well, for example into an
 application bundle.
 
@@ -110,15 +112,16 @@ application bundle.
 2. The `MANYTYPE_QUIC_FFI_PATH` environment variable.
 3. On macOS, `Contents/Frameworks/libmanytype_quic_ffi.dylib` in the running
    app bundle.
-4. `.dart_tool/anytype/native/` of the running project, when a package config
+4. The platform's library search path, such as `LD_LIBRARY_PATH`.
+5. `.dart_tool/anytype/native/` of the running project, when a package config
    is available (`dart run`, `dart test`, JIT executables).
-5. The platform's library search path.
 6. `rust/target/release` and `rust/target/debug` in the current directory or
    any parent, for development inside the ManyType repository.
 
-Steps 1 to 4 do not fall back when the library they name exists but fails to
-load. Every load checks the library's C ABI version against
-`NativeBridge.expectedAbiVersion` and throws on a mismatch. If nothing loads,
+When the library named by steps 1, 2, 3 or 5 exists but fails to load, the
+load fails rather than trying the next step. Every load checks the library's
+C ABI version against `NativeBridge.expectedAbiVersion` and throws on a
+mismatch. If nothing loads,
 a `StateError` explains how to build or point at the library. AOT-compiled
 executables have no package config, so they should set
 `NativeBridge.libraryPath` to the library they ship.
@@ -145,8 +148,9 @@ A new account's space must be registered once with
 `session.sync.run(networkConfigPath: ...)` pushes local changes and pulls
 remote ones. Restored devices only call `sync.run`.
 [example/sync_example.dart](example/sync_example.dart) performs a two-device
-round trip. The sync service currently prints progress lines to standard
-output.
+round trip; copy it into your project's `bin/` to run it, since examples are
+not runnable from the pub cache. The sync service currently prints progress
+lines to standard output.
 
 ## Supported targets
 
@@ -162,9 +166,11 @@ The ManyType app also bundles the bridge into a macOS `.app`
 (`Contents/Frameworks`); that path is covered by the app's own packaging
 checks, not by this package's release checks.
 
-Native storage uses the system SQLite library through `package:sqlite3`: on
-Windows that is `sqlite3.dll` if one is on the search path, otherwise the
-operating system's `winsqlite3.dll`.
+Native storage uses the system SQLite library through `package:sqlite3`. On
+Linux it opens `libsqlite3.so`, which Debian and Ubuntu install only with
+`libsqlite3-dev`. macOS uses the system library. On Windows it uses
+`sqlite3.dll` if one is on the search path, otherwise the operating system's
+`winsqlite3.dll`.
 
 ## Interoperability
 

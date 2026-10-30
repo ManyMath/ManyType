@@ -1,11 +1,14 @@
 // Synchronization round trip between two devices of one account.
 //
+// Copy this file into your project's bin/ directory, then:
+//
 //   dart run anytype:build_native
-//   dart run example/sync_example.dart <network.yml>
+//   dart run bin/sync_example.dart <network.yml>
 //
 // network.yml lists coordinator, tree, file and consensus nodes in the
-// Any-Sync network configuration format; see the package README for one
-// that targets a local manytype_server. Device A creates an account and an
+// Any-Sync network configuration format described in the package README.
+// The ManyType repository's scripts/sdk_loopback.sh runs this example
+// against a local manytype_server it starts for the purpose. Device A creates an account and an
 // object, registers the account's space and pushes the object, then device B restores the same account from its recovery
 // phrase into a separate store and pulls the object back. Storage lives in a
 // temporary directory that is removed afterwards. The recovery phrase is
@@ -17,7 +20,7 @@ import 'package:path/path.dart' as p;
 
 Future<void> main(List<String> arguments) async {
   if (arguments.length != 1) {
-    stderr.writeln('usage: dart run example/sync_example.dart <network.yml>');
+    stderr.writeln('usage: dart run bin/sync_example.dart <network.yml>');
     exitCode = 64;
     return;
   }

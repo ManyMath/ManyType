@@ -36,6 +36,14 @@ That decision covers only those packages. The app, CLI, server, site, Docker
 material and repository tooling still have no explicit license grant. Docker
 and font assets retain their existing separate notices.
 
+Open provenance question for the owner: parts of `manytype_core` replay
+logic were written to match anytype-heart behavior, and their comments say so
+(`store_slice.dart` "ports heart's `slice.ApplyChanges`", `change_replay.dart`
+and `object_replay.dart` "mirror heart's `BuildState`"). They are short Dart
+reimplementations and no Go source text was found copied, but the MIT label on
+`manytype_core` assumes they are independent implementations of observed
+behavior rather than translations of ASAL code. Confirm that before publishing.
+
 Software built on the SDK necessarily includes the ASAL-derived block model
 types. Public distribution and the intended commercial or network use remain
 subject to ASAL's Non-Commercial Use and Allowed Networks conditions.
