@@ -133,11 +133,13 @@ can instead set `NativeBridge.libraryPath` to the library they ship.
    builds in the current directory or any parent, for development inside the
    ManyType repository.
 
-When the library named by steps 1 to 4 exists but fails to load, the load
-fails rather than trying the next step, so an app whose bundled copy is
-present never falls back to a development build. Every load checks the library's C ABI version against
-`NativeBridge.expectedAbiVersion` and throws on a mismatch. If nothing loads,
-a `StateError` lists what was tried and how to provide the library.
+A path set through steps 1 or 2 is always used: if it is missing or fails to
+load, the load fails. When the library named by steps 3 or 4 exists but fails
+to load, the load fails too rather than trying the next step, so an app whose
+bundled copy is present never falls back to a development build. Every load
+checks the library's C ABI version against `NativeBridge.expectedAbiVersion`
+and throws on a mismatch. If nothing loads, a `StateError` lists what was
+tried and how to provide the library.
 
 ## Synchronization
 

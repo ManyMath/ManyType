@@ -78,11 +78,11 @@ this finds the APK copy, `manytype_quic_ffi.dll` on Windows,
 framework by its short path, then on iOS and macOS the process's own symbols,
 checked for `ffi_abi_version`, and finally release and debug builds in
 `rust/target` and `packages/anytype_flutter/rust/target` found while walking
-up from the current directory. If an override, the app bundle library or the
-plugin's bundled copy exists but cannot load, the load fails rather than
-falling back, so a shipped app whose bundled copy is present never reaches
-the development walk. Every
-load checks `ffi_abi_version` against the Dart bindings.
+up from the current directory. A configured override is always used and fails
+the load if it is missing or broken. If the app bundle library or the plugin's
+bundled copy exists but cannot load, the load fails rather than falling back,
+so a shipped app whose bundled copy is present never reaches the development
+walk. Every load checks `ffi_abi_version` against the Dart bindings.
 
 Flutter apps outside this repository get the library from `anytype_flutter`,
 which builds it from source with cargokit for each platform and bundles it.
