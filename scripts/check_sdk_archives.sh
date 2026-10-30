@@ -18,9 +18,11 @@
 #    published sync example against a loopback manytype_server.
 # 5. Builds a fresh Flutter desktop app for this host on the hosted
 #    anytype_flutter, so cargokit compiles the bridge from the archive's
-#    sources. On Linux it proves the bundled library is the one the app maps
-#    and syncs with it over loopback; on macOS it checks the framework exports
-#    the bridge and that the launched app maps the framework and loads ABI 2.
+#    sources. The launched app must load ABI 2 and create an account through
+#    its SQLite (bundled by sqlite3_flutter_libs on Linux; macOS may fall back
+#    to the system copy). On Linux the bundled bridge must be the one the app
+#    maps, and it syncs over loopback; on macOS the framework must export the
+#    bridge and be mapped with no separate bridge dylib.
 #
 # Archives and logs are kept in output-dir, which must be new or empty
 # (default: a new temp directory). Runs on Linux or macOS. Needs Flutter with
@@ -274,7 +276,7 @@ fi
 
 # Launch the app from an empty directory, so no library in the caller's
 # directory or its parents can stand in for the bundled one, and wait until it
-# reports the bridge ABI. Sets APP_PID.
+# reports the bridge ABI and the outcome of creating an account. Sets APP_PID.
 launch() {
   local executable="$1"; shift
   mkdir -p "$WORK/launch"
@@ -302,7 +304,7 @@ stop_app() {
   APP_PID=""
   grep 'bridge ABI 2' "$OUT_DIR/flutter-app.log" || fail 'Flutter app did not load the bridge'
   grep 'anytype_flutter storage ok' "$OUT_DIR/flutter-app.log" ||
-    fail 'Flutter app could not use the bundled SQLite'
+    { cat "$OUT_DIR/flutter-app.log"; fail 'Flutter app could not create an account'; }
 }
 
 if [[ "$HOST" == linux ]]; then
