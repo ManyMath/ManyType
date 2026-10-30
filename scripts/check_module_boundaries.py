@@ -27,10 +27,39 @@ for package in SDK_PACKAGES:
     for source in (ROOT / 'packages' / package).rglob('*.dart'):
         if re.search(r"package:(flutter|manyui[a-z_]*|manytype_cli)/", source.read_text()):
             raise SystemExit(f'SDK source imports an application package: {source}')
+PLUGIN = ROOT / 'packages/anytype_flutter'
+pubspec = (PLUGIN / 'pubspec.yaml').read_text()
+if re.search(r'^    (path|git):', pubspec, re.M) or 'publish_to:' in pubspec:
+    raise SystemExit('anytype_flutter is not publishable with hosted dependencies')
+if not re.search(r'^  anytype: \^', pubspec, re.M):
+    raise SystemExit('anytype_flutter must depend on hosted anytype')
+for forbidden in ['manyui', 'manytype_cli', 'manytype_server']:
+    if re.search(rf'^\s+{forbidden}[a-z_]*:', pubspec, re.M):
+        raise SystemExit(f'anytype_flutter depends on {forbidden}')
+for source in (PLUGIN / 'lib').rglob('*.dart'):
+    if re.search(r"package:(manyui[a-z_]*|manytype_cli)/", source.read_text()):
+        raise SystemExit(f'Plugin source imports an application package: {source}')
+
+PLUGIN_RUST = PLUGIN / 'rust/Cargo.toml'
 tree = subprocess.check_output(['cargo', 'tree', '--locked', '--manifest-path',
-    str(ROOT / 'rust/Cargo.toml'), '-p', 'manytype_quic_ffi', '--edges', 'normal'], text=True)
+    str(PLUGIN_RUST), '-p', 'manytype_quic_ffi', '--edges', 'normal'], text=True)
 if 'manytype_server ' in tree or 'redb ' in tree:
     raise SystemExit('Client FFI links server implementation or server database')
-manifest = tomllib.loads((ROOT / 'rust/manytype_quic_ffi/Cargo.toml').read_text())
+manifest = tomllib.loads(PLUGIN_RUST.read_text())
 assert 'manytype_transport' in manifest['dependencies']
-print('Public client imports, publishable SDK graph and server-free production FFI graph verified.')
+if 'manytype_server' in manifest.get('dev-dependencies', {}):
+    raise SystemExit('The plugin crate cannot reference the repository server')
+
+
+def locked(path):
+    return {(pkg['name'], pkg['version']): pkg.get('checksum')
+            for pkg in tomllib.loads(path.read_text())['package']}
+
+
+server_lock = locked(ROOT / 'rust/Cargo.lock')
+drifted = sorted(key for key, checksum in locked(PLUGIN / 'rust/Cargo.lock').items()
+                 if server_lock.get(key, '?') != checksum)
+if drifted:
+    raise SystemExit(f'Plugin and server lockfiles disagree: {drifted}')
+print('Public client imports, publishable SDK and plugin graphs, server-free '
+      'production FFI graph and matching lockfiles verified.')
