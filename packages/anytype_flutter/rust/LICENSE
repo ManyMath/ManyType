@@ -1,3 +1,12 @@
+The manytype_quic_ffi crate is first-party ManyType code under the MIT License
+below. It links crates/manytype_proto, which contains code generated from
+Anytype-heart schemas under the Any Source Available License 1.0 and from
+Any-Sync schemas under the MIT License; crates/manytype_proto/LICENSE
+describes those files and crates/manytype_proto/licenses holds the upstream
+notices. The library built from this workspace therefore includes ASAL 1.0
+material, which permits use only for Non-Commercial Use or for Commercial Use
+in Allowed Networks.
+
 MIT License
 
 Copyright (c) 2025-2026 Joshua Babb and ManyMath LLC
