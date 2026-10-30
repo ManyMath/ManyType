@@ -1,3 +1,20 @@
+manytype_core contains material under two sets of terms.
+
+1. The object replay files lib/src/crdt/change_replay.dart,
+   lib/src/crdt/object_replay.dart and lib/src/crdt/store_slice.dart were
+   written to reproduce anytype-heart's state building (BuildState,
+   applyChange and slice.ApplyChanges) and may derive from anytype-heart.
+   They are distributed under the Any Source Available License 1.0 (ASAL),
+   reproduced in licenses/anytype-heart-cfb7ec9-ASAL-1.0.txt. ASAL permits
+   use, modification and redistribution only for Non-Commercial Use or for
+   Commercial Use in Allowed Networks (https://networks.any.coop), and
+   requires that recipients receive a copy of that license.
+
+2. Everything else is first-party ManyType code under the MIT License below.
+
+The package also depends on manytype_protocol, whose Dart types generated from
+Anytype-heart schemas carry the same ASAL 1.0 terms.
+
 MIT License
 
 Copyright (c) 2025-2026 Joshua Babb and ManyMath LLC

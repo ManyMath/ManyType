@@ -94,7 +94,7 @@ against an official Any-Sync deployment or Anytype's hosted network.
 First-party code in this package is MIT licensed. `rust/crates/manytype_proto`
 contains code generated from Anytype-heart schemas under the Any Source
 Available License 1.0 and from Any-Sync schemas under the MIT License, and
-`anytype` depends on `manytype_protocol`, whose Anytype-heart types carry the
-same ASAL terms. ASAL allows use only for Non-Commercial Use or for Commercial
+`anytype` depends on `manytype_protocol` and `manytype_core`, whose
+Anytype-heart types and object replay files carry the same ASAL terms. ASAL allows use only for Non-Commercial Use or for Commercial
 Use in Allowed Networks. The vendored `cargokit/` keeps its own license. See
 [LICENSE](LICENSE) before distributing an app built on this package.

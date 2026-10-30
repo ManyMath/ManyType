@@ -215,7 +215,8 @@ Known limitations:
 
 First-party code in this package is MIT licensed. It depends on
 `manytype_protocol`, whose types generated from Anytype-heart schemas are under
-the Any Source Available License 1.0. ASAL allows use only for Non-Commercial
+the Any Source Available License 1.0, and on `manytype_core`, whose object
+replay files are under the same license. ASAL allows use only for Non-Commercial
 Use or for Commercial Use in Allowed Networks. See [LICENSE](LICENSE) and the
 `manytype_protocol` LICENSE before distributing software built on this
 package.

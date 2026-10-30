@@ -1,6 +1,7 @@
 anytype is first-party ManyType code under the MIT License below. It depends
 on manytype_protocol, whose Dart types generated from Anytype-heart schemas are
-subject to the Any Source Available License 1.0. ASAL permits use only for
+subject to the Any Source Available License 1.0, and on manytype_core, whose
+object replay files are under the same license. ASAL permits use only for
 Non-Commercial Use or for Commercial Use in Allowed Networks. See the
 manytype_protocol LICENSE before distributing or deploying software built on
 this package.

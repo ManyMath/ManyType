@@ -26,5 +26,10 @@ the Any Association. Version 0.0.2 is an early release whose API may change.
 
 ## License
 
-MIT. See [LICENSE](LICENSE). The package depends on `manytype_protocol`,
-whose Anytype-heart types are under the Any Source Available License 1.0.
+First-party code in this package is MIT licensed. The object replay files
+(`change_replay.dart`, `object_replay.dart` and `store_slice.dart` under
+`lib/src/crdt/`) reproduce anytype-heart's state building and are distributed
+under the Any Source Available License 1.0, and the package depends on
+`manytype_protocol`, whose Anytype-heart types carry the same terms. ASAL
+allows use only for Non-Commercial Use or for Commercial Use in Allowed
+Networks. See [LICENSE](LICENSE).

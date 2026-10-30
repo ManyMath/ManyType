@@ -24,8 +24,8 @@ overrides. The app, CLI and server stay `publish_to: none`. The Dart packages
 must not depend on them, on Flutter, or on ManyUI; the plugin may depend on
 Flutter but not on the others. `anytype` is the only client implementation and
 `anytype_flutter` re-exports it. `manytype_protocol` stays separate because
-its generated Anytype-heart types carry ASAL 1.0 terms that the MIT packages
-do not, and `manytype_core` is the IO-free layer that the app and CLI also
+its generated Anytype-heart types carry ASAL 1.0 terms (as do
+`manytype_core`'s three object replay files), and `manytype_core` is the IO-free layer that the app and CLI also
 import.
 
 The plugin follows the other ManyMath `<x>_dart` + plugin pairs (sound,

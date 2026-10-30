@@ -61,5 +61,6 @@ untracked `pubspec_overrides.yaml` at the repository root; the root
 See [module boundaries and protocol generation](docs/module-boundaries.md) for
 the client/server dependency contracts and pinned regeneration commands. See
 [protocol licenses and provenance](third_party/README.md) before preparing any
-public distribution. First-party licensing remains an owner decision; this
-private maintenance candidate is not a public release.
+public distribution. The SDK packages are MIT apart from the code noted
+there, which is under ASAL 1.0; the app, CLI and server have no license grant
+yet.

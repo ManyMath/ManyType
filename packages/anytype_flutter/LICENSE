@@ -7,8 +7,8 @@ rust/crates/manytype_proto/licenses holds the upstream notices. The vendored
 cargokit/ directory keeps its own LICENSE.
 
 anytype_flutter also depends on anytype and, through it, on
-manytype_protocol, whose Dart types generated from Anytype-heart schemas
-carry the same ASAL 1.0 terms. ASAL permits use only for Non-Commercial Use or
+manytype_protocol and manytype_core, whose Dart types generated from
+Anytype-heart schemas and object replay files carry the same ASAL 1.0 terms. ASAL permits use only for Non-Commercial Use or
 for Commercial Use in Allowed Networks. See the manytype_protocol LICENSE
 before distributing or deploying software built on this package.
 

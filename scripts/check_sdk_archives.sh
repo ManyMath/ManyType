@@ -128,6 +128,7 @@ for package in "${PACKAGES[@]}"; do
 done
 require manytype_protocol licenses/any-sync-v0.9.9-MIT.txt \
   licenses/anytype-heart-cfb7ec9-ASAL-1.0.txt
+require manytype_core licenses/anytype-heart-cfb7ec9-ASAL-1.0.txt
 require anytype example/example.dart example/sync_example.dart
 forbid anytype '^test/|^native/|^bin/'
 require anytype_flutter lib/anytype_flutter.dart rust/Cargo.toml rust/Cargo.lock rust/cargokit.yaml \

@@ -33,17 +33,20 @@ SDK candidate: the Dart packages `anytype`, `manytype_core` and
 directories has its own LICENSE. The protocol packages' LICENSE files keep the
 upstream terms above for generated code and do not relabel it MIT.
 
-That decision covers only those packages. The app, CLI, server, site, Docker
+That decision covers only those packages, minus the `manytype_core` files
+below. The app, CLI, server, site, Docker
 material and repository tooling still have no explicit license grant. Docker
 and font assets retain their existing separate notices.
 
-Open provenance question for the owner: parts of `manytype_core` replay
-logic were written to match anytype-heart behavior, and their comments say so
-(`store_slice.dart` "ports heart's `slice.ApplyChanges`", `change_replay.dart`
-and `object_replay.dart` "mirror heart's `BuildState`"). They are short Dart
-reimplementations and no Go source text was found copied, but the MIT label on
-`manytype_core` assumes they are independent implementations of observed
-behavior rather than translations of ASAL code. Confirm that before publishing.
+`manytype_core`'s object replay logic was written to reproduce anytype-heart
+behavior, and its comments say so (`store_slice.dart` "ports heart's
+`slice.ApplyChanges`", `change_replay.dart` and `object_replay.dart` "mirror
+heart's `BuildState`"). It was developed with AI coding agents that had
+anytype-heart available, so its independence cannot be shown. On 2026-10-30
+the owner accepted distributing those three files under ASAL 1.0, with a copy
+of the license in `packages/manytype_core/licenses`, rather than labeling them
+MIT. The rest of `manytype_core` stays MIT. A later rewrite from a written
+specification could return them to MIT.
 
 Software built on the SDK necessarily includes the ASAL-derived block model
 types. Public distribution and the intended commercial or network use remain
