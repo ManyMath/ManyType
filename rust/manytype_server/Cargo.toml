@@ -5,9 +5,9 @@ edition = "2024"
 publish = false
 
 [dependencies]
-manytype_transport = { path = "../manytype_transport" }
-manytype_proto = { path = "../manytype_proto" }
-manytype_core = { path = "../manytype_core" }
+manytype_transport = { path = "../../packages/anytype_flutter/rust/crates/manytype_transport" }
+manytype_proto = { path = "../../packages/anytype_flutter/rust/crates/manytype_proto" }
+manytype_core = { path = "../../packages/anytype_flutter/rust/crates/manytype_core" }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 prost = { workspace = true }

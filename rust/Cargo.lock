@@ -1216,7 +1216,6 @@ dependencies = [
  "libp2p-tls",
  "manytype_core",
  "manytype_proto",
- "manytype_server",
  "manytype_transport",
  "prost",
  "quinn",
@@ -1224,6 +1223,13 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "manytype_quic_ffi_host"
+version = "0.1.0"
+dependencies = [
+ "manytype_quic_ffi",
 ]
 
 [[package]]

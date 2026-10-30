@@ -17,7 +17,8 @@ headers remain historical lineage evidence.
   upstream trees have no more-specific schema-directory license.
 
 Exact upstream notices are copied into `proto/licenses`,
-`packages/manytype_protocol/licenses`, and `rust/manytype_proto/licenses` so the
+`packages/manytype_protocol/licenses`, and
+`packages/anytype_flutter/rust/crates/manytype_proto/licenses` so the
 schemas and generated source packages carry their notices. Generated protocol
 types must not be labeled wholly MIT or Apache merely because a first-party
 license is chosen. ASAL includes non-commercial/Allowed Networks conditions;

@@ -228,7 +228,7 @@ mod tests {
         let server_peer_id_for_server = server_peer_id.clone();
         let client_peer_id_for_server = client_peer_id.clone();
 
-        // Server side: uses perform_handshake from manytype_server
+        // Server side: the shared perform_handshake from manytype_transport
         let server_handle = tokio::spawn(async move {
             let (recv, send) = tokio::io::split(server_io);
             let mut stream = tokio::io::join(recv, send);

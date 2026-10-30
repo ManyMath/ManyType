@@ -1,0 +1,12 @@
+[package]
+name = "manytype_quic_ffi_host"
+version = "0.1.0"
+rust-version = "1.88"
+edition = "2024"
+publish = false
+description = "Keeps the anytype_flutter QUIC bridge in this workspace's build graph."
+
+# Repository harnesses build the bridge from here with
+# `cargo build -p manytype_quic_ffi`, which needs a normal dependency on it.
+[dependencies]
+manytype_quic_ffi = { path = "../../packages/anytype_flutter/rust" }

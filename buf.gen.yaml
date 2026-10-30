@@ -5,6 +5,6 @@ plugins:
   - local: protoc-gen-dart
     out: packages/manytype_protocol/lib/src/generated
   - local: protoc-gen-prost
-    out: rust/manytype_proto/src/generated
+    out: packages/anytype_flutter/rust/crates/manytype_proto/src/generated
 inputs:
   - directory: proto

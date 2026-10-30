@@ -1,11 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "manytype_proto",
-    "manytype_transport",
-    "manytype_core",
     "manytype_server",
-    "manytype_quic_ffi",
+    "manytype_quic_ffi_host",
 ]
 
 [workspace.dependencies]

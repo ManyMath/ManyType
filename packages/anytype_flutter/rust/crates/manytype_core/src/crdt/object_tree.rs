@@ -423,14 +423,14 @@ mod tests {
             "identityPublicKey": hex::encode(vk.to_bytes())
         });
 
-        // Write to test_vectors directory
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        let workspace_root = std::path::Path::new(manifest_dir)
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap();
-        let fixture_dir = workspace_root.join("test_vectors");
+        // Write to the repository's test_vectors directory, which the Dart
+        // cross-verification reads. Outside the repository (a published
+        // source archive) there is none, so use a temporary directory.
+        let fixture_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .map(|dir| dir.join("test_vectors"))
+            .find(|dir| dir.is_dir())
+            .unwrap_or_else(|| std::env::temp_dir().join("manytype_core_test_vectors"));
         std::fs::create_dir_all(&fixture_dir).unwrap();
         let fixture_path = fixture_dir.join("object_tree_fixture.json");
         std::fs::write(

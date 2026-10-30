@@ -252,14 +252,25 @@ fn tls_peer_id(connection: &quinn::Connection) -> Result<String> {
 mod tests {
     use super::*;
     use manytype_core::crypto::ed25519;
-    use manytype_server::transport::quic::{make_server_config, run_quic_listener};
     use manytype_transport::handshake::perform_handshake;
 
     const SERVER_SEED: [u8; 32] = [7u8; 32];
 
+    /// A libp2p TLS QUIC listener configured like manytype_server's, built
+    /// here so the bridge's tests need no server dependency.
+    fn listen(bind_addr: &str, seed: &[u8; 32]) -> Result<quinn::Endpoint> {
+        let mut seed = *seed;
+        let identity = Keypair::ed25519_from_bytes(seed.as_mut_slice())?;
+        let mut tls_config = libp2p_tls::make_server_config(&identity)?;
+        tls_config.alpn_protocols = vec![b"anysync".to_vec()];
+        let crypto = quinn::crypto::rustls::QuicServerConfig::try_from(Arc::new(tls_config))?;
+        let config = quinn::ServerConfig::with_crypto(Arc::new(crypto));
+        Ok(quinn::Endpoint::server(config, bind_addr.parse()?)?)
+    }
+
     /// Accept connections and run the server side of the credential handshake.
     async fn spawn_handshake_server(bind_addr: &str) -> Result<(SocketAddr, PeerId)> {
-        let endpoint = run_quic_listener(bind_addr, make_server_config(&SERVER_SEED)?).await?;
+        let endpoint = listen(bind_addr, &SERVER_SEED)?;
         let local_addr = endpoint.local_addr()?;
         let mut seed = SERVER_SEED;
         let identity = Keypair::ed25519_from_bytes(seed.as_mut_slice())?;

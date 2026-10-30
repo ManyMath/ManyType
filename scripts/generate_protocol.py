@@ -10,7 +10,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 DART = ROOT / 'packages/manytype_protocol/lib/src/generated'
-RUST = ROOT / 'rust/manytype_proto/src/generated'
+RUST = ROOT / 'packages/anytype_flutter/rust/crates/manytype_proto/src/generated'
 
 
 def output(args):
