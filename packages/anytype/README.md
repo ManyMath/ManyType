@@ -173,7 +173,7 @@ lines to standard output.
 | --- | --- | --- |
 | Linux x64 (Dart VM) | Tested | Tested against a loopback server, also with the library a Flutter build bundles |
 | macOS arm64 (Dart VM) | Tested | Tested against a loopback server |
-| Windows x64 (Dart VM) | Tested on Windows 10 | The DLL an anytype_flutter build bundles loads; sync not run |
+| Windows x64 (Dart VM) | Tested on Windows 10 (system SQLite) | Tested against a loopback server with the bridge and server built on Windows |
 | Android, iOS (Flutter) | Tested through anytype_flutter, which bundles SQLite, on an emulator and a simulator | Tested against a loopback server through anytype_flutter on an emulator and a simulator |
 | Web | Supported via drift WebAssembly | Not available: `NativeBridge` throws `UnsupportedError` |
 
@@ -184,11 +184,13 @@ The ManyType app also bundles the bridge into a macOS `.app`
 checks, not by this package's release checks.
 
 Native storage uses SQLite through `package:sqlite3`. Flutter apps on
-anytype_flutter get a bundled copy from `sqlite3_flutter_libs`. Dart programs
-use the system library: on Linux it opens `libsqlite3.so`, which Debian and
-Ubuntu install only with `libsqlite3-dev`. macOS uses the system library. On
-Windows it uses `sqlite3.dll` if one is on the search path, otherwise the
-operating system's `winsqlite3.dll`.
+anytype_flutter get a bundled copy from `sqlite3_flutter_libs`; a Flutter app
+that depends on `anytype` directly should add `sqlite3_flutter_libs: ^0.5.42`
+itself, or it has no SQLite on Android. Dart programs use the system library:
+on Linux it opens `libsqlite3.so`, which Debian and Ubuntu install only with
+`libsqlite3-dev`. macOS uses the system library. On Windows it uses
+`sqlite3.dll` if one is on the search path, otherwise the operating system's
+`winsqlite3.dll`.
 
 ## Interoperability
 

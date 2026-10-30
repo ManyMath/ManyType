@@ -25,7 +25,8 @@
 # Archives and logs are kept in output-dir, which must be new or empty
 # (default: a new temp directory). Runs on Linux or macOS. Needs Flutter with
 # that desktop toolchain, Rust 1.88+ via rustup, Python 3.11+, coreutils
-# timeout, and network access to pub.dev and crates.io. On Linux the app is
+# timeout, and network access to pub.dev and crates.io (plus sqlite.org on
+# Linux and GitHub on macOS, where sqlite3_flutter_libs fetches SQLite). On Linux the app is
 # launched when xvfb-run is present, which CI (CI=true) requires.
 set -euo pipefail
 

@@ -43,8 +43,14 @@ Builds compile the bridge for each target with cargokit, so the build machine
 needs rustup. Cargokit runs rustup's `stable` toolchain, which must be Rust
 1.88 or newer (rustup installs it if missing), adds the Rust targets it needs,
 and builds with `cargo build --locked` against the shipped `Cargo.lock`
-(`rust/cargokit.yaml`). No prebuilt binaries are downloaded: this release has
-no precompiled-binary configuration.
+(`rust/cargokit.yaml`). No prebuilt bridge binaries are downloaded: this
+release has no precompiled-binary configuration. SQLite is another matter:
+`sqlite3_flutter_libs` fetches it at build time, as a prebuilt Android library
+from Maven Central, as source from sqlite.org on Linux and Windows, and as the
+CSQLite Swift package (or the sqlite3 pod when Swift Package Manager is off)
+on iOS and macOS. The example's committed `Podfile.lock` and
+`Package.resolved` files assume Flutter's Swift Package Manager support is
+enabled.
 
 | Platform | How the bridge ships |
 | --- | --- |
