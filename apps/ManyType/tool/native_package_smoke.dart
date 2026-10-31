@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:anytype/anytype.dart';
@@ -7,11 +8,17 @@ import 'package:anytype/anytype.dart';
 const _key = 'manytype.native-package-smoke';
 const _value = 'manytype-native-package-smoke-v1';
 
+// Android apps cannot set environment variables, so the phase can also come
+// from --dart-define=MANYTYPE_NATIVE_SMOKE_PHASE=write|read.
+const _definedPhase = String.fromEnvironment('MANYTYPE_NATIVE_SMOKE_PHASE');
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _progress('phase=startup');
 
-  final phase = Platform.environment['MANYTYPE_NATIVE_SMOKE_PHASE'];
+  final phase =
+      Platform.environment['MANYTYPE_NATIVE_SMOKE_PHASE'] ??
+      (_definedPhase.isEmpty ? null : _definedPhase);
   if (phase != 'write' && phase != 'read') {
     await _fail('MANYTYPE_NATIVE_SMOKE_PHASE must be write or read');
   }
@@ -59,6 +66,7 @@ Future<void> _progress(String message) async {
   final line = 'NATIVE_PACKAGE_SMOKE $message';
   stdout.writeln(line);
   await stdout.flush();
+  debugPrint(line);
   await _record(line);
 }
 
@@ -66,6 +74,7 @@ Future<Never> _fail(String message) async {
   final line = 'NATIVE_PACKAGE_SMOKE failed: $message';
   stderr.writeln(line);
   await stderr.flush();
+  debugPrint(line);
   await _record(line);
   exit(1);
 }
