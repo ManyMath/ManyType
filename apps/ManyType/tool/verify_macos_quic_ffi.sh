@@ -30,7 +30,7 @@ if [[ ! -x "$bundle_executable" ]]; then
   exit 66
 fi
 
-install_name="$(xcrun otool -D "$LIBRARY_PATH" | tail -n 1 | sed 's/^[[:space:]]*//')"
+install_name="$(xcrun otool -D "$LIBRARY_PATH" | grep -v ':$' | sort -u)"
 if [[ "$install_name" != "@rpath/$FRAMEWORK_NAME.framework/Versions/A/$FRAMEWORK_NAME" ]]; then
   echo "unexpected framework install name: $install_name" >&2
   exit 1
@@ -62,7 +62,7 @@ done
 
 unexpected_dependency="$(xcrun otool -L "$LIBRARY_PATH" \
   | awk '/^[[:space:]]/ { print $1 }' \
-  | grep -Ev "^(@rpath/$FRAMEWORK_NAME\\.framework/Versions/A/$FRAMEWORK_NAME$|@rpath/FlutterMacOS\\.framework/Versions/A/FlutterMacOS$|/System/Library/|/usr/lib/)" \
+  | grep -Ev "^(@rpath/$FRAMEWORK_NAME\\.framework/Versions/A/$FRAMEWORK_NAME$|/System/Library/|/usr/lib/)" \
   | head -n 1 || true)"
 if [[ -n "$unexpected_dependency" ]]; then
   echo "QUIC bridge has a non-system dependency: $unexpected_dependency" >&2
