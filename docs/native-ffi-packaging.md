@@ -75,10 +75,12 @@ build and two-launch smoke commands above.
 ## Library discovery
 
 `NativeBridge.libraryPath` and then `MANYTYPE_QUIC_FFI_PATH` are explicit
-overrides. Without them, the loader prefers the signed library in a macOS app
-bundle (the app no longer ships one there), then the copy an anytype_flutter
+overrides. Without them, the loader prefers the copy an anytype_flutter
 app carries next to its executable (`lib/` on Linux, beside the executable on
-Windows, the `anytype_flutter` framework on iOS and macOS), then the platform library name through the
+Windows, the `anytype_flutter` framework on iOS and macOS), then on macOS a
+signed `libmanytype_quic_ffi.dylib` in the app bundle's `Contents/Frameworks`
+(the ManyType app does not ship one there, and the plugin framework wins over
+a stale one), then the platform library name through the
 platform loader path (`libmanytype_quic_ffi.so` on Linux and Android, where
 this finds the APK copy, `manytype_quic_ffi.dll` on Windows,
 `libmanytype_quic_ffi.dylib` on Apple platforms), then on iOS and macOS the
@@ -86,8 +88,8 @@ framework by its short path, then on iOS and macOS the process's own symbols,
 checked for `ffi_abi_version`, and finally release and debug builds in
 `rust/target` and `packages/anytype_flutter/rust/target` found while walking
 up from the current directory. A configured override is always used and fails
-the load if it is missing or broken. If the app bundle library or the plugin's
-bundled copy exists but cannot load, the load fails rather than falling back,
+the load if it is missing or broken. If the plugin's bundled copy or the app
+bundle library exists but cannot load, the load fails rather than falling back,
 so a shipped app whose bundled copy is present never reaches the development
 walk. Every load checks `ffi_abi_version` against the Dart bindings.
 

@@ -50,9 +50,10 @@ bundling of its own: cargokit builds `manytype_quic_ffi` through the plugin,
 which puts it in `lib/` on Linux, beside the executable on Windows, in the
 APK's `lib/<abi>/` on Android, and in `anytype_flutter.framework` on iOS and
 macOS. `verify_macos_quic_ffi.sh` checks that framework in the built app
-(`Contents/Frameworks/anytype_flutter.framework`). The loader's step for a
-`libmanytype_quic_ffi.dylib` in the macOS app bundle's `Contents/Frameworks`
-is no longer used by the app; it stays for other consumers that ship the
+(`Contents/Frameworks/anytype_flutter.framework`). The loader tries the plugin
+framework before a `libmanytype_quic_ffi.dylib` in the macOS app bundle's
+`Contents/Frameworks`, so a stale dylib left in an incremental build directory
+cannot shadow it. That legacy step stays for other consumers that ship the
 library that way.
 
 Publish in dependency order: `manytype_protocol`, `manytype_core`, `anytype`,

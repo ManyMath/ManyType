@@ -118,12 +118,13 @@ under the target directory. AOT-compiled executables can instead set
 
 1. `NativeBridge.libraryPath`, if your code sets it.
 2. The `MANYTYPE_QUIC_FFI_PATH` environment variable.
-3. On macOS, `Contents/Frameworks/libmanytype_quic_ffi.dylib` in the running
-   app bundle, for apps that ship the library that way. The ManyType app does
-   not; it uses step 4.
-4. The copy an anytype_flutter app carries next to its executable:
+3. The copy an anytype_flutter app carries next to its executable:
    `lib/libmanytype_quic_ffi.so` on Linux, `manytype_quic_ffi.dll` on Windows,
    and the `anytype_flutter.framework` binary on iOS and macOS.
+4. On macOS, `Contents/Frameworks/libmanytype_quic_ffi.dylib` in the running
+   app bundle, for apps that ship the library that way. The ManyType app does
+   not ship one there; a stale copy left in a build directory is ignored
+   whenever step 3 finds the framework.
 5. The platform library name (`libmanytype_quic_ffi.so` on Linux and Android,
    `manytype_quic_ffi.dll` on Windows, `libmanytype_quic_ffi.dylib` on Apple
    platforms) through the platform's search path. On Android this finds the
