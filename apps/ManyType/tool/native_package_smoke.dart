@@ -15,9 +15,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _progress('phase=startup');
 
-  final phase =
-      Platform.environment['MANYTYPE_NATIVE_SMOKE_PHASE'] ??
-      (_definedPhase.isEmpty ? null : _definedPhase);
+  final environmentPhase = Platform.environment['MANYTYPE_NATIVE_SMOKE_PHASE'];
+  final phase = environmentPhase != null && environmentPhase.isNotEmpty
+      ? environmentPhase
+      : (_definedPhase.isEmpty ? null : _definedPhase);
   if (phase != 'write' && phase != 'read') {
     await _fail('MANYTYPE_NATIVE_SMOKE_PHASE must be write or read');
   }
@@ -54,12 +55,12 @@ Future<void> main() async {
       await storage.delete(key: _key).timeout(const Duration(seconds: 10));
     }
 
-    await _progress('phase=$phase ffi_abi=2 secure_storage=ok');
     // Android persists secure storage asynchronously; exiting at once can lose
-    // the write before the read phase launches.
+    // the write before the read phase launches. Wait before reporting success.
     if (Platform.isAndroid) {
       await Future<void>.delayed(const Duration(seconds: 3));
     }
+    await _progress('phase=$phase ffi_abi=2 secure_storage=ok');
     exit(0);
   } catch (error, stackTrace) {
     await _fail('$error\n$stackTrace');
