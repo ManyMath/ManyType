@@ -119,7 +119,8 @@ under the target directory. AOT-compiled executables can instead set
 1. `NativeBridge.libraryPath`, if your code sets it.
 2. The `MANYTYPE_QUIC_FFI_PATH` environment variable.
 3. On macOS, `Contents/Frameworks/libmanytype_quic_ffi.dylib` in the running
-   app bundle (the ManyType app's layout).
+   app bundle, for apps that ship the library that way. The ManyType app does
+   not; it uses step 4.
 4. The copy an anytype_flutter app carries next to its executable:
    `lib/libmanytype_quic_ffi.so` on Linux, `manytype_quic_ffi.dll` on Windows,
    and the `anytype_flutter.framework` binary on iOS and macOS.
@@ -181,9 +182,9 @@ lines to standard output.
 
 anytype_flutter's README lists exactly what was checked on each platform.
 
-The ManyType app also bundles the bridge into a macOS `.app`
-(`Contents/Frameworks`); that path is covered by the app's own packaging
-checks, not by this package's release checks.
+The ManyType app gets the bridge from anytype_flutter on every platform; its
+macOS packaging check verifies the plugin framework in the built `.app`, not
+this package's release checks.
 
 Native storage uses SQLite through `package:sqlite3`. Flutter apps on
 anytype_flutter get a bundled copy from `sqlite3_flutter_libs`; a Flutter app

@@ -44,11 +44,16 @@ build -p manytype_quic_ffi` from `rust/` and find the library in
 dev-dependency. The boundary check fails if the two lockfiles disagree on any
 shared crate.
 
-The ManyType app keeps depending on `anytype` and its own macOS bundling
-(`apps/ManyType/tool/build_macos_quic_ffi.sh`), which places a signed
-`libmanytype_quic_ffi.dylib` in `Contents/Frameworks`. Switching it to
-`anytype_flutter` would force-load a static library into the plugin
-framework instead and break what `verify_macos_quic_ffi.sh` checks.
+The ManyType app depends on `anytype_flutter` for the native bridge on every
+platform and keeps its direct `anytype` dependency for imports. It has no
+bundling of its own: cargokit builds `manytype_quic_ffi` through the plugin,
+which puts it in `lib/` on Linux, beside the executable on Windows, in the
+APK's `lib/<abi>/` on Android, and in `anytype_flutter.framework` on iOS and
+macOS. `verify_macos_quic_ffi.sh` checks that framework in the built app
+(`Contents/Frameworks/anytype_flutter.framework`). The loader's step for a
+`libmanytype_quic_ffi.dylib` in the macOS app bundle's `Contents/Frameworks`
+is no longer used by the app; it stays for other consumers that ship the
+library that way.
 
 Publish in dependency order: `manytype_protocol`, `manytype_core`, `anytype`,
 then `anytype_flutter`.

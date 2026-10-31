@@ -1,16 +1,21 @@
 # Native QUIC bridge packaging
 
 The native ManyType client loads `manytype_quic_ffi`, the Rust QUIC transport
-bridge. macOS app builds compile the bridge from `rust/Cargo.lock` with
-`cargo build --locked --release` and place it at this stable bundle path:
+bridge. The app gets it from the `anytype_flutter` plugin on every platform.
+The plugin builds the crate with cargokit from its own `rust/Cargo.lock` and
+bundles the result, so the app has no packaging script for it. Where the
+library ends up in a built app:
 
-```text
-manytype.app/Contents/Frameworks/libmanytype_quic_ffi.dylib
-```
+| Platform | Bundled library |
+| --- | --- |
+| Linux | `bundle/lib/libmanytype_quic_ffi.so` |
+| Windows | `manytype_quic_ffi.dll` beside the executable |
+| Android | `lib/<abi>/libmanytype_quic_ffi.so` in the APK (arm64-v8a, armeabi-v7a, x86_64), with `libsqlite3.so` |
+| iOS, macOS | `anytype_flutter.framework` (macOS: `manytype.app/Contents/Frameworks/anytype_flutter.framework`) |
 
-The build rewrites the dylib ID to
-`@rpath/libmanytype_quic_ffi.dylib` and signs the library with the same identity
-Xcode uses for the app. The app has an outbound-network sandbox entitlement.
+On Apple platforms cargokit links the crate into the plugin framework, which
+Xcode signs with the app. The macOS app has an outbound-network sandbox
+entitlement.
 
 Build and verify an ad-hoc release bundle from the repository root:
 
@@ -47,9 +52,9 @@ apps/ManyType/tool/build_macos_app.sh
 apps/ManyType/tool/run_macos_native_smoke.sh
 ```
 
-The verifier checks the app and nested-library signatures, architectures,
-install name, system-only dynamic dependencies, exported FFI API, network
-entitlement, and ABI call through Dart's production bundle-path resolver.
+The verifier checks the `anytype_flutter.framework` in the built app: its
+signature, architectures, the exported FFI API, the network entitlement, and
+an ABI call through Dart's production loader.
 
 ## Current signed-canary blocker
 
@@ -69,9 +74,9 @@ build and two-launch smoke commands above.
 
 `NativeBridge.libraryPath` and then `MANYTYPE_QUIC_FFI_PATH` are explicit
 overrides. Without them, the loader prefers the signed library in a macOS app
-bundle, then the copy an anytype_flutter app carries next to its executable
-(`lib/` on Linux, beside the executable on Windows, the `anytype_flutter`
-framework on iOS and macOS), then the platform library name through the
+bundle (the app no longer ships one there), then the copy an anytype_flutter
+app carries next to its executable (`lib/` on Linux, beside the executable on
+Windows, the `anytype_flutter` framework on iOS and macOS), then the platform library name through the
 platform loader path (`libmanytype_quic_ffi.so` on Linux and Android, where
 this finds the APK copy, `manytype_quic_ffi.dll` on Windows,
 `libmanytype_quic_ffi.dylib` on Apple platforms), then on iOS and macOS the
@@ -84,7 +89,8 @@ bundled copy exists but cannot load, the load fails rather than falling back,
 so a shipped app whose bundled copy is present never reaches the development
 walk. Every load checks `ffi_abi_version` against the Dart bindings.
 
-Flutter apps outside this repository get the library from `anytype_flutter`,
-which builds it from source with cargokit for each platform and bundles it.
+The ManyType app and Flutter apps outside this repository get the library from
+`anytype_flutter`, which builds it from source with cargokit for each platform
+and bundles it.
 Dart programs build it with cargo from that package's `rust/` directory; see
 `packages/anytype/README.md`. No prebuilt binaries are published.

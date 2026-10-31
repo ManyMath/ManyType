@@ -69,6 +69,18 @@ pub.dev and crates.io; on Linux the app is launched when `xvfb-run` is
 installed, and CI (`CI=true`) fails without it. A pass is loopback evidence, not compatibility evidence against an
 official Any-Sync deployment.
 
+## App native bridge
+
+The ManyType app gets `manytype_quic_ffi` from `anytype_flutter` on every
+platform (see [native FFI packaging](native-ffi-packaging.md)).
+`apps/ManyType/tool/native_package_smoke.dart` is an alternate entry point
+that loads the bridge, checks the ABI, and round-trips secure storage. It
+takes the phase from `MANYTYPE_NATIVE_SMOKE_PHASE` (`write`, then `read` in a
+second launch) or, where the environment cannot be set, from
+`--dart-define=MANYTYPE_NATIVE_SMOKE_PHASE=...`. It prints
+`NATIVE_PACKAGE_SMOKE phase=<p> ffi_abi=2 secure_storage=ok` to stdout and,
+through `debugPrint`, to Android logcat.
+
 ## Self-hosted oracle stack
 
 The oracle tests and harnesses expect the docker any-sync stack and the
