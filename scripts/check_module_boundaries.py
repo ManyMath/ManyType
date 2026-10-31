@@ -17,7 +17,12 @@ for source in (ROOT / 'packages/anytype/lib').rglob('*.dart'):
     if 'package:manytype_cli/' in source.read_text():
         raise SystemExit(f'Client depends on CLI: {source}')
 app_pubspec = (ROOT / 'apps/ManyType/pubspec.yaml').read_text()
-if not re.search(r'^  anytype_flutter:', app_pubspec, re.M):
+app_dependencies = re.search(
+    r'^dependencies:[ \t]*\n(.*?)(?=^[A-Za-z_]|\Z)', app_pubspec, re.M | re.S
+)
+if not app_dependencies or not re.search(
+    r'^  anytype_flutter:', app_dependencies.group(1), re.M
+):
     raise SystemExit('apps/ManyType must get the native bridge from anytype_flutter')
 SDK_PACKAGES = ['anytype', 'manytype_core', 'manytype_protocol']
 for package in SDK_PACKAGES:
