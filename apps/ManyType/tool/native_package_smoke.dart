@@ -69,19 +69,26 @@ Future<void> main() async {
 
 Future<void> _progress(String message) async {
   final line = 'NATIVE_PACKAGE_SMOKE $message';
-  stdout.writeln(line);
-  await stdout.flush();
-  debugPrint(line);
   await _record(line);
+  await _echo(stdout, line);
+  debugPrint(line);
 }
 
 Future<Never> _fail(String message) async {
   final line = 'NATIVE_PACKAGE_SMOKE failed: $message';
-  stderr.writeln(line);
-  await stderr.flush();
-  debugPrint(line);
   await _record(line);
+  await _echo(stderr, line);
+  debugPrint(line);
   exit(1);
+}
+
+Future<void> _echo(IOSink sink, String line) async {
+  try {
+    sink.writeln(line);
+    await sink.flush();
+  } catch (_) {
+    // GUI-subsystem Windows builds have no valid stdout/stderr handle.
+  }
 }
 
 Future<void> _record(String line) async {
