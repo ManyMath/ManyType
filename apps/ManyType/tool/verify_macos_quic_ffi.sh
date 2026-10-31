@@ -23,6 +23,18 @@ if [[ -e "$STALE_LIBRARY_PATH" ]]; then
   exit 1
 fi
 
+# The loader opens the top-level framework path, so it must be the same file
+# as the versioned binary checked below.
+TOP_LEVEL_LIBRARY_PATH="$FRAMEWORK_PATH/$FRAMEWORK_NAME"
+if [[ ! -e "$TOP_LEVEL_LIBRARY_PATH" ]]; then
+  echo "framework binary the loader opens not found: $TOP_LEVEL_LIBRARY_PATH" >&2
+  exit 66
+fi
+if [[ ! "$TOP_LEVEL_LIBRARY_PATH" -ef "$LIBRARY_PATH" ]]; then
+  echo "$TOP_LEVEL_LIBRARY_PATH does not resolve to $LIBRARY_PATH" >&2
+  exit 1
+fi
+
 bundle_executable_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
 bundle_executable="$APP_PATH/Contents/MacOS/$bundle_executable_name"
 if [[ ! -x "$bundle_executable" ]]; then
@@ -30,7 +42,7 @@ if [[ ! -x "$bundle_executable" ]]; then
   exit 66
 fi
 
-install_name="$(xcrun otool -D "$LIBRARY_PATH" | grep -v ':$' | sort -u)"
+install_name="$(xcrun otool -D "$LIBRARY_PATH" | grep -v ':$' | sort -u || true)"
 if [[ "$install_name" != "@rpath/$FRAMEWORK_NAME.framework/Versions/A/$FRAMEWORK_NAME" ]]; then
   echo "unexpected framework install name: $install_name" >&2
   exit 1
@@ -45,6 +57,8 @@ for architecture in $app_architectures; do
   fi
 done
 
+# Capture once: grep -q closing the pipe early would SIGPIPE nm under pipefail.
+exported_symbols="$(nm -gU "$LIBRARY_PATH")"
 for symbol in \
   ffi_abi_version \
   ffi_connect \
@@ -54,7 +68,7 @@ for symbol in \
   ffi_sync_store \
   ffi_free_handle \
   ffi_free_result; do
-  if ! nm -gU "$LIBRARY_PATH" | grep -Eq "[[:space:]]_${symbol}$"; then
+  if ! grep -Eq "[[:space:]]_${symbol}$" <<<"$exported_symbols"; then
     echo "QUIC bridge is missing exported symbol $symbol" >&2
     exit 1
   fi
