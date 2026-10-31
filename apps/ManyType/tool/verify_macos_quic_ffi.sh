@@ -5,8 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$APP_DIR/../.." && pwd)"
 APP_PATH="${1:-$APP_DIR/build/macos/Build/Products/Release/manytype.app}"
-LIBRARY_NAME="libmanytype_quic_ffi.dylib"
-LIBRARY_PATH="$APP_PATH/Contents/Frameworks/$LIBRARY_NAME"
+FRAMEWORK_NAME="anytype_flutter"
+FRAMEWORK_PATH="$APP_PATH/Contents/Frameworks/$FRAMEWORK_NAME.framework"
+LIBRARY_PATH="$FRAMEWORK_PATH/Versions/A/$FRAMEWORK_NAME"
+STALE_LIBRARY_PATH="$APP_PATH/Contents/Frameworks/libmanytype_quic_ffi.dylib"
 
 if [[ ! -d "$APP_PATH" ]]; then
   echo "ManyType app bundle not found: $APP_PATH" >&2
@@ -15,6 +17,10 @@ fi
 if [[ ! -f "$LIBRARY_PATH" ]]; then
   echo "packaged QUIC bridge not found: $LIBRARY_PATH" >&2
   exit 66
+fi
+if [[ -e "$STALE_LIBRARY_PATH" ]]; then
+  echo "stale standalone QUIC bridge is still bundled: $STALE_LIBRARY_PATH" >&2
+  exit 1
 fi
 
 bundle_executable_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
@@ -25,8 +31,8 @@ if [[ ! -x "$bundle_executable" ]]; then
 fi
 
 install_name="$(xcrun otool -D "$LIBRARY_PATH" | tail -n 1 | sed 's/^[[:space:]]*//')"
-if [[ "$install_name" != "@rpath/$LIBRARY_NAME" ]]; then
-  echo "unexpected dylib install name: $install_name" >&2
+if [[ "$install_name" != "@rpath/$FRAMEWORK_NAME.framework/Versions/A/$FRAMEWORK_NAME" ]]; then
+  echo "unexpected framework install name: $install_name" >&2
   exit 1
 fi
 
@@ -56,14 +62,14 @@ done
 
 unexpected_dependency="$(xcrun otool -L "$LIBRARY_PATH" \
   | awk '/^[[:space:]]/ { print $1 }' \
-  | grep -Ev "^(@rpath/$LIBRARY_NAME$|/System/Library/|/usr/lib/)" \
+  | grep -Ev "^(@rpath/$FRAMEWORK_NAME\\.framework/Versions/A/$FRAMEWORK_NAME$|@rpath/FlutterMacOS\\.framework/Versions/A/FlutterMacOS$|/System/Library/|/usr/lib/)" \
   | head -n 1 || true)"
 if [[ -n "$unexpected_dependency" ]]; then
   echo "QUIC bridge has a non-system dependency: $unexpected_dependency" >&2
   exit 1
 fi
 
-/usr/bin/codesign --verify --strict --verbose=2 "$LIBRARY_PATH"
+/usr/bin/codesign --verify --strict --verbose=2 "$FRAMEWORK_PATH"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
 if ! /usr/bin/codesign -d --entitlements - "$APP_PATH" 2>/dev/null \
