@@ -53,8 +53,10 @@ apps/ManyType/tool/run_macos_native_smoke.sh
 ```
 
 The verifier checks the `anytype_flutter.framework` in the built app: its
-signature, architectures, the exported FFI API, the network entitlement, and
-an ABI call through Dart's production loader.
+signature, its install name, architectures covering the app's, the exported
+FFI API, that it links only itself and system libraries, the network
+entitlement, that no stale `libmanytype_quic_ffi.dylib` remains in
+`Contents/Frameworks`, and an ABI call through Dart's production loader.
 
 ## Current signed-canary blocker
 
