@@ -56,6 +56,9 @@ Future<void> main() async {
     }
 
     await _progress('phase=$phase ffi_abi=2 secure_storage=ok');
+    // Android persists secure storage asynchronously; exiting at once can lose
+    // the write before the read phase launches.
+    await Future<void>.delayed(const Duration(seconds: 3));
     exit(0);
   } catch (error, stackTrace) {
     await _fail('$error\n$stackTrace');
