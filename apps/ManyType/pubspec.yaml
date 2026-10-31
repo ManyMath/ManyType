@@ -16,9 +16,9 @@ dependencies:
   flutter_secure_storage: ^10.3.1
   hooks_riverpod: ^2.5.0
   anytype: ^0.0.2
+  anytype_flutter: ^0.0.2
   manytype_core: ^0.0.2
   manytype_protocol: ^0.0.2
-  sqlite3_flutter_libs: ^0.5.42
   manyui:
     git:
       url: https://github.com/ManyMath/ManyUI.git
