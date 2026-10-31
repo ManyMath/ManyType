@@ -169,6 +169,21 @@ class NativeLibraryLocator {
     };
   }
 
+  /// App-bundle locations to try before the platform search path, in load
+  /// order. The anytype_flutter copy comes first; the legacy macOS
+  /// `Contents/Frameworks/libmanytype_quic_ffi.dylib` follows for consumers
+  /// that ship the library that way.
+  static List<String> bundledLibraryPaths(
+    String operatingSystem,
+    String executablePath,
+  ) {
+    final plugin = pluginBundlePath(operatingSystem, executablePath);
+    return [
+      ?plugin,
+      if (operatingSystem == 'macos') macOSBundleLibraryPath(executablePath),
+    ];
+  }
+
   /// Release and debug builds in this repository, found by walking up from
   /// [workingDirectory]: the server workspace's `rust/target` first, then
   /// the plugin crate's own `packages/anytype_flutter/rust/target`.
@@ -283,25 +298,17 @@ class NativeBridge {
       return DynamicLibrary.open(explicitPath);
     }
 
-    if (Platform.isMacOS) {
-      final packagedPath = NativeLibraryLocator.macOSBundleLibraryPath(
-        resolvedExecutablePath ?? Platform.resolvedExecutable,
-      );
-      if (File(packagedPath).existsSync()) {
-        // A present bundle library is authoritative. Do not silently load a
-        // developer build if its signature, architecture, or ABI is invalid.
-        return DynamicLibrary.open(packagedPath);
-      }
-    }
-
-    // A copy bundled by anytype_flutter is authoritative too: an app whose
-    // own bridge cannot load must not pick up a development build instead.
-    final bundledPath = NativeLibraryLocator.pluginBundlePath(
+    // A library bundled with the app is authoritative: if one exists and
+    // fails to load, do not silently load a development build instead. The
+    // anytype_flutter copy comes first so a stale legacy dylib left in an
+    // incremental build directory cannot shadow the plugin framework.
+    for (final bundledPath in NativeLibraryLocator.bundledLibraryPaths(
       Platform.operatingSystem,
       resolvedExecutablePath ?? Platform.resolvedExecutable,
-    );
-    if (bundledPath != null && File(bundledPath).existsSync()) {
-      return DynamicLibrary.open(bundledPath);
+    )) {
+      if (File(bundledPath).existsSync()) {
+        return DynamicLibrary.open(bundledPath);
+      }
     }
 
     // The platform search path, which also resolves the copy anytype_flutter

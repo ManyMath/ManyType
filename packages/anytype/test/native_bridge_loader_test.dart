@@ -97,6 +97,27 @@ void main() {
     );
   });
 
+  test('tries the anytype_flutter bundle before the legacy macOS dylib', () {
+    final separator = Platform.pathSeparator;
+    final executable = [
+      Directory.systemTemp.path,
+      'App.app',
+      'Contents',
+      'MacOS',
+      'app',
+    ].join(separator);
+
+    expect(NativeLibraryLocator.bundledLibraryPaths('macos', executable), [
+      NativeLibraryLocator.pluginBundlePath('macos', executable),
+      NativeLibraryLocator.macOSBundleLibraryPath(executable),
+    ]);
+    expect(
+      NativeLibraryLocator.bundledLibraryPaths('linux', executable),
+      hasLength(1),
+    );
+    expect(NativeLibraryLocator.bundledLibraryPaths('android', executable), []);
+  });
+
   test('orders release before debug for each development ancestor', () {
     final temporaryDirectory = Directory.systemTemp.createTempSync();
     addTearDown(() => temporaryDirectory.deleteSync(recursive: true));
